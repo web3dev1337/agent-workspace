@@ -12757,29 +12757,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
   margin-top: var(--space-lg);
 }
 
-.ports-dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--space-md);
-}
 
-.port-dashboard-card {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-md);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  border-left: 3px solid var(--border-color);
-  cursor: pointer;
-  transition: all 0.15s;
-}
 
-.port-dashboard-card:hover {
-  background: var(--bg-tertiary);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-soft);
-}
+
+
+
 
 .port-dashboard-card.orchestrator { border-left-color: #9f7aea; }
 .port-dashboard-card.node { border-left-color: #68d391; }
@@ -12788,41 +12770,15 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .port-dashboard-card.python { border-left-color: #ffd93d; }
 .port-dashboard-card.vite { border-left-color: #48bb78; }
 
-.port-card-icon {
-  font-size: 1.5rem;
-  flex-shrink: 0;
-}
 
-.port-card-info {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
 
-.port-card-name {
-  display: block;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-.port-card-context {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-.port-card-port {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--accent-primary);
-  flex-shrink: 0;
-}
+
+
+
+
+
 
 .ports-empty,
 .ports-loading {
@@ -12862,44 +12818,19 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 /* Grid layout for ports in dashboard half */
-.dashboard-half .ports-dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: var(--space-xs);
-}
+.dashboard-half 
 
-.dashboard-half .port-dashboard-card {
-  padding: var(--space-sm);
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: var(--space-xs);
-  min-height: 70px;
-}
+.dashboard-half 
 
-.dashboard-half .port-card-icon {
-  font-size: 1.3rem;
-}
+.dashboard-half 
 
-.dashboard-half .port-card-info {
-  width: 100%;
-}
+.dashboard-half 
 
-.dashboard-half .port-card-name {
-  font-size: 0.75rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.dashboard-half 
 
-.dashboard-half .port-card-context {
-  font-size: 0.65rem;
-}
+.dashboard-half 
 
-.dashboard-half .port-card-port {
-  font-size: 0.8rem;
-  margin-top: auto;
-}
+.dashboard-half 
 
 /* Grid layout for quick links in dashboard half */
 .dashboard-half .quick-links-grid {
@@ -13334,45 +13265,22 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 /* Grid layout for ports in dashboard half */
-.dashboard-half .ports-dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: var(--space-xs);
-}
+.dashboard-half 
 
-.dashboard-half .port-dashboard-card {
-  padding: var(--space-xs);
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: var(--space-xs);
-  min-height: 60px;
-}
+.dashboard-half 
 
-.dashboard-half .port-card-icon {
-  font-size: 1.1rem;
-}
+.dashboard-half 
 
 .onboarding-header {
   margin-bottom: 4px;
   text-align: center;
 }
 
-.dashboard-half .port-card-name {
-  font-size: 0.7rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.dashboard-half 
 
-.dashboard-half .port-card-context {
-  font-size: 0.6rem;
-}
+.dashboard-half 
 
-.dashboard-half .port-card-port {
-  font-size: 0.75rem;
-  margin-top: auto;
-}
+.dashboard-half 
 
 /* Grid layout for quick links in dashboard half */
 .dashboard-half .quick-links-grid {
@@ -14215,4 +14123,540 @@ body.dependency-onboarding-active #dependency-setup-modal {
     animation: none !important;
     transition: none !important;
   }
+}
+
+
+/* Dashboard Bento Design Updates */
+
+
+
+
+.dashboard-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.dashboard-title-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-pressed) 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 16px rgba(31, 111, 235, 0.25);
+}
+
+.dashboard-title-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.dashboard-title-group h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.dashboard-title-group p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+}
+
+
+
+
+
+
+
+
+
+
+
+.dashboard-section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 var(--space-md) 0;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-md);
+}
+
+
+
+.dashboard-bento-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  border-color: var(--accent-primary);
+}
+
+.dashboard-bento-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-md);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dashboard-bento-header svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-primary);
+}
+
+.dashboard-bento-body {
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: var(--space-md);
+}
+
+.dashboard-bento-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.bento-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bento-btn svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+
+.bento-btn:hover {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  border-color: var(--accent-primary);
+}
+
+.bento-btn:hover svg {
+  opacity: 1;
+}
+
+.bento-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+
+
+
+
+
+
+
+
+.bento-action-group {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-danger-icon:hover {
+  background: rgba(248, 81, 73, 0.1);
+  color: var(--accent-danger);
+  border-color: var(--accent-danger);
+}
+
+.bento-workspace-health {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+.health-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.health-text strong {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.health-text span {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.bento-quick-link {
+  border-radius: 12px !important;
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border-color) !important;
+  padding: var(--space-sm) var(--space-md) !important;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.bento-quick-link:hover {
+  background: var(--bg-hover) !important;
+  border-color: var(--accent-primary) !important;
+  transform: translateY(-1px) !important;
+}
+
+@media (max-width: 1200px) {
+  
+
+
+
+
+}
+
+.header-svg-icon { width: 14px; height: 14px; vertical-align: text-bottom; margin-right: 4px; }
+.dashboard-svg-icon { width: 16px; height: 16px; vertical-align: text-bottom; margin-right: 4px; }
+
+
+
+
+
+/* Ensure bento items shrink if needed */
+
+
+
+
+
+
+
+
+
+@media (max-width: 1200px) {
+  
+}
+
+
+
+
+
+
+
+/* Ensure bento items shrink if needed */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@media (max-width: 1400px) {
+  
+}
+
+@media (max-width: 1000px) {
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+.dashboard-bento-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  border-color: var(--accent-primary);
+}
+
+@media (max-width: 1400px) {
+  
+}
+
+@media (max-width: 1000px) {
+  
+}
+
+
+.dashboard-wrapper {
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 0 var(--space-xl) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  height: 100%;
+  overflow: hidden; /* Prevent body scrolling */
+}
+
+.dashboard-header-modern {
+  padding: var(--space-md) 0 0 0;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.dashboard-main-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-lg);
+  align-items: start;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-content-left,
+.dashboard-content-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+}
+
+.dashboard-content-left::-webkit-scrollbar,
+.dashboard-content-right::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.bento-workspace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-md);
+}
+
+.dashboard-bento-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.dashboard-bento-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  border-color: var(--accent-primary);
+}
+
+@media (max-width: 1200px) {
+  .dashboard-main-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.bento-workspace-card {
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.bento-workspace-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  border-color: var(--accent-primary);
+}
+
+.bento-workspace-icon {
+  width: 44px;
+  height: 44px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  border: 1px solid var(--border-color);
+}
+
+.bento-workspace-card .workspace-card-header {
+  padding: 12px 14px 4px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bento-workspace-card .workspace-card-body {
+  padding: 4px 14px 12px 14px;
+  flex: 1;
+}
+
+.bento-workspace-card .workspace-info h3 {
+  font-size: 1.05rem;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bento-workspace-card .workspace-type {
+  font-size: 0.8rem;
+  margin: 2px 0 0 0;
+}
+
+.bento-workspace-card .last-used {
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.bento-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+  gap: 8px;
+  margin-top: auto;
+}
+
+.bento-btn-primary {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.bento-action-group .btn-icon {
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+}
+
+
+.ports-dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.port-dashboard-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border-left: 4px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.port-dashboard-card:hover {
+  background: var(--bg-hover);
+  transform: translateX(4px);
+  border-color: var(--accent-primary);
+}
+
+.port-card-icon {
+  font-size: 1.4rem;
+  min-width: 32px;
+  text-align: center;
+}
+
+.port-card-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.port-card-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.port-card-context {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.port-card-port {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: var(--bg-primary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }

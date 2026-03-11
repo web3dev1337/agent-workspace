@@ -107,192 +107,240 @@ class Dashboard {
   }
 
   generateDashboardHTML() {
-		    const sortByLastAccess = (a, b) => {
-		      const aTime = a.lastAccess ? new Date(a.lastAccess).getTime() : 0;
-		      const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
-		      return bTime - aTime;
-		    };
-		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
-		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
-		    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
-        const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
-        const showProcessBanner = visibility.processBanner !== false;
-        const showProcessSection = visibility.processSection !== false;
-        const showStatusCard = visibility.statusCard !== false;
-        const showTelemetryCard = visibility.telemetryCard !== false;
-        const showPolecatsCard = visibility.polecatsCard !== false;
-        const showDiscordCard = visibility.discordCard !== false;
-        const showProjectsCard = visibility.projectsCard !== false;
-        const showAdviceCard = visibility.adviceCard !== false;
-        const showReadinessCard = visibility.readinessCard !== false;
+    const sortByLastAccess = (a, b) => {
+      const aTime = a.lastAccess ? new Date(a.lastAccess).getTime() : 0;
+      const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
+      return bTime - aTime;
+    };
+    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
+    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
+    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
+    const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
+    const showProcessBanner = visibility.processBanner !== false;
 
-        const processCards = [
-          showStatusCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Status</div>
-              <div id="dashboard-status-summary" class="dashboard-summary-body">Loading…</div>
-            </div>
-          ` : '',
-          showTelemetryCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Telemetry</div>
-              <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-polecats" title="Manage sessions (restart/kill/logs)">🐾 Polecats</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-hooks" title="Hook browser (automations/webhooks)">🪝 Hooks</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-deacon" title="Deacon monitor (health dashboard)">🛡 Deacon</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-tests" title="Run tests across worktrees">🧪 Tests</button>
-                <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
-                <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
-              </div>
-            </div>
-          ` : '',
-          showPolecatsCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Polecats</div>
-              <div id="dashboard-polecats-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-polecats-card" title="Open Polecats panel">🐾 Manage</button>
-              </div>
-            </div>
-          ` : '',
-          showDiscordCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Discord</div>
-              <div id="dashboard-discord-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;" title="Auto-start Discord bot when server starts">
-                  <input type="checkbox" id="dashboard-discord-autostart" style="margin:0;" />
-                  Auto-start
-                </label>
-                <button class="dashboard-topbar-btn" id="dashboard-discord-ensure" title="Create/ensure Services workspace + terminals">🧰 Ensure</button>
-                <button class="dashboard-topbar-btn" id="dashboard-discord-process" title="Trigger Discord queue processing">📥 Process</button>
-                <button class="dashboard-topbar-btn" id="dashboard-discord-open-services" title="Open Services workspace">↗ Services</button>
-              </div>
-            </div>
-          ` : '',
-          showProjectsCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Projects</div>
-              <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-prs" title="Open Pull Requests">🔀 PRs</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-project-health" title="Open per-project health dashboard">🩺 Health</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-project-board" title="Open projects kanban board">🗂 Board</button>
-              </div>
-            </div>
-          ` : '',
-          showAdviceCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Advice</div>
-              <div id="dashboard-advice-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-queue-viz" title="Work queue visualization">🧭 Viz</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-convoys" title="Convoy dashboard (by assignment)">🚚 Convoys</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-suggestions" title="Open workspace suggestions">✨ Suggestions</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-distribution" title="Suggested terminal per PR/task">🎯 Distribution</button>
-              </div>
-            </div>
-          ` : '',
-          showReadinessCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Readiness</div>
-              <div id="dashboard-readiness-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-readiness" title="Open project readiness checklists">✅ Checklists</button>
-              </div>
-            </div>
-          ` : ''
-        ].filter(Boolean).join('');
+    // SVG Icons replacing Emojis
+    const svgIcon = (path, cls="dashboard-svg-icon") => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+    const SVGS = {
+      back: svgIcon('<path d="M19 12H5M12 19l-7-7 7-7"/>'),
+      status: svgIcon('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'),
+      telemetry: svgIcon('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>'),
+      details: svgIcon('<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>'),
+      perf: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
+      polecats: svgIcon('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>'),
+      hooks: svgIcon('<path d="M12 22v-5"/><path d="M9 7H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2"/><path d="M15 7h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><circle cx="12" cy="7" r="3"/>'),
+      deacon: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+      tests: svgIcon('<path d="M9 2v2"/><path d="M15 2v2"/><path d="M12 2v10"/><path d="M5 20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-4-4H9L5 8v12Z"/>'),
+      export: svgIcon('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+      discord: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
+      projects: svgIcon('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>'),
+      prs: svgIcon('<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/>'),
+      health: svgIcon('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'),
+      board: svgIcon('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>'),
+      advice: svgIcon('<path d="M12 2a5 5 0 0 0-5 5v2a5 5 0 0 0 5 5h0a5 5 0 0 0 5-5V7a5 5 0 0 0-5-5z"/><path d="M12 14v7"/><path d="M9 21h6"/>'),
+      queue: svgIcon('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
+      viz: svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>'),
+      convoys: svgIcon('<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>'),
+      suggestions: svgIcon('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>'),
+      distribution: svgIcon('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
+      readiness: svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
+      workspace: svgIcon('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>'),
+      ensure: svgIcon('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 9.36l-7.1 7.1a2.12 2.12 0 0 1-3-3l7.1-7.1a6 6 0 0 1 9.36-7.94z"/>'),
+      services: svgIcon('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>'),
+      add: svgIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
+      quickLinks: svgIcon('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>')
+    };
 
-        const processSection = (showProcessSection && processCards) ? `
-          <div class="dashboard-section">
-            <h2>Process</h2>
-            <div class="dashboard-summary-grid">
-              ${processCards}
+    const processCards = [
+      visibility.statusCard !== false ? `
+        <div class="dashboard-bento-card dashboard-status">
+          <div class="dashboard-bento-header">
+            ℹ️ <span class="dashboard-bento-title">Status</span>
+          </div>
+          <div id="dashboard-status-summary" class="dashboard-bento-body">Loading…</div>
+        </div>
+      ` : '',
+      visibility.telemetryCard !== false ? `
+        <div class="dashboard-bento-card dashboard-telemetry">
+          <div class="dashboard-bento-header">
+            📈 <span class="dashboard-bento-title">Telemetry</span>
+          </div>
+          <div id="dashboard-telemetry-summary" class="dashboard-bento-body">Loading…</div>
+          <div class="dashboard-bento-actions">
+            <button class="bento-btn" id="dashboard-open-telemetry-details" title="View trends">📈 Details</button>
+            <button class="bento-btn" id="dashboard-open-performance" title="Resource usage">⚙ Perf</button>
+            <button class="bento-btn" id="dashboard-open-hooks" title="Hook browser">🪝 Hooks</button>
+            <button class="bento-btn" id="dashboard-open-deacon" title="Health dashboard">🛡 Deacon</button>
+            <button class="bento-btn" id="dashboard-open-tests" title="Run tests">🧪 Tests</button>
+            <button class="bento-btn" id="dashboard-export-telemetry" title="Export CSV">⬇ CSV</button>
+            <button class="bento-btn" id="dashboard-export-telemetry-json" title="Export JSON">⬇ JSON</button>
+          </div>
+        </div>
+      ` : '',
+      visibility.polecatsCard !== false ? `
+        <div class="dashboard-bento-card dashboard-polecats">
+          <div class="dashboard-bento-header">
+            🐾 <span class="dashboard-bento-title">Polecats</span>
+          </div>
+          <div id="dashboard-polecats-summary" class="dashboard-bento-body">Loading…</div>
+          <div class="dashboard-bento-actions">
+            <button class="bento-btn" id="dashboard-open-polecats-card" title="Open Polecats panel">🐾 Manage</button>
+          </div>
+        </div>
+      ` : '',
+      visibility.discordCard !== false ? `
+        <div class="dashboard-bento-card dashboard-discord">
+          <div class="dashboard-bento-header">
+            🎮 <span class="dashboard-bento-title">Discord</span>
+          </div>
+          <div id="dashboard-discord-summary" class="dashboard-bento-body">Loading…</div>
+          <div class="dashboard-bento-actions">
+            <label class="bento-checkbox-label" title="Auto-start Discord bot">
+              <input type="checkbox" id="dashboard-discord-autostart" /> Auto-start
+            </label>
+            <button class="bento-btn" id="dashboard-discord-ensure" title="Ensure Services">🧰 Ensure</button>
+            <button class="bento-btn" id="dashboard-discord-process" title="Trigger processing">📥 Process</button>
+            <button class="bento-btn" id="dashboard-discord-open-services" title="Open Services">↗ Services</button>
+          </div>
+        </div>
+      ` : '',
+      visibility.projectsCard !== false ? `
+        <div class="dashboard-bento-card dashboard-projects">
+          <div class="dashboard-bento-header">
+            🗂 <span class="dashboard-bento-title">Projects</span>
+          </div>
+          <div id="dashboard-projects-summary" class="dashboard-bento-body">Loading…</div>
+          <div class="dashboard-bento-actions">
+            <button class="bento-btn" id="dashboard-open-prs" title="Pull Requests">🔀 PRs</button>
+            <button class="bento-btn" id="dashboard-open-project-health" title="Health dashboard">🩺 Health</button>
+            <button class="bento-btn" id="dashboard-open-project-board" title="Kanban board">🗂 Board</button>
+          </div>
+        </div>
+      ` : '',
+      visibility.adviceCard !== false ? `
+        <div class="dashboard-bento-card dashboard-advice">
+          <div class="dashboard-bento-header">
+            🧠 <span class="dashboard-bento-title">Advice</span>
+          </div>
+          <div id="dashboard-advice-summary" class="dashboard-bento-body">Loading…</div>
+          <div class="dashboard-bento-actions">
+            <button class="bento-btn" id="dashboard-open-queue" title="Queue">📥 Queue</button>
+            <button class="bento-btn" id="dashboard-open-queue-viz" title="Queue visualization">🧭 Viz</button>
+            <button class="bento-btn" id="dashboard-open-convoys" title="Convoys">🚚 Convoys</button>
+            <button class="bento-btn" id="dashboard-open-advice" title="Advice">🧠 Advice</button>
+            <button class="bento-btn" id="dashboard-open-suggestions" title="Suggestions">✨ Hints</button>
+            <button class="bento-btn" id="dashboard-open-distribution" title="Distribution">🎯 Dist</button>
+          </div>
+        </div>
+      ` : '',
+      visibility.readinessCard !== false ? `
+        <div class="dashboard-bento-card dashboard-readiness">
+          <div class="dashboard-bento-header">
+            ✅ <span class="dashboard-bento-title">Readiness</span>
+          </div>
+          <div id="dashboard-readiness-summary" class="dashboard-bento-body">Loading…</div>
+          <div class="dashboard-bento-actions">
+            <button class="bento-btn" id="dashboard-open-readiness" title="Checklists">✅ Checklists</button>
+          </div>
+        </div>
+      ` : ''
+    ].filter(Boolean).join('');
+
+    const processSection = processCards ? `
+      <div class="dashboard-bento-section">
+        <h2 class="dashboard-section-title">Process & Telemetry</h2>
+        <div class="bento-grid">
+          ${processCards}
+        </div>
+      </div>
+    ` : '';
+
+    const createSection = (visibility.createSection !== false) ? `
+      <div class="dashboard-bento-section" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 20px;">
+        <div>
+          <div style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">✨ Get Started</div>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">Set up a new workspace environment to begin building.</div>
+        </div>
+        <div>
+          <button id="dashboard-add-workspace-btn" class="btn-primary workspace-create-empty-btn" style="padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 0.95rem; white-space: nowrap;">
+            ➕ Create Workspace
+          </button>
+        </div>
+      </div>
+    ` : '';
+
+    const quickLinksSection = (visibility.quickLinks !== false) ? `
+      <div class="dashboard-bento-card dashboard-quick-links">
+        <div class="dashboard-bento-header">
+          🔗 <span class="dashboard-bento-title">Quick Links</span>
+        </div>
+        <div class="quick-links-grid">
+          ${this.generateQuickLinksHTML()}
+        </div>
+      </div>
+    ` : '';
+
+    const runningServicesSection = (visibility.runningServices !== false) ? `
+      <div class="dashboard-bento-card ports-dashboard-section">
+        <div class="dashboard-bento-header">
+          📈 <span class="dashboard-bento-title">Running Services</span>
+        </div>
+        <div class="ports-dashboard-grid" id="ports-dashboard-grid">
+          <div class="ports-loading">Loading services...</div>
+        </div>
+      </div>
+    ` : '';
+
+    const activeSection = (visibility.workspacesActive !== false && activeWorkspaces.length > 0) ? `
+      <div class="dashboard-bento-section">
+        <h2 class="dashboard-section-title">Active Workspaces</h2>
+        <div class="workspace-grid bento-workspace-grid">
+          ${activeWorkspaces.map(ws => this.generateWorkspaceCard(ws, true)).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    const allSection = (visibility.workspacesAll !== false) ? `
+      <div class="dashboard-bento-section">
+        <h2 class="dashboard-section-title">All Workspaces</h2>
+        <div class="workspace-grid bento-workspace-grid">
+          ${inactiveWorkspaces.map(ws => this.generateWorkspaceCard(ws, false)).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    return `
+      <div class="dashboard-wrapper">
+        <div class="dashboard-topbar">
+          ${canReturnToWorkspaces ? `<button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back</button>` : '<div></div>'}
+          ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status"></div>` : '<div></div>'}
+        </div>
+        
+        <div class="dashboard-header-modern">
+          <div class="dashboard-title-group">
+            <div class="dashboard-title-icon" style="font-size:24px;">🏠</div>
+            <div>
+              <h1>Agent Workspace</h1>
+              <p>Select a workspace to begin development</p>
             </div>
           </div>
-        ` : '';
+        </div>
 
-        const activeSection = (visibility.workspacesActive !== false && activeWorkspaces.length > 0) ? `
-          <div class="dashboard-section">
-            <h2>Active Workspaces</h2>
-            <div class="workspace-grid">
-              ${activeWorkspaces.map(ws => this.generateWorkspaceCard(ws, true)).join('')}
-            </div>
+        <div class="dashboard-main-content">
+          <div class="dashboard-content-left">
+            ${createSection}
+            ${processSection}
+            ${activeSection}
+            ${allSection}
           </div>
-        ` : '';
-
-        const allSection = (visibility.workspacesAll !== false) ? `
-          <div class="dashboard-section">
-            <h2>All Workspaces</h2>
-            <div class="workspace-grid">
-              ${inactiveWorkspaces.map(ws => this.generateWorkspaceCard(ws, false)).join('')}
-            </div>
+          <div class="dashboard-content-right">
+            ${quickLinksSection}
+            ${runningServicesSection}
           </div>
-        ` : '';
-
-        const createSection = (visibility.createSection !== false) ? `
-          <div class="dashboard-section dashboard-create">
-            <h2>Create</h2>
-            <div class="dashboard-create-actions">
-            <button id="dashboard-add-workspace-btn" class="btn-cta-empty workspace-create-empty-btn">Add Workspace</button>
-            </div>
-          </div>
-        ` : '';
-
-        const reviewSection = '';
-
-        const quickLinksSection = (visibility.quickLinks !== false) ? `
-          <div class="dashboard-section dashboard-half">
-            <h2>Quick Links</h2>
-            <div class="quick-links-grid">
-              ${this.generateQuickLinksHTML()}
-            </div>
-          </div>
-        ` : '';
-
-        const runningServicesSection = (visibility.runningServices !== false) ? `
-          <div class="dashboard-section dashboard-half ports-dashboard-section">
-            <h2>Running Services</h2>
-            <div class="ports-dashboard-grid" id="ports-dashboard-grid">
-              <div class="ports-loading">Loading services...</div>
-            </div>
-          </div>
-        ` : '';
-
-			    return `
-			      <div class="dashboard-topbar">
-		        ${canReturnToWorkspaces ? `
-		          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
-		        ` : `<div></div>`}
-            ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>` : `<div></div>`}
-		      </div>
-		      <div class="dashboard-header">
-		        <h1>Dashboard</h1>
-		        <p>Select a workspace to begin development</p>
-		      </div>
-
-          ${processSection}
-
-          <div class="dashboard-columns">
-            <div class="dashboard-col dashboard-col-left">
-              ${activeSection}
-              ${allSection}
-            </div>
-            <div class="dashboard-col dashboard-col-right">
-              ${createSection}
-              ${reviewSection}
-              ${quickLinksSection}
-              ${runningServicesSection}
-            </div>
-          </div>
+        </div>
+      </div>
     `;
-	  }
+  }
+
 
   async loadDashboardProcessSummary() {
     const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
@@ -3378,68 +3426,80 @@ class Dashboard {
 
   generateWorkspaceCard(workspace, isActive) {
     const lastUsed = this.getLastUsed(workspace);
-	    const health = workspace?.health && typeof workspace.health === 'object' ? workspace.health : null;
-	    const staleCount = Number(health?.staleCandidates?.length || 0);
-	    const removedCount = Number(health?.removedTerminals?.length || 0);
-	    const dedupedCount = Number(health?.dedupedTerminalIds?.length || 0);
-	    const fixedCount = Number(health?.fixedWorktreePaths?.length || 0);
-	    const warnCount = staleCount + removedCount + dedupedCount;
-	    const warnChip = warnCount
-	      ? `<span class="process-chip level-warn" title="Workspace has stale/invalid terminal entries">⚠ ${warnCount}</span>`
-	      : '';
+    const health = workspace?.health && typeof workspace.health === 'object' ? workspace.health : null;
+    const staleCount = Number(health?.staleCandidates?.length || 0);
+    const removedCount = Number(health?.removedTerminals?.length || 0);
+    const dedupedCount = Number(health?.dedupedTerminalIds?.length || 0);
+    const fixedCount = Number(health?.fixedWorktreePaths?.length || 0);
+    const warnCount = staleCount + removedCount + dedupedCount;
+    
+    const svgIcon = (path, cls="") => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">${path}</svg>`;
+    const SVGS = {
+      warn: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 'icon-warn'),
+      clean: svgIcon('<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'),
+      open: svgIcon('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>'),
+      rename: svgIcon('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>'),
+      export: svgIcon('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+      trash: svgIcon('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>')
+    };
 
-	    return `
-	      <div class="workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}">
-	        <div class="workspace-card-header">
-	          <span class="workspace-icon">${workspace.icon}</span>
-	          <div class="workspace-info">
-	            <h3>${workspace.name}</h3>
-	            <p class="workspace-type">${this.getWorkspaceTypeLabel(workspace.type)}</p>
-	          </div>
-	          ${warnChip}
-	        </div>
+    const warnChip = warnCount
+      ? `<span class="process-chip level-warn" title="Workspace has stale/invalid terminal entries">⚠ ${warnCount}</span>`
+      : '';
 
-	        <div class="workspace-card-body">
-	          <div class="workspace-meta">
-	            <p class="last-used">${lastUsed}</p>
-	          </div>
+    return `
+      <div class="workspace-card bento-workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}">
+        <div class="workspace-card-header">
+          <span class="workspace-icon bento-workspace-icon">${workspace.icon}</span>
+          <div class="workspace-info">
+            <h3>${workspace.name}</h3>
+            <p class="workspace-type">${this.getWorkspaceTypeLabel(workspace.type)}</p>
+          </div>
+          ${warnChip}
+        </div>
 
-	          ${warnCount ? `
-	            <div class="workspace-health" style="margin-top:10px; padding:8px 10px; border:1px solid var(--border-color); border-radius:10px; background: rgba(245, 158, 11, 0.08);">
-	              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-	                <div style="opacity:0.9;">
-	                  <strong>Workspace cleanup</strong>
-	                  <span style="opacity:0.85; margin-left:8px;">
-	                    ${removedCount ? `${removedCount} removed` : ''}${removedCount && dedupedCount ? ' • ' : ''}${dedupedCount ? `${dedupedCount} deduped` : ''}${(removedCount || dedupedCount) && staleCount ? ' • ' : ''}${staleCount ? `${staleCount} stale` : ''}
-	                  </span>
-	                </div>
-	                <button class="btn-secondary workspace-cleanup-btn" type="button" title="Remove stale/invalid terminals from this workspace config">🧹 Clean</button>
-	              </div>
-	              ${fixedCount ? `<div style="margin-top:6px; opacity:0.85;">Fixed ${fixedCount} worktree path${fixedCount === 1 ? '' : 's'}.</div>` : ''}
-	            </div>
-	          ` : ''}
-	        </div>
+        <div class="workspace-card-body">
+          <div class="workspace-meta">
+            <p class="last-used">${lastUsed}</p>
+          </div>
 
-        <div class="workspace-card-footer">
-          <button class="btn-primary workspace-open-btn">
-            Open Workspace
+          ${warnCount ? `
+            <div class="workspace-health bento-workspace-health">
+              <div class="health-info-row">
+                <div class="health-text">
+                  <strong>Cleanup</strong>
+                  <span>${removedCount ? `${removedCount} removed` : ''}${removedCount && dedupedCount ? ' • ' : ''}${dedupedCount ? `${dedupedCount} deduped` : ''}${(removedCount || dedupedCount) && staleCount ? ' • ' : ''}${staleCount ? `${staleCount} stale` : ''}</span>
+                </div>
+                <button class="btn-secondary workspace-cleanup-btn" type="button" title="Clean workspace">🧹 Clean</button>
+              </div>
+              ${fixedCount ? `<div class="health-subtext">Fixed ${fixedCount} worktree path${fixedCount === 1 ? '' : 's'}.</div>` : ''}
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="workspace-card-footer bento-card-footer">
+          <button class="btn-primary workspace-open-btn bento-btn-primary">
+            ↗ Open Workspace
           </button>
-          <button class="btn-secondary workspace-rename-btn" title="Rename workspace">
-            ✎
-          </button>
-          <button class="btn-secondary workspace-export-btn" title="Export workspace config (JSON)">
-            ⬇
-          </button>
-	          <button class="btn-secondary workspace-cleanup-btn" title="Remove stale/invalid terminals from this workspace config">
-	            🧹
-	          </button>
-	          <button class="btn-danger workspace-delete-btn" title="Delete workspace (keeps worktrees)">
-	            🗑️
-	          </button>
-	        </div>
-	      </div>
-	    `;
-	  }
+          <div class="bento-action-group">
+            <button class="btn-icon workspace-rename-btn" title="Rename workspace">
+              ✎
+            </button>
+            <button class="btn-icon workspace-export-btn" title="Export config">
+              ⬇
+            </button>
+            <button class="btn-icon workspace-cleanup-btn" title="Clean config">
+              🧹
+            </button>
+            <button class="btn-icon workspace-delete-btn btn-danger-icon" title="Delete workspace">
+              🗑️
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
 
   generateCreateWorkspaceCard() {
     return `
@@ -3488,43 +3548,45 @@ class Dashboard {
   }
 
   generateQuickLinksHTML() {
-    // Get globalShortcuts from config
     const globalShortcuts = this.orchestrator.orchestratorConfig?.globalShortcuts || [];
-
-    // Check if QuickLinks has actual data
     const hasQuickLinksData = this.quickLinks &&
       (this.quickLinks.data?.favorites?.length > 0 ||
        this.quickLinks.data?.recentSessions?.length > 0 ||
        this.quickLinks.data?.customLinks?.length > 0 ||
        this.quickLinks.data?.products?.length > 0);
 
-    // If QuickLinks has data, use it alongside globalShortcuts
     if (hasQuickLinksData) {
       return this.quickLinks.generateDashboardHTML();
     }
 
-    // Otherwise show globalShortcuts
     if (globalShortcuts.length === 0) {
       return '<div class="quick-links-empty">No links configured. Add shortcuts in Settings.</div>';
     }
 
+    const svgIcon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">${path}</svg>`;
+    const SVGS = {
+      settings: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
+      rocket: svgIcon('<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>'),
+      link: svgIcon('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>')
+    };
+
     return globalShortcuts.map(shortcut => `
-      <a href="${shortcut.url}" target="_blank" class="quick-link-item"
-         title="${shortcut.label}">
-        <span class="quick-link-icon">${shortcut.icon || '🔗'}</span>
+      <a href="${shortcut.url}" target="_blank" class="quick-link-item bento-quick-link" title="${shortcut.label}">
+        <span class="quick-link-icon">🔗</span>
         <span class="quick-link-label">${shortcut.label}</span>
       </a>
     `).join('') + `
-      <button class="quick-link-item settings-link" onclick="window.orchestrator.showSettings()">
+      <button class="quick-link-item bento-quick-link settings-link" onclick="window.orchestrator.showSettings()">
         <span class="quick-link-icon">⚙️</span>
         <span class="quick-link-label">Settings</span>
       </button>
-      <button class="quick-link-item setup-link" onclick="window.dashboard.installWindowsStartup()" title="Setup auto-start on Windows login">
+      <button class="quick-link-item bento-quick-link setup-link" onclick="window.dashboard.installWindowsStartup()" title="Setup auto-start on Windows login">
         <span class="quick-link-icon">🚀</span>
-        <span class="quick-link-label">Setup Windows Startup</span>
+        <span class="quick-link-label">Windows Startup</span>
       </button>
     `;
   }
+
 
   setupEventListeners() {
     // Back button to return to the current tabbed workspace view (when available)
