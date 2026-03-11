@@ -492,6 +492,8 @@ body {
   height: 1px;
   background: var(--border-color);
   opacity: 0.6;
+  margin-left: calc(-1 * var(--space-md));
+  margin-right: calc(-1 * var(--space-md));
 }
 
 .sidebar-worktrees-line {
