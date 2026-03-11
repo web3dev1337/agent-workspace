@@ -1880,14 +1880,14 @@ class ClaudeOrchestrator {
 	    });
 
 	    // View buttons
-	    const dashboardBtn = document.getElementById('dashboard-btn');
-	    if (dashboardBtn) {
-	      dashboardBtn.addEventListener('click', () => {
-	        this.showDashboard();
-	      });
+    const dashboardBtn = document.getElementById('dashboard-btn');
+    if (dashboardBtn) {
+      dashboardBtn.addEventListener('click', () => {
+        this.showDashboard();
+      });
 	    }
 
-	    const projectsBoardBtn = document.getElementById('projects-board-btn');
+    const projectsBoardBtn = document.getElementById('projects-board-btn');
 	    if (projectsBoardBtn) {
 	      projectsBoardBtn.addEventListener('click', () => {
 	        try {
@@ -1921,13 +1921,20 @@ class ClaudeOrchestrator {
     });
 
     // Preset buttons
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const preset = btn.dataset.preset;
-        this.applyPreset(preset);
-        document.getElementById('presets-modal').classList.add('hidden');
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const preset = btn.dataset.preset;
+          this.applyPreset(preset);
+          document.getElementById('presets-modal').classList.add('hidden');
+        });
       });
-    });
+
+      const renameWorkspaceBtn = document.getElementById('rename-workspace-btn');
+      if (renameWorkspaceBtn) {
+        renameWorkspaceBtn.addEventListener('click', () => {
+          this.promptRenameCurrentWorkspace();
+        });
+      }
 
 	    // Grid layout dropdown removed - using dynamic layout now
 
@@ -17462,6 +17469,119 @@ class ClaudeOrchestrator {
 
     // Show dashboard
     this.dashboard.show();
+  }
+
+  async renameWorkspace(workspaceId, name) {
+    const id = String(workspaceId || '').trim();
+    const nextName = String(name || '').trim();
+
+    if (!id) {
+      throw new Error('workspaceId is required');
+    }
+
+    if (!nextName) {
+      throw new Error('Workspace name cannot be empty');
+    }
+
+    const response = await fetch(`/api/workspaces/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nextName })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.ok || !payload?.workspace) {
+      throw new Error(String(payload?.error || `Failed to rename workspace (${response.status})`));
+    }
+
+    const updated = payload.workspace;
+
+    const normalizedId = String(updated.id || id).trim();
+    const nextNameValue = String(updated.name || nextName).trim() || nextName;
+
+    // Update local available workspaces
+    const updateWorkspaceInList = (list) => {
+      if (!Array.isArray(list)) return list;
+      return list.map((workspace) => {
+        if (String(workspace?.id || '') !== normalizedId) return workspace;
+        return {
+          ...workspace,
+          ...updated,
+          name: nextNameValue
+        };
+      });
+    };
+
+    this.availableWorkspaces = updateWorkspaceInList(this.availableWorkspaces);
+
+    if (String(this.currentWorkspace?.id || '') === normalizedId) {
+      this.currentWorkspace = {
+        ...this.currentWorkspace,
+        ...(this.currentWorkspace || {}),
+        ...updated,
+        name: nextNameValue
+      };
+    }
+
+    // Keep active tab labels consistent
+    if (this.tabManager?.tabs instanceof Map) {
+      this.tabManager.tabs.forEach((tabState) => {
+        if (tabState?.workspaceId !== normalizedId) return;
+        tabState.workspace = {
+          ...tabState.workspace,
+          ...updated,
+          name: nextNameValue
+        };
+        tabState.displayName = nextNameValue;
+        if (tabState.tabElement) {
+          const nameEl = tabState.tabElement.querySelector('.tab-name');
+          if (nameEl) {
+            nameEl.textContent = nextNameValue;
+            nameEl.title = nextNameValue;
+          }
+        }
+      });
+    }
+
+    // Keep dashboard in sync
+    if (this.dashboard) {
+      if (Array.isArray(this.dashboard.workspaces)) {
+        this.dashboard.workspaces = updateWorkspaceInList(this.dashboard.workspaces);
+      }
+      if (this.dashboard.isVisible) {
+        this.dashboard.render();
+      }
+    }
+
+    if (this.workspaceSwitcher) {
+      this.workspaceSwitcher.updateCurrentWorkspace();
+    }
+
+    this.showToast?.(`Workspace renamed to ${nextNameValue}`, 'success');
+    return updated;
+  }
+
+  promptRenameCurrentWorkspace() {
+    if (!this.currentWorkspace?.id) {
+      this.showToast?.('No active workspace to rename', 'warning');
+      return;
+    }
+
+    const nextName = window.prompt('Rename workspace', String(this.currentWorkspace.name || '').trim() || this.currentWorkspace.id);
+    if (nextName === null) return;
+
+    const cleanName = String(nextName).trim();
+    if (!cleanName) {
+      this.showToast?.('Workspace name cannot be empty', 'warning');
+      return;
+    }
+
+    if (cleanName === String(this.currentWorkspace.name || '').trim()) return;
+
+    this.renameWorkspace(this.currentWorkspace.id, cleanName).catch((error) => {
+      console.error('Failed to rename workspace:', error);
+      this.showToast?.(`Failed to rename workspace: ${error.message || 'unknown error'}`, 'error');
+    });
   }
 
   hideDashboard() {

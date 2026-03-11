@@ -240,7 +240,7 @@ class Dashboard {
           <div class="dashboard-section dashboard-create">
             <h2>Create</h2>
             <div class="dashboard-create-actions">
-              <button id="dashboard-add-workspace-btn" class="btn-primary workspace-create-empty-btn">Add Workspace</button>
+            <button id="dashboard-add-workspace-btn" class="btn-cta-empty workspace-create-empty-btn">Add Workspace</button>
             </div>
           </div>
         ` : '';
@@ -3437,13 +3437,16 @@ class Dashboard {
 	          ` : ''}
 	        </div>
 
-	        <div class="workspace-card-footer">
-	          <button class="btn-primary workspace-open-btn">
-	            Open Workspace
-	          </button>
-	          <button class="btn-secondary workspace-export-btn" title="Export workspace config (JSON)">
-	            ⬇
-	          </button>
+        <div class="workspace-card-footer">
+          <button class="btn-primary workspace-open-btn">
+            Open Workspace
+          </button>
+          <button class="btn-secondary workspace-rename-btn" title="Rename workspace">
+            ✎
+          </button>
+          <button class="btn-secondary workspace-export-btn" title="Export workspace config (JSON)">
+            ⬇
+          </button>
 	          <button class="btn-secondary workspace-cleanup-btn" title="Remove stale/invalid terminals from this workspace config">
 	            🧹
 	          </button>
@@ -3577,6 +3580,17 @@ class Dashboard {
       });
     });
 
+    document.querySelectorAll('.workspace-rename-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = e.target.closest('.workspace-card');
+        const workspaceId = card?.dataset?.workspaceId;
+        const workspace = this.workspaces.find(ws => ws.id === workspaceId);
+        if (!workspace) return;
+        this.promptRenameWorkspace(workspace);
+      });
+    });
+
     // Workspace export handlers
     document.querySelectorAll('.workspace-export-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -3587,12 +3601,11 @@ class Dashboard {
       });
     });
 
-    const createEmptyBtn = document.getElementById('dashboard-add-workspace-btn');
-    if (createEmptyBtn) {
-      createEmptyBtn.addEventListener('click', () => {
+    document.querySelectorAll('.workspace-create-empty-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
         this.createEmptyWorkspaceQuick();
       });
-    }
+    });
 
     // ESC: return to tabbed workspaces if dashboard was opened from there
     if (this._escHandler) {
@@ -3762,13 +3775,29 @@ class Dashboard {
           return match ? Number(match[1]) : NaN;
         })
         .filter(n => Number.isFinite(n));
-      let nextNumber = existingNumbers.length ? Math.max(...existingNumbers) + 1 : 1;
-      let name = `Workspace ${nextNumber}`;
-      let workspaceId = `workspace-${nextNumber}`;
+      const nextNumber = existingNumbers.length ? Math.max(...existingNumbers) + 1 : 1;
+      const proposedName = `Workspace ${nextNumber}`;
+
+      const requestedName = window.prompt('Enter workspace name', proposedName);
+      if (requestedName === null) return;
+
+      const name = String(requestedName).trim() || proposedName;
+
+      const sanitizeId = (value, fallback) => {
+        const raw = String(value || '').trim().toLowerCase();
+        const slug = raw
+          .replace(/[^a-z0-9-]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        return slug || String(fallback || '').trim() || `workspace-${nextNumber}`;
+      };
+
+      const sanitizedBaseId = sanitizeId(name, `workspace-${nextNumber}`);
+      let workspaceId = sanitizedBaseId;
+      let dedupeIndex = 1;
       while (existingIds.has(workspaceId)) {
-        nextNumber += 1;
-        name = `Workspace ${nextNumber}`;
-        workspaceId = `workspace-${nextNumber}`;
+        dedupeIndex += 1;
+        workspaceId = `${sanitizedBaseId}-${dedupeIndex}`;
       }
 
       const workspaceConfig = {
@@ -3842,6 +3871,21 @@ class Dashboard {
       console.error('Failed to create empty workspace:', error);
       alert('Failed to create empty workspace: ' + error.message);
     }
+  }
+
+  async promptRenameWorkspace(workspace) {
+    if (!workspace || !workspace.id) return;
+
+    const nextName = window.prompt('Rename workspace', String(workspace.name || '').trim() || 'Workspace');
+    if (nextName === null) return;
+    const cleanName = String(nextName).trim();
+    if (!cleanName) {
+      this.orchestrator.showToast?.('Workspace name cannot be empty', 'warning');
+      return;
+    }
+    if (cleanName === String(workspace.name || '').trim()) return;
+
+    await this.orchestrator.renameWorkspace?.(workspace.id, cleanName);
   }
 
   async updateCommanderToggle() {
