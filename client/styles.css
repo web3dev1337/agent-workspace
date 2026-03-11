@@ -416,12 +416,6 @@ body {
     justify-content: flex-end;
   }
 
-  body.sidebar-collapsed .sidebar-worktrees-line .sidebar-worktrees-actions {
-    margin-left: 0;
-    gap: 0;
-    justify-content: flex-end;
-  }
-
   body.sidebar-collapsed .sidebar-worktrees-line > h2,
   body.sidebar-collapsed .sidebar-worktrees-line .sidebar-header-presets {
     pointer-events: none;
@@ -509,6 +503,9 @@ body {
   font-weight: 600;
   white-space: nowrap;
   line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: opacity 0.18s ease, transform 0.2s ease, max-width 0.2s ease;
 }
 
@@ -517,12 +514,6 @@ body {
   height: 32px;
   margin: 0;
   transition: opacity 0.18s ease, transform 0.2s ease, width 0.2s ease, margin 0.18s ease, padding 0.18s ease, max-width 0.2s ease;
-}
-
-.sidebar-worktrees-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .worktree-list {
