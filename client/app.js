@@ -16387,8 +16387,8 @@ class ClaudeOrchestrator {
             />
           </div>
           <div class="modal-actions">
-            <button id="text-input-save" class="button-success text-input-dialog-confirm">${confirmText}</button>
             <button id="text-input-cancel" class="button-secondary text-input-dialog-cancel">${cancelText}</button>
+            <button id="text-input-save" class="button-success text-input-dialog-confirm">${confirmText}</button>
           </div>
         </div>
       `;
