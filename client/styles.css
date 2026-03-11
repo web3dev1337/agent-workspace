@@ -1446,7 +1446,7 @@ header {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
+  min-width: 4ch;
   flex-shrink: 1;
 }
 
