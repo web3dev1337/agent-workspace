@@ -1446,13 +1446,16 @@ header {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 4ch;
+  min-width: 6em;
   flex-shrink: 1;
 }
 
 .terminal-branch {
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 6em;
+  flex-shrink: 3;
   font-size: 0.95rem;
   color: var(--accent-primary);
   font-family: var(--font-mono);
