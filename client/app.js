@@ -5479,7 +5479,7 @@ class ClaudeOrchestrator {
               });
             }
           }
-          if (wrapper && wrapper.parentElement !== container) {
+          if (wrapper) {
             container.appendChild(wrapper);
           }
           visibleCount += 1;
