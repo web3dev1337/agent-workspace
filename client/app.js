@@ -1671,6 +1671,8 @@ class ClaudeOrchestrator {
           if (grid) {
             grid.innerHTML = '';
             grid.removeAttribute('data-visible-count');
+            grid.style.removeProperty('--grid-cols');
+            grid.style.removeProperty('--grid-rows');
           }
 
           // Clear sidebar
@@ -5442,11 +5444,31 @@ class ClaudeOrchestrator {
       if (key && !groupMap.has(key)) container.remove();
     });
 
-    // Set the data attribute for dynamic layout based on visible count
+    // Compute grid layout: pairs stack top-to-bottom (single column) for small
+    // counts; add a second column only when rows would become too thin.
     const visibleCount = activeGroupKeys.size;
     grid.setAttribute('data-visible-count', visibleCount);
-    // If the user has more than 16 visible terminals, fall back to a scrollable grid
-    // instead of clipping extra rows (which shows up as tiny “slivers” at the bottom).
+
+    let cols = 1;
+    let rows = visibleCount;
+    if (visibleCount > 6) {
+      cols = 2;
+      rows = Math.ceil(visibleCount / 2);
+    }
+    grid.style.setProperty('--grid-cols', cols);
+    grid.style.setProperty('--grid-rows', rows);
+
+    // When the last row is incomplete, stretch the last pair across all columns
+    // so there are never empty cells in the grid.
+    const allPairs = Array.from(grid.querySelectorAll(':scope > .terminal-pair'));
+    allPairs.forEach((pair, i) => {
+      if (cols > 1 && visibleCount % cols !== 0 && i === allPairs.length - 1) {
+        pair.style.gridColumn = '1 / -1';
+      } else {
+        pair.style.gridColumn = '';
+      }
+    });
+
     grid.classList.toggle('terminal-grid-scrollable', visibleCount > 16);
 
     // Force a resize after everything is rendered to ensure terminals fit properly
