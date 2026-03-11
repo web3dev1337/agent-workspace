@@ -4367,6 +4367,7 @@ class ClaudeOrchestrator {
     if (!worktreeList) return;
 
     const previousScrollTop = worktreeList.scrollTop;
+    const preservedProjectShortcuts = document.getElementById('sidebar-project-shortcuts')?.cloneNode(true) || null;
     const sidebarVisibility = this.getUiVisibilityConfig().sidebar || {};
 
     // Always ensure filter toggle exists and is updated FIRST
@@ -4548,10 +4549,12 @@ class ClaudeOrchestrator {
       worktreeList.appendChild(item);
     }
 
-    const shortcuts = document.createElement('div');
+    const shortcuts = preservedProjectShortcuts || document.createElement('div');
     shortcuts.id = 'sidebar-project-shortcuts';
     shortcuts.className = 'sidebar-project-shortcuts';
-    shortcuts.innerHTML = `<div class="sidebar-project-shortcuts-loading">Loading projects…</div>`;
+    if (!preservedProjectShortcuts) {
+      shortcuts.innerHTML = `<div class="sidebar-project-shortcuts-loading">Loading projects…</div>`;
+    }
     worktreeList.appendChild(shortcuts);
     this.scheduleSidebarProjectShortcutsRender();
 
