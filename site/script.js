@@ -68,54 +68,47 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalObserver.observe(terminalFluid);
   }
 
-  function startTerminalSequence() {
-    const type1 = document.querySelector('.typing-1');
-    const text1 = type1.textContent;
-    type1.textContent = '';
-    
-    let charIndex = 0;
-    const typeInterval = setInterval(() => {
-      if (charIndex < text1.length) {
-        type1.textContent += text1.charAt(charIndex);
-        charIndex++;
-      } else {
-        clearInterval(typeInterval);
-        setTimeout(() => {
-          document.querySelectorAll('.response-1').forEach(el => el.classList.remove('hidden'));
-          setTimeout(() => {
-            document.querySelector('.cmd-2').classList.remove('hidden');
-            typeSecondCommand();
-          }, 600);
-        }, 300);
-      }
-    }, 40);
+  function typeCommand(el, speed) {
+    return new Promise(resolve => {
+      const text = el.textContent;
+      el.textContent = '';
+      let i = 0;
+      const iv = setInterval(() => {
+        if (i < text.length) {
+          el.textContent += text.charAt(i++);
+        } else {
+          clearInterval(iv);
+          resolve();
+        }
+      }, speed);
+    });
   }
 
-  function typeSecondCommand() {
-    const type2 = document.querySelector('.typing-2');
-    const text2 = type2.textContent;
-    type2.textContent = '';
-    
-    let charIndex = 0;
-    const typeInterval = setInterval(() => {
-      if (charIndex < text2.length) {
-        type2.textContent += text2.charAt(charIndex);
-        charIndex++;
-      } else {
-        clearInterval(typeInterval);
-        setTimeout(() => {
-          const responses = document.querySelectorAll('.response-2');
-          let delay = 0;
-          responses.forEach(el => {
-            setTimeout(() => el.classList.remove('hidden'), delay);
-            delay += 400;
-          });
-          setTimeout(() => {
-            document.querySelector('.cmd-3').classList.remove('hidden');
-          }, delay + 200);
-        }, 300);
-      }
-    }, 50);
+  function showResponses(selector, stagger) {
+    return new Promise(resolve => {
+      const els = document.querySelectorAll(selector);
+      let delay = 0;
+      els.forEach(el => {
+        setTimeout(() => el.classList.remove('hidden'), delay);
+        delay += stagger;
+      });
+      setTimeout(resolve, delay + 200);
+    });
+  }
+
+  async function startTerminalSequence() {
+    await typeCommand(document.querySelector('.typing-1'), 30);
+    await showResponses('.response-1', 400);
+
+    document.querySelector('.cmd-2').classList.remove('hidden');
+    await typeCommand(document.querySelector('.typing-2'), 35);
+    await showResponses('.response-2', 300);
+
+    document.querySelector('.cmd-3').classList.remove('hidden');
+    await typeCommand(document.querySelector('.typing-3'), 40);
+    await showResponses('.response-3', 400);
+
+    document.querySelector('.cmd-4').classList.remove('hidden');
   }
 
   // 5. Neural Network / Particle Canvas Background
