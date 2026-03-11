@@ -864,6 +864,33 @@
             </div>
 
             <div class="setting-section">
+                <h4>Trello Integration</h4>
+                <div class="setting-group">
+                    <div id="trello-status" style="margin-bottom: 8px;"></div>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        API Key:
+                        <input id="trello-api-key" type="password" placeholder="Your Trello API key" style="width: 300px;" autocomplete="off" />
+                    </label>
+                    <p class="setting-description">Get your key at <a href="https://trello.com/power-ups/admin" target="_blank" rel="noopener">trello.com/power-ups/admin</a></p>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Token:
+                        <input id="trello-token" type="password" placeholder="Your Trello token" style="width: 300px;" autocomplete="off" />
+                    </label>
+                    <p class="setting-description">Generate a token from the API key page above.</p>
+                </div>
+                <div class="setting-group">
+                    <button class="btn-primary" type="button" id="trello-save-creds">Save &amp; Test</button>
+                    <button class="btn-secondary" type="button" id="trello-save-only" style="margin-left: 6px;">Save Only</button>
+                    <span id="trello-save-status" style="margin-left: 8px;"></span>
+                </div>
+                <p class="setting-description" style="margin-top: 4px; opacity: 0.7;">Credentials are saved locally to <code>~/.trello-credentials</code> (file permissions 600). They are never sent to any external service except the Trello API.</p>
+            </div>
+
+            <div class="setting-section">
                 <h4>Diff Viewer</h4>
                 <div class="setting-group">
                     <label>

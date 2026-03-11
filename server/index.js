@@ -6197,6 +6197,81 @@ app.get('/api/tasks/providers', (req, res) => {
   }
 });
 
+app.get('/api/tasks/trello/status', (req, res) => {
+  try {
+    const { loadTrelloCredentials } = require('./taskProviders/trelloCredentials');
+    const creds = loadTrelloCredentials();
+    res.json({ configured: !!creds, source: creds?.source || null });
+  } catch (error) {
+    res.json({ configured: false, source: null });
+  }
+});
+
+app.post('/api/tasks/trello/credentials', async (req, res) => {
+  try {
+    const { apiKey, token } = req.body || {};
+    if (!apiKey || !token) {
+      return res.status(400).json({ error: 'Both apiKey and token are required' });
+    }
+
+    // Test the credentials against Trello API first
+    const https = require('https');
+    const testUrl = `https://api.trello.com/1/members/me?key=${encodeURIComponent(apiKey)}&token=${encodeURIComponent(token)}`;
+    const testResult = await new Promise((resolve) => {
+      https.get(testUrl, (resp) => {
+        let data = '';
+        resp.on('data', (chunk) => { data += chunk; });
+        resp.on('end', () => {
+          if (resp.statusCode === 200) {
+            try { resolve({ ok: true, user: JSON.parse(data) }); } catch { resolve({ ok: true }); }
+          } else {
+            resolve({ ok: false, status: resp.statusCode });
+          }
+        });
+      }).on('error', (err) => resolve({ ok: false, error: err.message }));
+    });
+
+    if (!testResult.ok) {
+      return res.status(400).json({ error: 'Invalid credentials — Trello API rejected them', details: testResult });
+    }
+
+    // Write to ~/.trello-credentials
+    const os = require('os');
+    const path = require('path');
+    const fs = require('fs');
+    const credPath = path.join(os.homedir(), '.trello-credentials');
+    const content = `TRELLO_API_KEY=${apiKey}\nTRELLO_TOKEN=${token}\n`;
+    fs.writeFileSync(credPath, content, { mode: 0o600 });
+
+    const username = testResult.user?.username || testResult.user?.fullName || '';
+    logger.info('Trello credentials saved', { credPath, username });
+    res.json({ ok: true, username, source: credPath });
+  } catch (error) {
+    logger.error('Failed to save Trello credentials', { error: error.message });
+    res.status(500).json({ error: 'Failed to save credentials' });
+  }
+});
+
+app.post('/api/tasks/trello/credentials/save-only', (req, res) => {
+  try {
+    const { apiKey, token } = req.body || {};
+    if (!apiKey || !token) {
+      return res.status(400).json({ error: 'Both apiKey and token are required' });
+    }
+    const os = require('os');
+    const path = require('path');
+    const fs = require('fs');
+    const credPath = path.join(os.homedir(), '.trello-credentials');
+    const content = `TRELLO_API_KEY=${apiKey}\nTRELLO_TOKEN=${token}\n`;
+    fs.writeFileSync(credPath, content, { mode: 0o600 });
+    logger.info('Trello credentials saved (no test)', { credPath });
+    res.json({ ok: true, source: credPath });
+  } catch (error) {
+    logger.error('Failed to save Trello credentials', { error: error.message });
+    res.status(500).json({ error: 'Failed to save credentials' });
+  }
+});
+
 app.get('/api/tasks/me', async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';
