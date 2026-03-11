@@ -52,6 +52,7 @@
   
   /* Layout */
   --sidebar-width: 280px;
+  --workspace-tab-strip-height: 48px;
   --header-height: 60px;
   --space-xs: 0.25rem;
   --space-sm: 0.5rem;
@@ -393,7 +394,10 @@ body {
   }
 
   body.sidebar-collapsed .sidebar-header {
+    display: flex;
+    align-items: center;
     justify-content: flex-end;
+    min-height: var(--workspace-tab-strip-height);
     position: relative;
     border-bottom: none;
     padding: 8px 6px;
@@ -457,17 +461,23 @@ body {
 
 .sidebar-header {
   position: relative;
-  padding: var(--space-md);
+  flex: 0 0 calc(var(--workspace-tab-strip-height) + var(--header-height));
+  padding: 0;
   border-bottom: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-rows:
+    calc(var(--workspace-tab-strip-height) - 1px)
+    1px
+    calc(var(--header-height) - 1px);
+  justify-content: stretch;
   align-items: stretch;
-  gap: 6px;
 }
 
 .sidebar-title-line {
-  min-height: 24px;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-md);
 }
 
 .sidebar-title {
@@ -486,15 +496,16 @@ body {
   height: 1px;
   background: var(--border-color);
   opacity: 0.6;
-  margin-left: calc(-1 * var(--space-md));
-  margin-right: calc(-1 * var(--space-md));
+  margin: 0;
 }
 
 .sidebar-worktrees-line {
   display: flex;
   justify-content: flex-start;
   align-items: center;
+  min-height: 0;
   gap: 4px;
+  padding: 0 var(--space-md);
 }
 
 .sidebar-worktrees-line h2 {
@@ -974,7 +985,7 @@ body {
 
 .sidebar-footer {
   padding: var(--space-md);
-  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
