@@ -687,9 +687,7 @@ class ClaudeOrchestrator {
       : document.body.classList.contains('sidebar-collapsed');
     const shouldBeExpanded = !isCollapsed;
     const label = shouldBeExpanded ? 'Collapse sidebar' : 'Expand sidebar';
-    const icon = toggle.querySelector('.sidebar-toggle-icon');
 
-    if (icon) icon.textContent = '◂';
     toggle.classList.toggle('is-collapsed', isCollapsed);
     toggle.title = label;
     toggle.setAttribute('aria-label', label);
