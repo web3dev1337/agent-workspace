@@ -11197,6 +11197,9 @@ class ClaudeOrchestrator {
 	        if (!wrapper) continue;
 
         wrapper.classList.remove('review-console-terminal');
+        // Restore the display state the terminal had before RC docked it,
+        // so main grid filtering is respected again.
+        wrapper.style.display = info?.prevDisplay ?? '';
 
         const parent = info?.parent;
         const nextSibling = info?.nextSibling;
@@ -11362,16 +11365,18 @@ class ClaudeOrchestrator {
       }
       if (!wrapper) continue;
 
-      // Remember original location so we can restore on close.
+      // Remember original location and display state so we can restore on close.
       if (!this.reviewConsoleDockedTerminals.has(sid)) {
         this.reviewConsoleDockedTerminals.set(sid, {
           wrapper,
           parent: wrapper.parentElement,
-          nextSibling: wrapper.nextSibling
+          nextSibling: wrapper.nextSibling,
+          prevDisplay: wrapper.style.display
         });
       }
 
       wrapper.classList.remove('hidden');
+      wrapper.style.display = '';
       wrapper.classList.add('review-console-terminal');
       container.appendChild(wrapper);
 
