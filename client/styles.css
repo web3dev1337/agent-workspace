@@ -2005,6 +2005,12 @@ header {
   color: #111827;
 }
 
+.text-input-dialog .modal-actions .button-success.text-input-dialog-confirm:hover,
+.text-input-dialog .modal-actions .button-success.text-input-dialog-confirm:focus,
+.text-input-dialog .modal-actions .button-success.text-input-dialog-confirm:focus-visible {
+  color: #111827;
+}
+
 .icon-button {
   background: transparent;
   border: none;
