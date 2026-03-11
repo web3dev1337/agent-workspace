@@ -11468,6 +11468,9 @@ class ClaudeOrchestrator {
     modal.classList.remove('docked');
     modal.classList.remove('fullscreen');
     modal.classList.add('hidden');
+    // Re-apply view mode filters so terminals hidden by Agent Only / Servers Only
+    // don't leak back into the grid after being undocked.
+    this.updateTerminalGrid();
   }
 
   restoreReviewConsoleDockedTerminals() {
