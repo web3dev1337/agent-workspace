@@ -491,6 +491,24 @@ body {
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.sidebar-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: conic-gradient(from 180deg at 50% 50%, #52d3ff 0deg, #4b92ff 180deg, #52d3ff 360deg);
+  box-shadow: 0 0 12px #52d3ff;
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.sidebar-title-line:hover .sidebar-logo {
+  animation: sidebar-logo-spin 4s linear infinite;
+}
+
+@keyframes sidebar-logo-spin {
+  100% { transform: rotate(360deg); }
+}
+
 .sidebar-title {
   margin: 0;
   font-size: 0.95rem;
