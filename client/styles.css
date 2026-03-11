@@ -1442,7 +1442,17 @@ header {
   min-width: 0;
 }
 
+.terminal-display-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
 .terminal-branch {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 0.95rem;
   color: var(--accent-primary);
   font-family: var(--font-mono);

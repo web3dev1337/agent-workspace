@@ -5980,7 +5980,7 @@ class ClaudeOrchestrator {
 			      <div class="terminal-header">
 			        <div class="terminal-title">
 		          <span class="status-indicator ${session.status}" id="${this.getSessionDomId('status', sessionId)}"></span>
-		          <span>${isAgentSession ? '🤖' : '💻'} ${displayName}</span>
+		          <span class="terminal-display-name">${isAgentSession ? '🤖' : '💻'} ${displayName}</span>
 		          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
 		          ${showBranchRefresh ? `<button type="button" class="terminal-branch-refresh" data-branch-refresh="${this.escapeHtml(branchRefreshId)}" title="Refresh branch label">↻</button>` : ''}
 		          ${ticketChip}
