@@ -867,6 +867,26 @@ body {
   box-shadow: 0 0 0 2px rgb(59 130 246 / 0.2);
 }
 
+.text-input-dialog .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.text-input-dialog-confirm {
+  min-width: 120px;
+  padding: 0.65rem 1.15rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.text-input-dialog-cancel {
+  min-width: 92px;
+  padding: 0.5rem 0.95rem;
+  font-size: 0.9rem;
+}
+
 .button-danger {
   background: var(--accent-danger);
   color: white;
