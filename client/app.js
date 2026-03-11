@@ -9036,8 +9036,12 @@ class ClaudeOrchestrator {
 	  }
 
 	  showCodeReviewDropdown(sessionId) {
-    // Close any existing dropdowns
-    document.querySelectorAll('.review-dropdown').forEach(dropdown => dropdown.remove());
+    // Toggle: if a dropdown is already open, just close it
+    const existing = document.querySelector('.review-dropdown');
+    if (existing) {
+      existing.remove();
+      return;
+    }
 
     const terminalWrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
     if (!terminalWrapper) return;
