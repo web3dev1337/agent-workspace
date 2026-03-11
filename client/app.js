@@ -191,7 +191,7 @@ class ClaudeOrchestrator {
         intentHints: false,
         branchRefresh: false,
         closeProcess: false,
-        removeWorktree: true,
+        removeWorktree: false,
         reviewConsole: true,
         showOnlyWorktree: false,
         startAgentOptions: true,
@@ -210,7 +210,8 @@ class ClaudeOrchestrator {
         forceKill: true,
         launchSettings: false,
         serverLaunchMenu: false,
-        startServer: true
+        startServer: false,
+        serverReviewConsole: false
       },
       dashboard: {
         processBanner: false,
@@ -4196,7 +4197,7 @@ class ClaudeOrchestrator {
     const tierValue = tier ? String(tier) : '';
     return `
       <select class="tier-dropdown" data-session-id="${sessionId}" aria-label="Tier" title="Tier" onchange="window.orchestrator.setTierForSession('${sessionId}', this.value)">
-        <option value="" ${tierValue === '' ? 'selected' : ''}>Tier</option>
+        <option value="" ${tierValue === '' ? 'selected' : ''}>T</option>
         <option value="1" ${tierValue === '1' ? 'selected' : ''}>T1</option>
         <option value="2" ${tierValue === '2' ? 'selected' : ''}>T2</option>
         <option value="3" ${tierValue === '3' ? 'selected' : ''}>T3</option>
@@ -4290,6 +4291,7 @@ class ClaudeOrchestrator {
   getServerControlsHTML(sessionId) {
     const isRunning = this.serverStatuses.get(sessionId) === 'running';
     const visibility = this.getTerminalVisibilityConfig();
+    if (visibility.startServer === false) return '';
     const showLaunchSettings = visibility.launchSettings !== false;
     const showServerLaunchMenu = visibility.serverLaunchMenu !== false;
 
@@ -5996,7 +5998,7 @@ class ClaudeOrchestrator {
 		          ` : ''}
 			          ${isServerSession ? `
 			            ${this.getServerControlsHTML(sessionId)}
-			            ${this.getWorktreeInspectorButtonHTML(sessionId)}
+			            ${this.getTerminalVisibilityConfig().serverReviewConsole !== false ? this.getWorktreeInspectorButtonHTML(sessionId) : ''}
 			            ${this.getSessionCloseButtonHTML(sessionId)}
 			          ` : ''}
 		        </div>
@@ -6567,7 +6569,7 @@ class ClaudeOrchestrator {
 			    // Server terminals: keep the existing launch controls.
 			    controlsDiv.innerHTML = `
 			      ${this.getServerControlsHTML(sessionId)}
-			      ${this.getWorktreeInspectorButtonHTML(sessionId)}
+			      ${this.getTerminalVisibilityConfig().serverReviewConsole !== false ? this.getWorktreeInspectorButtonHTML(sessionId) : ''}
 			      ${this.getSessionCloseButtonHTML(sessionId)}
 			    `;
 			  }
