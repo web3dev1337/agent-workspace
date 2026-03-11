@@ -25,17 +25,28 @@ const SmartDiffViewer = ({ data, initialFilePath = '' }) => {
   // Detect embed mode from URL param
   const isEmbedded = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1';
 
-  const [expandedSections, setExpandedSections] = useState({
-    refactorings: true,
-    moves: true,
-    duplications: true,
-    noise: false,
-    richDiff: true,
-    semanticView: false,
-    autoAdvance: false,
-    scrollWheelAdvance: true,
-    markdownRender: false
+  const [expandedSections, setExpandedSections] = useState(() => {
+    const defaults = {
+      refactorings: true,
+      moves: true,
+      duplications: true,
+      noise: false,
+      richDiff: true,
+      semanticView: true,
+      autoAdvance: true,
+      scrollWheelAdvance: true,
+      markdownRender: true
+    };
+    try {
+      const stored = window.localStorage.getItem('diffViewer.settings');
+      if (stored) return { ...defaults, ...JSON.parse(stored) };
+    } catch {}
+    return defaults;
   });
+
+  useEffect(() => {
+    try { window.localStorage.setItem('diffViewer.settings', JSON.stringify(expandedSections)); } catch {}
+  }, [expandedSections]);
 
   const { metadata, diff, type } = data;
   const diffScrollRef = useRef(null);
