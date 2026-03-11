@@ -20,7 +20,10 @@
   align-items: stretch;
   gap: 2px;
   padding: 4px 8px;
-  min-width: 100%;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 /* Individual Tab */
@@ -81,6 +84,14 @@
 
 .workspace-tab:not(.active) .tab-name {
   color: var(--text-secondary);
+}
+
+.workspace-dashboard-btn {
+  margin: 4px 8px 4px 0;
+  padding: 6px 12px;
+  height: 40px;
+  box-sizing: border-box;
+  align-self: center;
 }
 
 /* Notification Badge */
