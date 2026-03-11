@@ -1,5 +1,8 @@
 // Workspace switcher dropdown component
 
+// Keep this feature disabled until we re-introduce it intentionally.
+const WORKSPACE_SWITCHER_ENABLED = false;
+
 class WorkspaceSwitcher {
   constructor(orchestrator) {
     this.orchestrator = orchestrator;
@@ -7,6 +10,14 @@ class WorkspaceSwitcher {
   }
 
   render() {
+    if (!WORKSPACE_SWITCHER_ENABLED) {
+      const existing = document.getElementById('workspace-switcher');
+      if (existing) {
+        existing.remove();
+      }
+      return;
+    }
+
     // Add workspace switcher to header
     const header = document.querySelector('header .header-content');
     if (!header) {
