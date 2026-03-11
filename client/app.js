@@ -5980,7 +5980,7 @@ class ClaudeOrchestrator {
 			      <div class="terminal-header">
 			        <div class="terminal-title">
 		          <span class="status-indicator ${session.status}" id="${this.getSessionDomId('status', sessionId)}"></span>
-		          <span>${isAgentSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
+		          <span>${isAgentSession ? '🤖' : '💻'} ${displayName}</span>
 		          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
 		          ${showBranchRefresh ? `<button type="button" class="terminal-branch-refresh" data-branch-refresh="${this.escapeHtml(branchRefreshId)}" title="Refresh branch label">↻</button>` : ''}
 		          ${ticketChip}
@@ -15619,7 +15619,7 @@ class ClaudeOrchestrator {
       const isAgentSession = /-(claude|codex)$/.test(String(sessionId || ''));
       const worktreeNumber = sessionId.split('-')[0].replace('work', '');
 
-      if (focusedTitle) focusedTitle.textContent = `${isAgentSession ? '🤖 Agent' : '💻 Server'} ${worktreeNumber}`;
+      if (focusedTitle) focusedTitle.textContent = `${isAgentSession ? '🤖' : '💻'} ${worktreeNumber}`;
       if (focusedBranch) focusedBranch.textContent = this.formatBranchLabel(session.branch || '', { context: 'terminal' }).text || '';
       if (focusedStatus) focusedStatus.className = `status-indicator ${session.status || 'idle'}`;
 
