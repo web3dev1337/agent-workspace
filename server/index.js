@@ -1293,6 +1293,37 @@ app.post('/api/workspaces/:id/cleanup-terminals', async (req, res) => {
   }
 });
 
+app.put('/api/workspaces/:id', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) {
+      return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    }
+
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ ok: false, error: 'Workspace not found' });
+    }
+
+    const name = String(req.body?.name || '').trim();
+    if (!name) {
+      return res.status(400).json({ ok: false, error: 'name is required' });
+    }
+
+    const updatedWorkspace = await workspaceManager.updateWorkspace(workspaceId, {
+      name
+    });
+
+    res.json({ ok: true, workspace: updatedWorkspace });
+  } catch (error) {
+    logger.error('Failed to rename workspace', { error: error.message, stack: error.stack, workspaceId: req.params?.id });
+    const status = String(error?.message || '').toLowerCase().includes('invalid workspace config')
+      ? 400
+      : 500;
+    res.status(status).json({ ok: false, error: error.message });
+  }
+});
+
 // Get dynamic workspace types for frontend
 app.get('/api/workspace-types', (req, res) => {
   try {

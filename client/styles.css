@@ -822,6 +822,77 @@ body {
   color: var(--text-secondary);
 }
 
+.text-input-dialog-backdrop {
+  background: color-mix(in srgb, #000 38%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.text-input-dialog {
+  max-width: 430px;
+}
+
+.text-input-dialog-backdrop .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.text-input-dialog-backdrop .modal-content {
+  background: color-mix(in srgb, var(--bg-secondary) 82%, var(--bg-tertiary) 18%);
+  border: 1px solid var(--border-color);
+}
+
+.text-input-dialog-message {
+  white-space: pre-line;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.text-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 0.2);
+}
+
+.text-input-dialog .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.text-input-dialog .button-success,
+.text-input-dialog .button-secondary {
+  width: auto;
+}
+
+.text-input-dialog-confirm {
+  min-width: 120px;
+  padding: 0.65rem 1.15rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.text-input-dialog-cancel {
+  min-width: 92px;
+  padding: 0.5rem 0.95rem;
+  font-size: 0.9rem;
+}
+
 .button-danger {
   background: var(--accent-danger);
   color: white;
@@ -1928,6 +1999,16 @@ header {
 
 .button-success:hover {
   background: color-mix(in srgb, var(--accent-success) 78%, #ffffff 22%);
+}
+
+.text-input-dialog .modal-actions .button-success.text-input-dialog-confirm {
+  color: #111827;
+}
+
+.text-input-dialog .modal-actions .button-success.text-input-dialog-confirm:hover,
+.text-input-dialog .modal-actions .button-success.text-input-dialog-confirm:focus,
+.text-input-dialog .modal-actions .button-success.text-input-dialog-confirm:focus-visible {
+  color: #111827;
 }
 
 .icon-button {

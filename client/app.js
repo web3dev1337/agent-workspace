@@ -226,7 +226,7 @@ class ClaudeOrchestrator {
         workspacesActive: true,
         workspacesAll: true,
         reviewSection: true,
-        quickLinks: true,
+        quickLinks: false,
         runningServices: true,
         createSection: true
       },
@@ -1880,14 +1880,14 @@ class ClaudeOrchestrator {
 	    });
 
 	    // View buttons
-	    const dashboardBtn = document.getElementById('dashboard-btn');
-	    if (dashboardBtn) {
-	      dashboardBtn.addEventListener('click', () => {
-	        this.showDashboard();
-	      });
+    const dashboardBtn = document.getElementById('dashboard-btn');
+    if (dashboardBtn) {
+      dashboardBtn.addEventListener('click', () => {
+        this.showDashboard();
+      });
 	    }
 
-	    const projectsBoardBtn = document.getElementById('projects-board-btn');
+    const projectsBoardBtn = document.getElementById('projects-board-btn');
 	    if (projectsBoardBtn) {
 	      projectsBoardBtn.addEventListener('click', () => {
 	        try {
@@ -1921,13 +1921,20 @@ class ClaudeOrchestrator {
     });
 
     // Preset buttons
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const preset = btn.dataset.preset;
-        this.applyPreset(preset);
-        document.getElementById('presets-modal').classList.add('hidden');
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const preset = btn.dataset.preset;
+          this.applyPreset(preset);
+          document.getElementById('presets-modal').classList.add('hidden');
+        });
       });
-    });
+
+      const renameWorkspaceBtn = document.getElementById('rename-workspace-btn');
+      if (renameWorkspaceBtn) {
+        renameWorkspaceBtn.addEventListener('click', () => {
+          this.promptRenameCurrentWorkspace();
+        });
+      }
 
 	    // Grid layout dropdown removed - using dynamic layout now
 
@@ -16338,6 +16345,121 @@ class ClaudeOrchestrator {
     });
   }
 
+  showTextInputDialog(title, {
+    message = '',
+    initialValue = '',
+    placeholder = 'Enter value',
+    confirmText = 'Save',
+    cancelText = 'Cancel'
+  } = {}) {
+    return new Promise((resolve) => {
+      const existing = document.getElementById('text-input-dialog');
+      if (existing) existing.remove();
+
+      const dialog = document.createElement('div');
+      dialog.id = 'text-input-dialog';
+      dialog.className = 'modal text-input-dialog-backdrop';
+
+      const escapeHtml = (value = '') => {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      };
+
+      const safeTitle = escapeHtml(String(title || 'Input').trim());
+      const safeMessage = escapeHtml(String(message || ''));
+      const safeInitialValue = escapeHtml(String(initialValue));
+      const safePlaceholder = escapeHtml(String(placeholder));
+
+      dialog.innerHTML = `
+        <div class="modal-content confirmation-dialog text-input-dialog">
+          <div class="modal-header">
+            <h3>${safeTitle}</h3>
+            <button type="button" class="close-btn" data-text-input-close>×</button>
+          </div>
+          <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+            ${safeMessage ? `<p class="text-input-dialog-message">${safeMessage}</p>` : ''}
+            <input
+              id="text-input-dialog-field"
+              class="text-input"
+              type="text"
+              value="${safeInitialValue}"
+              placeholder="${safePlaceholder}"
+              autocomplete="off"
+            />
+          </div>
+          <div class="modal-actions">
+            <button id="text-input-cancel" class="button-secondary text-input-dialog-cancel">${cancelText}</button>
+            <button id="text-input-save" class="button-success text-input-dialog-confirm">${confirmText}</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(dialog);
+
+      const inputEl = dialog.querySelector('#text-input-dialog-field');
+      const saveBtn = dialog.querySelector('#text-input-save');
+      const cancelBtn = dialog.querySelector('#text-input-cancel');
+      const closeBtn = dialog.querySelector('[data-text-input-close]');
+
+      const cleanup = () => {
+        if (dialog && dialog.parentElement) {
+          dialog.remove();
+        }
+        document.removeEventListener('keydown', handleEsc);
+      };
+
+      const finish = (value = null) => {
+        cleanup();
+        resolve(value === null ? null : String(value));
+      };
+
+      saveBtn?.addEventListener('click', () => {
+        finish(inputEl?.value ?? '');
+      });
+
+      cancelBtn?.addEventListener('click', () => {
+        finish(null);
+      });
+
+      closeBtn?.addEventListener('click', () => {
+        finish(null);
+      });
+
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) {
+          finish(null);
+        }
+      });
+
+      const submit = (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        finish(inputEl?.value ?? '');
+      };
+
+      inputEl?.addEventListener('keydown', submit);
+
+      const handleEsc = (event) => {
+        if (event.key === 'Escape') {
+          finish(null);
+        }
+      };
+
+      document.addEventListener('keydown', handleEsc);
+
+      setTimeout(() => {
+        if (inputEl) {
+          inputEl.focus();
+          inputEl.select();
+        }
+      }, 0);
+    });
+  }
+
   updateYoloState(sessionId, checked) {
     // Update button styles to show YOLO is active
     const buttons = [
@@ -17467,6 +17589,126 @@ class ClaudeOrchestrator {
 
     // Show dashboard
     this.dashboard.show();
+  }
+
+  async renameWorkspace(workspaceId, name) {
+    const id = String(workspaceId || '').trim();
+    const nextName = String(name || '').trim();
+
+    if (!id) {
+      throw new Error('workspaceId is required');
+    }
+
+    if (!nextName) {
+      throw new Error('Workspace name cannot be empty');
+    }
+
+    const response = await fetch(`/api/workspaces/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nextName })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.ok || !payload?.workspace) {
+      throw new Error(String(payload?.error || `Failed to rename workspace (${response.status})`));
+    }
+
+    const updated = payload.workspace;
+
+    const normalizedId = String(updated.id || id).trim();
+    const nextNameValue = String(updated.name || nextName).trim() || nextName;
+
+    // Update local available workspaces
+    const updateWorkspaceInList = (list) => {
+      if (!Array.isArray(list)) return list;
+      return list.map((workspace) => {
+        if (String(workspace?.id || '') !== normalizedId) return workspace;
+        return {
+          ...workspace,
+          ...updated,
+          name: nextNameValue
+        };
+      });
+    };
+
+    this.availableWorkspaces = updateWorkspaceInList(this.availableWorkspaces);
+
+    if (String(this.currentWorkspace?.id || '') === normalizedId) {
+      this.currentWorkspace = {
+        ...this.currentWorkspace,
+        ...(this.currentWorkspace || {}),
+        ...updated,
+        name: nextNameValue
+      };
+    }
+
+    // Keep active tab labels consistent
+    if (this.tabManager?.tabs instanceof Map) {
+      this.tabManager.tabs.forEach((tabState) => {
+        if (tabState?.workspaceId !== normalizedId) return;
+        tabState.workspace = {
+          ...tabState.workspace,
+          ...updated,
+          name: nextNameValue
+        };
+        tabState.displayName = nextNameValue;
+        if (tabState.tabElement) {
+          const nameEl = tabState.tabElement.querySelector('.tab-name');
+          if (nameEl) {
+            nameEl.textContent = nextNameValue;
+            nameEl.title = nextNameValue;
+          }
+        }
+      });
+    }
+
+    // Keep dashboard in sync
+    if (this.dashboard) {
+      if (Array.isArray(this.dashboard.workspaces)) {
+        this.dashboard.workspaces = updateWorkspaceInList(this.dashboard.workspaces);
+      }
+      if (this.dashboard.isVisible) {
+        this.dashboard.render();
+      }
+    }
+
+    if (this.workspaceSwitcher) {
+      this.workspaceSwitcher.updateCurrentWorkspace();
+    }
+
+    this.showToast?.(`Workspace renamed to ${nextNameValue}`, 'success');
+    return updated;
+  }
+
+  async promptRenameCurrentWorkspace() {
+    if (!this.currentWorkspace?.id) {
+      this.showToast?.('No active workspace to rename', 'warning');
+      return;
+    }
+
+    const nextName = await this.showTextInputDialog('Rename workspace', {
+      message: 'Enter a new name for the current workspace.',
+      initialValue: String(this.currentWorkspace.name || '').trim() || this.currentWorkspace.id,
+      placeholder: 'Workspace name',
+      confirmText: 'Rename',
+      cancelText: 'Cancel'
+    });
+
+    if (nextName === null) return;
+
+    const cleanName = String(nextName).trim();
+    if (!cleanName) {
+      this.showToast?.('Workspace name cannot be empty', 'warning');
+      return;
+    }
+
+    if (cleanName === String(this.currentWorkspace.name || '').trim()) return;
+
+    this.renameWorkspace(this.currentWorkspace.id, cleanName).catch((error) => {
+      console.error('Failed to rename workspace:', error);
+      this.showToast?.(`Failed to rename workspace: ${error.message || 'unknown error'}`, 'error');
+    });
   }
 
   hideDashboard() {

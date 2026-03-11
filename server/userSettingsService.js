@@ -228,7 +228,7 @@ class UserSettingsService {
               workspacesActive: true,
               workspacesAll: true,
               reviewSection: true,
-              quickLinks: true,
+              quickLinks: false,
               runningServices: true,
               createSection: true
             },
@@ -498,6 +498,32 @@ class UserSettingsService {
           changed = true;
         }
         uiMigrations.headerPortsDefaultOn = true;
+        ui.migrations = uiMigrations;
+        changed = true;
+      }
+      if (!uiMigrations.headerSettingsDefaultOn) {
+        const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
+        const header = (visibility.header && typeof visibility.header === 'object') ? { ...visibility.header } : {};
+        if (header.settings !== true) {
+          header.settings = true;
+          visibility.header = header;
+          ui.visibility = visibility;
+          changed = true;
+        }
+        uiMigrations.headerSettingsDefaultOn = true;
+        ui.migrations = uiMigrations;
+        changed = true;
+      }
+      if (!uiMigrations.dashboardQuickLinksDefaultOff) {
+        const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
+        const dashboard = (visibility.dashboard && typeof visibility.dashboard === 'object') ? { ...visibility.dashboard } : {};
+        if (dashboard.quickLinks !== false) {
+          dashboard.quickLinks = false;
+          visibility.dashboard = dashboard;
+          ui.visibility = visibility;
+          changed = true;
+        }
+        uiMigrations.dashboardQuickLinksDefaultOff = true;
         ui.migrations = uiMigrations;
         changed = true;
       }
