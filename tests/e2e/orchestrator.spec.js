@@ -3,6 +3,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
+const { mockUserSettings } = require('./_mockUserSettings');
 
 const ensureWorkspaceLoaded = async (page) => {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -45,6 +46,7 @@ const ensureWorkspaceLoaded = async (page) => {
 
 test.describe('Claude Orchestrator', () => {
   test.beforeEach(async ({ page }) => {
+    await mockUserSettings(page);
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
   });
@@ -103,6 +105,7 @@ test.describe('Claude Orchestrator', () => {
 
 test.describe('Greenfield Wizard', () => {
   test.beforeEach(async ({ page }) => {
+    await mockUserSettings(page);
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
   });
@@ -119,6 +122,7 @@ test.describe('Greenfield Wizard', () => {
 
 test.describe('Commander Panel', () => {
   test.beforeEach(async ({ page }) => {
+    await mockUserSettings(page);
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
   });
@@ -135,6 +139,7 @@ test.describe('Commander Panel', () => {
 
 test.describe('Terminal Grid', () => {
   test.beforeEach(async ({ page }) => {
+    await mockUserSettings(page);
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
   });
@@ -156,6 +161,7 @@ test.describe('Terminal Grid', () => {
 
 test.describe('Sidebar Controls', () => {
   test.beforeEach(async ({ page }) => {
+    await mockUserSettings(page);
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
   });
@@ -295,6 +301,7 @@ test.describe('API Health', () => {
 
 test.describe('Conversation Browser', () => {
   test.beforeEach(async ({ page }) => {
+    await mockUserSettings(page);
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
   });

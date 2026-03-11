@@ -152,11 +152,11 @@ class ClaudeOrchestrator {
 
   getDefaultVisibilityConfig() {
     return {
-      processBanner: true,
+      processBanner: false,
       header: {
         dashboard: true,
-        newProject: true,
-        history: true,
+        newProject: false,
+        history: false,
         prs: false,
         queue: true,
         chats: false,
@@ -164,11 +164,11 @@ class ClaudeOrchestrator {
         reviewRoute: false,
         activity: false,
         diff: false,
-        workflowMode: true,
-        workflowBackground: true,
-        tierFilters: true,
-        focusTier2: true,
-        focusSwap: true,
+        workflowMode: false,
+        workflowBackground: false,
+        tierFilters: false,
+        focusTier2: false,
+        focusSwap: false,
         tasks: false,
         ports: false,
         commander: true,
@@ -211,7 +211,7 @@ class ClaudeOrchestrator {
         startServer: true
       },
       dashboard: {
-        processBanner: true,
+        processBanner: false,
         processSection: false,
         statusCard: false,
         telemetryCard: false,
