@@ -461,6 +461,20 @@ class UserSettingsService {
       }
 
       const uiMigrations = (ui.migrations && typeof ui.migrations === 'object') ? { ...ui.migrations } : {};
+      if (!uiMigrations.headerNotificationsVoiceDefaultOff) {
+        const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
+        const header = (visibility.header && typeof visibility.header === 'object') ? { ...visibility.header } : {};
+        if (header.notifications !== false || header.voice !== false) {
+          header.notifications = false;
+          header.voice = false;
+          visibility.header = header;
+          ui.visibility = visibility;
+          changed = true;
+        }
+        uiMigrations.headerNotificationsVoiceDefaultOff = true;
+        ui.migrations = uiMigrations;
+        changed = true;
+      }
       if (!uiMigrations.headerTasksDefaultOn) {
         const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
         const header = (visibility.header && typeof visibility.header === 'object') ? { ...visibility.header } : {};
