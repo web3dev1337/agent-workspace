@@ -210,6 +210,7 @@ class UserSettingsService {
               startServerDev: false,
               forceKill: true,
               launchSettings: false,
+              serverLaunchMenu: false,
               startServer: true
             },
             dashboard: {
