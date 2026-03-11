@@ -1344,10 +1344,10 @@ header {
 /* Terminal Grid — driven by JS-set --grid-cols / --grid-rows custom properties.
    Pairs stack top-to-bottom; within each pair terminals sit side-by-side. */
 .terminal-grid {
-  padding: var(--space-md);
+  padding: var(--space-xs);
   overflow: hidden;
   display: grid;
-  gap: var(--space-md);
+  gap: var(--space-xs);
   grid-template-columns: repeat(var(--grid-cols, 1), minmax(0, 1fr));
   grid-template-rows:    repeat(var(--grid-rows, 1), minmax(0, 1fr));
   flex: 1 1 auto;
@@ -1360,7 +1360,7 @@ header {
 .terminal-pair {
   display: flex;
   flex-direction: row;
-  gap: var(--space-md);
+  gap: var(--space-xs);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -1402,10 +1402,10 @@ header {
 
 .terminal-header {
   background: var(--bg-secondary);
-  padding: var(--space-sm) var(--space-md);
+  padding: 2px var(--space-sm);
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 2px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -1438,7 +1438,7 @@ header {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 2px;
   min-width: 0;
 }
 
@@ -1574,7 +1574,7 @@ header {
 
 .terminal-controls {
   display: flex;
-  gap: var(--space-xs);
+  gap: 1px;
   align-items: center;
   flex-wrap: wrap;
 }
