@@ -255,16 +255,14 @@ class Dashboard {
     ` : '';
 
     const createSection = (visibility.createSection !== false) ? `
-      <div class="dashboard-bento-section" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 20px;">
-        <div>
-          <div style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">✨ Get Started</div>
-          <div style="color: var(--text-secondary); font-size: 0.9rem;">Set up a new workspace environment to begin building.</div>
+      <div class="dashboard-create-banner">
+        <div class="dashboard-create-info">
+          <div class="dashboard-create-title">✨ Get Started</div>
+          <div class="dashboard-create-desc">Set up a new workspace environment to begin building.</div>
         </div>
-        <div>
-          <button id="dashboard-add-workspace-btn" class="btn-primary workspace-create-empty-btn" style="padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 0.95rem; white-space: nowrap;">
-            ➕ Create Workspace
-          </button>
-        </div>
+        <button id="dashboard-add-workspace-btn" class="btn-primary workspace-create-empty-btn dashboard-create-btn">
+          ➕ Create Workspace
+        </button>
       </div>
     ` : '';
 
@@ -3453,7 +3451,7 @@ class Dashboard {
           <span class="workspace-icon bento-workspace-icon">${workspace.icon}</span>
           <div class="workspace-info">
             <h3>${workspace.name}</h3>
-            <p class="workspace-type">${this.getWorkspaceTypeLabel(workspace.type)}</p>
+            ${workspace.type && workspace.type !== 'custom' ? `<p class="workspace-type">${this.getWorkspaceTypeLabel(workspace.type)}</p>` : ''}
           </div>
           ${warnChip}
         </div>
@@ -3484,12 +3482,6 @@ class Dashboard {
           <div class="bento-action-group">
             <button class="btn-icon workspace-rename-btn" title="Rename workspace">
               ✎
-            </button>
-            <button class="btn-icon workspace-export-btn" title="Export config">
-              ⬇
-            </button>
-            <button class="btn-icon workspace-cleanup-btn" title="Clean config">
-              🧹
             </button>
             <button class="btn-icon workspace-delete-btn btn-danger-icon" title="Delete workspace">
               🗑️
