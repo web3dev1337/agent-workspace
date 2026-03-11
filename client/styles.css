@@ -1600,23 +1600,23 @@ header {
   display: none;
   background: transparent;
   border: none;
-  color: var(--text-tertiary);
+  color: #fff;
   cursor: pointer;
-  padding: 2px 3px;
+  padding: 2px 4px;
   line-height: 1;
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 1;
   transition: opacity 0.15s;
+  font-size: 20px;
 }
 
 .terminal-controls-toggle:hover {
-  opacity: 1;
-  color: var(--text-primary);
+  opacity: 0.7;
 }
 
 .controls-toggle-icon {
   display: inline-flex;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  letter-spacing: 1px;
 }
 
 /* Collapsed state: hide buttons, show toggle, branch stays visible */
@@ -1628,10 +1628,7 @@ header {
   display: inline-flex;
 }
 
-/* Arrow points left when collapsed (click to expand) */
-.terminal-header.controls-collapsed .controls-toggle-icon {
-  transform: rotate(0deg);
-}
+/* Collapsed state: dots just show as-is */
 
 /* Expanded state: show buttons, hide branch, arrow rotates */
 .terminal-header.controls-expanded .terminal-controls > * {
@@ -1642,9 +1639,7 @@ header {
   display: inline-flex;
 }
 
-.terminal-header.controls-expanded .controls-toggle-icon {
-  transform: rotate(180deg);
-}
+/* Expanded state: dots stay the same (no rotation for dots) */
 
 .terminal-header.controls-expanded .terminal-branch,
 .terminal-header.controls-expanded .terminal-branch-refresh,
@@ -5705,12 +5700,6 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .notifications-panel .notification-action:hover {
   border-color: rgba(147, 197, 253, 0.45);
   background: rgba(37, 99, 235, 0.24);
-}
-
-.terminal-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
 }
 
 .terminal-controls label {

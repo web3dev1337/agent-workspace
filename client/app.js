@@ -4315,24 +4315,26 @@ class ClaudeOrchestrator {
 
     if (isRunning) {
       html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>`;
-    } else if (showStartServer) {
-      if (showServerLaunchMenu) {
-        html += `<div class="server-launch-group">
-          <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
-                  onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
-            <option value="">▶</option>
-            ${this.getDynamicLaunchOptions(sessionId)}
-            <option value="custom" selected>Custom...</option>
-          </select>
-          ${showLaunchSettings ? `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>` : ''}
-        </div>`;
-      } else {
-        html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start Server">▶</button>`;
-        if (showLaunchSettings) {
-          html += `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>`;
-        }
-      }
     }
+    // START SERVER BUTTON — disabled, kept for future re-enablement
+    // } else if (showStartServer) {
+    //   if (showServerLaunchMenu) {
+    //     html += `<div class="server-launch-group">
+    //       <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
+    //               onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+    //         <option value="">▶</option>
+    //         ${this.getDynamicLaunchOptions(sessionId)}
+    //         <option value="custom" selected>Custom...</option>
+    //       </select>
+    //       ${showLaunchSettings ? `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>` : ''}
+    //     </div>`;
+    //   } else {
+    //     html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start Server">▶</button>`;
+    //     if (showLaunchSettings) {
+    //       html += `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>`;
+    //     }
+    //   }
+    // }
 
     // Add dynamic buttons from config
     const buttons = this.getButtonsForSession(sessionId, 'server');
@@ -4383,9 +4385,10 @@ class ClaudeOrchestrator {
     if (isRunning) {
       return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}')" title="Stop Server">⏹S</button>`;
     }
-    if (visibility.startServerDev === true) {
-      return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
-    }
+    // START SERVER (dev) — disabled, kept for future re-enablement
+    // if (visibility.startServerDev === true) {
+    //   return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
+    // }
     return '';
   }
 
@@ -5144,31 +5147,39 @@ class ClaudeOrchestrator {
   updateControlsCollapse() {
     const grid = this.getTerminalGrid();
     if (!grid) return;
-    const headers = grid.querySelectorAll('.terminal-header');
+    const headers = Array.from(grid.querySelectorAll('.terminal-header'));
+
+    // Only agent terminals participate in collapse (server terminals have few buttons)
+    let anyNeedsCollapse = false;
+    const agentHeaders = [];
     headers.forEach((header) => {
       if (header.classList.contains('controls-expanded')) return;
-      const title = header.querySelector('.terminal-title');
       const controls = header.querySelector('.terminal-controls');
-      if (!title || !controls) return;
+      if (!controls) return;
+      // Identify agent terminals by session ID in the parent wrapper
+      const wrapper = header.closest('.terminal-wrapper');
+      const sessionId = wrapper?.id?.replace(/^terminal-wrapper-/, '') || '';
+      const isAgent = /-(claude|codex)$/.test(sessionId);
+      if (!isAgent) return;
 
-      // Uncollapse and remove overflow clipping so we can measure natural widths
       header.classList.remove('controls-collapsed');
-      const prevOverflow = controls.style.overflow;
-      const prevWhiteSpace = controls.style.whiteSpace;
-      controls.style.overflow = 'visible';
-      controls.style.whiteSpace = 'nowrap';
+      agentHeaders.push(header);
+    });
 
+    // Single forced reflow
+    void grid.offsetWidth;
+
+    agentHeaders.forEach((header) => {
+      const controls = header.querySelector('.terminal-controls');
       const headerW = header.clientWidth;
-      const controlsNatural = controls.scrollWidth;
-      const titleNatural = title.scrollWidth;
+      if (headerW === 0) return;
+      const controlsW = controls.scrollWidth;
+      if (controlsW > headerW * 0.45) anyNeedsCollapse = true;
+    });
 
-      // Restore
-      controls.style.overflow = prevOverflow;
-      controls.style.whiteSpace = prevWhiteSpace;
-
-      // Collapse when both can't fit — title is getting squeezed
-      const fits = (controlsNatural + titleNatural + 8) <= headerW;
-      header.classList.toggle('controls-collapsed', !fits);
+    // If ANY agent header needs collapse, collapse ALL agent headers (unified look)
+    agentHeaders.forEach((header) => {
+      header.classList.toggle('controls-collapsed', anyNeedsCollapse);
     });
   }
 
@@ -6038,7 +6049,7 @@ class ClaudeOrchestrator {
 		          ${ticketChip}
 			        </div>
 		        <div class="terminal-controls">
-		          <button type="button" class="terminal-controls-toggle" title="Show controls"><svg class="controls-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+		          <button type="button" class="terminal-controls-toggle" title="Show controls"><span class="controls-toggle-icon">⋯</span></button>
 		          ${isAgentSession ? `
 		            ${this.getTierDropdownHTML(sessionId)}
 	            ${this.getServerQuickControlsHTMLForClaude(sessionId)}
@@ -6613,7 +6624,7 @@ class ClaudeOrchestrator {
       const isAgentSession = /-(claude|codex)$/.test(String(sessionId || '')) || sessionType === 'claude' || sessionType === 'codex';
 	    if (isAgentSession) {
 	      controlsDiv.innerHTML = `
-	        <button type="button" class="terminal-controls-toggle" title="Show controls"><svg class="controls-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+	        <button type="button" class="terminal-controls-toggle" title="Show controls"><span class="controls-toggle-icon">⋯</span></button>
 	        ${this.getTierDropdownHTML(sessionId)}
 		      ${this.getServerQuickControlsHTMLForClaude(sessionId)}
 		      ${this.getWorktreeInspectorButtonHTML(sessionId)}
@@ -6621,18 +6632,17 @@ class ClaudeOrchestrator {
 		      ${this.getGitHubButtons(sessionId)}
 		      ${this.getSessionCloseButtonHTML(sessionId)}
 		    `;
-		    return;
-			    }
-
+			    } else {
 			    // Server terminals: keep the existing launch controls.
 			    controlsDiv.innerHTML = `
-			      <button type="button" class="terminal-controls-toggle" title="Show controls"><svg class="controls-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+			      <button type="button" class="terminal-controls-toggle" title="Show controls"><span class="controls-toggle-icon">⋯</span></button>
 			      ${this.getServerControlsHTML(sessionId)}
 			      ${this.getTerminalVisibilityConfig().serverReviewConsole !== false ? this.getWorktreeInspectorButtonHTML(sessionId) : ''}
 			      ${this.getSessionCloseButtonHTML(sessionId)}
 			    `;
+      }
 
-      // Re-check collapse after controls content changed
+      // Re-check collapse after controls content changed (for ALL terminal types)
       requestAnimationFrame(() => this.updateControlsCollapse());
 			  }
 
