@@ -721,10 +721,18 @@ class WorkspaceTabManager {
    * Show workspace wizard for new tab
    */
   showWorkspaceWizard() {
+    if (typeof this.orchestrator.showDashboard === 'function') {
+      this.orchestrator.showDashboard();
+      return;
+    }
+
     if (this.orchestrator.dashboard) {
       this.orchestrator.dashboard.show();
       this.orchestrator.isDashboardMode = true;
+      return;
     }
+
+    console.warn('Unable to open workspace wizard: dashboard not initialized.');
   }
 
   shouldIgnoreShortcutEvent(e) {
