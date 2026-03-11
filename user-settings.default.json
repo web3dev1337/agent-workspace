@@ -172,7 +172,7 @@
           "suggestions": false,
           "workspacesActive": true,
           "workspacesAll": true,
-          "reviewSection": true,
+          "reviewSection": false,
           "quickLinks": true,
           "runningServices": true,
           "createSection": true
