@@ -52,8 +52,8 @@
   
   /* Layout */
   --sidebar-width: 280px;
-  --workspace-tab-strip-height: 48px;
-  --header-height: 60px;
+  --workspace-tab-strip-height: 38px;
+  --header-height: 38px;
   --space-xs: 0.25rem;
   --space-sm: 0.5rem;
   --space-md: 1rem;
@@ -148,11 +148,11 @@ body.skin-blue {
   --accent-primary: #0f67fd;
   --accent-primary-hover: #2b7cff;
   --accent-primary-pressed: #0b56d8;
-  /* Dark mode: subtle blue-tinted neutrals (blended by --skin-intensity) */
-  --skin-bg-secondary: #0f1624;
-  --skin-bg-tertiary: #17233a;
-  --skin-bg-hover: #1d2c48;
-  --skin-border-color: #2a3b63;
+  --bg-primary: #080e1e;
+  --skin-bg-secondary: #0c1529;
+  --skin-bg-tertiary: #132040;
+  --skin-bg-hover: #1a2d54;
+  --skin-border-color: #1e3a6e;
   --skin-focus-ring: rgba(15, 103, 253, 0.4);
 }
 
@@ -1130,8 +1130,8 @@ header {
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  padding: 0 var(--space-lg);
-  gap: var(--space-md);
+  padding: 0 var(--space-md);
+  gap: var(--space-sm);
 }
 
 .sidebar-toggle {
@@ -1196,9 +1196,10 @@ header {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm);
   justify-content: flex-end;
   margin-left: auto;
+  padding-right: var(--space-xl);
   flex: 1;
   min-width: 0;
   overflow-x: auto;
@@ -1313,12 +1314,12 @@ header {
 }
 
 .header-btn {
-  padding: 6px 12px;
+  padding: 3px 8px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1329,6 +1330,23 @@ header {
 .header-btn:hover {
   background: var(--bg-secondary);
   border-color: var(--accent-primary);
+}
+
+.header-nav-btn {
+  min-width: 82px;
+  justify-content: center;
+  padding: 4px 10px;
+  gap: 5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-nav-icon {
+  font-size: 0.85em;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .header-btn.commander-btn {
