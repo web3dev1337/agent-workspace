@@ -3,186 +3,162 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Workspace</title>
-  <meta
-    name="description"
-    content="All your agents in one workspace. All your projects in one workspace. Run Claude and Codex side by side with the plans you already have."
-  >
-  <meta property="og:title" content="Agent Workspace">
-  <meta
-    property="og:description"
-    content="Run Claude and Codex side by side across local repos, worktrees, and reviews from one UI."
-  >
-  <meta property="og:type" content="website">
-  <meta property="og:image" content="assets/og-card.png">
+  <title>Agent Workspace | Unified AI Orchestration</title>
+  <meta name="description" content="All your agents in one workspace. All your projects in one workspace. Claude Max and Codex plan compatible.">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap"
-    rel="stylesheet"
-  >
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;900&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-  <script defer src="script.js"></script>
 </head>
 <body>
-  <div class="page-shell">
-    <header class="site-header">
-      <a class="brand" href="#top">
-        <span class="brand-mark">AW</span>
-        <span class="brand-copy">
-          <strong>Agent Workspace</strong>
-          <span>Workspace for agent CLIs</span>
-        </span>
-      </a>
-      <nav class="site-nav" aria-label="Primary">
-        <a href="#top">Overview</a>
-        <a href="#flow">Flow</a>
-        <a href="#local">Local</a>
-        <a href="#setup">Setup</a>
-      </nav>
-      <a class="nav-cta" href="https://github.com/web3dev1337/claude-orchestrator">View Repo</a>
-    </header>
-
-    <main class="scene-stack">
-      <section class="scene hero-scene reveal" id="top">
-        <div class="scene-copy">
-          <p class="eyebrow">Runs on your machine</p>
-          <h1>All your agents in one workspace.</h1>
-          <p class="scene-kicker">All your projects in one workspace.</p>
-          <p class="scene-note">
-            Run Claude and Codex side by side across repos, worktrees, and reviews.
-          </p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="#flow">How it works</a>
-            <a class="button button-secondary" href="#setup">Quick start</a>
-          </div>
-        </div>
-
-        <div class="scene-visual">
-          <figure class="ui-shot">
-            <div class="ui-shot-label">Actual Agent Workspace UI</div>
-            <img
-              src="assets/orchestrator-ui.png"
-              alt="Agent Workspace showing multiple local agent and server sessions across several projects in one interface."
-            >
-          </figure>
-        </div>
-      </section>
-
-      <section class="scene flow-scene reveal" id="flow">
-        <div class="scene-head">
-          <p class="eyebrow">How it works</p>
-          <h2>Pick repos. Launch agents. Review here.</h2>
-          <p class="scene-note">
-            One workspace for the whole run.
-          </p>
-        </div>
-
-        <div class="step-stage">
-          <article class="step-card">
-            <span>01</span>
-            <h3>Add repos</h3>
-            <p>Choose the projects you want open.</p>
-          </article>
-          <article class="step-card">
-            <span>02</span>
-            <h3>Launch agents</h3>
-            <p>Start Claude or Codex in local terminals.</p>
-          </article>
-          <article class="step-card">
-            <span>03</span>
-            <h3>Track and review</h3>
-            <p>See sessions, branches, and reviews together.</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="scene local-scene reveal" id="local">
-        <div class="scene-head">
-          <p class="eyebrow">Compatible plans</p>
-          <h2>Claude and Codex. Same workspace.</h2>
-          <p class="scene-note">
-            Built around local terminals, local repos, and local worktrees.
-          </p>
-        </div>
-
-        <div class="compat-stage">
-          <article class="compat-node compat-node-claude">
-            <img class="logo-monochrome" src="assets/claude-logo.png" alt="Claude logo">
-            <strong>Claude</strong>
-            <span>Claude Max</span>
-          </article>
-
-          <article class="compat-core">
-            <span class="compat-core-label">Shared workspace</span>
-            <strong>Local terminals. Local repos.</strong>
-            <p>Agent Workspace stays around the tools you already use.</p>
-          </article>
-
-          <article class="compat-node compat-node-codex">
-            <img src="assets/codex-logo.png" alt="Codex logo">
-            <strong>Codex</strong>
-            <span>Codex plans</span>
-          </article>
-        </div>
-
-        <div class="scene-tags" aria-label="Local workspace details">
-          <span>Worktrees</span>
-          <span>Projects</span>
-          <span>Reviews</span>
-        </div>
-      </section>
-
-      <section class="scene setup-scene reveal" id="setup">
-        <div class="scene-copy">
-          <p class="eyebrow">Get started</p>
-          <h2>Start locally in a few commands.</h2>
-          <p class="scene-note">
-            Open the app. Create a workspace. Launch agents.
-          </p>
-
-          <div class="setup-list" aria-label="Getting started steps">
-            <article class="setup-line">
-              <span>01</span>
-              <p>Use your existing Claude Max or Codex plan.</p>
-            </article>
-            <article class="setup-line">
-              <span>02</span>
-              <p>Run the app locally.</p>
-            </article>
-            <article class="setup-line">
-              <span>03</span>
-              <p>Create a workspace and launch agents.</p>
-            </article>
-          </div>
-        </div>
-
-        <div class="code-panel">
-          <div class="code-panel-header">
-            <span>Quick start</span>
-            <span>Web mode</span>
-          </div>
-          <pre><code>git clone https://github.com/web3dev1337/claude-orchestrator.git
-cd claude-orchestrator
-
-cp .env.example .env
-npm install
-cd diff-viewer && npm install && cd ..
-
-npm run dev</code></pre>
-          <p class="code-note">Open the local app and create your first workspace.</p>
-        </div>
-      </section>
-    </main>
-
-    <footer class="site-footer">
-      <p>Runs locally. Works with the plans you already have.</p>
-      <div class="footer-links">
-        <a href="https://github.com/web3dev1337/claude-orchestrator">Repository</a>
-        <a href="https://github.com/web3dev1337/claude-orchestrator/blob/main/README.md">README</a>
-      </div>
-    </footer>
+  <!-- Dynamic Background -->
+  <canvas id="neural-bg"></canvas>
+  
+  <div class="ambient-lights">
+    <div class="light cyan"></div>
+    <div class="light blue-deep"></div>
+    <div class="light indigo"></div>
   </div>
+
+  <nav class="fluid-nav">
+    <a href="#" class="brand">
+      <div class="brand-orb"></div>
+      <span>Agent Workspace</span>
+    </a>
+    <div class="nav-items">
+      <a href="#orchestration">Orchestration</a>
+      <a href="#integrations">Integrations</a>
+      <a href="https://github.com/web3dev1337/claude-orchestrator" class="btn-glass" target="_blank">Repository <span class="arrow">↗</span></a>
+    </div>
+  </nav>
+
+  <main>
+    <section class="hero-fluid">
+      <div class="hero-content reveal">
+        <h1 class="mega-title">
+          All your agents.<br>
+          <span class="gradient-text multi-color">One workspace.</span>
+        </h1>
+        <p class="hero-lead">
+          All your projects in one workspace. Bring order to the chaos and run multiple agents simultaneously across different repos with complete local control.
+        </p>
+        <div class="action-row">
+          <button class="btn-glow" onclick="document.getElementById('terminal-start').scrollIntoView({behavior: 'smooth'})">
+            <span>Initialize</span>
+          </button>
+          <div class="plan-compat">
+            <span class="compat-text">Claude Code & Codex plan compatible</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-showcase reveal">
+        <div class="glass-panel main-ui">
+          <div class="panel-header">
+            <div class="traffic-lights"><i></i><i></i><i></i></div>
+            <div class="address-bar">workspace://local/orchestrator</div>
+          </div>
+          <div class="panel-body">
+            <img src="assets/orchestrator-ui.png" alt="UI" class="ui-img">
+            <div class="overlay-scanline"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bento-grid" id="orchestration">
+      <div class="bento-item span-2 reveal">
+        <div class="bento-inner">
+          <h3 class="bento-title">Use Multiple Agents</h3>
+          <p class="bento-desc">Deploy specialized agents for different tasks. Have one agent reviewing PRs while another writes tests—all within the same unified UI. Total asynchronous mastery.</p>
+          <div class="visual-placeholder network-anim">
+            <div class="dot d1"></div><div class="dot d2"></div><div class="dot d3"></div>
+            <svg class="lines"><path d="M20,50 Q50,20 80,50 T140,50" /></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="bento-item reveal" style="--delay: 0.1s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title text-cyan">Unified Sandbox</h3>
+          <p class="bento-desc">We orchestrate your existing CLI tools (like Claude Code) in a shared workspace. Maintain complete visibility over what your agents can access and execute within your repositories.</p>
+          <div class="shield-icon">🛡️</div>
+        </div>
+      </div>
+
+      <div class="bento-item reveal" style="--delay: 0.2s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title text-blue-deep">Multi-Project</h3>
+          <p class="bento-desc">Manage multiple repositories and worktrees simultaneously. Context switching is a thing of the past.</p>
+          <div class="folder-stack">
+            <div class="folder"></div><div class="folder"></div><div class="folder"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="integration-fluid" id="integrations">
+      <div class="integration-content reveal">
+        <h2 class="section-title">Seamless Ecosystem.</h2>
+        <p class="section-desc">Bring your existing API keys or CLI logins. Agent Workspace acts as the ultimate wrapper around your preferred tools. Claude Code and Codex plan compatible directly from the terminal.</p>
+        
+        <div class="logo-showcase">
+          <div class="showcase-card">
+            <div class="card-glow claude-glow"></div>
+            <div class="card-front white-bg-prominent">
+              <img src="assets/claude-logo.svg" alt="Claude Code" class="hi-res-logo">
+            </div>
+            <span class="card-name">Claude Code</span>
+          </div>
+          
+          <div class="connection-line">
+            <div class="pulse-dot"></div>
+          </div>
+
+          <div class="showcase-card">
+            <div class="card-glow codex-glow"></div>
+            <div class="card-front white-bg-prominent">
+              <img src="assets/codex-logo.png" alt="Codex" class="hi-res-logo">
+            </div>
+            <span class="card-name">Codex</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="terminal-fluid reveal" id="terminal-start">
+      <div class="terminal-wrapper">
+        <div class="terminal-window">
+          <div class="term-header">
+            <div class="term-buttons"><span></span><span></span><span></span></div>
+            <div class="term-title">~ / agent-workspace</div>
+          </div>
+          <div class="term-body">
+            <div class="line"><span class="prompt">❯</span> <span class="command typing-1">npm install -g agent-workspace</span></div>
+            <div class="line hidden response-1">Fetching packages... [████████████████████] 100%</div>
+            <div class="line hidden response-1">Successfully installed agent-workspace v2.0.0</div>
+            <div class="line hidden cmd-2"><span class="prompt">❯</span> <span class="command typing-2">agent-workspace init</span></div>
+            <div class="line hidden response-2 text-cyan">◆ Initializing workspace environments...</div>
+            <div class="line hidden response-2 text-blue-deep">◆ Detecting local repositories... [4 found]</div>
+            <div class="line hidden response-2 text-success">✔ Workspace ready. Access via UI.</div>
+            <div class="line hidden cmd-3"><span class="prompt blink">_</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="fluid-footer">
+    <div class="footer-content">
+      <div class="brand">
+        <div class="brand-orb small"></div>
+        <span>Agent Workspace</span>
+      </div>
+      <div class="copyright">© 2026 / Unified AI Infrastructure</div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
 </body>
 </html>
