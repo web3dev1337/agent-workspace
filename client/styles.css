@@ -2001,6 +2001,10 @@ header {
   background: color-mix(in srgb, var(--accent-success) 78%, #ffffff 22%);
 }
 
+.text-input-dialog .modal-actions .button-success.text-input-dialog-confirm {
+  color: #111827;
+}
+
 .icon-button {
   background: transparent;
   border: none;
