@@ -376,8 +376,27 @@ class CommanderPanel {
 
     let isDragging = false;
     let startX, startY, startLeft, startTop;
+    let panelWidth = 0;
+    let panelHeight = 0;
+
+    const clampPanelWithinViewport = () => {
+      if (!panel || panel.classList.contains('hidden')) return;
+      const width = panelWidth || panel.offsetWidth || panel.getBoundingClientRect().width || 0;
+      const height = panelHeight || panel.offsetHeight || panel.getBoundingClientRect().height || 0;
+      if (!width || !height) return;
+
+      const maxLeft = Math.max(0, window.innerWidth - width);
+      const maxTop = Math.max(0, window.innerHeight - height);
+      const currentLeft = Number.parseFloat(panel.style.left || `${panel.getBoundingClientRect().left}`) || 0;
+      const currentTop = Number.parseFloat(panel.style.top || `${panel.getBoundingClientRect().top}`) || 0;
+      const left = Math.min(Math.max(currentLeft, 0), maxLeft);
+      const top = Math.min(Math.max(currentTop, 0), maxTop);
+      panel.style.left = `${left}px`;
+      panel.style.top = `${top}px`;
+    };
 
     titlebar.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
       // Don't drag if clicking on buttons
       if (e.target.closest('button')) return;
 
@@ -386,6 +405,8 @@ class CommanderPanel {
 
       // Get current position
       const rect = panel.getBoundingClientRect();
+      panelWidth = rect.width;
+      panelHeight = rect.height;
       startX = e.clientX;
       startY = e.clientY;
       startLeft = rect.left;
@@ -405,16 +426,24 @@ class CommanderPanel {
       const deltaX = e.clientX - startX;
       const deltaY = e.clientY - startY;
 
-      panel.style.left = `${startLeft + deltaX}px`;
-      panel.style.top = `${startTop + deltaY}px`;
+      const maxLeft = Math.max(0, window.innerWidth - panelWidth);
+      const maxTop = Math.max(0, window.innerHeight - panelHeight);
+      const nextLeft = Math.min(Math.max(startLeft + deltaX, 0), maxLeft);
+      const nextTop = Math.min(Math.max(startTop + deltaY, 0), maxTop);
+
+      panel.style.left = `${nextLeft}px`;
+      panel.style.top = `${nextTop}px`;
     });
 
     document.addEventListener('mouseup', () => {
       if (isDragging) {
         isDragging = false;
         panel.classList.remove('dragging');
+        clampPanelWithinViewport();
       }
     });
+
+    window.addEventListener('resize', clampPanelWithinViewport);
   }
 
   /**
