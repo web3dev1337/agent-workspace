@@ -4066,7 +4066,8 @@ class Dashboard {
     const repoName = String(workspace.repository?.name || '').trim();
     const repoPath = String(workspace.repository?.path || '').trim();
     const title = repoName || workspaceName || 'Current Project';
-    const typeLabel = this.getWorkspaceTypeLabel(workspace.type || '').trim();
+    const workspaceType = typeof workspace.type === 'string' ? workspace.type.trim() : '';
+    const typeLabel = String(this.getWorkspaceTypeLabel(workspaceType || ''));
     const subtitleParts = [];
 
     if (workspaceName && workspaceName !== title) {
