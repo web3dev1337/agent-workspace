@@ -218,9 +218,14 @@ class CommanderPanel {
       container._commanderPasteHandler = onPaste;
     }
 
-    // Click to focus
+    // Click or hover to focus (auto-focus)
     container.addEventListener('click', () => {
       if (this.terminal) {
+        this.terminal.focus();
+      }
+    });
+    container.addEventListener('mousemove', () => {
+      if (this.terminal && (!this.terminal.hasSelection || !this.terminal.hasSelection()) && document.activeElement !== this.terminal.textarea) {
         this.terminal.focus();
       }
     });
