@@ -42,10 +42,10 @@ class WorkspaceTabManager {
     tabsContainer.id = 'workspace-tabs-container';
     tabsContainer.className = 'workspace-tabs-container';
     tabsContainer.innerHTML = `
-      <div class="workspace-tabs" id="workspace-tabs"></div>
       <button id="dashboard-btn" class="header-btn workspace-dashboard-btn" title="Home" data-ui-visibility="header.dashboard">
         🏠 Home
       </button>
+      <div class="workspace-tabs" id="workspace-tabs"></div>
     `;
 
     // Insert before header
