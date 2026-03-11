@@ -7839,6 +7839,13 @@ body.dependency-onboarding-active #dependency-setup-modal {
   min-width: 0;
 }
 
+.dashboard-title-accent {
+  color: var(--accent-primary);
+  white-space: nowrap;
+  font-size: 0.9em;
+  font-weight: 700;
+}
+
 .dashboard-project-title {
   align-self: flex-start;
   display: inline-flex;

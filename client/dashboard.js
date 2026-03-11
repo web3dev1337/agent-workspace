@@ -129,8 +129,11 @@ class Dashboard {
         const showProjectsCard = visibility.projectsCard !== false;
         const showAdviceCard = visibility.adviceCard !== false;
         const showReadinessCard = visibility.readinessCard !== false;
-        const workspaceTitle = String(this.orchestrator?.currentWorkspace?.name || '').trim();
-        const currentWorkspaceLabel = workspaceTitle || String(this.workspaces?.[0]?.name || '').trim() || 'Agent Workspace';
+        const workspaceCandidates = Array.isArray(this.workspaces) ? this.workspaces : [];
+        const activeWorkspace = workspaceCandidates.find((ws) => this.isWorkspaceActive?.(ws));
+        const currentWorkspace = this.orchestrator?.currentWorkspace || activeWorkspace || workspaceCandidates[0] || null;
+        const workspaceTitle = String(currentWorkspace?.name || currentWorkspace?.projectName || currentWorkspace?.title || currentWorkspace?.label || '').trim();
+        const currentWorkspaceLabel = workspaceTitle || 'Agent Workspace';
 
         const processCards = [
           showStatusCard ? `
@@ -280,7 +283,7 @@ class Dashboard {
 		      </div>
 		      <div class="dashboard-header">
 		        <div class="dashboard-title-block">
-		          <h1>Dashboard</h1>
+		          <h1>Dashboard <span class="dashboard-title-accent">• ${escapeHtml(currentWorkspaceLabel)}</span></h1>
 		          <p>Select a workspace to begin development</p>
 		        </div>
 		        <div class="dashboard-project-title" title="Current project">
