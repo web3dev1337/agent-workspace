@@ -21,6 +21,7 @@ class ProjectsBoardUI {
     this.dragInsertTargetEl = null;
     this.dragInsertBeforeKey = null;
     this.dragInsertColumnId = null;
+    this.dragHoverColumnId = null;
     this._dragOverRaf = null;
     this._pendingDragOver = null;
     this.hideForks = false;
@@ -475,6 +476,53 @@ class ProjectsBoardUI {
     return columnEl.querySelector?.('.projects-board-column-body[data-dropzone="true"]') || null;
   }
 
+  getColumnById(columnId) {
+    const id = String(columnId || '').trim();
+    if (!id) return null;
+
+    const modal = document.getElementById(this.modalId);
+    if (!modal) return null;
+
+    return modal.querySelector(`.projects-board-column[data-column-id="${CSS.escape(id)}"]`) || null;
+  }
+
+  getColumnFromPoint(x, y) {
+    const px = Number.isFinite(Number(x)) ? Number(x) : null;
+    const py = Number.isFinite(Number(y)) ? Number(y) : null;
+    if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
+
+    let target = null;
+    try {
+      target = document.elementFromPoint(px, py);
+    } catch {
+      target = null;
+    }
+
+    return target?.closest?.('.projects-board-column') || null;
+  }
+
+  getColumnFromDragEvent(event) {
+    const direct = event.target?.closest?.('.projects-board-column');
+    if (direct) return direct;
+
+    if (typeof event.composedPath === 'function') {
+      for (const node of event.composedPath() || []) {
+        if (!node || node.nodeType !== 1) continue;
+        const col = node.closest?.('.projects-board-column');
+        if (col) return col;
+      }
+    }
+
+    const byPoint = this.getColumnFromPoint(event.clientX, event.clientY);
+    if (byPoint) return byPoint;
+
+    if (this.dragHoverColumnId) {
+      return this.getColumnById(this.dragHoverColumnId);
+    }
+
+    return null;
+  }
+
   clearDragInsertTarget() {
     if (this.dragInsertTargetEl) {
       this.dragInsertTargetEl.classList.remove('is-drop-target-before', 'is-drop-target-after');
@@ -482,6 +530,7 @@ class ProjectsBoardUI {
     this.dragInsertTargetEl = null;
     this.dragInsertBeforeKey = null;
     this.dragInsertColumnId = null;
+    this.dragHoverColumnId = null;
   }
 
   computeClosestCardForPoint(cards, x, y) {
@@ -575,6 +624,7 @@ class ProjectsBoardUI {
     this.dragSourceColumnId = this.getProjectColumn(key);
     this.dragCardEl = card;
     this.clearDragInsertTarget();
+    this.dragHoverColumnId = this.dragSourceColumnId;
     card.classList.add('dragging');
     try {
       event.dataTransfer?.setData?.('text/plain', key);
@@ -598,7 +648,7 @@ class ProjectsBoardUI {
   }
 
   onDragOver(event) {
-    const col = event.target?.closest?.('.projects-board-column');
+    const col = this.getColumnFromDragEvent(event);
     if (!col) return;
     if (!this.dragProjectKey) return;
     event.preventDefault();
@@ -609,6 +659,8 @@ class ProjectsBoardUI {
     try {
       event.dataTransfer.dropEffect = 'move';
     } catch {}
+
+    this.dragHoverColumnId = String(col.dataset?.columnId || '').trim();
 
     const columnId = String(col.dataset?.columnId || '').trim();
     if (col.classList.contains('is-collapsed')) {
@@ -641,10 +693,13 @@ class ProjectsBoardUI {
     if (columnId && columnId === this.dragInsertColumnId) {
       this.clearDragInsertTarget();
     }
+    if (columnId && columnId === this.dragHoverColumnId) {
+      this.dragHoverColumnId = null;
+    }
   }
 
   async onDrop(event) {
-    const col = event.target?.closest?.('.projects-board-column');
+    const col = this.getColumnFromDragEvent(event);
     if (!col) return;
     event.preventDefault();
     col.classList.remove('drag-over');
@@ -653,6 +708,7 @@ class ProjectsBoardUI {
     const projectKey = String(this.dragProjectKey || '').trim() || String(event.dataTransfer?.getData?.('text/plain') || '').trim();
     const sourceColumnId = this.dragSourceColumnId || this.getProjectColumn(projectKey);
     if (!projectKey || !columnId) return;
+    this.dragHoverColumnId = null;
 
     const normalizedProjectKey = String(projectKey || '').trim().replace(/\\/g, '/');
     const dropzone = col.classList.contains('is-collapsed') ? null : this.getColumnDropzone(col);
