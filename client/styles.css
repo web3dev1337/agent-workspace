@@ -512,7 +512,7 @@ body {
 
 .sidebar-worktrees-line {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   flex: 1;
   min-height: 0;
@@ -526,7 +526,8 @@ body {
   white-space: nowrap;
   line-height: 1.2;
   min-width: 0;
-  max-width: 200px;
+  flex: 1;
+  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
