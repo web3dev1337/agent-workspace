@@ -6,13 +6,15 @@ class Dashboard {
     this.workspaces = [];
     this.config = {};
     this.isVisible = false;
+    this.openMode = 'overview';
     this.quickLinks = null;
     this._escHandler = null;
     this._projectLaunchInFlight = false;
   }
 
-	  async show() {
+	  async show(options = {}) {
     console.log('Showing dashboard...');
+    this.openMode = String(options?.mode || 'overview').trim() || 'overview';
 
     // Initialize Quick Links if available
     if (window.QuickLinks && !this.quickLinks) {
@@ -3589,6 +3591,12 @@ class Dashboard {
     document.querySelectorAll('.workspace-open-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        const card = e.target.closest('.workspace-card');
+        const workspaceId = card?.dataset?.workspaceId;
+        if (this.shouldOpenWorkspaceFromDashboard()) {
+          this.openWorkspace(workspaceId);
+          return;
+        }
         this.returnToWorkspaceView();
       });
     });
@@ -3784,6 +3792,10 @@ class Dashboard {
 
   returnToWorkspaceView() {
     this.orchestrator.hideDashboard();
+  }
+
+  shouldOpenWorkspaceFromDashboard() {
+    return this.openMode === 'workspace-picker';
   }
 
   async createEmptyWorkspaceQuick() {
