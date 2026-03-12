@@ -31724,6 +31724,7 @@ class ClaudeOrchestrator {
       if (btn.dataset.isOldest === 'true') tagParts.push('oldest');
       const tagsStr = tagParts.length ? ` • ${tagParts.join(' • ')}` : '';
 
+      console.log(`[oldest-debug] enrich ${id}: isOldest=${btn.dataset.isOldest}, inUse=${btn.dataset.inUse}, tagsStr="${tagsStr}"`);
       btn.textContent = `${id} • ${branch}${suffix}${tagsStr}`;
 
       if (prClass) {
