@@ -299,7 +299,7 @@ const quickLinksService = QuickLinksService.getInstance();
 const recommendationsService = RecommendationsService.getInstance();
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
-activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 9460) });
+activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 9470) });
 const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
 const agentProviderService = AgentProviderService.getInstance({ agentManager, logger });
@@ -8107,7 +8107,7 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
 });
 
 // Start server
-const DESIRED_PORT = Number(process.env.ORCHESTRATOR_PORT || 9460);
+const DESIRED_PORT = Number(process.env.ORCHESTRATOR_PORT || 9470);
 const MAX_PORT_ATTEMPTS = 10;
 const hostPolicy = evaluateBindSecurity({
   host: process.env.ORCHESTRATOR_HOST || process.env.HOST,
