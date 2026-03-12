@@ -31603,13 +31603,16 @@ class ClaudeOrchestrator {
     const rect = anchorButton.getBoundingClientRect();
     const menuWidth = 280;
     const left = Math.min(window.innerWidth - menuWidth - 12, Math.max(12, rect.left));
-    const top = Math.min(window.innerHeight - 12, rect.bottom + 6);
 
     menu.style.position = 'fixed';
     menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
     menu.style.minWidth = `${menuWidth}px`;
-    menu.style.zIndex = '1100';
+    menu.style.zIndex = '2100';
+
+    // Position above the button; measure after appending so offsetHeight is available
+    const menuHeight = menu.offsetHeight || 200;
+    const topAbove = rect.top - menuHeight - 6;
+    menu.style.top = `${Math.max(12, topAbove)}px`;
 
     const onMenuClick = (e) => {
       const item = e.target.closest('.quick-menu-item');
