@@ -31910,12 +31910,12 @@ class ClaudeOrchestrator {
     const recommended = this.getRecommendedWorktree(repo);
     const mostRecent = this.getMostRecentWorktree(repo);
     const hasWorktrees = Array.isArray(repo.worktreeDirs) && repo.worktreeDirs.length > 0;
+    const nextId = this.getNextWorktreeIdForRepo(repo);
     const actionLabel = recommended ? `Start (${recommended.id})` : `Create (${nextId})`;
     const displayPath = repo.relativePath || repo.path || '';
     const displayPathLabel = displayPath.startsWith('/') ? displayPath : `~/${displayPath}`;
     const isFavorite = (this.quickWorktreeFavorites || new Set()).has(repo.path);
     const favoriteLabel = isFavorite ? '★' : '☆';
-    const nextId = this.getNextWorktreeIdForRepo(repo);
     const nextNumber = Number(String(nextId || '').replace(/^work/i, ''));
     const canCreate = !!(this.currentWorkspace?.id && Number.isFinite(nextNumber) && nextNumber <= this.autoCreateWorktreeMaxNumber);
     const createCount = this.getQuickWorktreeCreateCountForRepoPath(repo.path);
