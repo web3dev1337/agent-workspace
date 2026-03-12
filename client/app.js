@@ -31548,11 +31548,15 @@ class ClaudeOrchestrator {
         const mtime = Number(wt.lastModifiedMs) || 0;
         const activity = Number(this.getWorktreeLastActivity(resolvedRepo, wt.id)) || 0;
         const effective = Math.max(mtime, activity) || 0;
+        console.log(`[oldest-debug] ${wt.id}: mtime=${mtime}, activity=${activity}, effective=${effective}, oldestTime=${oldestTime}, pass=${effective < oldestTime}`);
         if (effective < oldestTime || (effective === 0 && oldestId === null)) {
           oldestTime = effective;
           oldestId = wt.id;
         }
       }
+      console.log(`[oldest-debug] RESULT: oldestId=${oldestId}, oldestTime=${oldestTime}, allWorktrees.length=${allWorktrees.length}`);
+    } else {
+      console.log('[oldest-debug] allWorktrees is EMPTY');
     }
 
     const menu = document.createElement('div');
@@ -31562,6 +31566,7 @@ class ClaudeOrchestrator {
         ${allWorktrees.map(entry => {
           const inUse = this.isWorktreeInUse(repoPath, entry.id, repoName);
           const isOldest = entry.id === oldestId;
+          console.log(`[oldest-debug] render ${entry.id}: isOldest=${isOldest}, oldestId=${oldestId}`);
           const labels = [];
           if (inUse) labels.push('in use');
           if (isOldest) labels.push('oldest');
