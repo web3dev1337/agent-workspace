@@ -720,6 +720,25 @@ a.btn-glow {
   letter-spacing: 0.05em;
 }
 
+.cli-any-agent {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 2px dashed rgba(255, 255, 255, 0.25) !important;
+  box-shadow: none !important;
+  width: 140px;
+  height: 140px;
+  border-radius: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.cli-any-text {
+  font-family: var(--font-mono);
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
 .coming-soon-note {
   margin-top: 3rem;
   color: var(--text-muted);
