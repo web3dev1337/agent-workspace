@@ -1,0 +1,9 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="120" rx="24" fill="black"/>
+  <path d="M60 20 L68 48 L60 40 L52 48 Z" fill="white"/>
+  <path d="M60 100 L68 72 L60 80 L52 72 Z" fill="white"/>
+  <path d="M20 60 L48 52 L40 60 L48 68 Z" fill="white"/>
+  <path d="M100 60 L72 52 L80 60 L72 68 Z" fill="white"/>
+  <circle cx="60" cy="60" r="6" fill="white"/>
+  <text x="60" y="67" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="42" fill="white" opacity="0">G</text>
+</svg>
