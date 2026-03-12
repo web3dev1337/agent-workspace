@@ -704,27 +704,26 @@ a.btn-glow {
 
 .grok-question {
   position: absolute;
-  bottom: 4px;
-  right: 8px;
-  font-size: 2.5rem;
+  bottom: 6px;
+  right: 10px;
+  font-size: 1.8rem;
   font-weight: 900;
-  color: var(--cyan);
-  text-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
+  color: rgba(0, 0, 0, 0.4);
   pointer-events: none;
 }
 
 .when-elon {
   display: block;
-  font-size: 1.2rem;
-  font-weight: 900;
-  color: var(--cyan);
-  letter-spacing: 0.08em;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
 }
 
 .cli-any-agent {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: 2px dashed rgba(255, 255, 255, 0.25) !important;
-  box-shadow: none !important;
+  background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(79, 70, 229, 0.15)) !important;
+  border: 2px dashed rgba(0, 229, 255, 0.4) !important;
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.1), inset 0 0 0 1px rgba(0, 229, 255, 0.05) !important;
   width: 140px;
   height: 140px;
   border-radius: 30px;
@@ -737,7 +736,7 @@ a.btn-glow {
   font-family: var(--font-mono);
   font-size: 2.5rem;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--cyan);
 }
 
 .coming-soon-note {
