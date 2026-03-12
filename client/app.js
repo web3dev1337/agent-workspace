@@ -31548,15 +31548,11 @@ class ClaudeOrchestrator {
         const mtime = Number(wt.lastModifiedMs) || 0;
         const activity = Number(this.getWorktreeLastActivity(resolvedRepo, wt.id)) || 0;
         const effective = Math.max(mtime, activity) || 0;
-        console.log(`[oldest-debug] ${wt.id}: mtime=${mtime}, activity=${activity}, effective=${effective}, oldestTime=${oldestTime}, pass=${effective < oldestTime}`);
         if (effective < oldestTime || (effective === 0 && oldestId === null)) {
           oldestTime = effective;
           oldestId = wt.id;
         }
       }
-      console.log(`[oldest-debug] RESULT: oldestId=${oldestId}, oldestTime=${oldestTime}, allWorktrees.length=${allWorktrees.length}`);
-    } else {
-      console.log('[oldest-debug] allWorktrees is EMPTY');
     }
 
     const menu = document.createElement('div');
@@ -31566,7 +31562,6 @@ class ClaudeOrchestrator {
         ${allWorktrees.map(entry => {
           const inUse = this.isWorktreeInUse(repoPath, entry.id, repoName);
           const isOldest = entry.id === oldestId;
-          console.log(`[oldest-debug] render ${entry.id}: isOldest=${isOldest}, oldestId=${oldestId}`);
           const labels = [];
           if (inUse) labels.push('in use');
           if (isOldest) labels.push('oldest');
@@ -31675,48 +31670,8 @@ class ClaudeOrchestrator {
       const meta = data[btn.dataset.worktreePath];
       if (!meta) return;
 
-      const branch = meta.git?.branch || 'unknown';
-      const pr = meta.pr || {};
-      const risk = String(meta.project?.baseImpactRisk || '').toLowerCase();
-      const dirty = meta.git?.hasUncommittedChanges ? Number(meta.git?.total || 0) : 0;
-      const ahead = Number(meta.git?.ahead || 0);
-      const behind = Number(meta.git?.behind || 0);
-
-      let prLabel = '';
-      let prClass = '';
-      if (pr.hasPR && pr.number) {
-        if (pr.state === 'merged') {
-          prLabel = `✅ merged #${pr.number}`;
-          prClass = 'pr-merged';
-        } else if (pr.state === 'open') {
-          prLabel = pr.isDraft ? `🟡 draft #${pr.number}` : `🟢 PR #${pr.number}`;
-          prClass = pr.isDraft ? 'pr-draft' : 'pr-open';
-        } else if (pr.state === 'closed') {
-          prLabel = `⚪ closed #${pr.number}`;
-          prClass = 'pr-closed';
-        } else {
-          prLabel = `#${pr.number}`;
-          prClass = 'pr-unknown';
-        }
-      }
-
+      const branch = meta.git?.branch || '';
       const id = btn.dataset.worktreeId || '';
-      let suffix = prLabel ? ` • ${prLabel}` : '';
-      if (dirty > 0) suffix += ` • dirty:${dirty}`;
-      if (behind > 0 || ahead > 0) {
-        const parts = [];
-        if (behind > 0) parts.push(`⇣${behind}`);
-        if (ahead > 0) parts.push(`⇡${ahead}`);
-        suffix += ` • ${parts.join(' ')}`;
-      }
-      if (risk) {
-        suffix += ` • risk: ${risk}`;
-        btn.classList.remove('risk-low', 'risk-medium', 'risk-high', 'risk-critical');
-        if (risk === 'critical') btn.classList.add('risk-critical');
-        else if (risk === 'high') btn.classList.add('risk-high');
-        else if (risk === 'medium') btn.classList.add('risk-medium');
-        else if (risk === 'low') btn.classList.add('risk-low');
-      }
 
       // Preserve "in use" / "oldest" labels from data attributes
       const tagParts = [];
@@ -31724,13 +31679,9 @@ class ClaudeOrchestrator {
       if (btn.dataset.isOldest === 'true') tagParts.push('oldest');
       const tagsStr = tagParts.length ? ` • ${tagParts.join(' • ')}` : '';
 
-      console.log(`[oldest-debug] enrich ${id}: isOldest=${btn.dataset.isOldest}, inUse=${btn.dataset.inUse}, tagsStr="${tagsStr}"`);
-      btn.textContent = `${id} • ${branch}${suffix}${tagsStr}`;
-
-      if (prClass) {
-        btn.classList.remove('pr-open', 'pr-draft', 'pr-merged', 'pr-closed', 'pr-unknown');
-        btn.classList.add(prClass);
-      }
+      btn.textContent = branch
+        ? `${id} • ${branch}${tagsStr}`
+        : `${id}${tagsStr}`;
     });
   }
 
