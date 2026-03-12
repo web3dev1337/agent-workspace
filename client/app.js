@@ -1,3 +1,27 @@
+const HIDDEN_SETTINGS_SECTION_IDS = new Set([
+  'appearance',
+  'command-catalog',
+  'discord',
+  'identity',
+  'license',
+  'pager-pollcat',
+  'pr-merge-automation',
+  'projects-chats',
+  'quick-review',
+  'review-inbox',
+  'scheduler',
+  'tasks',
+  'tasks-launch',
+  'workflow-notifications'
+]);
+
+const normalizeSettingsSectionId = (value, fallback = '') => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  || fallback;
+
 // Enhanced Agent Workspace with sidebar and flexible viewing
 class ClaudeOrchestrator {
   constructor() {
@@ -942,11 +966,11 @@ class ClaudeOrchestrator {
   }
 
   async init() {
-    try {
-      // Initialize managers
-      this.terminalManager = new TerminalManager(this);
-      this.terminalManager.autosuggestEnabled = this.settings.autoSuggestions !== false;
-      this.notificationManager = new NotificationManager(this);
+	    try {
+	      // Initialize managers
+	      this.terminalManager = new TerminalManager(this);
+	      this.terminalManager.autosuggestEnabled = false;
+	      this.notificationManager = new NotificationManager(this);
       this.agentModalManager = new AgentModalManager(this);
 
       // Initialize tab manager for multi-workspace support
@@ -1074,11 +1098,6 @@ class ClaudeOrchestrator {
       // Initialize sidebar ports and set up auto-refresh
       this.refreshSidebarPorts();
       setInterval(() => this.refreshSidebarPorts(), 30000); // Refresh every 30s
-
-      // Request notification permission if enabled
-      if (this.settings.notifications) {
-        this.notificationManager.requestPermission();
-      }
 
 	      // Set up UI
 	      this.setupEventListeners();
@@ -1745,10 +1764,7 @@ class ClaudeOrchestrator {
           console.log(`Opening localhost for initialization: ${localhostUrl}`);
           window.open(localhostUrl, '_blank');
 
-          // Show notification that server is ready
-          if (this.settings.notifications) {
-            this.showNotification('Server Ready', `Server ${sessionId.replace('-server', '')} is running on port ${port}. Click 🎮 to play!`);
-          }
+          this.showNotification('Server Ready', `Server ${sessionId.replace('-server', '')} is running on port ${port}. Click 🎮 to play!`);
         }, 2000); // Wait 2 seconds for server to fully start
       });
 
@@ -1792,48 +1808,17 @@ class ClaudeOrchestrator {
       'view-servers-only': null,
       'view-presets': null,
       'close-presets': null,
-      'settings-toggle': null,
-      'close-settings': null,
-      'notification-toggle': null,
-      'notifications-panel': null,
-      'close-notifications': null,
-      'notifications-clear': null,
-      'notifications-mark-read': null,
-      'enable-notifications': null,
-      'enable-sounds': null,
-      'auto-scroll': null,
-      'theme-select': null,
-      'workflow-notify-mode': null,
-      'workflow-notify-tier1-interrupts': null,
-      'workflow-notify-review-nudges': null,
-      'worktrees-show-detailed-chooser-metadata': null,
-      'tasks-theme-select': null,
-      'tasks-launch-global-prefix': null,
-      'tasks-launch-include-title': null,
-      'review-inbox-mode': null,
-      'review-inbox-tiers': null,
-      'review-inbox-pr-only': null,
-      'review-inbox-unreviewed': null,
-      'review-inbox-prioritize-active': null,
-      'review-inbox-auto-console': null,
-      'review-inbox-auto-advance': null,
-      'review-inbox-project': null,
-      'quick-review-mode': null,
-      'quick-review-tiers': null,
-      'quick-review-pr-only': null,
-      'quick-review-unreviewed': null,
-      'quick-review-prioritize-active': null,
-      'quick-review-auto-console': null,
-      'quick-review-auto-advance': null,
-      'quick-review-project': null,
-      'trello-me-username': null,
-      'identity-claim-name': null,
-      'identity-save': null,
-      'identity-clear': null,
-      'identity-saved-list': null,
-      'global-skip-permissions': null,
-      'reset-to-defaults': null,
-      'save-as-default': null,
+	      'settings-toggle': null,
+	      'close-settings': null,
+	      'notification-toggle': null,
+	      'notifications-panel': null,
+	      'close-notifications': null,
+	      'notifications-clear': null,
+	      'notifications-mark-read': null,
+	      'auto-scroll': null,
+	      'global-skip-permissions': null,
+	      'reset-to-defaults': null,
+	      'save-as-default': null,
       'check-updates': null,
       'pull-updates': null,
 	      'dismiss-settings-notification': null,
@@ -2023,32 +2008,45 @@ class ClaudeOrchestrator {
 
 	    // Grid layout dropdown removed - using dynamic layout now
 
-	    // Settings
-		    const settingsToggle = document.getElementById('settings-toggle');
+		    // Settings
+			    const settingsToggle = document.getElementById('settings-toggle');
+			    const openSettingsPanel = ({ focusSearch = true, sectionId = null, behavior = 'auto' } = {}) => {
+			      const panel = document.getElementById('settings-panel');
+			      if (!panel) return;
+			      const normalizedSectionId = normalizeSettingsSectionId(sectionId, '');
+			      if (normalizedSectionId && HIDDEN_SETTINGS_SECTION_IDS.has(normalizedSectionId)) {
+			        sectionId = null;
+			      }
+			      panel.classList.remove('hidden');
+			      this.settingsPanelNavigationController?.reset?.();
+			      if (sectionId) {
+			        this.settingsPanelNavigationController?.openSectionById?.(sectionId, {
+			          scrollIntoView: true,
+		          behavior
+		        });
+		      }
+		      if (focusSearch) {
+		        setTimeout(() => document.getElementById('settings-search')?.focus?.(), 0);
+		      }
+		    };
 		    const closeSettingsPanel = () => {
 		      const panel = document.getElementById('settings-panel');
 		      if (!panel) return;
 		      panel.classList.add('hidden');
-		      const searchEl = document.getElementById('settings-search');
-		      if (searchEl && searchEl.value) {
-		        searchEl.value = '';
-		        document.querySelectorAll('.settings-filter-hidden').forEach((el) => el.classList.remove('settings-filter-hidden'));
-		      }
+		      this.settingsPanelNavigationController?.reset?.();
 		    };
+		    this.openSettingsPanel = openSettingsPanel;
+		    this.closeSettingsPanel = closeSettingsPanel;
 		    if (settingsToggle) {
 		      settingsToggle.addEventListener('click', () => {
 		        const panel = document.getElementById('settings-panel');
-		        if (panel) {
-		          panel.classList.toggle('hidden');
-		          if (!panel.classList.contains('hidden')) {
-		            // Convenience: put cursor in search so you can type immediately.
-		            setTimeout(() => document.getElementById('settings-search')?.focus?.(), 0);
-		          }
-		          console.log('Settings panel toggled');
+		        if (!panel) return;
+		        if (panel.classList.contains('hidden')) {
+		          openSettingsPanel({ focusSearch: true });
+		          return;
 		        }
+		        closeSettingsPanel();
 		      });
-		    } else {
-		      console.error('Settings toggle button not found!');
 		    }
 
 	    document.getElementById('close-settings').addEventListener('click', () => {
@@ -2077,108 +2075,19 @@ class ClaudeOrchestrator {
 	      closeSettingsPanel();
 	    });
 
-    // Settings inputs
-    document.getElementById('enable-notifications').addEventListener('change', (e) => {
-      this.settings.notifications = e.target.checked;
-      this.saveSettings();
-      if (e.target.checked) {
-        this.notificationManager.requestPermission();
-      }
-    });
-
-    document.getElementById('enable-sounds').addEventListener('change', (e) => {
-      this.settings.sounds = e.target.checked;
-      this.saveSettings();
-    });
-
-    document.getElementById('auto-scroll').addEventListener('change', (e) => {
-      this.settings.autoScroll = e.target.checked;
-      this.saveSettings();
-    });
-
-    document.getElementById('auto-suggestions').addEventListener('change', (e) => {
-      this.settings.autoSuggestions = e.target.checked;
-      this.saveSettings();
-      if (this.terminalManager) {
-        this.terminalManager.autosuggestEnabled = e.target.checked;
-        if (!e.target.checked) {
-          for (const sessionId of this.terminalManager.terminals.keys()) {
-            this.terminalManager.clearSuggestion(sessionId);
-          }
-        }
-      }
-    });
-
-    document.getElementById('theme-select').addEventListener('change', (e) => {
-      this.settings.theme = e.target.value;
-      this.saveSettings();
-      this.applyTheme();
-      // Persist via server user settings so it survives reloads across devices/worktrees.
-      this.updateGlobalUserSetting('ui.theme', e.target.value);
-    });
-
-	    const applySkinSelection = (rawSkin, { persist = true } = {}) => {
-	      const candidate = String(rawSkin || '').trim().toLowerCase();
-	      const skin = this.getKnownSkins().includes(candidate) ? candidate : 'default';
-	      this.settings.skin = skin;
-	      this.saveSettings();
-	      this.applyTheme();
-	      this.syncSkinGallerySelection();
-	      if (persist) this.updateGlobalUserSetting('ui.skin', skin);
-	    };
-
-	    const skinSelect = document.getElementById('skin-select');
-	    if (skinSelect) {
-	      skinSelect.addEventListener('change', (e) => {
-	        applySkinSelection(e.target.value, { persist: true });
+	    // Settings inputs
+	    const autoScroll = document.getElementById('auto-scroll');
+	    if (autoScroll) {
+	      autoScroll.addEventListener('change', (e) => {
+	        this.settings.autoScroll = e.target.checked;
+	        this.saveSettings();
 	      });
 	    }
 
-	    document.querySelectorAll('[data-skin-swatch]').forEach((btn) => {
-	      btn.addEventListener('click', () => {
-	        const next = String(btn?.dataset?.skinSwatch || '').trim().toLowerCase();
-	        applySkinSelection(next, { persist: true });
-	      });
-	    });
-
-		    const skinIntensityRange = document.getElementById('skin-intensity-range');
-		    const skinIntensityValue = document.getElementById('skin-intensity-value');
-		    if (skinIntensityRange) {
-		      let t = null;
-		      const apply = (raw) => {
-		        const v0 = Number(raw);
-		        const v = Number.isFinite(v0) ? Math.min(100, Math.max(0, Math.round(v0))) : 100;
-		        this.settings.skinIntensity = v;
-		        this.saveSettings();
-		        if (skinIntensityValue) skinIntensityValue.textContent = `${v}%`;
-		        this.applyTheme();
-		        if (t) clearTimeout(t);
-		        t = setTimeout(() => this.updateGlobalUserSetting('ui.skinIntensity', v), 250);
-		      };
-		      skinIntensityRange.addEventListener('input', (e) => apply(e.target.value));
-		      skinIntensityRange.addEventListener('change', (e) => apply(e.target.value));
-		    }
-
-		    // Settings UI helpers: search + section jump so the panel doesn’t feel like an endless scroll.
-		    this.setupSettingsPanelNavigation();
-		    this.setupDiagnosticsPanel();
-		    this.setupDependencySetupWizard();
-
-	    const tasksThemeSelect = document.getElementById('tasks-theme-select');
-	    if (tasksThemeSelect) {
-	      tasksThemeSelect.addEventListener('change', (e) => {
-	        const next = e.target.value;
-	        this.updateGlobalUserSetting('ui.tasks.theme', next);
-      });
-    }
-
-    const trelloMeUsername = document.getElementById('trello-me-username');
-    if (trelloMeUsername) {
-      trelloMeUsername.addEventListener('change', (e) => {
-        const v = String(e.target.value || '').trim();
-        this.updateGlobalUserSetting('ui.tasks.me.trelloUsername', v);
-      });
-    }
+			    // Settings UI helpers: search + section jump so the panel doesn’t feel like an endless scroll.
+			    this.setupSettingsPanelNavigation();
+			    this.setupDiagnosticsPanel();
+			    this.setupDependencySetupWizard();
 
     // PR merge automation settings (server-persisted)
     const prMergeEnabled = document.getElementById('pr-merge-auto-enabled');
@@ -2340,16 +2249,9 @@ class ClaudeOrchestrator {
       if (trelloSaveOnlyBtn) trelloSaveOnlyBtn.addEventListener('click', () => doTrelloSave(false));
     }
 
-    const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
-    if (diffViewerThemeSelect) {
-      diffViewerThemeSelect.addEventListener('change', (e) => {
-        this.updateGlobalUserSetting('ui.diffViewer.theme', e.target.value);
-      });
-    }
-
-    // User settings (terminal flags)
-    document.getElementById('global-skip-permissions').addEventListener('change', (e) => {
-      this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
+	    // User settings (terminal flags)
+	    document.getElementById('global-skip-permissions').addEventListener('change', (e) => {
+	      this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
     });
 
     const globalZaiProvider = document.getElementById('global-zai-provider');
@@ -2437,26 +2339,34 @@ class ClaudeOrchestrator {
       });
     }
 
-    // Template management buttons
-    document.getElementById('reset-to-defaults').addEventListener('click', () => {
-      this.resetToDefaults();
-    });
+	    // Template management buttons
+	    const resetToDefaultsBtn = document.getElementById('reset-to-defaults');
+	    if (resetToDefaultsBtn) {
+	      resetToDefaultsBtn.addEventListener('click', () => {
+	        this.resetToDefaults();
+	      });
+	    }
 
-    document.getElementById('save-as-default').addEventListener('click', () => {
-      this.saveAsDefault();
-    });
+	    const saveAsDefaultBtn = document.getElementById('save-as-default');
+	    if (saveAsDefaultBtn) {
+	      saveAsDefaultBtn.addEventListener('click', () => {
+	        this.saveAsDefault();
+	      });
+	    }
 
-    // Git update buttons
-    document.getElementById('check-updates').addEventListener('click', () => {
-      this.checkForUpdates();
-    });
+	    // Git update buttons
+	    const checkUpdatesBtn = document.getElementById('check-updates');
+	    if (checkUpdatesBtn) {
+	      checkUpdatesBtn.addEventListener('click', () => {
+	        this.checkForUpdates();
+	      });
+	    }
 
-    const pullUpdatesBtn = document.getElementById('pull-updates');
-    const checkUpdatesBtn = document.getElementById('check-updates');
-    if (this.isTauriRuntime()) {
-      if (checkUpdatesBtn) checkUpdatesBtn.textContent = 'Check App Updates';
-      if (pullUpdatesBtn) {
-        pullUpdatesBtn.textContent = 'Install App Update';
+	    const pullUpdatesBtn = document.getElementById('pull-updates');
+	    if (this.isTauriRuntime()) {
+	      if (checkUpdatesBtn) checkUpdatesBtn.textContent = 'Check App Updates';
+	      if (pullUpdatesBtn) {
+	        pullUpdatesBtn.textContent = 'Install App Update';
         pullUpdatesBtn.addEventListener('click', () => {
           this.installDesktopAppUpdate();
         });
@@ -2468,13 +2378,19 @@ class ClaudeOrchestrator {
     }
 
     // Notification dismiss buttons
-    document.getElementById('dismiss-settings-notification').addEventListener('click', () => {
-      document.getElementById('settings-update-notification').classList.add('hidden');
-    });
+	    const dismissSettingsNotificationBtn = document.getElementById('dismiss-settings-notification');
+	    if (dismissSettingsNotificationBtn) {
+	      dismissSettingsNotificationBtn.addEventListener('click', () => {
+	        document.getElementById('settings-update-notification')?.classList.add('hidden');
+	      });
+	    }
 
-    document.getElementById('dismiss-git-notification').addEventListener('click', () => {
-      document.getElementById('git-update-notification').classList.add('hidden');
-    });
+	    const dismissGitNotificationBtn = document.getElementById('dismiss-git-notification');
+	    if (dismissGitNotificationBtn) {
+	      dismissGitNotificationBtn.addEventListener('click', () => {
+	        document.getElementById('git-update-notification')?.classList.add('hidden');
+	      });
+	    }
 
     // Workflow notification settings (server-persisted)
     const workflowNotifyMode = document.getElementById('workflow-notify-mode');
@@ -2506,28 +2422,13 @@ class ClaudeOrchestrator {
         this.refreshBranchLabels();
       });
     }
-    const branchesColorize = document.getElementById('branches-colorize');
-    if (branchesColorize) {
-      branchesColorize.addEventListener('change', async (e) => {
-        await this.updateGlobalUserSetting('ui.branches.colorize', !!e.target.checked);
-        this.refreshBranchLabels();
-      });
-    }
-    const branchesShowAtSidebar = document.getElementById('branches-show-at-sidebar');
-    if (branchesShowAtSidebar) {
-      branchesShowAtSidebar.addEventListener('change', async (e) => {
-        await this.updateGlobalUserSetting('ui.branches.showAtInSidebar', !!e.target.checked);
-        this.refreshBranchLabels();
-      });
-    }
-    const worktreesShowDetailedChooserMetadata = document.getElementById('worktrees-show-detailed-chooser-metadata');
-    if (worktreesShowDetailedChooserMetadata) {
-      worktreesShowDetailedChooserMetadata.addEventListener('change', async (e) => {
-        this.showDetailedQuickWorktreeChooserMetadata = !!e.target.checked;
-        this.closeQuickWorktreeMenu();
-        await this.updateGlobalUserSetting('ui.worktrees.showDetailedChooserMetadata', !!e.target.checked);
-      });
-    }
+	    const branchesColorize = document.getElementById('branches-colorize');
+	    if (branchesColorize) {
+	      branchesColorize.addEventListener('change', async (e) => {
+	        await this.updateGlobalUserSetting('ui.branches.colorize', !!e.target.checked);
+	        this.refreshBranchLabels();
+	      });
+	    }
 
     // Review Console settings (server-persisted)
     const reviewConsolePreset = document.getElementById('review-console-preset');
@@ -3357,13 +3258,13 @@ class ClaudeOrchestrator {
     this.updateWorkflowModeButtons();
   }
 
-  syncWorktreeCreationFromUserSettings() {
-    const cfg = this.userSettings?.global?.ui?.worktrees || {};
-    this.autoCreateExtraWorktreesWhenBusy = cfg.autoCreateExtraWhenBusy !== false;
-    this.showDetailedQuickWorktreeChooserMetadata = cfg.showDetailedChooserMetadata === true;
-    const min = Number(cfg.autoCreateMinNumber);
-    const max = Number(cfg.autoCreateMaxNumber);
-    if (Number.isFinite(min) && min >= 1) this.autoCreateWorktreeMinNumber = Math.round(min);
+	  syncWorktreeCreationFromUserSettings() {
+	    const cfg = this.userSettings?.global?.ui?.worktrees || {};
+	    this.autoCreateExtraWorktreesWhenBusy = cfg.autoCreateExtraWhenBusy !== false;
+	    this.showDetailedQuickWorktreeChooserMetadata = false;
+	    const min = Number(cfg.autoCreateMinNumber);
+	    const max = Number(cfg.autoCreateMaxNumber);
+	    if (Number.isFinite(min) && min >= 1) this.autoCreateWorktreeMinNumber = Math.round(min);
     if (Number.isFinite(max) && max >= this.autoCreateWorktreeMinNumber) this.autoCreateWorktreeMaxNumber = Math.round(max);
   }
 
@@ -5639,14 +5540,14 @@ class ClaudeOrchestrator {
     });
   }
 
-  getBranchLabelConfig() {
-    const cfg = this.userSettings?.global?.ui?.branches || {};
-    return {
-      hidePrefixes: cfg.hidePrefixes !== false,
-      colorize: cfg.colorize !== false,
-      showAtInSidebar: !!cfg.showAtInSidebar
-    };
-  }
+	  getBranchLabelConfig() {
+	    const cfg = this.userSettings?.global?.ui?.branches || {};
+	    return {
+	      hidePrefixes: cfg.hidePrefixes !== false,
+	      colorize: cfg.colorize !== false,
+	      showAtInSidebar: false
+	    };
+	  }
 
   getIdentityClaimName() {
     const fromIdentity = String(this.userSettings?.global?.ui?.identity?.claimName || '').trim();
@@ -6876,7 +6777,7 @@ class ClaudeOrchestrator {
         break;
 
       case 'open-settings':
-        document.getElementById('settings-panel')?.classList.remove('hidden');
+        this.openSettingsPanel?.({ focusSearch: true });
         break;
 
       case 'open-dashboard':
@@ -7985,66 +7886,41 @@ class ClaudeOrchestrator {
     const branch = session ? session.branch : '';
 
     this.showToast(`Claude ${worktreeId} ready ${branch ? `(${branch})` : ''}`, 'success', { durationMs: 3000 });
-
-    // Play notification sound if enabled
-    if (this.settings.sounds) {
-      this.playNotificationSound();
-    }
-
-    // Browser notification if enabled
-    if (this.settings.notifications && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification(`Claude ${worktreeId} Ready`, {
-        body: `Claude finished responding and is ready for input ${branch ? `(${branch})` : ''}`,
-        icon: '/favicon.ico',
-        tag: `claude-ready-${sessionId}` // Prevent duplicates
-      });
-    }
   }
 
-  showNotification(title, message) {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, {
-        body: message,
-        icon: '/favicon.ico'
-      });
-    }
-  }
+	  showNotification(title, message) {
+	    const knownTypes = new Set(['success', 'warning', 'error', 'info']);
+	    const raw = String(message || '').trim().toLowerCase();
+	    const type = knownTypes.has(raw) ? raw : 'info';
+	    const text = knownTypes.has(raw)
+	      ? String(title || '').trim()
+	      : [String(title || '').trim(), String(message || '').trim()].filter(Boolean).join(': ');
+	    if (!text) return;
+	    this.showToast?.(text, type);
+	  }
 
-  playNotificationSound() {
-    // Create a simple notification sound
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
+	  loadSettings() {
+	    const stored = localStorage.getItem('claude-orchestrator-settings');
+	    const defaults = {
+	      notifications: false,
+	      sounds: false,
+	      autoScroll: true,
+	      autoSuggestions: false,
+	      theme: 'dark',
+	      skin: 'blue'
+	    };
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+	    if (stored) {
+	      return {
+	        ...defaults,
+	        ...JSON.parse(stored),
+	        notifications: false,
+	        sounds: false,
+	        autoSuggestions: false
+	      };
+	    }
 
-    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-    oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.3);
-  }
-
-  loadSettings() {
-    const stored = localStorage.getItem('claude-orchestrator-settings');
-    const defaults = {
-      notifications: true,
-      sounds: true,
-      autoScroll: true,
-      autoSuggestions: true,
-      theme: 'dark',
-      skin: 'blue'
-    };
-
-    if (stored) {
-      return { ...defaults, ...JSON.parse(stored) };
-    }
-
-    return defaults;
+	    return defaults;
   }
 
   loadServerLaunchSettings() {
@@ -8850,15 +8726,6 @@ class ClaudeOrchestrator {
 	    this.settings.skinIntensity = nextIntensity;
 	    this.saveSettings();
 	    this.applyTheme();
-
-	    const themeSelect = document.getElementById('theme-select');
-	    if (themeSelect) themeSelect.value = userTheme;
-	    const skinSelect = document.getElementById('skin-select');
-	    if (skinSelect) skinSelect.value = nextSkin;
-	    const skinIntensityRange = document.getElementById('skin-intensity-range');
-	    if (skinIntensityRange) skinIntensityRange.value = String(nextIntensity);
-	    const skinIntensityValue = document.getElementById('skin-intensity-value');
-	    if (skinIntensityValue) skinIntensityValue.textContent = `${nextIntensity}%`;
 	    this.syncSkinGallerySelection();
 	  }
 
@@ -8881,10 +8748,11 @@ class ClaudeOrchestrator {
 
   getSimpleModeConfig() {
     const cfg = this.userSettings?.global?.ui?.simpleMode || {};
+    const disabled = HIDDEN_SETTINGS_SECTION_IDS.has('projects-chats');
     return {
-      enabled: cfg.enabled !== false,
-      startupOpen: cfg.startupOpen === true,
-      hotkeys: cfg.hotkeys !== false,
+      enabled: disabled ? false : (cfg.enabled !== false),
+      startupOpen: disabled ? false : (cfg.startupOpen === true),
+      hotkeys: disabled ? false : (cfg.hotkeys !== false),
       showHints: cfg.showHints !== false
     };
   }
@@ -8986,22 +8854,8 @@ class ClaudeOrchestrator {
 
 	  syncSettingsUI() {
 	    // Sync checkbox states with settings
-	    document.getElementById('enable-notifications').checked = this.settings.notifications;
-	    document.getElementById('enable-sounds').checked = this.settings.sounds;
-	    document.getElementById('auto-scroll').checked = this.settings.autoScroll;
-	    document.getElementById('auto-suggestions').checked = this.settings.autoSuggestions !== false;
-	    document.getElementById('theme-select').value = this.settings.theme;
-	    const skinSelect = document.getElementById('skin-select');
-	    if (skinSelect) skinSelect.value = this.settings.skin || 'default';
-	    this.syncSkinGallerySelection();
-	    const skinIntensityRange = document.getElementById('skin-intensity-range');
-	    if (skinIntensityRange) {
-	      const v0 = Number(this.settings.skinIntensity);
-	      const v = Number.isFinite(v0) ? Math.min(100, Math.max(0, Math.round(v0))) : 100;
-	      skinIntensityRange.value = String(v);
-	      const label = document.getElementById('skin-intensity-value');
-	      if (label) label.textContent = `${v}%`;
-	    }
+	    const autoScroll = document.getElementById('auto-scroll');
+	    if (autoScroll) autoScroll.checked = this.settings.autoScroll;
 
 	    // Sync user settings UI if loaded
 	    if (this.userSettings) {
@@ -9305,64 +9159,112 @@ class ClaudeOrchestrator {
 	  }
 
 	  setupSettingsPanelNavigation() {
-	    const panel = document.getElementById('settings-panel');
-	    if (!panel) return;
-	    const content = panel.querySelector('.settings-content');
-	    if (!content) return;
+		    const panel = document.getElementById('settings-panel');
+		    if (!panel) return;
+		    const sectionsContainer = panel.querySelector('.settings-sections-container');
+		    const mainScroll = document.getElementById('settings-main');
+		    const searchEl = document.getElementById('settings-search');
+		    if (!sectionsContainer || !mainScroll) return;
 
-	    const searchEl = document.getElementById('settings-search');
-	    const jumpEl = document.getElementById('settings-jump');
+		    const sections = [];
+		    const titleForSection = (sectionEl) => {
+		      const raw = sectionEl.getAttribute('data-section-title')
+		        || sectionEl.querySelector('.setting-section-toggle-title')?.textContent
+		        || Array.from(sectionEl.children).find((child) => child.matches?.('h4, h5'))?.textContent;
+		      const title = String(raw || '').trim();
+		      return title || 'Section';
+		    };
 
-	    const sections = Array.from(content.querySelectorAll('.setting-section'));
-	    const titleForSection = (sectionEl) => {
-	      const h = sectionEl.querySelector('h4, h5');
-	      const title = String(h?.textContent || '').trim();
-	      return title || 'Section';
+		    const setSectionCollapsed = (sectionEl, collapsed) => {
+		      sectionEl.classList.toggle('is-collapsed', collapsed);
+		      const toggleEl = sectionEl.querySelector('.setting-section-toggle');
+		      toggleEl?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
 	    };
-
-	    if (jumpEl) {
-	      try {
-	        const opts = sections.map((sectionEl, idx) => {
-	          const title = this.escapeHtml(titleForSection(sectionEl));
-	          return `<option value="${idx}">${title}</option>`;
-	        }).join('');
-	        jumpEl.innerHTML = `<option value="">Jump to…</option>${opts}`;
-	      } catch {
-	        // ignore
+	    const expandSection = (sectionEl, { scrollIntoView = false, behavior = 'smooth' } = {}) => {
+	      if (!sectionEl) return;
+	      sectionEl.classList.remove('settings-filter-hidden');
+	      setSectionCollapsed(sectionEl, false);
+	      if (scrollIntoView) {
+	        sectionEl.scrollIntoView({ behavior, block: 'start' });
 	      }
+	    };
+	    const collapseAllSections = () => {
+	      sections.forEach((sectionEl) => setSectionCollapsed(sectionEl, true));
+	    };
+	    const reset = () => {
+	      if (searchEl) searchEl.value = '';
+	      sections.forEach((sectionEl) => sectionEl.classList.remove('settings-filter-hidden'));
+		      collapseAllSections();
+		      mainScroll.scrollTo({ top: 0, behavior: 'auto' });
+		    };
 
-	      jumpEl.addEventListener('change', () => {
-	        const raw = String(jumpEl.value || '').trim();
-	        if (!raw) return;
-	        const idx = Number(raw);
-	        const target = Number.isFinite(idx) ? sections[idx] : null;
-	        if (target) {
-	          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		    Array.from(sectionsContainer.querySelectorAll('.setting-section')).forEach((sectionEl, idx) => {
+		      const title = titleForSection(sectionEl);
+		      const sectionId = normalizeSettingsSectionId(sectionEl.getAttribute('data-section-id') || title, `sec-${idx}`);
+		      if (HIDDEN_SETTINGS_SECTION_IDS.has(sectionId)) {
+		        sectionEl.remove();
+		        return;
+		      }
+		      sectionEl.setAttribute('data-section-id', sectionId);
+		      sectionEl.setAttribute('data-section-title', title);
+		      sectionEl.id = `settings-${sectionId}`;
+
+	      const headingEl = Array.from(sectionEl.children).find((child) => child.matches?.('h4, h5'));
+	      if (headingEl) {
+	        const bodyEl = document.createElement('div');
+	        bodyEl.className = 'setting-section-body';
+	        bodyEl.id = `${sectionEl.id}-body`;
+	        while (headingEl.nextSibling) {
+	          bodyEl.appendChild(headingEl.nextSibling);
 	        }
-	        jumpEl.value = '';
-	      });
-	    }
 
-	    if (searchEl) {
-	      const applyFilter = () => {
-	        const query = String(searchEl.value || '').trim().toLowerCase();
-	        const groups = Array.from(content.querySelectorAll('.setting-group'));
+	        const toggleEl = document.createElement('button');
+	        toggleEl.type = 'button';
+	        toggleEl.className = 'setting-section-toggle';
+	        toggleEl.setAttribute('aria-controls', bodyEl.id);
+	        toggleEl.setAttribute('aria-expanded', 'false');
+
+	        const titleEl = document.createElement('span');
+	        titleEl.className = 'setting-section-toggle-title';
+	        titleEl.textContent = title;
+
+	        const iconEl = document.createElement('span');
+	        iconEl.className = 'setting-section-toggle-icon';
+	        iconEl.setAttribute('aria-hidden', 'true');
+	        iconEl.textContent = '▾';
+
+	        toggleEl.append(titleEl, iconEl);
+	        toggleEl.addEventListener('click', () => {
+	          const isCollapsed = sectionEl.classList.contains('is-collapsed');
+	          setSectionCollapsed(sectionEl, !isCollapsed);
+	        });
+
+	        headingEl.replaceWith(toggleEl);
+	        sectionEl.appendChild(bodyEl);
+		      }
+
+		      setSectionCollapsed(sectionEl, true);
+		      sections.push(sectionEl);
+		    });
+
+		    if (searchEl) {
+		      const applyFilter = () => {
+		        const query = String(searchEl.value || '').trim().toLowerCase();
 
 	        if (!query) {
-	          content.querySelectorAll('.settings-filter-hidden').forEach((el) => el.classList.remove('settings-filter-hidden'));
+	          sections.forEach((sectionEl) => sectionEl.classList.remove('settings-filter-hidden'));
+	          collapseAllSections();
 	          return;
 	        }
 
-	        groups.forEach((groupEl) => {
-	          const text = String(groupEl.textContent || '').toLowerCase();
-	          groupEl.classList.toggle('settings-filter-hidden', !text.includes(query));
-	        });
-
 	        sections.forEach((sectionEl) => {
 	          const title = String(titleForSection(sectionEl)).toLowerCase();
-	          const anyVisibleGroup = Array.from(sectionEl.querySelectorAll('.setting-group')).some((groupEl) => !groupEl.classList.contains('settings-filter-hidden'));
-	          const show = title.includes(query) || anyVisibleGroup;
+	          const bodyText = String(sectionEl.querySelector('.setting-section-body')?.textContent || '').toLowerCase();
+	          const show = title.includes(query) || bodyText.includes(query);
 	          sectionEl.classList.toggle('settings-filter-hidden', !show);
+	          if (show) {
+	            setSectionCollapsed(sectionEl, false);
+	          }
 	        });
 	      };
 
@@ -9374,273 +9276,372 @@ class ClaudeOrchestrator {
 	        applyFilter();
 	      });
 	    }
+
+		    this.settingsPanelNavigationController = {
+		      reset,
+		      openSectionById: (sectionId, options = {}) => {
+		        const normalizedSectionId = normalizeSettingsSectionId(sectionId, '');
+		        if (!normalizedSectionId || HIDDEN_SETTINGS_SECTION_IDS.has(normalizedSectionId)) return;
+		        const normalizedId = `settings-${normalizedSectionId}`;
+		        const target = sections.find((sectionEl) => sectionEl.id === normalizedId)
+		          || sections.find((sectionEl) => sectionEl.getAttribute('data-section-id') === normalizedSectionId);
+		        if (!target) return;
+		        expandSection(target, options);
+		      }
+		    };
+		    reset();
 	  }
 
 	  setupDiagnosticsPanel() {
 	    const btn = document.getElementById('diagnostics-refresh');
-	    const btnFirstRun = document.getElementById('diagnostics-first-run');
-	    const btnInstallWizard = document.getElementById('diagnostics-install-wizard');
-	    const btnRepairSafe = document.getElementById('diagnostics-repair-safe');
-	    const out = document.getElementById('diagnostics-output');
 	    const statusEl = document.getElementById('diagnostics-status');
-	    const repairEl = document.getElementById('diagnostics-repair-actions');
-	    if (!btn || !out) return;
+	    const summaryEl = document.getElementById('diagnostics-summary');
+	    const guidanceEl = document.getElementById('diagnostics-guidance');
+	    const detailsEl = document.getElementById('diagnostics-details');
+	    if (!btn || !summaryEl || !guidanceEl || !detailsEl) return;
+
+	    const buttonLabel = 'Run diagnostic scan';
 	    const state = {
 	      base: null,
 	      firstRun: null,
-	      wizard: null
+	      postInstall: null
 	    };
 
-	    const renderRepairActions = (firstRunData) => {
-	      if (!repairEl) return;
-	      const actions = Array.isArray(firstRunData?.repairActions) ? firstRunData.repairActions : [];
-	      if (!actions.length) {
-	        repairEl.innerHTML = '';
+	    const formatPlatform = (platform) => {
+	      const value = String(platform || '').trim().toLowerCase();
+	      if (value === 'win32') return 'Windows';
+	      if (value === 'darwin') return 'macOS';
+	      if (value === 'linux') return 'Linux';
+	      return platform ? String(platform) : 'Unknown';
+	    };
+
+	    const formatTimestamp = (value) => {
+	      const raw = String(value || '').trim();
+	      if (!raw) return '';
+	      const date = new Date(raw);
+	      if (Number.isNaN(date.getTime())) return raw;
+	      return date.toLocaleString();
+	    };
+
+	    const escape = (value) => this.escapeHtml(String(value || ''));
+
+	    const getToneClass = ({ ok = null, status = '', severity = '' } = {}) => {
+	      if (ok === true || String(status || '').trim().toLowerCase() === 'pass') return 'is-good';
+	      const sev = String(severity || '').trim().toLowerCase();
+	      if (sev === 'blocking') return 'is-blocking';
+	      if (sev === 'warning') return 'is-warning';
+	      return 'is-neutral';
+	    };
+
+	    const getSeverityLabel = ({ ok = null, status = '', severity = '' } = {}) => {
+	      if (ok === true || String(status || '').trim().toLowerCase() === 'pass') return 'Ready';
+	      const sev = String(severity || '').trim().toLowerCase();
+	      if (sev === 'blocking') return 'Blocking';
+	      if (sev === 'warning') return 'Warning';
+	      return String(status || 'Info').trim() || 'Info';
+	    };
+
+	    const renderEmpty = () => {
+	      summaryEl.innerHTML = '<div class="diagnostics-empty-state">Run a diagnostic scan to inspect tool availability, auth, and local setup readiness.</div>';
+	      guidanceEl.innerHTML = '';
+	      detailsEl.innerHTML = '';
+	    };
+
+	    const renderFailure = (message) => {
+	      summaryEl.innerHTML = `<div class="diagnostics-error-state">${escape(message || 'Failed to load diagnostics.')}</div>`;
+	      guidanceEl.innerHTML = '';
+	      detailsEl.innerHTML = '';
+	    };
+
+	    const render = () => {
+	      const base = (state.base && typeof state.base === 'object') ? state.base : {};
+	      const firstRun = (state.firstRun && typeof state.firstRun === 'object') ? state.firstRun : {};
+	      const postInstall = (state.postInstall && typeof state.postInstall === 'object') ? state.postInstall : {};
+	      const tools = Array.isArray(base.tools) ? base.tools : [];
+	      const checks = Array.isArray(firstRun.checks) ? firstRun.checks : [];
+	      const steps = Array.isArray(postInstall.steps) ? postInstall.steps : [];
+	      if (!tools.length && !checks.length && !steps.length) {
+	        renderEmpty();
 	        return;
 	      }
-	      repairEl.innerHTML = actions
-	        .map((action) => {
-	          const id = this.escapeHtml(String(action?.id || '').trim());
-	          const label = this.escapeHtml(String(action?.label || action?.id || 'Repair').trim());
-	          const kind = this.escapeHtml(String(action?.kind || '').trim());
-	          const title = kind ? `Repair (${kind})` : 'Repair';
-	          return `<button class="btn-secondary" type="button" data-diagnostics-repair="${id}" title="${title}">${label}</button>`;
-	        })
-	        .join('');
-	    };
 
-	    const render = (data, firstRunData = null, wizardData = null) => {
-	      const lines = [];
-	      const platform = String(data?.platform || '');
-	      lines.push(`platform: ${platform || 'unknown'}`);
-	      if (data?.env) {
-	        lines.push(`homeDir: ${String(data.env.homeDir || '')}`);
-	        if (data.env.USERPROFILE) lines.push(`USERPROFILE: ${String(data.env.USERPROFILE)}`);
-	      }
-	      if (data?.nodePty) {
-	        lines.push(`node-pty: ${data.nodePty.ok ? 'ok' : `missing (${String(data.nodePty.error || 'error')})`}`);
-	      }
-	      if (data?.platformSmoke?.checks) {
-	        const checks = data.platformSmoke.checks;
-	        lines.push(`platform-smoke: ${data.platformSmoke.ok ? 'ok' : 'issues detected'}`);
-	        const shellId = String(checks?.shell?.id || 'shell');
-	        lines.push(`  shell(${shellId}): ${checks?.shell?.ok ? 'ok' : `fail (${String(checks?.shell?.error || 'missing')})`}`);
-	        lines.push(`  git: ${checks?.git?.ok ? 'ok' : `fail (${String(checks?.git?.error || 'missing')})`}`);
-	        lines.push(`  gh: ${checks?.gh?.ok ? 'ok' : `fail (${String(checks?.gh?.error || 'missing')})`}`);
-	        lines.push(`  gh auth: ${checks?.ghAuth?.ok ? 'ok' : `fail (${String(checks?.ghAuth?.error || 'not authenticated')})`}`);
-	      }
-	      lines.push('');
-
-	      const tools = Array.isArray(data.tools) ? data.tools : [];
-	      tools.forEach((t) => {
-	        const name = String(t?.name || t?.id || 'tool');
-	        if (t?.ok) {
-	          const version = String(t?.version || '').trim();
-	          lines.push(`ok   ${name}${version ? `: ${version}` : ''}`);
-	        } else {
-	          const err = String(t?.error || t?.code || 'missing');
-	          lines.push(`fail ${name}: ${err}`);
+	      const toolMap = new Map(tools.map((tool) => [String(tool?.id || '').trim(), tool]));
+	      const checkMap = new Map(checks.map((check) => [String(check?.id || '').trim(), check]));
+	      const platformLabel = formatPlatform(base.platform || postInstall.platform || firstRun.platform);
+	      const summary = (postInstall.summary && typeof postInstall.summary === 'object')
+	        ? postInstall.summary
+	        : ((firstRun.summary && typeof firstRun.summary === 'object') ? firstRun.summary : {});
+	      const ready = !!summary.ready;
+	      const blockingCount = Number(summary.blockingCount || 0);
+	      const warningCount = Number(summary.warningCount || 0);
+	      const totalChecks = Number(firstRun?.summary?.totalChecks || postInstall?.summary?.totalSteps || 0);
+	      const shellCheck = base?.platformSmoke?.checks?.shell || null;
+	      const shellName = String(shellCheck?.id || (platformLabel === 'Windows' ? 'powershell' : 'bash')).trim();
+	      const nodePty = base?.nodePty || null;
+	      const ghTool = toolMap.get('gh') || null;
+	      const ghAuthTool = toolMap.get('ghAuth') || null;
+	      const claudeTool = toolMap.get('claude') || null;
+	      const codexTool = toolMap.get('codex') || null;
+	      const storageChecks = ['orchestrator-home', 'orchestrator-workspaces', 'repo-scan-root']
+	        .map((id) => checkMap.get(id))
+	        .filter(Boolean);
+	      const runtimeReady = !!shellCheck?.ok && !!nodePty?.ok;
+	      const githubReady = !!ghTool?.ok && !!ghAuthTool?.ok;
+	      const storageReady = storageChecks.length > 0 && storageChecks.every((check) => String(check?.status || '').trim().toLowerCase() === 'pass');
+	      const detectedAgentCount = [claudeTool, codexTool].filter((tool) => !!tool?.ok).length;
+	      const missingAgents = [
+	        claudeTool?.ok ? null : 'Claude CLI',
+	        codexTool?.ok ? null : 'Codex CLI'
+	      ].filter(Boolean);
+	      const scanTone = ready ? 'is-good' : (blockingCount > 0 ? 'is-blocking' : 'is-warning');
+	      const scanLabel = ready ? 'Ready' : (blockingCount > 0 ? 'Needs attention' : 'Advisory');
+	      const summaryCards = [
+	        {
+	          title: 'Terminal runtime',
+	          value: runtimeReady ? 'Ready' : 'Needs attention',
+	          copy: runtimeReady
+	            ? `${shellName === 'powershell' ? 'PowerShell' : shellName} and node-pty are available.`
+	            : String(nodePty?.ok ? (shellCheck?.error || 'Shell runtime is unavailable.') : (nodePty?.error || 'node-pty failed to load.')),
+	          tone: runtimeReady ? 'is-good' : 'is-blocking'
+	        },
+	        {
+	          title: 'GitHub access',
+	          value: githubReady ? 'Ready' : (ghTool?.ok ? 'Login needed' : 'CLI missing'),
+	          copy: githubReady
+	            ? 'GitHub CLI is installed and authenticated.'
+	            : String(ghTool?.ok ? (ghAuthTool?.error || 'Authenticate GitHub CLI to enable review workflows.') : (ghTool?.error || 'GitHub CLI is not installed.')),
+	          tone: githubReady ? 'is-good' : 'is-warning'
+	        },
+	        {
+	          title: 'Workspace storage',
+	          value: storageReady ? 'Ready' : 'Needs attention',
+	          copy: storageReady
+	            ? '~/.orchestrator and ~/GitHub are writable.'
+	            : String(storageChecks.find((check) => String(check?.status || '').trim().toLowerCase() !== 'pass')?.message || 'Local workspace storage needs attention.'),
+	          tone: storageReady ? 'is-good' : 'is-warning'
+	        },
+	        {
+	          title: 'Agent CLIs',
+	          value: detectedAgentCount === 2 ? 'Ready' : (detectedAgentCount === 1 ? 'Partial' : 'Missing'),
+	          copy: detectedAgentCount === 2
+	            ? 'Claude and Codex CLIs are both available.'
+	            : `${missingAgents.join(' and ') || 'Agent CLIs'} not detected in PATH.`,
+	          tone: detectedAgentCount === 2 ? 'is-good' : 'is-warning'
 	        }
+	      ];
+
+	      const findings = steps.length
+	        ? steps.filter((step) => String(step?.status || '').trim().toLowerCase() !== 'pass').map((step) => ({
+	            id: String(step?.id || '').trim(),
+	            title: String(step?.title || step?.id || 'Check').trim(),
+	            message: String(step?.message || '').trim(),
+	            details: String(step?.details || '').trim(),
+	            help: String(step?.help || '').trim(),
+	            command: String(step?.command || '').trim(),
+	            severity: String(step?.severity || '').trim(),
+	            status: String(step?.status || '').trim()
+	          }))
+	        : checks.filter((check) => String(check?.status || '').trim().toLowerCase() !== 'pass').map((check) => ({
+	            id: String(check?.id || '').trim(),
+	            title: String(check?.name || check?.id || 'Check').trim(),
+	            message: String(check?.message || '').trim(),
+	            details: String(check?.details || '').trim(),
+	            help: '',
+	            command: '',
+	            severity: String(check?.severity || '').trim(),
+	            status: String(check?.status || '').trim()
+	          }));
+
+	      const guidanceItems = Array.from(new Set([
+	        ...(Array.isArray(postInstall.guidance) ? postInstall.guidance : []),
+	        ...findings.map((finding) => {
+	          const parts = [];
+	          if (finding.help) parts.push(finding.help);
+	          if (!finding.help && finding.message) parts.push(finding.message);
+	          if (finding.command) parts.push(`Suggested command: ${finding.command}`);
+	          return parts.join(' ').trim();
+	        })
+	      ].map((item) => String(item || '').trim()).filter(Boolean)));
+
+	      const toolPriority = ['node', 'npm', 'git', 'gitIdentity', 'gh', 'ghAuth', 'claude', 'codex', 'ffmpeg', 'python', 'powershell', 'wsl', 'bash'];
+	      const sortedTools = [...tools].sort((left, right) => {
+	        const leftId = String(left?.id || '').trim();
+	        const rightId = String(right?.id || '').trim();
+	        const leftIndex = toolPriority.indexOf(leftId);
+	        const rightIndex = toolPriority.indexOf(rightId);
+	        if (leftIndex >= 0 || rightIndex >= 0) {
+	          if (leftIndex < 0) return 1;
+	          if (rightIndex < 0) return -1;
+	          return leftIndex - rightIndex;
+	        }
+	        return leftId.localeCompare(rightId);
 	      });
 
-	      if (firstRunData?.summary) {
-	        lines.push('');
-	        lines.push('first-run:');
-	        lines.push(`  ready: ${firstRunData.summary.ready ? 'yes' : 'no'}`);
-	        lines.push(`  blocking: ${Number(firstRunData.summary.blockingCount || 0)}`);
-	        lines.push(`  warnings: ${Number(firstRunData.summary.warningCount || 0)}`);
-	        lines.push(`  repairable actions: ${Number(firstRunData.summary.repairableCount || 0)}`);
-	        const checks = Array.isArray(firstRunData?.checks) ? firstRunData.checks : [];
-	        checks.forEach((check) => {
-	          const status = String(check?.status || '').trim() || 'unknown';
-	          const severity = String(check?.severity || '').trim() || 'info';
-	          const name = String(check?.name || check?.id || 'check');
-	          const msg = String(check?.message || '').trim();
-	          lines.push(`  ${status} [${severity}] ${name}${msg ? `: ${msg}` : ''}`);
-	        });
-	      }
+	      summaryEl.innerHTML = `
+	        <div class="diagnostics-banner ${scanTone}">
+	          <div class="diagnostics-banner-copy">
+	            <div class="diagnostics-eyebrow">Read-only scan</div>
+	            <div class="diagnostics-banner-title-row">
+	              <span class="diagnostics-pill ${scanTone}">${escape(scanLabel)}</span>
+	              <span class="diagnostics-banner-title">Environment readiness</span>
+	            </div>
+	            <p class="diagnostics-banner-text">Checks terminal runtime, Git and GitHub access, local workspace storage, and agent CLIs without making any changes.</p>
+	          </div>
+	          <div class="diagnostics-chip-row">
+	            <span class="diagnostics-chip">Platform: ${escape(platformLabel)}</span>
+	            <span class="diagnostics-chip">Blocking: ${escape(blockingCount)}</span>
+	            <span class="diagnostics-chip">Warnings: ${escape(warningCount)}</span>
+	            <span class="diagnostics-chip">Checks: ${escape(totalChecks)}</span>
+	          </div>
+	        </div>
+	        <div class="diagnostics-card-grid">
+	          ${summaryCards.map((card) => `
+	            <article class="diagnostics-card ${card.tone}">
+	              <div class="diagnostics-card-title">${escape(card.title)}</div>
+	              <div class="diagnostics-card-value">${escape(card.value)}</div>
+	              <p class="diagnostics-card-copy">${escape(card.copy)}</p>
+	            </article>
+	          `).join('')}
+	        </div>
+	      `;
 
-	      if (wizardData?.summary) {
-	        lines.push('');
-	        lines.push('install-wizard:');
-	        lines.push(`  ready: ${wizardData.summary.ready ? 'yes' : 'no'}`);
-	        lines.push(`  blocking: ${Number(wizardData.summary.blockingCount || 0)}`);
-	        lines.push(`  warnings: ${Number(wizardData.summary.warningCount || 0)}`);
-	        const steps = Array.isArray(wizardData?.steps) ? wizardData.steps : [];
-	        steps.forEach((step) => {
-	          const status = String(step?.status || 'unknown').trim();
-	          const sev = String(step?.severity || 'info').trim();
-	          const title = String(step?.title || step?.id || 'step').trim();
-	          const msg = String(step?.message || '').trim();
-	          const auto = String(step?.autoFixActionId || '').trim();
-	          const cmd = String(step?.command || '').trim();
-	          const actionHints = [];
-	          if (auto) actionHints.push(`auto:${auto}`);
-	          if (cmd) actionHints.push(`cmd:${cmd}`);
-	          const hint = actionHints.length ? ` [${actionHints.join(' | ')}]` : '';
-	          lines.push(`  ${status} [${sev}] ${title}${msg ? `: ${msg}` : ''}${hint}`);
-	        });
-	        const guidance = Array.isArray(wizardData?.guidance) ? wizardData.guidance : [];
-	        guidance.slice(0, 5).forEach((line) => {
-	          const text = String(line || '').trim();
-	          if (text) lines.push(`  hint: ${text}`);
-	        });
-	      }
+	      guidanceEl.innerHTML = guidanceItems.length ? `
+	        <section class="diagnostics-section-card">
+	          <div class="diagnostics-section-title">Guidance</div>
+	          <ul class="diagnostics-guidance-list">
+	            ${guidanceItems.map((item) => `<li>${escape(item)}</li>`).join('')}
+	          </ul>
+	        </section>
+	      ` : '';
 
-	      out.textContent = lines.join('\n').trim() || 'No diagnostics available.';
+	      detailsEl.innerHTML = `
+	        <div class="diagnostics-details-grid">
+	          <section class="diagnostics-section-card">
+	            <div class="diagnostics-section-title">Findings</div>
+	            <div class="diagnostics-findings-list">
+	              ${findings.length ? findings.map((finding) => {
+	                const tone = getToneClass({ status: finding.status, severity: finding.severity });
+	                const label = getSeverityLabel({ status: finding.status, severity: finding.severity });
+	                const description = finding.message || finding.details || finding.help || 'Review this item.';
+	                return `
+	                  <article class="diagnostics-item ${tone}">
+	                    <div class="diagnostics-item-header">
+	                      <span class="diagnostics-pill ${tone}">${escape(label)}</span>
+	                      <div class="diagnostics-item-title">${escape(finding.title)}</div>
+	                    </div>
+	                    <p class="diagnostics-item-copy">${escape(description)}</p>
+	                    ${finding.help && finding.help !== description ? `<p class="diagnostics-item-detail">${escape(finding.help)}</p>` : ''}
+	                    ${finding.command ? `<code class="diagnostics-item-command">${escape(finding.command)}</code>` : ''}
+	                  </article>
+	                `;
+	              }).join('') : '<div class="diagnostics-empty-state compact">No issues found in the latest scan.</div>'}
+	            </div>
+	          </section>
+	          <section class="diagnostics-section-card">
+	            <div class="diagnostics-section-title">Detected tools</div>
+	            <div class="diagnostics-tools-list">
+	              ${sortedTools.map((tool) => {
+	                const tone = getToneClass({ ok: !!tool?.ok, severity: tool?.ok ? 'info' : 'warning' });
+	                const label = tool?.ok ? 'Detected' : 'Missing';
+	                const meta = tool?.ok
+	                  ? String(tool?.version || tool?.command || 'Available').trim()
+	                  : String(tool?.error || tool?.code || 'Not detected').trim();
+	                return `
+	                  <article class="diagnostics-item ${tone}">
+	                    <div class="diagnostics-item-header">
+	                      <span class="diagnostics-pill ${tone}">${escape(label)}</span>
+	                      <div class="diagnostics-item-title">${escape(String(tool?.name || tool?.id || 'Tool'))}</div>
+	                    </div>
+	                    <p class="diagnostics-item-copy">${escape(meta)}</p>
+	                  </article>
+	                `;
+	              }).join('')}
+	            </div>
+	          </section>
+	        </div>
+	      `;
 	    };
 
-	    const refreshBase = async () => {
-	      const res = await fetch('/api/diagnostics');
-	      const data = await res.json().catch(() => ({}));
-	      if (!res.ok || data?.ok === false) {
-	        throw new Error(String(data?.error || `HTTP ${res.status}`));
+	    const loadJson = async (url) => {
+	      const response = await fetch(url);
+	      const data = await response.json().catch(() => ({}));
+	      if (!response.ok || data?.ok === false) {
+	        throw new Error(String(data?.error || `HTTP ${response.status}`));
 	      }
-	      state.base = data;
 	      return data;
 	    };
 
-	    const refreshFirstRun = async () => {
-	      const res = await fetch('/api/diagnostics/first-run');
-	      const data = await res.json().catch(() => ({}));
-	      if (!res.ok || data?.ok === false) {
-	        throw new Error(String(data?.error || `HTTP ${res.status}`));
-	      }
-	      state.firstRun = data;
-	      renderRepairActions(data);
-	      return data;
+	    const setLoading = (loading) => {
+	      btn.disabled = !!loading;
+	      btn.textContent = loading ? 'Scanning…' : buttonLabel;
+	      btn.setAttribute('aria-busy', loading ? 'true' : 'false');
 	    };
 
-	    const refreshInstallWizard = async () => {
-	      const res = await fetch('/api/diagnostics/install-wizard');
-	      const data = await res.json().catch(() => ({}));
-	      if (!res.ok || data?.ok === false) {
-	        throw new Error(String(data?.error || `HTTP ${res.status}`));
-	      }
-	      state.wizard = data;
-	      return data;
-	    };
-
-	    const refresh = async (mode = 'all') => {
-	      btn.disabled = true;
-	      if (btnFirstRun) btnFirstRun.disabled = true;
-	      if (btnInstallWizard) btnInstallWizard.disabled = true;
-	      if (btnRepairSafe) btnRepairSafe.disabled = true;
-	      if (statusEl) statusEl.textContent = 'Loading…';
+	    const refresh = async () => {
+	      setLoading(true);
+	      if (statusEl) statusEl.textContent = 'Scanning…';
 	      try {
-	        if (mode === 'base') {
-	          await refreshBase();
-	        } else if (mode === 'first-run') {
-	          await refreshFirstRun();
-	        } else if (mode === 'install-wizard') {
-	          await Promise.all([refreshBase(), refreshFirstRun(), refreshInstallWizard()]);
-	        } else {
-	          await Promise.all([refreshBase(), refreshFirstRun(), refreshInstallWizard()]);
-	        }
-	        render(state.base, state.firstRun, state.wizard);
-	        const stamp = String(state.wizard?.generatedAt || state.firstRun?.generatedAt || state.base?.generatedAt || '');
-	        if (statusEl) statusEl.textContent = `Updated: ${stamp}`;
-	      } catch (err) {
-	        out.textContent = `Failed to load diagnostics: ${String(err?.message || err)}`;
-	        if (repairEl) repairEl.innerHTML = '';
-	        if (statusEl) statusEl.textContent = '';
-	      } finally {
-	        btn.disabled = false;
-	        if (btnFirstRun) btnFirstRun.disabled = false;
-	        if (btnInstallWizard) btnInstallWizard.disabled = false;
-	        if (btnRepairSafe) btnRepairSafe.disabled = false;
-	      }
-	    };
+	        const requests = [
+	          { key: 'base', url: '/api/diagnostics' },
+	          { key: 'firstRun', url: '/api/diagnostics/first-run' },
+	          { key: 'postInstall', url: '/api/diagnostics/post-install' }
+	        ];
+	        const results = await Promise.allSettled(requests.map((request) => loadJson(request.url)));
+	        const nextState = { base: null, firstRun: null, postInstall: null };
+	        const errors = [];
 
-	    btn.addEventListener('click', () => refresh('all'));
-	    btnFirstRun?.addEventListener('click', () => refresh('first-run'));
-	    btnInstallWizard?.addEventListener('click', () => refresh('install-wizard'));
-	    btnRepairSafe?.addEventListener('click', async () => {
-	      btnRepairSafe.disabled = true;
-	      if (statusEl) statusEl.textContent = 'Running safe auto-fix…';
-	      try {
-	        const res = await fetch('/api/diagnostics/first-run/repair-safe', { method: 'POST' });
-	        const data = await res.json().catch(() => ({}));
-	        if (!res.ok || data?.ok === false) {
-	          throw new Error(String(data?.error || data?.message || `HTTP ${res.status}`));
+	        results.forEach((result, index) => {
+	          const { key } = requests[index];
+	          if (result.status === 'fulfilled') {
+	            nextState[key] = result.value;
+	            return;
+	          }
+	          nextState[key] = null;
+	          errors.push(String(result.reason?.message || result.reason || `${key} failed`));
+	        });
+
+	        if (!nextState.base && !nextState.firstRun && !nextState.postInstall) {
+	          throw new Error(errors[0] || 'Failed to load diagnostics.');
 	        }
 
-	        const diagnostics = data?.diagnostics;
-	        if (diagnostics && typeof diagnostics === 'object') {
-	          state.firstRun = diagnostics;
-	          renderRepairActions(state.firstRun);
-	        } else {
-	          await refreshFirstRun();
-	        }
-	        if (!state.base) await refreshBase();
-	        await refreshInstallWizard().catch(() => {});
-	        render(state.base, state.firstRun, state.wizard);
+	        state.base = nextState.base;
+	        state.firstRun = nextState.firstRun;
+	        state.postInstall = nextState.postInstall;
+	        render();
 
-	        const appliedCount = Number(data?.appliedCount || 0);
-	        const failedCount = Number(data?.failedCount || 0);
-	        const skippedManualCount = Number(data?.skippedManualCount || 0);
-	        if (failedCount > 0) {
-	          this.showToast?.(`Auto-fix applied ${appliedCount}, failed ${failedCount}`, 'warning');
-	        } else {
-	          const tail = skippedManualCount > 0 ? `, ${skippedManualCount} manual step(s) left` : '';
-	          this.showToast?.(`Auto-fix applied ${appliedCount}${tail}`, 'success');
+	        const stamp = formatTimestamp(
+	          nextState.postInstall?.generatedAt ||
+	          nextState.firstRun?.generatedAt ||
+	          nextState.base?.generatedAt
+	        );
+	        if (statusEl) {
+	          statusEl.textContent = errors.length
+	            ? `Partial scan${stamp ? ` • ${stamp}` : ''}`
+	            : `Updated${stamp ? ` • ${stamp}` : ''}`;
 	        }
-	        if (statusEl) statusEl.textContent = 'Safe auto-fix completed';
 	      } catch (error) {
-	        this.showToast?.(`Safe auto-fix failed: ${String(error?.message || error)}`, 'error');
+	        renderFailure(`Failed to load diagnostics: ${String(error?.message || error)}`);
 	        if (statusEl) statusEl.textContent = '';
 	      } finally {
-	        btnRepairSafe.disabled = false;
+	        setLoading(false);
 	      }
-	    });
-	    repairEl?.addEventListener('click', async (event) => {
-	      const target = event.target.closest('[data-diagnostics-repair]');
-	      if (!target) return;
-	      const action = String(target.getAttribute('data-diagnostics-repair') || '').trim();
-	      if (!action) return;
-	      target.disabled = true;
-	      if (statusEl) statusEl.textContent = `Running repair: ${action}…`;
-	      try {
-	        const res = await fetch('/api/diagnostics/first-run/repair', {
-	          method: 'POST',
-	          headers: { 'Content-Type': 'application/json' },
-	          body: JSON.stringify({ action })
-	        });
-	        const data = await res.json().catch(() => ({}));
-	        if (!res.ok || data?.ok === false) {
-	          throw new Error(String(data?.error || data?.message || `HTTP ${res.status}`));
-	        }
-	        const repair = data?.repair || {};
-	        if (repair.manual) {
-	          this.showToast?.(String(repair?.message || 'Manual action required'), 'warning');
-	        } else {
-	          this.showToast?.(String(repair?.message || 'Repair completed'), 'success');
-	        }
-		        if (data?.diagnostics) {
-		          state.firstRun = data.diagnostics;
-		          renderRepairActions(state.firstRun);
-		        } else {
-		          await refreshFirstRun();
-		        }
-		        if (!state.base) await refreshBase();
-		        await refreshInstallWizard().catch(() => {});
-		        render(state.base, state.firstRun, state.wizard);
-	        if (statusEl) statusEl.textContent = `Repair completed: ${action}`;
-	      } catch (error) {
-	        this.showToast?.(`Repair failed: ${String(error?.message || error)}`, 'error');
-	        if (statusEl) statusEl.textContent = '';
-	      } finally {
-	        target.disabled = false;
-	      }
-	    });
+	    };
+
+	    this.refreshDiagnosticsPanel = () => refresh();
+	    renderEmpty();
+	    btn.addEventListener('click', () => refresh());
 	  }
 
 	  openDiagnosticsPanel({ refresh = true } = {}) {
 	    try {
-	      document.getElementById('settings-panel')?.classList?.remove?.('hidden');
+	      this.openSettingsPanel?.({
+	        focusSearch: false,
+	        sectionId: 'diagnostics',
+	        behavior: 'smooth'
+	      });
 	      setTimeout(() => {
 	        try {
-	          document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+	          document.getElementById('diagnostics-summary')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
 	        } catch {
 	          // ignore
 	        }
@@ -17044,47 +17045,6 @@ class ClaudeOrchestrator {
       }
     }
 
-    // Update diff viewer settings UI
-    const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
-    if (diffViewerThemeSelect) {
-      diffViewerThemeSelect.value = this.userSettings.global?.ui?.diffViewer?.theme || 'light';
-    }
-
-    // Sync UI theme (light/dark) from server settings if present.
-    const themeSelect = document.getElementById('theme-select');
-    if (themeSelect) {
-      const theme = this.userSettings.global?.ui?.theme;
-      if (theme === 'light' || theme === 'dark') {
-        themeSelect.value = theme;
-      }
-    }
-
-	    const skinSelect = document.getElementById('skin-select');
-	    if (skinSelect) {
-	      const skin = this.userSettings.global?.ui?.skin;
-	      skinSelect.value = this.getKnownSkins().includes(skin) ? skin : 'default';
-	    }
-	    this.syncSkinGallerySelection();
-
-	    const skinIntensityRange = document.getElementById('skin-intensity-range');
-	    const skinIntensityValue = document.getElementById('skin-intensity-value');
-	    if (skinIntensityRange) {
-	      const raw = Number(this.userSettings.global?.ui?.skinIntensity);
-	      const v = Number.isFinite(raw) ? Math.min(100, Math.max(0, Math.round(raw))) : 100;
-	      skinIntensityRange.value = String(v);
-	      if (skinIntensityValue) skinIntensityValue.textContent = `${v}%`;
-	    }
-
-    const tasksThemeSelect = document.getElementById('tasks-theme-select');
-    if (tasksThemeSelect) {
-      const tasksTheme = this.userSettings.global?.ui?.tasks?.theme;
-      if (tasksTheme === 'light' || tasksTheme === 'dark' || tasksTheme === 'inherit') {
-        tasksThemeSelect.value = tasksTheme;
-      } else {
-        tasksThemeSelect.value = 'inherit';
-      }
-    }
-
     // Workflow notification settings UI
     const workflowNotifyMode = document.getElementById('workflow-notify-mode');
     if (workflowNotifyMode) {
@@ -17113,16 +17073,6 @@ class ClaudeOrchestrator {
     if (branchesColorize) {
       const cfg = this.userSettings.global?.ui?.branches || {};
       branchesColorize.checked = cfg.colorize !== false;
-    }
-    const branchesShowAtSidebar = document.getElementById('branches-show-at-sidebar');
-    if (branchesShowAtSidebar) {
-      const cfg = this.userSettings.global?.ui?.branches || {};
-      branchesShowAtSidebar.checked = !!cfg.showAtInSidebar;
-    }
-    const worktreesShowDetailedChooserMetadata = document.getElementById('worktrees-show-detailed-chooser-metadata');
-    if (worktreesShowDetailedChooserMetadata) {
-      const cfg = this.userSettings.global?.ui?.worktrees || {};
-      worktreesShowDetailedChooserMetadata.checked = cfg.showDetailedChooserMetadata === true;
     }
 
     // Review Console settings UI
@@ -17683,17 +17633,18 @@ class ClaudeOrchestrator {
     setTimeout(checkAndStart, 1000); // Initial delay for terminal setup
   }
 
-  async checkForSettingsUpdates() {
-    try {
-      const response = await fetch('/api/user-settings/check-updates');
-      if (response.ok) {
-        const result = await response.json();
+	  async checkForSettingsUpdates() {
+	    try {
+	      const notification = document.getElementById('settings-update-notification');
+	      if (!notification) return;
+	      const response = await fetch('/api/user-settings/check-updates');
+	      if (response.ok) {
+	        const result = await response.json();
 
-        if (result && result.hasUpdates) {
-          const notification = document.getElementById('settings-update-notification');
-          notification.classList.remove('hidden');
-          console.log('Settings updates available:', result);
-        }
+	        if (result && result.hasUpdates) {
+	          notification.classList.remove('hidden');
+	          console.log('Settings updates available:', result);
+	        }
       }
     } catch (error) {
       console.error('Error checking for settings updates:', error);
@@ -17792,21 +17743,23 @@ class ClaudeOrchestrator {
       return;
     }
 
-    try {
-      this.showTemporaryMessage('Checking for updates...', 'info');
+	    try {
+	      this.showTemporaryMessage('Checking for updates...', 'info');
 
-      const response = await fetch('/api/git/check-updates');
-      if (response.ok) {
-        const result = await response.json();
+	      const response = await fetch('/api/git/check-updates');
+	      if (response.ok) {
+	        const result = await response.json();
 
-        if (result.hasUpdates) {
-          const notification = document.getElementById('git-update-notification');
-          const textElement = document.getElementById('git-notification-text');
-          textElement.textContent = `${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available on ${result.currentBranch}`;
-          notification.classList.remove('hidden');
+	        if (result.hasUpdates) {
+	          const notification = document.getElementById('git-update-notification');
+	          const textElement = document.getElementById('git-notification-text');
+	          if (textElement) {
+	            textElement.textContent = `${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available on ${result.currentBranch}`;
+	          }
+	          notification?.classList.remove('hidden');
 
-          this.showTemporaryMessage(`Found ${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available`, 'success');
-        } else if (result.hasUpdates === false) {
+	          this.showTemporaryMessage(`Found ${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available`, 'success');
+	        } else if (result.hasUpdates === false) {
           this.showTemporaryMessage('Repository is up to date', 'success');
         } else {
           this.showTemporaryMessage('Unable to check for updates', 'error');
@@ -17833,14 +17786,13 @@ class ClaudeOrchestrator {
         headers: { 'Content-Type': 'application/json' }
       });
 
-      if (response.ok) {
-        const result = await response.json();
+	      if (response.ok) {
+	        const result = await response.json();
 
-        if (result.success) {
-          // Success message will be handled by socket event
-          const notification = document.getElementById('git-update-notification');
-          notification.classList.add('hidden');
-        } else {
+	        if (result.success) {
+	          // Success message will be handled by socket event
+	          document.getElementById('git-update-notification')?.classList.add('hidden');
+	        } else {
           this.showTemporaryMessage(result.error || 'Failed to pull changes', 'error');
 
           // Show specific error details if available
@@ -18665,6 +18617,10 @@ class ClaudeOrchestrator {
   }
 
   async showProjectChatsShell() {
+    if (!this.getSimpleModeConfig().enabled) {
+      this.showToast?.('Projects + Chats is currently disabled', 'warning');
+      return;
+    }
     const existing = document.getElementById('projects-chats-shell');
     if (existing) existing.remove();
     const simpleCfg = this.getSimpleModeConfig();
@@ -33842,11 +33798,13 @@ class ClaudeOrchestrator {
   }
 
   showSettings() {
-    // Toggle settings panel
     const settingsPanel = document.getElementById('settings-panel');
-    if (settingsPanel) {
-      settingsPanel.classList.toggle('hidden');
+    if (!settingsPanel) return;
+    if (settingsPanel.classList.contains('hidden')) {
+      this.openSettingsPanel?.({ focusSearch: true });
+      return;
     }
+    this.closeSettingsPanel?.();
   }
 
   getProjectIcon(type) {

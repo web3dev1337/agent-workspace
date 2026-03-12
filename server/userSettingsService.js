@@ -263,7 +263,7 @@ class UserSettingsService {
           },
           simpleMode: {
             // Codex-style top-level project/chat shell controls.
-            enabled: true,
+            enabled: false,
             startupOpen: false,
             hotkeys: true,
             showHints: true
@@ -393,11 +393,11 @@ class UserSettingsService {
               assigneesByBoard: {}
             }
           },
-          diffViewer: {
-            theme: 'dark'
-          }
-        }
-      },
+	          diffViewer: {
+	            theme: 'light'
+	          }
+	        }
+	      },
       perTerminal: {
         // sessionId -> override settings
         // Example:

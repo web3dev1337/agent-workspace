@@ -210,167 +210,76 @@
         <div class="settings-content">
             <div class="settings-toolbar">
                 <input id="settings-search" type="search" placeholder="Search settings…" autocomplete="off" />
-                <select id="settings-jump" aria-label="Jump to settings section">
-                    <option value="">Jump to…</option>
-                </select>
             </div>
-            <div class="setting-group">
-                <label>
-                    <input type="checkbox" id="enable-notifications" checked />
-                    Enable Browser Notifications
-                </label>
-            </div>
-            <div class="setting-group">
-                <label>
-                    <input type="checkbox" id="enable-sounds" checked />
-                    Enable Sound Alerts
-                </label>
-            </div>
-            <div class="setting-group">
-                <label>
-                    <input type="checkbox" id="auto-scroll" checked />
-                    Auto-scroll Terminals
-                </label>
-            </div>
-            <div class="setting-group">
-                <label>
-                    <input type="checkbox" id="auto-suggestions" checked />
-                    Terminal Autosuggestions
-                </label>
-                <p class="setting-description">Fish/zsh-style command suggestions from shell history. Press → to accept.</p>
-            </div>
-            <div class="setting-group">
-                <label>
-                    Theme:
-                    <select id="theme-select">
-                        <option value="dark">Dark</option>
-                        <option value="light">Light</option>
-                    </select>
-                </label>
-            </div>
-            <div class="setting-group">
-                <label>
-                    Skin:
-                    <select id="skin-select">
-                        <option value="default">Default</option>
-                        <option value="blue">Blue</option>
-                        <option value="purple">Purple</option>
-                        <option value="emerald">Emerald</option>
-                        <option value="amber">Amber</option>
-                        <option value="high-contrast">High Contrast</option>
-                    </select>
-                </label>
-                <p class="setting-description">Controls accent styling; works with Light/Dark.</p>
-            </div>
-            <div class="setting-group">
-                <label>
-                    Skin intensity:
-                    <input id="skin-intensity-range" type="range" min="0" max="100" step="5" value="100" />
-                    <span id="skin-intensity-value" class="mono" style="margin-left:8px; opacity:0.85;">100%</span>
-                </label>
-                <p class="setting-description">How strongly the selected skin tints neutral UI surfaces (0% = neutral,
-                    100% = full skin).</p>
-            </div>
-            <div class="setting-group">
-                <div class="skin-gallery" id="skin-gallery">
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="default" title="Default skin">
-                        <span class="skin-swatch-paint skin-default"></span>
-                        <span>Default</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="blue" title="Blue skin">
-                        <span class="skin-swatch-paint skin-blue"></span>
-                        <span>Blue</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="purple" title="Purple skin">
-                        <span class="skin-swatch-paint skin-purple"></span>
-                        <span>Purple</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="emerald" title="Emerald skin">
-                        <span class="skin-swatch-paint skin-emerald"></span>
-                        <span>Emerald</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="amber" title="Amber skin">
-                        <span class="skin-swatch-paint skin-amber"></span>
-                        <span>Amber</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="high-contrast" title="High contrast skin">
-                        <span class="skin-swatch-paint skin-high-contrast"></span>
-                        <span>High Contrast</span>
-                    </button>
-                </div>
-                <p class="setting-description">Theme gallery: click a swatch to switch skins instantly.</p>
-            </div>
+            <div class="settings-main" id="settings-main">
+                <div class="settings-sections-container">
+                        <div class="setting-section settings-glossary" data-section-id="glossary" data-section-title="Glossary">
+                            <h4>Glossary</h4>
+                            <p class="setting-description">New here? Skim this first for a quick mental model of the Orchestrator.</p>
 
-            <div class="setting-section">
-                <h4>Workspace</h4>
-                <div class="setting-group">
-                    <button id="rename-workspace-btn" class="header-btn" style="width:auto">Rename current workspace</button>
-                </div>
-            </div>
+                            <details>
+                                <summary><strong>Workspace</strong></summary>
+                                <div class="setting-description">A saved configuration that groups worktrees/terminals for a project
+                                    (or many repos in a mixed workspace). Opening a workspace starts its sessions.</div>
+                            </details>
 
-            <div class="setting-section">
-                <h4>Workflow Notifications</h4>
-                <div class="setting-group">
-                    <label>
-                        <strong>Mode:</strong>
-                        <select id="workflow-notify-mode">
-                            <option value="quiet">Quiet</option>
-                            <option value="normal">Normal</option>
-                            <option value="aggressive">Aggressive</option>
-                        </select>
-                    </label>
-                    <p class="setting-description">Quiet: log only. Normal: toast for key events. Aggressive: toasts +
-                        optional browser/sound alerts.</p>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="workflow-notify-tier1-interrupts" />
-                        Tier 1 interrupts
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="workflow-notify-review-nudges" />
-                        Review complete nudges
-                    </label>
-                </div>
-            </div>
+                            <details>
+                                <summary><strong>Worktree</strong></summary>
+                                <div class="setting-description">A git worktree folder (e.g. <code>work6</code>) on disk. One
+                                    worktree usually has an <em>Agent</em> terminal and (optionally) a paired <em>Server</em>
+                                    terminal.</div>
+                            </details>
 
-            <div class="setting-section">
-                <h4>Branch Labels</h4>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="branches-hide-prefixes" />
-                        Hide branch prefixes (e.g. <code>feature/</code>, <code>fix/</code>)
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="branches-colorize" />
-                        Colorize branch labels by type
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="branches-show-at-sidebar" />
-                        Prefix branch with “@” in sidebar
-                    </label>
-                </div>
-            </div>
+                            <details>
+                                <summary><strong>Terminal / Session</strong></summary>
+                                <div class="setting-description">A running process (PTY) owned by the Orchestrator. It can be
+                                    recovered after restart unless you explicitly close it.</div>
+                            </details>
 
-            <div class="setting-section">
-                <h4>Worktrees</h4>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="worktrees-show-detailed-chooser-metadata" />
-                        Show detailed metadata in Quick Work chooser
-                    </label>
-                    <p class="setting-description">Off by default for a cleaner menu. Turn this on to show branch, PR, dirty state, and risk details inside the worktree dropdown.</p>
-                </div>
-            </div>
+                            <details>
+                                <summary><strong>Agent vs Server</strong></summary>
+                                <div class="setting-description"><strong>Agent</strong> runs Claude/Codex work.
+                                    <strong>Server</strong> runs your dev server (game/app). They’re paired per worktree and should
+                                    generally live/die together.</div>
+                            </details>
 
-            <div class="setting-section">
-                <h4>Review Console</h4>
+                        </div>
+
+                        <div class="setting-section" data-section-id="general" data-section-title="General Settings">
+                            <h4>General Settings</h4>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="auto-scroll" checked />
+                                    Auto-scroll Terminals
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-section" data-section-id="branch-labels" data-section-title="Branch Labels">
+                            <h4>Branch Labels</h4>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="branches-hide-prefixes" />
+                                    Hide branch prefixes (e.g. <code>feature/</code>, <code>fix/</code>)
+                                </label>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="branches-colorize" />
+                                    Colorize branch labels by type
+                                </label>
+                            </div>
+                        </div>
+
+	            <div class="setting-section" data-section-id="workspace" data-section-title="Workspace">
+	                <h4>Workspace</h4>
+	                <div class="setting-group">
+	                    <button id="rename-workspace-btn" class="header-btn" style="width:auto">Rename current workspace</button>
+	                </div>
+	            </div>
+
+	            <div class="setting-section" data-section-id="review-console" data-section-title="Review Console">
+	                <h4>Review Console</h4>
                 <div class="setting-group">
                     <label>
                         Default preset:
@@ -416,476 +325,29 @@
                 </div>
             </div>
 
-            <div class="setting-section">
-                <h4>Review Inbox</h4>
-                <div class="setting-group">
-                    <label>
-                        Default view:
-                        <select id="review-inbox-mode">
-                            <option value="mine">Mine</option>
-                            <option value="all">All</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        Default tiers:
-                        <select id="review-inbox-tiers">
-                            <option value="t3t4">T3 + T4</option>
-                            <option value="t1">T1</option>
-                            <option value="t2">T2</option>
-                            <option value="t3">T3</option>
-                            <option value="t4">T4</option>
-                            <option value="all">All</option>
-                            <option value="none">None</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-pr-only" />
-                        PRs only
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-unreviewed" />
-                        Unreviewed only
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-prioritize-active" />
-                        Prioritize active agents
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-auto-console" />
-                        Auto-open Review Console
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-auto-advance" />
-                        Auto-advance after review
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        Default project filter:
-                        <input id="review-inbox-project" type="text" placeholder="owner/repo or project name" />
-                    </label>
-                </div>
-            </div>
-
-            <div class="setting-section">
-                <h4>Quick Review</h4>
-                <div class="setting-group">
-                    <label>
-                        Default view:
-                        <select id="quick-review-mode">
-                            <option value="mine">Mine</option>
-                            <option value="all">All</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        Default tiers:
-                        <select id="quick-review-tiers">
-                            <option value="t3t4">T3 + T4</option>
-                            <option value="t1">T1</option>
-                            <option value="t2">T2</option>
-                            <option value="t3">T3</option>
-                            <option value="t4">T4</option>
-                            <option value="all">All</option>
-                            <option value="none">None</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-pr-only" />
-                        PRs only
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-unreviewed" />
-                        Unreviewed only
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-prioritize-active" />
-                        Prioritize active agents
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-auto-console" />
-                        Auto-open Review Console
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-auto-advance" />
-                        Auto-advance after review
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        Default project filter:
-                        <input id="quick-review-project" type="text" placeholder="owner/repo or project name" />
-                    </label>
-                </div>
-            </div>
-
-            <div class="setting-section">
-                <h4>Projects + Chats</h4>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="simple-mode-enabled" />
-                        Enable Projects + Chats shell
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="simple-mode-startup-open" />
-                        Open Projects + Chats on startup
-                    </label>
-                    <p class="setting-description">If enabled, opens the shell automatically once workspaces load.</p>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="simple-mode-hotkeys" />
-                        Enable Projects + Chats hotkey (Alt+P)
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="simple-mode-show-hints" />
-                        Show quick hints in shell
-                    </label>
-                </div>
-            </div>
-
-            <div class="setting-section settings-glossary">
-                <h4>Glossary</h4>
-                <p class="setting-description">A quick mental model for how the Orchestrator is structured.</p>
-
-                <details>
-                    <summary><strong>Workspace</strong></summary>
-                    <div class="setting-description">A saved configuration that groups worktrees/terminals for a project
-                        (or many repos in a mixed workspace). Opening a workspace starts its sessions.</div>
-                </details>
-
-                <details>
-                    <summary><strong>Worktree</strong></summary>
-                    <div class="setting-description">A git worktree folder (e.g. <code>work6</code>) on disk. One
-                        worktree usually has an <em>Agent</em> terminal and (optionally) a paired <em>Server</em>
-                        terminal.</div>
-                </details>
-
-                <details>
-                    <summary><strong>Terminal / Session</strong></summary>
-                    <div class="setting-description">A running process (PTY) owned by the Orchestrator. It can be
-                        recovered after restart unless you explicitly close it.</div>
-                </details>
-
-                <details>
-                    <summary><strong>Agent vs Server</strong></summary>
-                    <div class="setting-description"><strong>Agent</strong> runs Claude/Codex work.
-                        <strong>Server</strong> runs your dev server (game/app). They’re paired per worktree and should
-                        generally live/die together.</div>
-                </details>
-
-                <details>
-                    <summary><strong>Close vs Remove</strong></summary>
-                    <div class="setting-description">
-                        <div><strong>Close terminal (×)</strong>: stops the running processes for that worktree (agent + server). The worktree stays in the workspace and can be re-opened.</div>
-                        <div style="margin-top:6px;"><strong>Remove worktree (🗑)</strong>: removes the worktree from the workspace config, closes its terminals, and clears recoverables. Files on disk are kept.</div>
-                        <div style="margin-top:6px;"><strong>Close chat</strong>: marks thread status as closed (and can optionally close linked sessions via API flag).</div>
-                        <div style="margin-top:6px;"><strong>Archive chat</strong>: marks thread status as archived (and can optionally close linked sessions via API flag).</div>
-                    </div>
-                </details>
-            </div>
-
-                <div class="setting-section">
+                <div class="setting-section" data-section-id="diagnostics" data-section-title="Diagnostics">
                 <h4>Diagnostics</h4>
-                <div class="setting-group">
-                    <button id="diagnostics-refresh" class="template-btn secondary">Refresh diagnostics</button>
-                    <button id="diagnostics-first-run" class="template-btn secondary">Post-install check</button>
-                    <button id="diagnostics-install-wizard" class="template-btn secondary">Fix environment wizard</button>
-                    <button id="diagnostics-repair-safe" class="template-btn secondary">Auto-fix safe issues</button>
-                    <span id="diagnostics-status" style="margin-left:10px; opacity:0.75;"></span>
+                <p class="setting-description diagnostics-intro">Run a read-only environment scan for tooling, auth, and setup readiness. This section only analyzes and suggests next steps. It does not make changes for you.</p>
+                <div class="setting-group diagnostics-toolbar-row">
+                    <button id="diagnostics-refresh" class="template-btn secondary" type="button">Run diagnostic scan</button>
+                    <span id="diagnostics-status" class="diagnostics-status" aria-live="polite"></span>
                 </div>
                 <div class="setting-group">
-                    <div id="diagnostics-repair-actions" class="mono" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+                    <div id="diagnostics-summary" class="diagnostics-summary" aria-live="polite">
+                        <div class="diagnostics-empty-state">Run a diagnostic scan to inspect your environment.</div>
+                    </div>
                 </div>
                 <div class="setting-group">
-                    <pre id="diagnostics-output" class="mono diagnostics-output">Click “Refresh diagnostics”.</pre>
+                    <div id="diagnostics-guidance" class="diagnostics-guidance"></div>
+                </div>
+                <div class="setting-group">
+                    <div id="diagnostics-details" class="diagnostics-details"></div>
                 </div>
             </div>
 
-            <div class="setting-section">
-                <h4>Command Catalog</h4>
-                <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items: flex-end;">
-                    <label>
-                        Filter:
-                        <input id="command-catalog-filter" type="text" placeholder="search command, category, alias..." style="min-width: 260px;" />
-                    </label>
-                    <button id="command-catalog-refresh" class="btn-secondary" type="button">Refresh commands</button>
-                    <button id="command-catalog-open-new-project" class="btn-secondary" type="button">New Project Wizard</button>
-                    <span id="command-catalog-status" style="opacity:0.75;"></span>
-                </div>
-                <div class="setting-group">
-                    <p id="command-catalog-summary" class="setting-description">Click “Refresh commands”.</p>
-                </div>
-                <div class="setting-group">
-                    <pre id="command-catalog-output" class="mono diagnostics-output">Loading is manual by default.</pre>
-                </div>
-            </div>
-
-	            <div class="setting-section">
-	                <h4>Discord</h4>
+	            <div class="setting-section" data-section-id="trello-integration" data-section-title="Trello Integration">
+	                <h4>Trello Integration</h4>
 	                <div class="setting-group">
-	                    <label>
-	                        <input type="checkbox" id="discord-auto-ensure-services" />
-	                        Auto-start Services workspace on server startup
-	                    </label>
-	                    <p class="setting-description">Keeps Claudesworth (bot + queue processor) running after orchestrator restarts.</p>
-	                </div>
-	            </div>
-
-                <div class="setting-section">
-                    <h4>Scheduler</h4>
-                    <div class="setting-group">
-                        <label>
-                            <input type="checkbox" id="scheduler-enabled" />
-                            Enable scheduler
-                        </label>
-                        <p class="setting-description">Runs configured semantic commands on an interval. Safety mode blocks destructive commands unless explicitly allowed per schedule.</p>
-                    </div>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
-                        <button class="btn-secondary" type="button" id="scheduler-refresh">Refresh scheduler</button>
-                        <button class="btn-secondary" type="button" id="scheduler-save">Save scheduler config</button>
-                        <button class="btn-secondary" type="button" id="scheduler-run-now">Run selected now</button>
-                    </div>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
-                        <label>
-                            Template:
-                            <select id="scheduler-template-select" style="min-width: 260px;">
-                                <option value="">Select template…</option>
-                            </select>
-                        </label>
-                        <label>
-                            Interval (min):
-                            <input id="scheduler-template-interval" type="number" min="5" step="5" value="30" style="width: 110px;" />
-                        </label>
-                        <button class="btn-secondary" type="button" id="scheduler-template-preview">Preview template job</button>
-                        <button class="btn-secondary" type="button" id="scheduler-template-add">Add template job</button>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            Selected schedule id:
-                            <input id="scheduler-run-id" type="text" placeholder="schedule-id" style="width: 220px;" />
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            Schedules JSON:
-                            <textarea id="scheduler-json" class="tasks-textarea" rows="8" placeholder='[{"id":"review-route","enabled":true,"intervalMinutes":60,"command":"open-review-route","params":{}}]'></textarea>
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <pre id="scheduler-status-output" class="mono diagnostics-output">Click “Refresh scheduler”.</pre>
-                    </div>
-                </div>
-
-                <div class="setting-section">
-                    <h4>Pager / Pollcat</h4>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
-                        <label>
-                            Session id:
-                            <input id="pager-session-id" type="text" placeholder="work1-claude" style="width: 220px;" />
-                        </label>
-                        <label>
-                            Workspace id:
-                            <input id="pager-workspace-id" type="text" placeholder="zoo-hytopia" style="width: 220px;" />
-                        </label>
-                        <label>
-                            Tier filter:
-                            <input id="pager-tier-set" type="text" placeholder="3,4" style="width: 120px;" />
-                        </label>
-                        <label>
-                            Interval (sec):
-                            <input id="pager-interval-seconds" type="number" min="5" step="5" value="300" style="width: 110px;" />
-                        </label>
-                        <label>
-                            Max pings:
-                            <input id="pager-max-pings" type="number" min="1" step="1" value="24" style="width: 110px;" />
-                        </label>
-                        <label>
-                            Max runtime (min):
-                            <input id="pager-max-runtime-minutes" type="number" min="1" step="1" value="120" style="width: 130px;" />
-                        </label>
-                    </div>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
-                        <label>
-                            Nudge text:
-                            <input id="pager-nudge-text" type="text" value="next" style="width: 220px;" />
-                        </label>
-                        <label>
-                            Custom mode:
-                            <select id="pager-custom-instruction-mode" style="width: 120px;">
-                                <option value="append">append</option>
-                                <option value="replace">replace</option>
-                            </select>
-                        </label>
-                        <label>
-                            <input type="checkbox" id="pager-done-check-enabled" />
-                            Done-check enabled
-                        </label>
-                        <label>
-                            Done token:
-                            <input id="pager-done-token" type="text" value="PAGER_DONE" style="width: 160px;" />
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            Custom instruction (optional):
-                            <textarea id="pager-custom-instruction" class="tasks-textarea" rows="3" placeholder="continue and finish all remaining implementation tasks"></textarea>
-                        </label>
-                    </div>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
-                        <button class="btn-secondary" type="button" id="pager-refresh">Refresh pager</button>
-                        <button class="btn-secondary" type="button" id="pager-save-defaults">Save pager defaults</button>
-                        <button class="btn-secondary" type="button" id="pager-start">Start pager</button>
-                        <button class="btn-secondary" type="button" id="pager-stop">Stop pager</button>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            Stop job id:
-                            <input id="pager-stop-id" type="text" placeholder="pager-..." style="width: 220px;" />
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <pre id="pager-status-output" class="mono diagnostics-output">Click “Refresh pager”.</pre>
-                    </div>
-                </div>
-
-	            <div class="setting-section">
-	                <h4>License</h4>
-	                <div class="setting-group">
-	                    <div id="license-status" class="mono" style="opacity:0.85;">Loading…</div>
-	                    <p class="setting-description">Local/offline license verification (no project data is sent anywhere).</p>
-	                </div>
-	                <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
-	                    <button class="btn-secondary" type="button" id="license-reload">Reload</button>
-	                </div>
-	                <div class="setting-group">
-	                    <label>
-	                        Paste <code>license.json</code>:
-	                        <textarea id="license-json" class="tasks-textarea" rows="5" placeholder='{"license":{...},"signature":"..."}'></textarea>
-	                    </label>
-	                    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap: wrap;">
-	                        <button class="btn-secondary" type="button" id="license-save">Save</button>
-	                    </div>
-	                </div>
-	            </div>
-
-	            <div class="setting-group">
-	                <label>
-	                    Tasks Theme:
-                    <select id="tasks-theme-select">
-                        <option value="inherit">Follow App</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                    </select>
-                </label>
-            </div>
-
-            <div class="setting-group">
-                <label>
-                    Trello Username (Me):
-                    <input id="trello-me-username" type="text" placeholder="(auto)" style="width: 180px;" />
-                </label>
-                <p class="setting-description">Override for “assigned to me” filtering.</p>
-            </div>
-
-            <div class="setting-section">
-                <h4>PR Merge Automation</h4>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="pr-merge-auto-enabled" />
-                        Enable PR-merge automation (Trello)
-                    </label>
-                    <p class="setting-description">When a PR merges, auto-move/comment on the linked Trello card (when a
-                        Trello card is linked to the PR task).</p>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        Move merged ticket to:
-                        <select id="pr-merge-move-target">
-                            <option value="done">Done (auto-detect)</option>
-                            <option value="for_test">For Test</option>
-                            <option value="none">Don’t move</option>
-                        </select>
-                    </label>
-                    <p class="setting-description">Configure board-specific Done/For Test lists in Tasks → Board
-                        Settings → Conventions.</p>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="pr-merge-auto-comment" />
-                        Add comment on merge
-                    </label>
-                </div>
-            </div>
-
-            <div class="setting-section">
-                <h4>Tasks Launch</h4>
-                <div class="setting-group">
-                    <label>
-                        Global prompt prefix:
-                        <textarea id="tasks-launch-global-prefix" class="tasks-textarea" rows="4"
-                            placeholder="(optional) Prepended before ticket preface + card description..."></textarea>
-                    </label>
-                    <p class="setting-description">Prepended before the ticket preface + card description when
-                        auto-sending prompts from Tasks.</p>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="tasks-launch-include-title" />
-                        Include ticket title in prompt preface
-                    </label>
-                </div>
-            </div>
-
-            <div class="setting-section">
-                <h4>Identity</h4>
-                <div class="setting-group">
-                    <label>
-                        Claim / reviewer name:
-                        <input id="identity-claim-name" type="text" placeholder="me" style="width: 180px;" />
-                    </label>
-                    <p class="setting-description">Used for Queue “Claim” and assignment labels. If empty, falls back to
-                        Trello Username (Me), then <code>me</code>.</p>
-                </div>
-                <div class="setting-group">
-                    <button class="btn-secondary" type="button" id="identity-save">Save current</button>
-                    <button class="btn-secondary" type="button" id="identity-clear">Clear</button>
-                </div>
-                <div class="setting-group">
-                    <div class="identity-saved-list" id="identity-saved-list"></div>
-                </div>
-            </div>
-
-            <div class="setting-section">
-                <h4>Trello Integration</h4>
-                <div class="setting-group">
                     <div id="trello-status" style="margin-bottom: 8px;"></div>
                 </div>
                 <div class="setting-group">
@@ -893,7 +355,7 @@
                         API Key:
                         <input id="trello-api-key" type="password" placeholder="Your Trello API key" style="width: 300px;" autocomplete="off" />
                     </label>
-                    <p class="setting-description">Get your key at <a href="https://trello.com/power-ups/admin" target="_blank" rel="noopener">trello.com/power-ups/admin</a></p>
+                    <p class="setting-description">Get your key at <a class="settings-help-link" href="https://trello.com/power-ups/admin" target="_blank" rel="noopener">trello.com/power-ups/admin</a></p>
                 </div>
                 <div class="setting-group">
                     <label>
@@ -910,22 +372,8 @@
                 <p class="setting-description" style="margin-top: 4px; opacity: 0.7;">Credentials are saved locally to <code>~/.trello-credentials</code> (file permissions 600). They are never sent to any external service except the Trello API.</p>
             </div>
 
-            <div class="setting-section">
-                <h4>Diff Viewer</h4>
-                <div class="setting-group">
-                    <label>
-                        <strong>Theme:</strong>
-                        <select id="diff-viewer-theme">
-                            <option value="light">Light (GitHub)</option>
-                            <option value="dark">Dark</option>
-                        </select>
-                    </label>
-                </div>
-                <p class="setting-description">Controls the theme for the Advanced Diff Viewer (port 7655).</p>
-            </div>
-
             <!-- Terminal Settings -->
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="terminal-settings" data-section-title="Terminal Settings">
                 <h4>Terminal Settings</h4>
 
                 <div class="setting-group">
@@ -933,14 +381,6 @@
                         <input type="checkbox" id="global-skip-permissions" />
                         <strong>Global: Skip Permissions</strong>
                         <small>Apply --dangerously-skip-permissions to all new Claude sessions</small>
-                    </label>
-                </div>
-
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="global-zai-provider" />
-                        <strong>Global: Use Z.ai (GLM) for Claude</strong>
-                        <small>Uses ZAI_API_KEY or ZAI_ANTHROPIC_AUTH_TOKEN when enabled</small>
                     </label>
                 </div>
 
@@ -1014,47 +454,9 @@
                     <!-- Per-terminal settings will be populated by JavaScript -->
                 </div>
 
-                <div class="setting-group">
-                    <h5>Default Template Management</h5>
-                    <p class="setting-description">Manage the default settings template committed to the repository</p>
-                    <div class="template-actions">
-                        <button id="reset-to-defaults" class="template-btn secondary">
-                            Reset to Defaults
-                        </button>
-                        <button id="save-as-default" class="template-btn primary">
-                            Save as Default
-                        </button>
-                    </div>
-                    <div id="settings-update-notification" class="update-notification hidden">
-                        <div class="notification-content">
-                            <span class="notification-icon">📢</span>
-                            <span class="notification-text">Default settings have been updated in the repository</span>
-                            <button id="dismiss-settings-notification" class="dismiss-btn">×</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="setting-group">
-                    <h5>Repository Updates</h5>
-                    <p class="setting-description">Web/dev mode: Git pull updates. Tauri desktop mode: app updater
-                        check/install.</p>
-                    <div class="template-actions">
-                        <button id="check-updates" class="template-btn secondary">
-                            Check for Updates
-                        </button>
-                        <button id="pull-updates" class="template-btn primary">
-                            Pull Latest Changes
-                        </button>
-                    </div>
-                    <div id="git-update-notification" class="update-notification hidden">
-                        <div class="notification-content">
-                            <span class="notification-icon">🔄</span>
-                            <span class="notification-text" id="git-notification-text">Updates available</span>
-                            <button id="dismiss-git-notification" class="dismiss-btn">×</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+	            </div>
+	                </div>
+	            </div>
         </div>
     </div>
 

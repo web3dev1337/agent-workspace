@@ -560,6 +560,10 @@ function buildInstallWizardReport(firstRunDiagnostics, baseDiagnostics) {
     guidance.push('Windows-first flow: run PowerShell as your default shell for Commander sessions.');
     guidance.push('If terminal startup fails after dependency updates, run: npm rebuild node-pty');
     guidance.push('After gh login, rerun post-install checks before using Review Console merge/review actions.');
+  } else if (platform === 'darwin') {
+    guidance.push('macOS flow: ensure Terminal can find bash, git, and gh before launching orchestrator.');
+    guidance.push('If terminal startup fails after dependency updates, run: npm rebuild node-pty');
+    guidance.push('After gh login, rerun the scan before using Review Console merge/review actions.');
   } else {
     guidance.push('Linux flow: ensure bash, git, and gh are in PATH before launching orchestrator.');
   }

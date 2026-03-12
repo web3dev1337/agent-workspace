@@ -29,7 +29,7 @@ describe('UserSettingsService defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     const simpleMode = defaults?.global?.ui?.simpleMode;
     expect(simpleMode).toBeTruthy();
-    expect(simpleMode.enabled).toBe(true);
+    expect(simpleMode.enabled).toBe(false);
     expect(simpleMode.startupOpen).toBe(false);
     expect(simpleMode.hotkeys).toBe(true);
     expect(simpleMode.showHints).toBe(true);
@@ -191,7 +191,7 @@ describe('UserSettingsService defaults', () => {
     // Keeps simpleMode defaults while allowing partial override.
     expect(merged.global.ui.simpleMode).toBeTruthy();
     expect(merged.global.ui.simpleMode.startupOpen).toBe(true);
-    expect(merged.global.ui.simpleMode.enabled).toBe(true);
+    expect(merged.global.ui.simpleMode.enabled).toBe(false);
     expect(merged.global.ui.simpleMode.hotkeys).toBe(true);
 
     // Does not drop process.status defaults when only one cap is provided.
