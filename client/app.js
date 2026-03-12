@@ -31911,7 +31911,13 @@ class ClaudeOrchestrator {
     const mostRecent = this.getMostRecentWorktree(repo);
     const hasWorktrees = Array.isArray(repo.worktreeDirs) && repo.worktreeDirs.length > 0;
     const nextId = this.getNextWorktreeIdForRepo(repo);
-    const actionLabel = recommended ? `Start (${recommended.id})` : `Create (${nextId})`;
+    // If no recommended (all in use) but nextId already exists on disk, it means
+    // getNextWorktreeIdForRepo returned an existing ID — treat as "Start" not "Create"
+    const existingIds = new Set((repo.worktreeDirs || []).map(w => w?.id).filter(Boolean));
+    const nextIdExistsOnDisk = existingIds.has(nextId);
+    const actionLabel = recommended
+      ? `Start (${recommended.id})`
+      : (nextIdExistsOnDisk ? `Start (${nextId})` : `Create (${nextId})`);
     const displayPath = repo.relativePath || repo.path || '';
     const displayPathLabel = displayPath.startsWith('/') ? displayPath : `~/${displayPath}`;
     const isFavorite = (this.quickWorktreeFavorites || new Set()).has(repo.path);
@@ -32729,6 +32735,9 @@ class ClaudeOrchestrator {
         startTier: startTierSafe
       });
     }
+
+    // Refresh repo list so modal shows updated state
+    this.loadQuickWorktreeRepos().catch(() => {});
 
     if (!keepOpen) {
       document.getElementById('quick-worktree-modal')?.remove();
