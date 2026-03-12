@@ -240,6 +240,10 @@
                                 </label>
                                 <p class="setting-description">Fish/zsh-style command suggestions from shell history. Press → to accept.</p>
                             </div>
+                        </div>
+
+                        <div class="setting-section" data-section-id="appearance" data-section-title="Appearance">
+                            <h4>Appearance</h4>
                             <div class="setting-group">
                                 <label>
                                     Theme:
@@ -301,6 +305,57 @@
                                 </div>
                                 <p class="setting-description">Theme gallery: click a swatch to switch skins instantly.</p>
                             </div>
+                            <div class="setting-group">
+                                <label>
+                                    Tasks Theme:
+                                    <select id="tasks-theme-select">
+                                        <option value="inherit">Follow App</option>
+                                        <option value="light">Light</option>
+                                        <option value="dark">Dark</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <strong>Diff Viewer Theme:</strong>
+                                    <select id="diff-viewer-theme">
+                                        <option value="light">Light (GitHub)</option>
+                                        <option value="dark">Dark</option>
+                                    </select>
+                                </label>
+                                <p class="setting-description">Controls the theme for the Advanced Diff Viewer (port 7655).</p>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="branches-hide-prefixes" />
+                                    Hide branch prefixes (e.g. <code>feature/</code>, <code>fix/</code>)
+                                </label>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="branches-colorize" />
+                                    Colorize branch labels by type
+                                </label>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="branches-show-at-sidebar" />
+                                    Prefix branch with “@” in sidebar
+                                </label>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="worktrees-show-detailed-chooser-metadata" />
+                                    Show detailed metadata in Quick Work chooser
+                                </label>
+                                <p class="setting-description">Off by default for a cleaner menu. Turn this on to show branch, PR, dirty state, and risk details inside the worktree dropdown.</p>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="simple-mode-show-hints" />
+                                    Show quick hints in shell
+                                </label>
+                            </div>
                         </div>
 
                         <div class="setting-section" data-section-id="workspace" data-section-title="Workspace">
@@ -335,39 +390,6 @@
                         <input type="checkbox" id="workflow-notify-review-nudges" />
                         Review complete nudges
                     </label>
-                </div>
-            </div>
-
-            <div class="setting-section" data-section-id="branch-labels" data-section-title="Branch Labels">
-                <h4>Branch Labels</h4>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="branches-hide-prefixes" />
-                        Hide branch prefixes (e.g. <code>feature/</code>, <code>fix/</code>)
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="branches-colorize" />
-                        Colorize branch labels by type
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="branches-show-at-sidebar" />
-                        Prefix branch with “@” in sidebar
-                    </label>
-                </div>
-            </div>
-
-            <div class="setting-section" data-section-id="worktrees" data-section-title="Worktrees">
-                <h4>Worktrees</h4>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="worktrees-show-detailed-chooser-metadata" />
-                        Show detailed metadata in Quick Work chooser
-                    </label>
-                    <p class="setting-description">Off by default for a cleaner menu. Turn this on to show branch, PR, dirty state, and risk details inside the worktree dropdown.</p>
                 </div>
             </div>
 
@@ -563,12 +585,6 @@
                     <label>
                         <input type="checkbox" id="simple-mode-hotkeys" />
                         Enable Projects + Chats hotkey (Alt+P)
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="simple-mode-show-hints" />
-                        Show quick hints in shell
                     </label>
                 </div>
             </div>
@@ -802,16 +818,6 @@
                     <h4>Tasks</h4>
                     <div class="setting-group">
                         <label>
-                            Tasks Theme:
-                            <select id="tasks-theme-select">
-                                <option value="inherit">Follow App</option>
-                                <option value="light">Light</option>
-                                <option value="dark">Dark</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <label>
                             Trello Username (Me):
                             <input id="trello-me-username" type="text" placeholder="(auto)" style="width: 180px;" />
                         </label>
@@ -912,20 +918,6 @@
                     <span id="trello-save-status" style="margin-left: 8px;"></span>
                 </div>
                 <p class="setting-description" style="margin-top: 4px; opacity: 0.7;">Credentials are saved locally to <code>~/.trello-credentials</code> (file permissions 600). They are never sent to any external service except the Trello API.</p>
-            </div>
-
-            <div class="setting-section" data-section-id="diff-viewer" data-section-title="Diff Viewer">
-                <h4>Diff Viewer</h4>
-                <div class="setting-group">
-                    <label>
-                        <strong>Theme:</strong>
-                        <select id="diff-viewer-theme">
-                            <option value="light">Light (GitHub)</option>
-                            <option value="dark">Dark</option>
-                        </select>
-                    </label>
-                </div>
-                <p class="setting-description">Controls the theme for the Advanced Diff Viewer (port 7655).</p>
             </div>
 
             <!-- Terminal Settings -->
