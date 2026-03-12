@@ -375,7 +375,7 @@ class CommanderService {
 // ~/.orchestrator/port-registry.json
 {
   "reserved": {
-    "3000": { "description": "Orchestrator (NEVER KILL)", "permanent": true },
+    "9460": { "description": "Orchestrator (NEVER KILL)", "permanent": true },
     "3001": { "description": "Orchestrator Dev", "permanent": true }
   },
   "active": {
@@ -384,7 +384,7 @@ class CommanderService {
   },
   "assignments": {
     "hytopia-game": { "basePort": 8000, "pattern": "basePort + worktreeNumber" },
-    "website": { "basePort": 4000, "pattern": "basePort + worktreeNumber" }
+    "website": { "basePort": 9470, "pattern": "basePort + worktreeNumber" }
   }
 }
 ```
@@ -428,7 +428,7 @@ class PortRegistry {
 ├───────────────┬───────────────┬───────────────┬─────────────┤
 │ PROJECTS      │ SERVICES      │ FAVORITES     │ RECENT      │
 ├───────────────┼───────────────┼───────────────┼─────────────┤
-│ □ HyFire2     │ ● :3000 Orch  │ ★ GitHub      │ work3 claude│
+│ □ HyFire2     │ ● :9460 Orch  │ ★ GitHub      │ work3 claude│
 │   work1-8     │ ● :8001 Game  │ ★ Trello      │ 2 hrs ago   │
 │ □ EpicSurv    │ ○ :4444 Web   │ ★ Figma       │             │
 │   work1-6     │               │ ★ Notion      │ work1 server│

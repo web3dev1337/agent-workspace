@@ -38,7 +38,7 @@ npm run dev
 ```
 
 Open:
-- `http://localhost:2080`
+- `http://localhost:9461`
 
 Notes:
 - Some features require external tools (GitHub CLI `gh`, `claude`, `codex`, `ffmpeg`, etc.). See **Settings → Diagnostics**.

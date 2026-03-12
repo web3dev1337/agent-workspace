@@ -30,7 +30,7 @@ Related:
   - add/remove dependency
 - mark dependency satisfied (v1)
 - **Agent-ready API** exists for all actions above (not just UI buttons).
-- **No port 3000 usage** for tests (keep Playwright safe port flow).
+- **No port 9460 usage** for tests (keep Playwright safe port flow).
 
 Out of scope for this PR (next PRs):
 - Full Trello parity (attachments upload, cover images, full label CRUD, rules/automations).

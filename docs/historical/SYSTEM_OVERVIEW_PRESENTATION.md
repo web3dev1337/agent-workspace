@@ -287,9 +287,9 @@ The **Claude Orchestrator** is a revolutionary tool that manages unlimited devel
 │  │  Startup Script (orchestrator-startup.sh)                    │        │
 │  │  ├─ Git pull (auto-update)                                  │        │
 │  │  ├─ npm install (if package.json changed)                   │        │
-│  │  ├─ Start backend server (port 3000)                        │        │
-│  │  ├─ Start client (port 2080)                                │        │
-│  │  └─ Open browser → http://localhost:4000 (dev mode)         │        │
+│  │  ├─ Start backend server (port 9460)                        │        │
+│  │  ├─ Start client (port 9461)                                │        │
+│  │  └─ Open browser → http://localhost:9470 (dev mode)         │        │
 │  └─────────────────────────────────────────────────────────────┘        │
 │       │                                                                   │
 │       ▼                                                                   │
@@ -357,7 +357,7 @@ The **Claude Orchestrator** is a revolutionary tool that manages unlimited devel
   ],
 
   "server": {
-    "port": 3000,
+    "port": 9460,
     "host": "0.0.0.0"
   },
 

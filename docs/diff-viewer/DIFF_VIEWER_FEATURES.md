@@ -117,7 +117,7 @@
 ### Environment Variables
 - `GITHUB_TOKEN`: Required for API access
 - `CLAUDE_API_KEY`: For AI summaries
-- `DIFF_VIEWER_PORT`: Server port (default: 7655)
+- `DIFF_VIEWER_PORT`: Server port (default: 9462)
 - `ENABLE_AI_ANALYSIS`: Toggle AI features
 - `NODE_ENV`: Development/production mode
 

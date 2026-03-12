@@ -4,7 +4,7 @@ Use this for every PR in `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`.
 
 ## Safety
 - [ ] Running instance in `.../claude-orchestrator/master` is not touched
-- [ ] Dev/test ports avoid 3000 (use 4001+ for tests)
+- [ ] Dev/test ports avoid 9460 (use 9480+ for tests)
 
 ## Build/Tests
 - [ ] `npm run test:unit`

@@ -43,7 +43,7 @@ const oldYaml = `
 app:
   name: myapp
   version: 1.0.0
-  port: 3000
+  port: 9460
   
 database:
   host: localhost

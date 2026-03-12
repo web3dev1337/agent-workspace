@@ -36,11 +36,11 @@ cp .env.example .env
 ### 3. Start Servers
 
 ```bash
-# Terminal 1: Start backend (port 7655)
+# Terminal 1: Start backend (port 9462)
 cd diff-viewer
 npm run dev
 
-# Terminal 2: Start frontend (port 7656)
+# Terminal 2: Start frontend (port 9464)
 cd diff-viewer/client
 npm run dev
 ```

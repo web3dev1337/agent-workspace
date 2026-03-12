@@ -24,12 +24,12 @@ npm run dev
 
 ## Access the Viewer:
 
-Open your browser to: **http://localhost:7655**
+Open your browser to: **http://localhost:9462**
 
-⚠️ **IMPORTANT**: The server runs on port **7655**, not 7656!
+⚠️ **IMPORTANT**: The server runs on port **9462**, not 9464!
 
 ### URL format:
-- http://localhost:7655/pr/OWNER/REPO/PR_NUMBER
+- http://localhost:9462/pr/OWNER/REPO/PR_NUMBER
 
 ## Features Working:
 
@@ -52,7 +52,7 @@ Open your browser to: **http://localhost:7655**
 
 If you see 500 errors, make sure:
 1. You've built the client (`npm run build` in client folder)
-2. You're accessing on port 7655 (not 7656)
+2. You're accessing on port 9462 (not 9464)
 3. The server is running (`npm run dev` in main folder)
 4. Auth is configured:
    - Preferred: `gh auth status` shows you're logged in (diff viewer falls back to `gh api`)

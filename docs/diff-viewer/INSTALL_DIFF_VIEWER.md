@@ -10,7 +10,7 @@ cd diff-viewer
 This will:
 1. Check for .env file (create from template if missing)
 2. Install all dependencies (if needed)
-3. Start both backend (7655) and frontend (7656) servers
+3. Start both backend (9462) and frontend (9464) servers
 
 ## Manual Installation
 
@@ -54,8 +54,8 @@ npm run dev
 ```
 
 Access at:
-- Frontend: http://localhost:7656
-- Backend API: http://localhost:7655/api
+- Frontend: http://localhost:9464
+- Backend API: http://localhost:9462/api
 
 ## Production Deployment
 
@@ -111,7 +111,7 @@ SQLite cache is automatic. To adjust:
 Real-time features work automatically. For custom config:
 ```javascript
 // In client code
-const SOCKET_URL = 'ws://localhost:7655';
+const SOCKET_URL = 'ws://localhost:9462';
 ```
 
 ## Troubleshooting
@@ -119,7 +119,7 @@ const SOCKET_URL = 'ws://localhost:7655';
 ### Port Already in Use
 ```bash
 # Find process using port
-lsof -i :7655
+lsof -i :9462
 # Kill if needed
 kill -9 <PID>
 ```

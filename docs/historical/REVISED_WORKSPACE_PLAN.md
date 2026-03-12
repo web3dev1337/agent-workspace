@@ -304,7 +304,7 @@ Since different project types need different launch settings, create templates:
             "id": "port",
             "label": "Port",
             "type": "number",
-            "default": 3000,
+            "default": 9460,
             "envFormat": "PORT={value}"
           },
           {
@@ -371,7 +371,7 @@ Since different project types need different launch settings, create templates:
   ],
 
   "server": {
-    "port": 3000,
+    "port": 9460,
     "host": "0.0.0.0"
   },
 
@@ -1466,8 +1466,8 @@ Currently in HyFire 2 workspace, working on work1. Epic Survivors workspace has 
    set -e
 
    ORCH_DIR="$HOME/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev"
-   PORT=3000
-   CLIENT_PORT=2080
+   PORT=9460
+   CLIENT_PORT=9461
 
    GREEN='\033[0;32m'
    BLUE='\033[0;34m'

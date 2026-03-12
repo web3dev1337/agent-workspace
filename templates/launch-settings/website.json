@@ -13,7 +13,7 @@
           "description": "Dev server with hot reload",
           "settings": {
             "nodeEnv": "development",
-            "port": 3000,
+            "port": 9480,
             "hotReload": true
           }
         },
@@ -24,7 +24,7 @@
           "description": "Production build",
           "settings": {
             "nodeEnv": "production",
-            "port": 3000,
+            "port": 9480,
             "minify": true
           }
         }

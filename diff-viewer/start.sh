@@ -20,19 +20,24 @@ if [ ! -d "client/node_modules" ]; then
     cd client && npm install && cd ..
 fi
 
+BACKEND_PORT="${DIFF_VIEWER_PORT:-9462}"
+FRONTEND_PORT="${DIFF_VIEWER_CLIENT_PORT:-$((BACKEND_PORT + 2))}"
+export DIFF_VIEWER_PORT="$BACKEND_PORT"
+export DIFF_VIEWER_CLIENT_PORT="$FRONTEND_PORT"
+
 # Start servers
-echo "🔧 Starting backend server on port 7655..."
+echo "🔧 Starting backend server on port ${BACKEND_PORT}..."
 npm run dev &
 BACKEND_PID=$!
 
-echo "🎨 Starting frontend dev server on port 7656..."
+echo "🎨 Starting frontend dev server on port ${FRONTEND_PORT}..."
 cd client && npm run dev &
 FRONTEND_PID=$!
 
 echo ""
 echo "✅ Diff Viewer is running!"
-echo "   Backend:  http://localhost:7655"
-echo "   Frontend: http://localhost:7656"
+echo "   Backend:  http://localhost:${BACKEND_PORT}"
+echo "   Frontend: http://localhost:${FRONTEND_PORT}"
 echo ""
 echo "Press Ctrl+C to stop both servers"
 

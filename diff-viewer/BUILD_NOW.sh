@@ -17,4 +17,4 @@ npm run build 2>&1
 echo ""
 echo "Build complete! Check above for any errors."
 echo ""
-echo "If successful, access at: http://localhost:7655"
+echo "If successful, access at: http://localhost:9462"

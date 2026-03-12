@@ -58,7 +58,7 @@ This would require hooking into Cursor's Claude sessions (much more complex).
 ```bash
 # Your orchestrator runs independent Claude sessions
 npm start
-# Access: http://localhost:3000
+# Access: http://localhost:9460
 
 # Continue using Cursor normally for main work
 ```
@@ -85,7 +85,7 @@ WORKTREE_COUNT=8
 
 ## 🤖 What You'll See
 
-When you access http://localhost:3000:
+When you access http://localhost:9460:
 
 ```
 ┌─────────────────────────────────────────┐

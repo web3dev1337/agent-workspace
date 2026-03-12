@@ -164,7 +164,7 @@ Scope: all tracked markdown files (`git ls-files "*.md"`).
 
 **Unchecked**
 - PLANS/2026-01-24/CHECKLIST.md:6 — Running instance in \`.../claude-orchestrator/master\` is not touched
-- PLANS/2026-01-24/CHECKLIST.md:7 — Dev/test ports avoid 3000 (use 4001+ for tests)
+- PLANS/2026-01-24/CHECKLIST.md:7 — Dev/test ports avoid 9460 (use 9480+ for tests)
 - PLANS/2026-01-24/CHECKLIST.md:10 — \`npm run test:unit\`
 - PLANS/2026-01-24/CHECKLIST.md:11 — \`npm run test:e2e:safe\` (or note why skipped)
 - PLANS/2026-01-24/CHECKLIST.md:14 — Dashboard loads
@@ -256,7 +256,7 @@ Scope: all tracked markdown files (`git ls-files "*.md"`).
 
 **Heuristic “Remaining” sections**
 - PLANS/2026-01-20/ROLLING_LOG.md:102 — Notes / next actions
-  - PLANS/2026-01-20/ROLLING_LOG.md:103 — Next PR should likely be “Test isolation & safety rails” (ensure Playwright uses 4001+ by default).
+  - PLANS/2026-01-20/ROLLING_LOG.md:103 — Next PR should likely be “Test isolation & safety rails” (ensure Playwright uses 9480+ by default).
   - PLANS/2026-01-20/ROLLING_LOG.md:104 — Highest priority runtime bug to tackle early: workspace tab switching corrupts xterm sizing / input + sidebar selection.
 - PLANS/2026-01-20/ROLLING_LOG.md:566 — Workflow: Focus/Review/Background modes + Queue Next/Prev (merged)
   - PLANS/2026-01-20/ROLLING_LOG.md:567 — Adds a header workflow toggle:

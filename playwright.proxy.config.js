@@ -5,8 +5,8 @@ const { defineConfig } = require('@playwright/test');
 // (e.g. http://localhost:9461), where `/api/*` must be proxied to
 // the backend. This catches regressions where the UI hard-codes backend ports.
 
-const DEFAULT_BACKEND_PORT = 4001;
-const DEFAULT_CLIENT_PORT = 4100;
+const DEFAULT_BACKEND_PORT = 9480;
+const DEFAULT_CLIENT_PORT = 9481;
 
 const BACKEND_PORT = Number.parseInt(process.env.ORCHESTRATOR_TEST_PORT || '', 10) || DEFAULT_BACKEND_PORT;
 const CLIENT_PORT = Number.parseInt(process.env.CLIENT_TEST_PORT || '', 10) || DEFAULT_CLIENT_PORT;
@@ -40,4 +40,3 @@ module.exports = defineConfig({
   },
   outputDir: 'test-results',
 });
-

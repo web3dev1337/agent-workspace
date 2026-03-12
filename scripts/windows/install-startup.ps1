@@ -13,7 +13,7 @@ param(
     [switch]$DesktopShortcut,
     [switch]$NoStartupTask,
     [string]$WslDistro = "Ubuntu",
-    [int]$Port = 3000
+    [int]$Port = 9461
 )
 
 $ErrorActionPreference = "Stop"

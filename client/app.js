@@ -1133,9 +1133,8 @@ class ClaudeOrchestrator {
       const authToken = this.getAuthToken();
       const socketOptions = authToken ? { auth: { token: authToken } } : {};
 
-      // Connect to server - client dev-server proxies to correct backend port from .env
-      // Production: client on 2080 proxies to server on 3000
-      // Development: client on 2081 proxies to server on 4000
+      // Connect to the current origin. In web mode the client dev server proxies
+      // `/api` and `/socket.io` to the configured backend port from `.env`.
       const serverUrl = window.location.origin;
       this.socket = io(serverUrl, socketOptions);
       console.log(`Socket connecting to ${serverUrl}...`);
@@ -19234,7 +19233,7 @@ class ClaudeOrchestrator {
 
     // Always talk to the current origin. In split dev, `client/dev-server.js`
     // proxies `/api` + `/socket.io` to the backend (using `ORCHESTRATOR_PORT`),
-    // so hard-coding `:3000` breaks when running the orchestrator on other ports.
+    // so hard-coding a backend port breaks when running Agent Workspace on custom ports.
     const serverUrl = window.location.origin;
     const ALL_BOARDS_ID = '__all_enabled__';
     const COMBINED_VIEW_ID = '__combined__';

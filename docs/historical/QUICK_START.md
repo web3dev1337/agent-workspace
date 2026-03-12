@@ -2,10 +2,10 @@
 
 ## Morning-safe dev (recommended)
 
-If you already run another orchestrator instance from the separate `/master` worktree (often on port `3000`), use the dev worktree safe commands so nothing collides.
+If you already run another orchestrator instance from the separate `/master` worktree (often on port `9460`), use the dev worktree safe commands so nothing collides.
 
-- Start web UI on safe ports (server `:4001`, client `:4100`): `npm run dev:web:safe`
-- Run end-to-end tests on a safe port (auto-picks a free port starting at `:4001`): `npm run test:e2e:safe`
+- Start web UI on safe ports (server `:9480`, client `:9481`): `npm run dev:web:safe`
+- Run end-to-end tests on a safe port (auto-picks a free port starting at `:9480`): `npm run test:e2e:safe`
 
 ## One-Click Launch Options
 
@@ -17,7 +17,7 @@ You now have **THREE** ways to launch the Agent Orchestrator with full automatio
 1. Double-click `Launch-Orchestrator.bat` on your desktop
 2. VS Code will open to the orchestrator workspace
 3. The server will auto-start (`npm start`)
-4. Chrome will open to `http://localhost:2080` after 10 seconds
+4. Chrome will open to `http://localhost:9461` after 10 seconds
 
 **Pros:** Simple, no permissions needed, works immediately
 
@@ -43,7 +43,7 @@ You now have **THREE** ways to launch the Agent Orchestrator with full automatio
 1. **VS Code Opens** to the orchestrator workspace in WSL
 2. **Terminal Opens** automatically in the correct folder
 3. **`npm start` runs** automatically (starts all 4 services)
-4. **Chrome Opens** to `http://localhost:2080` after a few seconds
+4. **Chrome Opens** to `http://localhost:9461` after a few seconds
 5. **You're ready to work!** Everything is running
 
 ## Manual Launch (If Needed)
@@ -56,7 +56,7 @@ cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 code orchestrator.code-workspace
 ```
 
-If you also have a separate live worktree at `~/GitHub/tools/automation/claude-orchestrator/master` (often running on port `3000`), do not edit that folder while developing here.
+If you also have a separate live worktree at `~/GitHub/tools/automation/claude-orchestrator/master` (often running on port `9460`), do not edit that folder while developing here.
 
 Then manually run `npm start` in the integrated terminal if auto-start didn't work.
 
@@ -79,7 +79,7 @@ Then manually run `npm start` in the integrated terminal if auto-start didn't wo
 ### Browser doesn't open
 - Chrome might not be in your PATH
 - The script waits 8-10 seconds - give it time
-- Manually navigate to `http://localhost:2080` in any browser
+- Manually navigate to `http://localhost:9461` in any browser
 
 ### Permission errors with PowerShell
 ```powershell
@@ -102,14 +102,14 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ## What's Running?
 
 When `npm start` executes, it launches:
-1. **Express Server** (backend) - Port 3000
-2. **Client Dev Server** (web UI) - Port 2080
+1. **Express Server** (backend) - Port 9460
+2. **Client Dev Server** (web UI) - Port 9461
 3. **Tauri App** (native desktop app)
-4. **Diff Viewer** (PR review tool) - Port 7655
+4. **Diff Viewer** (PR review tool) - Port 9462
 
-You can access the web UI at `http://localhost:2080` or use the native Tauri app.
+You can access the web UI at `http://localhost:9461` or use the native Tauri app.
 
-If you use `npm run dev:web:safe`, it runs only the web UI and avoids port `3000`.
+If you use `npm run dev:web:safe`, it runs only the web UI and avoids port `9460`.
 
 ## Projects + Chats (Simple Mode)
 

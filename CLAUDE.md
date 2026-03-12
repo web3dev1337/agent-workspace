@@ -210,12 +210,12 @@ git checkout -b fix/your-feature-name origin/main
 
 Because `main` is usually checked out in the `master/` worktree, **do not try to check out `main` inside `claude-orchestrator-dev/`** (Git will error: “branch 'main' is already used by worktree…”). Always branch from `origin/main` in dev.
 
-**CRITICAL SAFETY:** If you are working in `claude-orchestrator-dev/`, **do not edit, pull, or run commands in the `master/` folder** unless explicitly requested — that instance may be running on port **3000**.
+**CRITICAL SAFETY:** If you are working in `claude-orchestrator-dev/`, **do not edit, pull, or run commands in the `master/` folder** unless explicitly requested — that instance may be running on port **9460**.
 
 **ALSO CRITICAL:** If Commander Claude is running FROM `master/`, **NEVER edit files in `master/`**. Even if you revert changes, nodemon will detect the file change and restart the production server, which crashes all active sessions. ALL code changes go in `claude-orchestrator-dev/` on a feature branch, then PR into main. The ONLY exception is if the user explicitly asks you to edit production.
 
 **TEST SAFETY (ports):**
-- Never use port `3000` for dev/test runs.
+- Never use ports `9460-9474` for isolated dev/test runs.
 - Use `npm run test:e2e:safe` (defaults to a dedicated port) for Playwright.
 
 **DO NOT**:
@@ -295,11 +295,11 @@ cat ~/GitHub/tools/automation/claude-orchestrator/master/docs/COMMANDER_CLAUDE.m
 The orchestrator port is NOT hardcoded. It comes from `.env` in your working directory:
 ```bash
 PORT=$(grep ORCHESTRATOR_PORT .env | cut -d= -f2)
-# Production (master/) = typically 3000, Dev = typically 4000
+# Production (master/) = typically 9460, Dev = typically 9470
 # All API examples below use $PORT — resolve it before running commands
 ```
 
-**All `curl` examples in this file use `$PORT`.** Never assume 3000 or 4000.
+**All `curl` examples in this file use `$PORT`.** Never assume 9460 or 9470.
 
 ### What Commander Can Do
 1. **View All Sessions**: See all active Claude sessions across all workspaces

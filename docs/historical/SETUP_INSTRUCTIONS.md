@@ -52,7 +52,7 @@ npm install
 npm run dev:all
 ```
 This starts:
-- Backend server (port 3000)
+- Backend server (port 9460)
 - Client dev server (port 8080)
 - Tauri native window
 
@@ -111,7 +111,7 @@ npm install
 
 ## Development Notes
 
-- Frontend connects to `http://localhost:3000` for Socket.IO
+- Frontend connects to `http://localhost:9460` for Socket.IO
 - Tauri serves files from the `client/` directory
 - Native features implemented in Rust (`src-tauri/src/main.rs`)
 - Existing Node.js backend remains unchanged

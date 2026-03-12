@@ -18,11 +18,11 @@ describe('workspaceServiceStackService', () => {
           enabled: true,
           env: {
             NODE_ENV: 'development',
-            PORT: 3000
+            PORT: 9460
           },
           healthcheck: {
             type: 'http',
-            url: 'http://127.0.0.1:3000/health',
+            url: 'http://127.0.0.1:9460/health',
             intervalSeconds: 12
           }
         },
@@ -41,11 +41,11 @@ describe('workspaceServiceStackService', () => {
     expect(manifest.services[1].id).toBe('worker');
     expect(manifest.services[0].env).toEqual({
       NODE_ENV: 'development',
-      PORT: '3000'
+      PORT: '9460'
     });
     expect(manifest.services[0].healthcheck).toEqual({
       type: 'http',
-      url: 'http://127.0.0.1:3000/health',
+      url: 'http://127.0.0.1:9460/health',
       intervalSeconds: 12
     });
   });

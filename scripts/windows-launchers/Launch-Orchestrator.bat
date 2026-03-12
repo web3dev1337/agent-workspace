@@ -5,7 +5,7 @@ REM
 REM This script will:
 REM   1. Open VS Code to the orchestrator folder in WSL
 REM   2. Auto-run 'npm start' via VS Code tasks
-REM   3. Open Chrome to http://localhost:3000
+REM   3. Open Chrome to http://localhost:9461
 
 echo.
 echo ========================================
@@ -22,11 +22,11 @@ code --folder-uri "vscode-remote://wsl+Ubuntu/home/YOUR_USERNAME/GitHub/tools/au
 echo.
 echo VS Code launched!
 echo The orchestrator will auto-start in a few seconds...
-echo Browser will open automatically to http://localhost:3000
+echo Browser will open automatically to http://localhost:9461
 echo.
 
 REM Wait for server to start, then open browser
 timeout /t 10 /nobreak > nul
-start chrome http://localhost:3000
+start chrome http://localhost:9461
 
 exit

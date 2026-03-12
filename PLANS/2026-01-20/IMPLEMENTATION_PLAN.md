@@ -4,8 +4,8 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 
 ## Ground Rules (Non‑Negotiables)
 
-- **Do not impact your running instance** in `~/GitHub/tools/automation/claude-orchestrator/master` (port **3000**).
-- Use this repo’s dev ports (**4000+**) and prefer **4001** for automated test servers.
+- **Do not impact your running instance** in `~/GitHub/tools/automation/claude-orchestrator/master` (port **9460**).
+- Use this repo’s dev ports (**9470+**) and prefer **9480** for automated test servers.
 - Ship in **small PRs**. Each PR:
   1) reproduces a single issue (or small cohesive set),
   2) fixes it,
@@ -20,14 +20,14 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - `npm run test:unit`
 
 ### E2E tests (Playwright)
-- Prefer: `npm run test:e2e:safe` (defaults to port 4001)
-- Or: `ORCHESTRATOR_TEST_PORT=4001 npm run test:e2e`
-- If we need the client dev-server: use a unique `CLIENT_PORT` (e.g. 2083+) and keep server on 4001+.
+- Prefer: `npm run test:e2e:safe` (defaults to port 9480)
+- Or: `ORCHESTRATOR_TEST_PORT=9480 npm run test:e2e`
+- If we need the client dev-server: use a unique `CLIENT_PORT` (e.g. 2083+) and keep server on 9480+.
 
 ## Completed PRs (as of 2026-01-21)
 
 - PR 79 — Planning docs: https://github.com/web3dev1337/claude-orchestrator/pull/79
-- PR 80 — Safe E2E port (defaults to 4001): https://github.com/web3dev1337/claude-orchestrator/pull/80
+- PR 80 — Safe E2E port (defaults to 9480): https://github.com/web3dev1337/claude-orchestrator/pull/80
 - PR 81 — Preserve per-tab state (stop tab switches from wiping UI state): https://github.com/web3dev1337/claude-orchestrator/pull/81
 - PR 82 — Sync backend workspace on tab activation: https://github.com/web3dev1337/claude-orchestrator/pull/82
 - PR 83 — Prevent startup UI overlay resurrection: https://github.com/web3dev1337/claude-orchestrator/pull/83
@@ -100,10 +100,10 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
   - `PLANS/2026-01-20/ROLLING_LOG.md`
 
 ### PR 1 — Test isolation & safety rails (done → PR 80)
-**Goal:** Make it harder to accidentally collide with port 3000 and easier to run tests on 4001+ consistently.
+**Goal:** Make it harder to accidentally collide with port 9460 and easier to run tests on 9480+ consistently.
 - Potential changes:
-  - Ensure Playwright defaults to a “safe” port (4001) when `ORCHESTRATOR_PORT` isn’t set.
-  - Add a `test:e2e:safe` script that sets `ORCHESTRATOR_PORT=4001`.
+  - Ensure Playwright defaults to a “safe” port (9480) when `ORCHESTRATOR_PORT` isn’t set.
+  - Add a `test:e2e:safe` script that sets `ORCHESTRATOR_PORT=9480`.
   - Ensure server startup in tests does not spawn the full dev stack (only server).
 - Validate:
   - `npm run test:unit`

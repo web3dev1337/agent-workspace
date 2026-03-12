@@ -51,9 +51,10 @@ cd claude-orchestrator
 
 # Create .env with your port preferences
 cat > .env << 'EOF'
-ORCHESTRATOR_PORT=3000
-CLIENT_PORT=2080
-DIFF_VIEWER_PORT=7655
+ORCHESTRATOR_PORT=9460
+CLIENT_PORT=9461
+DIFF_VIEWER_PORT=9462
+TAURI_DEV_PORT=9463
 LOG_LEVEL=info
 NODE_ENV=development
 ENABLE_FILE_WATCHING=true
@@ -63,10 +64,10 @@ npm install
 cd diff-viewer && npm install && cd ..
 
 npm run dev
-# Server starts on :3000, UI on :2080
+# API starts on :9460, UI on :9461
 ```
 
-Open `http://localhost:2080` in your browser.
+Open `http://localhost:9461` in your browser.
 
 ### Windows Desktop App (Tauri)
 
@@ -183,9 +184,10 @@ npm run check:command-surface          # Check for API surface drift
 ### Environment Variables (`.env`)
 
 ```env
-ORCHESTRATOR_PORT=3000       # Backend API port
-CLIENT_PORT=2080             # UI dev server port
-DIFF_VIEWER_PORT=7655        # Diff viewer port
+ORCHESTRATOR_PORT=9460       # Backend API port
+CLIENT_PORT=9461             # UI dev server port
+DIFF_VIEWER_PORT=9462        # Diff viewer port
+TAURI_DEV_PORT=9463          # Tauri dev port
 LOG_LEVEL=info               # Winston log level
 NODE_ENV=development
 ENABLE_FILE_WATCHING=true    # Watch for file changes in worktrees
@@ -210,8 +212,8 @@ For developing the orchestrator itself while using it for daily work:
 
 | Instance | Directory | Ports | Purpose |
 |----------|-----------|-------|---------|
-| Production | `claude-orchestrator/master` | 3000 / 2080 / 7655 | Daily AI agent work |
-| Development | `claude-orchestrator/claude-orchestrator-dev` | 4000 / 2081 / 7656 | Modifying the orchestrator |
+| Production | `claude-orchestrator/master` | 9460 / 9461 / 9462 | Daily AI agent work |
+| Development | `claude-orchestrator/claude-orchestrator-dev` | 9470 / 9471 / 9472 | Modifying the orchestrator |
 
 Each instance gets its own `.env` with different port numbers. Both can run simultaneously.
 

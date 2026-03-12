@@ -77,7 +77,7 @@ describe('ActivityFeedService', () => {
     svc.setIO(io);
 
     const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(12345);
-    const ev = svc.track('server.started', { port: 3000 });
+    const ev = svc.track('server.started', { port: 9460 });
     expect(ev).toBeTruthy();
     expect(ev.kind).toBe('server.started');
     expect(typeof ev.id).toBe('string');

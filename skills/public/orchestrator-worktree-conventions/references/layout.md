@@ -56,7 +56,6 @@ Not all categories require a framework folder. Some projects may be “ungrouped
 
 ## Ports
 
-- Avoid port **3000** (reserved for the user’s main orchestrator instance).
-- Prefer ports **4000+** for local dev servers and tests.
-- Orchestrator E2E tests run with `ORCHESTRATOR_TEST_PORT=4001` via `npm run test:e2e:safe`.
-
+- Avoid ports **9460-9474** (reserved for Agent Workspace instances and companion tooling).
+- Prefer ports **9480+** for local dev servers and tests.
+- Orchestrator E2E tests run with `ORCHESTRATOR_TEST_PORT=9480` via `npm run test:e2e:safe`.

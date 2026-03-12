@@ -239,7 +239,7 @@ Missing “process layer” features:
 - Defaults should match your real behavior:
   - YOLO is on by default
   - “mine PRs” first
-  - safe ports in dev (`4000+`), do not disturb `master/` instance
+  - safe ports in dev (`9470+`), do not disturb `master/` instance
 
 ---
 

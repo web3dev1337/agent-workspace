@@ -23,12 +23,12 @@ When you run the launcher:
 
 1. ✅ VS Code opens to the orchestrator workspace in WSL
 2. ✅ Terminal auto-runs `npm start` (via `.vscode/tasks.json`)
-3. ✅ Chrome opens to `http://localhost:3000` after 10 seconds
+3. ✅ Chrome opens to `http://localhost:9461` after 10 seconds
 4. ✅ All 4 services start automatically:
-   - Express Server (backend) - Port 3000
-   - Client Dev Server (web UI) - Port 2080
+   - Agent Workspace API - Port 9460
+   - Agent Workspace UI - Port 9461
    - Tauri App (native desktop)
-   - Diff Viewer (PR review) - Port 7655
+   - Diff Viewer (PR review) - Port 9462
 
 ## Available Launchers
 
@@ -47,7 +47,7 @@ When you run the launcher:
 ## Customization
 
 Edit the launcher to change:
-- **Port**: Change `localhost:3000` to your preferred port
+- **Port**: Change `localhost:9461` to your preferred UI port
 - **Browser**: Change `chrome` to `firefox`, `msedge`, etc.
 - **Delay**: Change `timeout /t 10` to adjust wait time
 - **WSL Path**: Update the folder URI to match your installation
@@ -66,7 +66,7 @@ Edit the launcher to change:
 **Browser doesn't open:**
 - Chrome might not be in your PATH
 - Try changing `chrome` to `start chrome` or full path
-- Manually navigate to `http://localhost:3000`
+- Manually navigate to `http://localhost:9461`
 
 ## Advanced: Create Desktop Shortcut
 

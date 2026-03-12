@@ -26,7 +26,7 @@ npm run dev
 ```
 
 ### 4. Access the URL again
-http://localhost:7655/pr/OWNER/REPO/PR_NUMBER
+http://localhost:9462/pr/OWNER/REPO/PR_NUMBER
 
 ### 5. Check the browser console
 Look for the debug messages:

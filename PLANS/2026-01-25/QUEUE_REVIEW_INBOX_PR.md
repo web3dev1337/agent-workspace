@@ -15,7 +15,7 @@ This is the first UI step toward the tiered workflow (T1–T4) and “review con
 - Adds a new Queue modal (reusing the Tasks modal layout/styles):
   - Left column: list + tier counts + search
   - Right column: editor for tier/risk/pFail/verify/promptRef
-  - “Diff” button opens `:7655/pr/:owner/:repo/:prNumber` when item is a PR
+  - “Diff” button opens `:9462/pr/:owner/:repo/:prNumber` when item is a PR
   - “Prompt” opens a local prompt editor backed by `/api/prompts/:id`
 
 ## API dependencies (already in `main`)

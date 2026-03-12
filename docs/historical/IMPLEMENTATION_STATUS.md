@@ -544,7 +544,7 @@ npm run dev:all
 tail -f logs/workspace.log
 
 # 6. Open browser and check console for workspace-info event
-# Browser: http://localhost:2080
+# Browser: http://localhost:9461
 ```
 
 **Expected**: HyFire 2 workspace loads, 8 terminal pairs initialize, everything works as before.

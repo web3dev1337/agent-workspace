@@ -37,7 +37,7 @@ Minimum runtime config:
 
 Notes:
 - Node version guidance is inconsistent across docs (`16+`) vs `.nvmrc` (`24.9.0`).
-- Client port guidance is inconsistent (`8080` in some docs vs `2080` in code/default quick start).
+- Client port guidance is inconsistent (`8080` in some docs vs `9461` in code/default quick start).
 
 References:
 - `package.json`

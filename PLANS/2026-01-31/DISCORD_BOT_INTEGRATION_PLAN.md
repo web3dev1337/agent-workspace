@@ -97,7 +97,7 @@ This session should have context about:
 
 The bot already calls:
 ```
-POST http://localhost:3000/api/commander/send-to-session
+POST http://localhost:9460/api/commander/send-to-session
 {
   "sessionId": "...",
   "input": "check discord queue...\r"
@@ -181,12 +181,12 @@ Create script that starts both bot and processor session:
 # start-discord-integration.sh
 
 # Start the bot terminal
-curl -X POST http://localhost:3000/api/terminals/start \
+curl -X POST http://localhost:9460/api/terminals/start \
   -H "Content-Type: application/json" \
   -d '{"terminalId": "claudesworth-bot"}'
 
 # Start the processor session (optional)
-curl -X POST http://localhost:3000/api/terminals/start \
+curl -X POST http://localhost:9460/api/terminals/start \
   -H "Content-Type: application/json" \
   -d '{"terminalId": "discord-queue-processor"}'
 ```
@@ -209,7 +209,7 @@ curl -X POST http://localhost:3000/api/terminals/start \
 
 5. **Duplicate Detection** - Before creating any Trello card, check existing cards on the board for duplicates.
 
-6. **Port 3000 Reserved** - Orchestrator runs on port 3000. Never kill it.
+6. **Port 9460 Reserved** - Orchestrator runs on port 9460. Never kill it.
 
 ## File References
 

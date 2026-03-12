@@ -1,6 +1,6 @@
 const net = require('net');
 
-const start = Number.parseInt(process.env.PORT_START || '', 10) || 4001;
+const start = Number.parseInt(process.env.PORT_START || '', 10) || 9480;
 const end = Number.parseInt(process.env.PORT_END || '', 10) || (start + 50);
 const host = process.env.PORT_HOST || '127.0.0.1';
 
@@ -28,4 +28,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-

@@ -4,8 +4,8 @@
 New-NetFirewallRule -DisplayName "Agent Workspace" `
     -Direction Inbound `
     -Protocol TCP `
-    -LocalPort 3000 `
+    -LocalPort 9460,9461 `
     -Action Allow `
     -Profile Private
 
-Write-Host "Firewall rule added for port 3000 on private networks"
+Write-Host "Firewall rule added for ports 9460 and 9461 on private networks"

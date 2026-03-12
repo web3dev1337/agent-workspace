@@ -4,7 +4,7 @@
 # This script will:
 #   1. Open VS Code to the orchestrator folder in WSL
 #   2. Auto-run 'npm start' via VS Code tasks
-#   3. Open Chrome to http://localhost:3000
+#   3. Open Chrome to http://localhost:9461
 
 Write-Host "🚀 Launching Agent Workspace..." -ForegroundColor Cyan
 
@@ -14,10 +14,10 @@ Write-Host "🚀 Launching Agent Workspace..." -ForegroundColor Cyan
 
 Write-Host "✅ VS Code launched!" -ForegroundColor Green
 Write-Host "⏳ Server will auto-start in a few seconds..." -ForegroundColor Yellow
-Write-Host "🌐 Opening browser to http://localhost:3000" -ForegroundColor Yellow
+Write-Host "🌐 Opening browser to http://localhost:9461" -ForegroundColor Yellow
 
 # Wait for server to start and open browser
 Start-Sleep -Seconds 10
-Start-Process "chrome" "http://localhost:3000"
+Start-Process "chrome" "http://localhost:9461"
 
 Write-Host "✨ All set! The orchestrator is starting up." -ForegroundColor Green

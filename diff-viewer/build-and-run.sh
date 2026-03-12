@@ -15,8 +15,8 @@ if [ -d "dist" ]; then
     echo "📁 Contents of dist folder:"
     ls -la dist/
     echo ""
-    echo "🚀 Now access the viewer at: http://localhost:7655"
-    echo "⚠️  Make sure you're using port 7655, not 7656!"
+    echo "🚀 Now access the viewer at: http://localhost:9462"
+    echo "⚠️  Make sure you're using port 9462, not 9464!"
 else
     echo "❌ Build failed. Trying alternative approach..."
     

@@ -233,14 +233,14 @@ if [ "$1" == "--update" ] || [ -z "$1" ]; then
 fi
 
 # 3. Check if already running (avoid duplicate instances)
-if lsof -i:3000 > /dev/null; then
+if lsof -i:9460 > /dev/null; then
   echo -e "${GREEN}✅ Orchestrator already running!${NC}"
 
   # Just open browser to existing instance
   if command -v xdg-open > /dev/null; then
-    xdg-open http://localhost:2080
+    xdg-open http://localhost:9461
   elif command -v open > /dev/null; then
-    open http://localhost:2080
+    open http://localhost:9461
   fi
 
   exit 0
@@ -252,7 +252,7 @@ npm run prod &
 
 # 5. Wait for services to be ready
 echo -e "${BLUE}⏳ Waiting for services...${NC}"
-while ! lsof -i:2080 > /dev/null; do
+while ! lsof -i:9461 > /dev/null; do
   sleep 0.5
 done
 
@@ -260,9 +260,9 @@ done
 echo -e "${GREEN}✅ Opening orchestrator...${NC}"
 sleep 1
 if command -v xdg-open > /dev/null; then
-  xdg-open http://localhost:2080
+  xdg-open http://localhost:9461
 elif command -v open > /dev/null; then
-  open http://localhost:2080
+  open http://localhost:9461
 fi
 
 echo -e "${GREEN}🎉 Claude Orchestrator ready!${NC}"

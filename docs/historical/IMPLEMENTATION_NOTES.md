@@ -22,14 +22,14 @@ An advanced git diff viewer integrated into Claude Orchestrator that provides:
 ### Architecture Overview
 ```
 Claude Terminal → Detects GitHub URL → Shows "Advanced Diff" button → 
-Launches localhost:7655 → Fetches PR data → Shows semantic diff
+Launches localhost:9462 → Fetches PR data → Shows semantic diff
 ```
 
 ### Next Steps for Implementation
 
 #### Phase 1 MVP Checklist:
 - [x] Create diff-viewer directory structure
-- [x] Set up Express server on port 7655
+- [x] Set up Express server on port 9462
 - [x] Add GitHub API integration (use GITHUB_TOKEN env var)
 - [x] Implement basic tree-sitter AST parser for JS/TS
 - [x] Create React SPA with Monaco diff viewer
@@ -112,11 +112,11 @@ detectGitHubLinks(sessionId, data) {
 ```
 GITHUB_TOKEN=ghp_xxxxx  # For API access
 CLAUDE_API_KEY=sk-xxxx  # For AI summaries
-DIFF_VIEWER_PORT=7655
+DIFF_VIEWER_PORT=9462
 ```
 
 ### Technical Decisions Made:
-1. **Port 7655** for diff viewer (orchestrator uses 3000)
+1. **Port 9462** for diff viewer (orchestrator uses 9460)
 2. **Tree-sitter** for AST parsing (most mature, 100+ languages)
 3. **Monaco Editor** for diff UI (same as VS Code)
 4. **Local SQLite** for caching diffs and progress

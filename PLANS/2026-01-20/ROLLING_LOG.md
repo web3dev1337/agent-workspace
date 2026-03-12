@@ -10,7 +10,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - Adds board snapshot API + board view toggle + drag/drop moves (optimistic UI).
   - Fix: add-comment uses form body (more reliable) and errors from Trello are surfaced back to the UI.
   - Fix: card update/move errors now include Trello status/details for debugging.
-  - Fix: Tasks API calls no longer hard-code port 3000 (works with whatever port the UI is served on; client dev server proxies `/api`).
+  - Fix: Tasks API calls no longer hard-code port 9460 (works with whatever port the UI is served on; client dev server proxies `/api`).
   - Tests: added e2e coverage for client-dev-server proxy mode (`npm run test:e2e:proxy`).
   - Plan for next work (metadata + dependencies): `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
 
@@ -89,7 +89,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Created working branch: `many-changes` (tracks `origin/main`)
 - Confirmed Z.ai toggle PR was merged into `main` (merge commit `d9406c0`).
 - `origin/main` HEAD (at time of writing): `7ca2113` (“Merge PR #85: remove Yes/No quick actions”)
-- Confirmed dev instance ports are set in `.env` (server is **not** 3000).
+- Confirmed dev instance ports are set in `.env` (server is **not** 9460).
 
 ### Planning docs
 - Added: `PLANS/2026-01-20/REQUESTED_CHANGES.md`
@@ -100,7 +100,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Merged: commit `3f2e3cb22c4907e3917eb164cf96f0b5dca18753`
 
 ### Notes / next actions
-- Next PR should likely be “Test isolation & safety rails” (ensure Playwright uses 4001+ by default).
+- Next PR should likely be “Test isolation & safety rails” (ensure Playwright uses 9480+ by default).
 - Highest priority runtime bug to tackle early: workspace tab switching corrupts xterm sizing / input + sidebar selection.
 
 ---
@@ -108,7 +108,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ## 2026-01-20 (later)
 
 ### Test isolation / safety rails (done)
-- Goal: default Playwright to a safe test port (4001) and keep API calls aligned.
+- Goal: default Playwright to a safe test port (9480) and keep API calls aligned.
 - Changes:
   - Added `ORCHESTRATOR_TEST_PORT` support for Playwright.
   - Added `npm run test:e2e:safe` helper.
@@ -559,7 +559,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Tasks: Trello parity iteration (labels + custom field editing) (merged)
 - Adds label editing (board labels list + card label toggles).
 - Adds custom field editing (text/number/checkbox/date/list) via provider-agnostic API.
-- Makes Tasks API calls port-agnostic in split dev (no hard-coded `:3000` inside Tasks panel).
+- Makes Tasks API calls port-agnostic in split dev (no hard-coded `:9460` inside Tasks panel).
 - Test updates: unit tests for Trello provider writes + new e2e mocks for label/custom-field edits.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/180 (merged 2026-01-25)
 
@@ -600,8 +600,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ### Chore: morning-safe ports + stable E2E (merged)
 - Default `npm start` / `npm run dev` runs web-only (avoid Tauri/Cargo failures); Tauri is still available via `npm run dev:full`.
-- Adds safe dev helper `npm run dev:web:safe` (server `:4001`, client `:4100`) so dev work doesn’t collide with the live `/master` instance (often `:3000`).
-- Makes `npm run test:e2e:safe` auto-pick a free port (starting `:4001`) and support `-- <playwright args>` passthrough.
+- Adds safe dev helper `npm run dev:web:safe` (server `:9480`, client `:9481`) so dev work doesn’t collide with the live `/master` instance (often `:9460`).
+- Makes `npm run test:e2e:safe` auto-pick a free port (starting `:9480`) and support `-- <playwright args>` passthrough.
 - Suppresses noisy git stderr from non-repo folders during startup.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/196 (merged 2026-01-25)

@@ -16,8 +16,8 @@ Goal: ship a Windows‑first product that stays **local**, preserves “real ter
 
 ### Runtime topology (today)
 - User runs `npm run dev`:
-  - `server/index.js` starts the backend (default port `3000` unless overridden)
-  - `client/dev-server.js` starts the dev UI server (default port `2080`) proxying `/api` to backend
+  - `server/index.js` starts the backend (default port `9460` unless overridden)
+  - `client/dev-server.js` starts the dev UI server (default port `9461`) proxying `/api` to backend
 - In prod-ish mode, the backend serves `client/` directly (see `server/index.js` route `/` and `express.static`).
 - Terminals are **real PTYs** managed server-side, streamed to the browser via Socket.IO.
 
@@ -84,7 +84,7 @@ Bundling Node (recommended):
 ### 3.2 Startup flow (target)
 On app launch:
 1. Tauri generates:
-   - a random free local port (or fixed `3000` if safe)
+   - a random free local port (or fixed `9460` if safe)
    - a random `AUTH_TOKEN` (required, not optional in packaged builds)
 2. Tauri spawns the backend:
    - `node.exe server/index.js`
@@ -297,7 +297,7 @@ Shipped in this slice:
 
 ## 8) Open questions (need your preference)
 
-1) Do we want a **fixed port** (e.g. 3000) or a **random free port** per launch?
+1) Do we want a **fixed port** (e.g. 9460) or a **random free port** per launch?
 2) Should `AUTH_TOKEN` be ephemeral-per-launch (simpler) or stable across runs?
 3) Which monetization style do you want:
    - one-time license + paid upgrades, or subscription?

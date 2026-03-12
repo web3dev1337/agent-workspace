@@ -185,7 +185,7 @@ orchestrator
 # Start orchestrator
 npm run dev:all
 
-# Open browser: http://localhost:2080
+# Open browser: http://localhost:9461
 
 # In browser console:
 window.orchestrator.switchToWorkspace('epic-survivors');

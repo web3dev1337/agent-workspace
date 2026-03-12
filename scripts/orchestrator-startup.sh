@@ -10,8 +10,14 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 ORCHESTRATOR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-4000}"
-CLIENT_PORT=2080
+if [ -f "$ORCHESTRATOR_DIR/.env" ]; then
+  set -a
+  . "$ORCHESTRATOR_DIR/.env"
+  set +a
+fi
+
+export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-9460}"
+CLIENT_PORT="${CLIENT_PORT:-9461}"
 
 echo -e "${BLUE}🚀 Agent Workspace Startup${NC}"
 echo -e "${BLUE}================================${NC}"

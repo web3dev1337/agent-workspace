@@ -5,6 +5,7 @@ const os = require('os');
 const net = require('net');
 const fs = require('fs').promises;
 const path = require('path');
+const { DEFAULT_DEV_PORTS, DEFAULT_PORTS, PORTS } = require('./portDefaults');
 const execAsync = util.promisify(exec);
 
 // Custom port labels file
@@ -25,14 +26,55 @@ const logger = winston.createLogger({
 // Configuration
 const PORT_RANGE_START = 8080;
 const PORT_RANGE_END = 8199;
-const RESERVED_PORTS = [
-  3000,  // Agent Workspace server
-  4000,  // Agent Workspace dev server
-  2080,  // Client dev server
-  2081,  // Client dev server (dev instance)
-  7655,  // Diff viewer
-  7656,  // Diff viewer (dev instance)
-];
+const RESERVED_PORTS = Array.from(new Set([
+  DEFAULT_PORTS.ORCHESTRATOR,
+  DEFAULT_PORTS.CLIENT,
+  DEFAULT_PORTS.DIFF_VIEWER,
+  DEFAULT_PORTS.TAURI_DEV,
+  DEFAULT_PORTS.DIFF_VIEWER + 2,
+  DEFAULT_DEV_PORTS.ORCHESTRATOR,
+  DEFAULT_DEV_PORTS.CLIENT,
+  DEFAULT_DEV_PORTS.DIFF_VIEWER,
+  DEFAULT_DEV_PORTS.TAURI_DEV,
+  DEFAULT_DEV_PORTS.DIFF_VIEWER + 2,
+  PORTS.ORCHESTRATOR,
+  PORTS.CLIENT,
+  PORTS.DIFF_VIEWER,
+  PORTS.TAURI_DEV,
+  PORTS.DIFF_VIEWER_CLIENT
+]));
+
+function registerKnownService(map, port, name, type, icon) {
+  if (!Number.isFinite(port)) return;
+  map[port] = { name, type, icon };
+}
+
+function buildKnownPorts() {
+  const knownPorts = {};
+  const variants = [
+    { ports: DEFAULT_PORTS, suffix: '' },
+    { ports: DEFAULT_DEV_PORTS, suffix: ' (Dev)' },
+    { ports: PORTS, suffix: '' }
+  ];
+
+  for (const { ports, suffix } of variants) {
+    registerKnownService(knownPorts, ports.ORCHESTRATOR, `Agent Workspace${suffix}`, 'agent-workspace', '🎛️');
+    registerKnownService(knownPorts, ports.CLIENT, `Agent Workspace UI${suffix}`, 'agent-workspace-ui', '🖥️');
+    registerKnownService(knownPorts, ports.DIFF_VIEWER, `Agent Workspace Diff Viewer${suffix}`, 'agent-workspace-diff-viewer', '📝');
+    registerKnownService(knownPorts, ports.TAURI_DEV, `Agent Workspace Tauri Dev${suffix}`, 'agent-workspace-tauri', '🦀');
+    registerKnownService(knownPorts, ports.DIFF_VIEWER_CLIENT, `Agent Workspace Diff Viewer UI${suffix}`, 'agent-workspace-diff-viewer-ui', '⚡');
+  }
+
+  registerKnownService(knownPorts, 5173, 'Vite Dev Server', 'vite', '⚡');
+  registerKnownService(knownPorts, 5174, 'Vite Dev Server', 'vite', '⚡');
+  registerKnownService(knownPorts, 3001, 'React Dev Server', 'react', '⚛️');
+  registerKnownService(knownPorts, 8080, 'Web Server', 'web', '🌐');
+  registerKnownService(knownPorts, 8000, 'Python Server', 'python', '🐍');
+  registerKnownService(knownPorts, 5000, 'Flask/Dev Server', 'flask', '🌶️');
+  registerKnownService(knownPorts, 4321, 'Astro Dev', 'astro', '🚀');
+
+  return knownPorts;
+}
 
 class PortRegistry {
   constructor() {
@@ -442,8 +484,8 @@ class PortRegistry {
       const lines = stdout.split('\n');
 
       for (const line of lines) {
-        // Parse ss output: LISTEN  0  511  *:3000  *:*  users:(("node",pid=12345,fd=20))
-        // Or netstat: tcp  0  0  0.0.0.0:3000  0.0.0.0:*  LISTEN  12345/node
+        // Parse ss output: LISTEN  0  511  *:9460  *:*  users:(("node",pid=12345,fd=20))
+        // Or netstat: tcp  0  0  0.0.0.0:9460  0.0.0.0:*  LISTEN  12345/node
         const portMatch = line.match(/:(\d+)\s/);
         if (!portMatch) continue;
 
@@ -513,7 +555,7 @@ class PortRegistry {
       const portToPid = new Map();
       for (const line of lines) {
         // Example:
-        // TCP    0.0.0.0:3000     0.0.0.0:0     LISTENING       12345
+        // TCP    0.0.0.0:9460     0.0.0.0:0     LISTENING       12345
         const m = line.match(/^\s*TCP\s+(\S+)\s+(\S+)\s+LISTENING\s+(\d+)\s*$/i);
         if (!m) continue;
 
@@ -586,24 +628,7 @@ class PortRegistry {
    * @returns {Object} Service identification info
    */
   identifyService(port, processName, projectInfo = null) {
-    // Known ports mapping
-    const knownPorts = {
-      3000: { name: 'Agent Workspace', type: 'orchestrator', icon: '🎛️' },
-      4000: { name: 'Agent Workspace (Dev)', type: 'orchestrator-dev', icon: '🔧' },
-      2080: { name: 'Orchestrator Client', type: 'client', icon: '🖥️' },
-      2081: { name: 'Orchestrator Client (Dev)', type: 'client-dev', icon: '🖥️' },
-      7655: { name: 'Diff Viewer', type: 'diff-viewer', icon: '📝' },
-      7656: { name: 'Diff Viewer (Dev)', type: 'diff-viewer-dev', icon: '📝' },
-      5173: { name: 'Vite Dev Server', type: 'vite', icon: '⚡' },
-      5174: { name: 'Vite Dev Server', type: 'vite', icon: '⚡' },
-      3001: { name: 'React Dev Server', type: 'react', icon: '⚛️' },
-      8080: { name: 'Web Server', type: 'web', icon: '🌐' },
-      8000: { name: 'Python Server', type: 'python', icon: '🐍' },
-      5000: { name: 'Flask/Dev Server', type: 'flask', icon: '🌶️' },
-      4321: { name: 'Astro Dev', type: 'astro', icon: '🚀' },
-      1420: { name: 'Tauri Dev', type: 'tauri', icon: '🦀' },
-      1421: { name: 'Tauri Dev', type: 'tauri', icon: '🦀' },
-    };
+    const knownPorts = buildKnownPorts();
 
     // Check known ports first
     if (knownPorts[port]) {

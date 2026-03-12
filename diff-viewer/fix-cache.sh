@@ -5,7 +5,7 @@ echo ""
 
 # Step 1: Stop the server
 echo "1️⃣ Stop the server with Ctrl+C in the terminal showing:"
-echo "   '🔍 Diff Viewer running on http://localhost:7655'"
+echo "   '🔍 Diff Viewer running on http://localhost:9462'"
 echo ""
 echo "Press Enter when done..."
 read
@@ -26,6 +26,6 @@ echo "✅ Server started!"
 echo ""
 
 echo "4️⃣ Wait 5 seconds, then refresh your browser at:"
-echo "   http://localhost:7655/pr/OWNER/REPO/PR_NUMBER"
+echo "   http://localhost:9462/pr/OWNER/REPO/PR_NUMBER"
 echo ""
 echo "The analysis will be regenerated with the advanced semantic engine!"

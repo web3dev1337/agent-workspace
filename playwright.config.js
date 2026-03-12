@@ -1,9 +1,9 @@
 require('dotenv').config();
 const { defineConfig } = require('@playwright/test');
 
-// E2E tests must not collide with the user's "main/master" instance (often on 3000).
+// E2E tests must not collide with the user's standard Agent Workspace ports (9460-9463).
 // Default to a safe high port unless explicitly overridden.
-const DEFAULT_TEST_SERVER_PORT = 4001;
+const DEFAULT_TEST_SERVER_PORT = 9480;
 const SERVER_PORT = Number.parseInt(process.env.ORCHESTRATOR_TEST_PORT || '', 10) || DEFAULT_TEST_SERVER_PORT;
 
 module.exports = defineConfig({

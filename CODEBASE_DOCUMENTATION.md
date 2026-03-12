@@ -383,7 +383,7 @@ close-tab: {tabId}                             - Close workspace tab and cleanup
   "server": {
     "port": 3001,
     "cors": {
-      "origins": ["http://localhost:2080", "tauri://localhost"]
+      "origins": ["http://localhost:9461", "tauri://localhost"]
     }
   },
   "sessions": {

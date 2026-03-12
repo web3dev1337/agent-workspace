@@ -24,7 +24,7 @@ Scope: markdown files added in the last 7 days via git history.
 
 **Unchecked**
 - PLANS/2026-01-24/CHECKLIST.md:6 — Running instance in \`.../claude-orchestrator/master\` is not touched
-- PLANS/2026-01-24/CHECKLIST.md:7 — Dev/test ports avoid 3000 (use 4001+ for tests)
+- PLANS/2026-01-24/CHECKLIST.md:7 — Dev/test ports avoid 9460 (use 9480+ for tests)
 - PLANS/2026-01-24/CHECKLIST.md:10 — \`npm run test:unit\`
 - PLANS/2026-01-24/CHECKLIST.md:11 — \`npm run test:e2e:safe\` (or note why skipped)
 - PLANS/2026-01-24/CHECKLIST.md:14 — Dashboard loads

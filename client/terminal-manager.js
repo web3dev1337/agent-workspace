@@ -21,7 +21,9 @@ class TerminalManager {
 
     initializeWebSocket() {
         // Connect to Node.js backend
-        this.socket = io(window.location.hostname + ':3000');
+        this.socket = io(window.location.origin, {
+            path: '/socket.io'
+        });
         
         this.socket.on('connect', () => {
             console.log('Connected to terminal server');

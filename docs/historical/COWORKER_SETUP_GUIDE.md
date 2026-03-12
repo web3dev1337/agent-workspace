@@ -562,9 +562,9 @@ bash scripts/install-startup.sh
 Create `master/.env` if you need custom ports:
 
 ```bash
-ORCHESTRATOR_PORT=3000 # Server port
-CLIENT_PORT=2080       # Client UI port
-TAURI_DEV_PORT=1420    # Native app port
+ORCHESTRATOR_PORT=9460 # Server port
+CLIENT_PORT=9461       # Client UI port
+TAURI_DEV_PORT=9463    # Native app port
 LOG_LEVEL=info         # Logging level
 ```
 
@@ -578,7 +578,7 @@ orchestrator
 cd ~/GitHub/tools/automation/claude-orchestrator/master
 npm run dev:all
 
-# Access at: http://localhost:2080
+# Access at: http://localhost:9461
 ```
 
 ---
@@ -587,7 +587,7 @@ npm run dev:all
 
 ### Option 1: Using the Wizard (Recommended)
 
-1. **Launch orchestrator** and open http://localhost:2080
+1. **Launch orchestrator** and open http://localhost:9461
 2. **Click "Create New Workspace"** in the dashboard
 3. **Select workspace type** (e.g., "Hytopia Game", "MonoGame", "Writing")
 4. **Choose repository** from auto-detected list
@@ -868,7 +868,7 @@ This prevents ID conflicts between repositories.
 # Start orchestrator
 orchestrator
 
-# Browser opens automatically at http://localhost:2080
+# Browser opens automatically at http://localhost:9461
 # Dashboard shows all your workspaces
 ```
 
@@ -951,12 +951,12 @@ rm -rf ../work1
 
 ### Issue: "Port already in use"
 
-**Symptom**: `Error: listen EADDRINUSE :::3000`
+**Symptom**: `Error: listen EADDRINUSE :::9460`
 
 **Fix**:
 ```bash
 # Find process using port
-lsof -i :3000
+lsof -i :9460
 
 # Kill it
 kill -9 [PID]

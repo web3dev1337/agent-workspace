@@ -79,7 +79,7 @@ mkdir -p logs sessions
 Edit `.env` file:
 ```env
 # Server
-ORCHESTRATOR_PORT=3000
+ORCHESTRATOR_PORT=9460
 ORCHESTRATOR_HOST=127.0.0.1
 # For LAN access (recommended with AUTH_TOKEN):
 # ORCHESTRATOR_HOST=0.0.0.0
@@ -117,8 +117,8 @@ npm start
 ### Accessing the Dashboard
 - Dashboard URLs depend on your ports.
 - Safe default for dev work is typically:
-  - server: `ORCHESTRATOR_PORT=4001`
-  - client: `CLIENT_PORT=4100`
+  - server: `ORCHESTRATOR_PORT=9480`
+  - client: `CLIENT_PORT=9481`
 
 ### Dashboard Interface
 
@@ -210,7 +210,7 @@ AUTH_TOKEN=your-secret-token
 ```
 
 Access methods:
-1. URL parameter: `http://localhost:3000?token=your-secret-token`
+1. URL parameter: `http://localhost:9460?token=your-secret-token`
 2. Saved in browser (localStorage)
 3. Header: `X-Auth-Token: your-secret-token`
 
@@ -272,7 +272,7 @@ Access methods:
 
 #### Cannot connect to server
 1. Check if server is running: `ps aux | grep node`
-2. Check firewall settings for port 3000
+2. Check firewall settings for port 9460
 3. Verify HOST setting in .env
 
 #### Terminals not displaying

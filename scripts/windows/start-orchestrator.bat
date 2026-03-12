@@ -14,13 +14,19 @@ echo.
 
 REM Configuration - modify these if needed
 set "WSL_DISTRO=Ubuntu"
-set "ORCHESTRATOR_PORT=3000"
-set "BROWSER_URL=http://localhost:%ORCHESTRATOR_PORT%"
 
 REM Auto-detect orchestrator path from this script's location
 set "SCRIPT_DIR=%~dp0"
 REM Go up from scripts/windows to repo root
 for %%i in ("%SCRIPT_DIR%..\..\") do set "REPO_ROOT=%%~fi"
+
+REM Load UI port from .env when present
+set "CLIENT_PORT="
+if exist "%REPO_ROOT%\.env" (
+    for /f "tokens=1,2 delims==" %%A in ('findstr /R "^CLIENT_PORT=" "%REPO_ROOT%\.env" 2^>nul') do set "CLIENT_PORT=%%B"
+)
+if not defined CLIENT_PORT set "CLIENT_PORT=9461"
+set "BROWSER_URL=http://localhost:%CLIENT_PORT%"
 
 REM Wait for WSL to be ready (up to 60 seconds)
 echo Waiting for WSL to initialize...

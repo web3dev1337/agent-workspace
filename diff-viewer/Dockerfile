@@ -27,5 +27,5 @@ COPY .env.example .env
 # Create cache directory
 RUN mkdir -p cache
 
-EXPOSE 7655
+EXPOSE 9462
 CMD ["node", "server/index.js"]

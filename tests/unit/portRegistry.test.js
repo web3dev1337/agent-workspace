@@ -109,4 +109,25 @@ describe('PortRegistry', () => {
       expect(Object.keys(assignments).length).toBe(0);
     });
   });
+
+  describe('identifyService', () => {
+    it('labels the Agent Workspace default ports', () => {
+      expect(registry.identifyService(9460, 'node')).toMatchObject({
+        name: 'Agent Workspace',
+        type: 'agent-workspace'
+      });
+      expect(registry.identifyService(9461, 'node')).toMatchObject({
+        name: 'Agent Workspace UI',
+        type: 'agent-workspace-ui'
+      });
+      expect(registry.identifyService(9462, 'node')).toMatchObject({
+        name: 'Agent Workspace Diff Viewer',
+        type: 'agent-workspace-diff-viewer'
+      });
+      expect(registry.identifyService(9463, 'node')).toMatchObject({
+        name: 'Agent Workspace Tauri Dev',
+        type: 'agent-workspace-tauri'
+      });
+    });
+  });
 });

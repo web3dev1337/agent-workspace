@@ -10714,8 +10714,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
   background: var(--bg-primary);
 }
 
-.port-item.orchestrator,
-.port-item.orchestrator-dev {
+.port-item.agent-workspace,
+.port-item.agent-workspace-ui,
+.port-item.agent-workspace-diff-viewer,
+.port-item.agent-workspace-diff-viewer-ui,
+.port-item.agent-workspace-tauri {
   border-left-color: #9f7aea;
 }
 
@@ -12694,7 +12697,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
   background: var(--bg-tertiary);
 }
 
-.port-sidebar-item.orchestrator { border-left-color: #9f7aea; }
+.port-sidebar-item.agent-workspace { border-left-color: #9f7aea; }
+.port-sidebar-item.agent-workspace-ui { border-left-color: #63b3ed; }
+.port-sidebar-item.agent-workspace-diff-viewer { border-left-color: #9f7aea; }
+.port-sidebar-item.agent-workspace-diff-viewer-ui { border-left-color: #48bb78; }
+.port-sidebar-item.agent-workspace-tauri { border-left-color: #9f7aea; }
 .port-sidebar-item.node { border-left-color: #68d391; }
 .port-sidebar-item.rails { border-left-color: #f56565; }
 .port-sidebar-item.python { border-left-color: #ffd93d; }
@@ -12757,7 +12764,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 
 
-.port-dashboard-card.orchestrator { border-left-color: #9f7aea; }
+.port-dashboard-card.agent-workspace { border-left-color: #9f7aea; }
+.port-dashboard-card.agent-workspace-ui { border-left-color: #63b3ed; }
+.port-dashboard-card.agent-workspace-diff-viewer { border-left-color: #9f7aea; }
+.port-dashboard-card.agent-workspace-diff-viewer-ui { border-left-color: #48bb78; }
+.port-dashboard-card.agent-workspace-tauri { border-left-color: #9f7aea; }
 .port-dashboard-card.node { border-left-color: #68d391; }
 .port-dashboard-card.rails { border-left-color: #f56565; }
 .port-dashboard-card.ruby { border-left-color: #f56565; }

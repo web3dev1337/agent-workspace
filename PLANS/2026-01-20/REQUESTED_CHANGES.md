@@ -4,8 +4,8 @@ This document captures (verbatim intent, condensed) all requested changes and is
 
 ## Context / Constraints
 
-- You are actively running another orchestrator instance from the separate worktree at `~/GitHub/tools/automation/claude-orchestrator/master` on **port 3000**.
-- All local dev/testing work in this repo should **avoid port 3000**. Prefer running this repo on **4000+** (or **4001** for test servers).
+- You are actively running another orchestrator instance from the separate worktree at `~/GitHub/tools/automation/claude-orchestrator/master` on **port 9460**.
+- All local dev/testing work in this repo should **avoid port 9460**. Prefer running this repo on **9470+** (or **9480** for test servers).
 - Keep work **modular** and **performance-aware**.
 - Ship changes as a sequence of small PRs: **1 change → tests → commit → push → PR**.
 - Keep a **rolling markdown log** so work can resume if context is lost.
@@ -206,12 +206,12 @@ When clicking the Advanced Diff Viewer (🔍) from PR lists / GitHub links, the 
 
 **Acceptance criteria**
 - Clicking 🔍 opens a new tab that shows a “starting…” message and then redirects to the diff viewer when ready (no broken browser error page).
-- Orchestrator starts the diff viewer on-demand (default `http://localhost:7655`) and exposes status for polling.
-- Starting the diff viewer does not impact the separate orchestrator instance running from `master/` on port **3000**.
+- Orchestrator starts the diff viewer on-demand (default `http://localhost:9462`) and exposes status for polling.
+- Starting the diff viewer does not impact the separate orchestrator instance running from `master/` on port **9460**.
 
 ## L. Advanced Diff Viewer: start automatically with orchestrator (`npm start`)
 
-The diff viewer should be started automatically as part of the orchestrator startup so you can paste/open `http://localhost:7655/pr/...` without getting connection refused.
+The diff viewer should be started automatically as part of the orchestrator startup so you can paste/open `http://localhost:9462/pr/...` without getting connection refused.
 
 **Acceptance criteria**
 - `npm start` launches orchestrator and also starts diff viewer in the background by default.

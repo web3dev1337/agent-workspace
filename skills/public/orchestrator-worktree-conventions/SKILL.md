@@ -11,7 +11,7 @@ This skill defines the **standard directory layout** and **worktree naming conve
 
 ## Quick Rules
 
-- **Never edit the user’s run-only orchestrator instance:** avoid `~/GitHub/tools/automation/claude-orchestrator/master` (it’s used on port 3000). Do all orchestrator dev work in `.../claude-orchestrator-dev`.
+- **Never edit the user’s run-only orchestrator instance:** avoid `~/GitHub/tools/automation/claude-orchestrator/master` (it’s used on port 9460). Do all orchestrator dev work in `.../claude-orchestrator-dev`.
 - Prefer the **worktree layout**: each project has a stable `master/` folder plus multiple `workN/` folders (e.g., `work1`…`work8`) for parallel work.
 - Keep paths deterministic: the orchestrator and scripts should be able to derive category/framework/project/worktree from folder location.
 
@@ -44,7 +44,7 @@ When asked to “create a new project”, gather:
 - Desired category + framework (games/hytopia, games/monogame, websites, tools, writing, etc.)
 - Project name
 - Whether it should be worktree-structured immediately (default: yes)
-- Any known default port (avoid 3000; prefer 4000+ for local dev services)
+- Any known default port (avoid 9460-9474; prefer 9480+ for local dev services)
 
 ## Adding a New Worktree
 
@@ -54,9 +54,9 @@ Preferred workflow:
 
 ## Ports (Safety)
 
-- Do not use port **3000** in this dev worktree (reserved for the user’s run-only orchestrator).
-- For orchestrator tests use `npm run test:e2e:safe` (Playwright will use port **4001**).
-- For ad-hoc local dev services, prefer ports **4000+** and avoid collisions with other running projects.
+- Do not use ports **9460-9474** in this dev worktree (reserved for Agent Workspace itself).
+- For orchestrator tests use `npm run test:e2e:safe` (Playwright will use port **9480**).
+- For ad-hoc local dev services, prefer ports **9480+** and avoid collisions with other running projects.
 
 ## References
 

@@ -59,7 +59,7 @@ git push origin --force --all
 | `server/gitHelper.js` | n/a | HOME handling can break git safe.directory → “unknown” branch | Fixed (no longer overrides HOME) |
 | `server/index.js` | n/a | Hardcoded user paths for build-production | Fixed (derive from session `cwd`) |
 | `server/greenfieldService.js` | n/a | Hardcoded GitHub-root defaults | Fixed (configurable via `GREENFIELD_GITHUB_ROOT`/`GITHUB_ROOT`) |
-| `client/*` | n/a | Hardcoded dev port mapping 2080/2081→3000/4000 | Fixed (use same-origin; dev server proxies `/api`) |
+| `client/*` | n/a | Hardcoded dev port mapping 9461/9471→9460/9470 | Fixed (use same-origin; dev server proxies `/api`) |
 
 **Estimated Effort:** 4-6 hours
 
@@ -77,8 +77,8 @@ module.exports = {
     websites: process.env.WEBSITES_PATH || '~/GitHub/websites',
   },
   ports: {
-    production: parseInt(process.env.PORT) || 3000,
-    development: parseInt(process.env.DEV_PORT) || 4000,
+    production: parseInt(process.env.PORT) || 9460,
+    development: parseInt(process.env.DEV_PORT) || 9470,
   }
 };
 ```
