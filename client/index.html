@@ -327,18 +327,21 @@
 
                 <div class="setting-section" data-section-id="diagnostics" data-section-title="Diagnostics">
                 <h4>Diagnostics</h4>
-                <div class="setting-group">
-                    <button id="diagnostics-refresh" class="template-btn secondary">Refresh diagnostics</button>
-                    <button id="diagnostics-first-run" class="template-btn secondary">Post-install check</button>
-                    <button id="diagnostics-install-wizard" class="template-btn secondary">Fix environment wizard</button>
-                    <button id="diagnostics-repair-safe" class="template-btn secondary">Auto-fix safe issues</button>
-                    <span id="diagnostics-status" style="margin-left:10px; opacity:0.75;"></span>
+                <p class="setting-description diagnostics-intro">Run a read-only environment scan for tooling, auth, and setup readiness. This section only analyzes and suggests next steps. It does not make changes for you.</p>
+                <div class="setting-group diagnostics-toolbar-row">
+                    <button id="diagnostics-refresh" class="template-btn secondary" type="button">Run diagnostic scan</button>
+                    <span id="diagnostics-status" class="diagnostics-status" aria-live="polite"></span>
                 </div>
                 <div class="setting-group">
-                    <div id="diagnostics-repair-actions" class="mono" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+                    <div id="diagnostics-summary" class="diagnostics-summary" aria-live="polite">
+                        <div class="diagnostics-empty-state">Run a diagnostic scan to inspect your environment.</div>
+                    </div>
                 </div>
                 <div class="setting-group">
-                    <pre id="diagnostics-output" class="mono diagnostics-output">Click “Refresh diagnostics”.</pre>
+                    <div id="diagnostics-guidance" class="diagnostics-guidance"></div>
+                </div>
+                <div class="setting-group">
+                    <div id="diagnostics-details" class="diagnostics-details"></div>
                 </div>
             </div>
 

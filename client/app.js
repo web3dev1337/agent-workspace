@@ -9280,261 +9280,342 @@ class ClaudeOrchestrator {
 
 	  setupDiagnosticsPanel() {
 	    const btn = document.getElementById('diagnostics-refresh');
-	    const btnFirstRun = document.getElementById('diagnostics-first-run');
-	    const btnInstallWizard = document.getElementById('diagnostics-install-wizard');
-	    const btnRepairSafe = document.getElementById('diagnostics-repair-safe');
-	    const out = document.getElementById('diagnostics-output');
 	    const statusEl = document.getElementById('diagnostics-status');
-	    const repairEl = document.getElementById('diagnostics-repair-actions');
-	    if (!btn || !out) return;
+	    const summaryEl = document.getElementById('diagnostics-summary');
+	    const guidanceEl = document.getElementById('diagnostics-guidance');
+	    const detailsEl = document.getElementById('diagnostics-details');
+	    if (!btn || !summaryEl || !guidanceEl || !detailsEl) return;
+
+	    const buttonLabel = 'Run diagnostic scan';
 	    const state = {
 	      base: null,
 	      firstRun: null,
-	      wizard: null
+	      postInstall: null
 	    };
 
-	    const renderRepairActions = (firstRunData) => {
-	      if (!repairEl) return;
-	      const actions = Array.isArray(firstRunData?.repairActions) ? firstRunData.repairActions : [];
-	      if (!actions.length) {
-	        repairEl.innerHTML = '';
+	    const formatPlatform = (platform) => {
+	      const value = String(platform || '').trim().toLowerCase();
+	      if (value === 'win32') return 'Windows';
+	      if (value === 'darwin') return 'macOS';
+	      if (value === 'linux') return 'Linux';
+	      return platform ? String(platform) : 'Unknown';
+	    };
+
+	    const formatTimestamp = (value) => {
+	      const raw = String(value || '').trim();
+	      if (!raw) return '';
+	      const date = new Date(raw);
+	      if (Number.isNaN(date.getTime())) return raw;
+	      return date.toLocaleString();
+	    };
+
+	    const escape = (value) => this.escapeHtml(String(value || ''));
+
+	    const getToneClass = ({ ok = null, status = '', severity = '' } = {}) => {
+	      if (ok === true || String(status || '').trim().toLowerCase() === 'pass') return 'is-good';
+	      const sev = String(severity || '').trim().toLowerCase();
+	      if (sev === 'blocking') return 'is-blocking';
+	      if (sev === 'warning') return 'is-warning';
+	      return 'is-neutral';
+	    };
+
+	    const getSeverityLabel = ({ ok = null, status = '', severity = '' } = {}) => {
+	      if (ok === true || String(status || '').trim().toLowerCase() === 'pass') return 'Ready';
+	      const sev = String(severity || '').trim().toLowerCase();
+	      if (sev === 'blocking') return 'Blocking';
+	      if (sev === 'warning') return 'Warning';
+	      return String(status || 'Info').trim() || 'Info';
+	    };
+
+	    const renderEmpty = () => {
+	      summaryEl.innerHTML = '<div class="diagnostics-empty-state">Run a diagnostic scan to inspect tool availability, auth, and local setup readiness.</div>';
+	      guidanceEl.innerHTML = '';
+	      detailsEl.innerHTML = '';
+	    };
+
+	    const renderFailure = (message) => {
+	      summaryEl.innerHTML = `<div class="diagnostics-error-state">${escape(message || 'Failed to load diagnostics.')}</div>`;
+	      guidanceEl.innerHTML = '';
+	      detailsEl.innerHTML = '';
+	    };
+
+	    const render = () => {
+	      const base = (state.base && typeof state.base === 'object') ? state.base : {};
+	      const firstRun = (state.firstRun && typeof state.firstRun === 'object') ? state.firstRun : {};
+	      const postInstall = (state.postInstall && typeof state.postInstall === 'object') ? state.postInstall : {};
+	      const tools = Array.isArray(base.tools) ? base.tools : [];
+	      const checks = Array.isArray(firstRun.checks) ? firstRun.checks : [];
+	      const steps = Array.isArray(postInstall.steps) ? postInstall.steps : [];
+	      if (!tools.length && !checks.length && !steps.length) {
+	        renderEmpty();
 	        return;
 	      }
-	      repairEl.innerHTML = actions
-	        .map((action) => {
-	          const id = this.escapeHtml(String(action?.id || '').trim());
-	          const label = this.escapeHtml(String(action?.label || action?.id || 'Repair').trim());
-	          const kind = this.escapeHtml(String(action?.kind || '').trim());
-	          const title = kind ? `Repair (${kind})` : 'Repair';
-	          return `<button class="btn-secondary" type="button" data-diagnostics-repair="${id}" title="${title}">${label}</button>`;
-	        })
-	        .join('');
-	    };
 
-	    const render = (data, firstRunData = null, wizardData = null) => {
-	      const lines = [];
-	      const platform = String(data?.platform || '');
-	      lines.push(`platform: ${platform || 'unknown'}`);
-	      if (data?.env) {
-	        lines.push(`homeDir: ${String(data.env.homeDir || '')}`);
-	        if (data.env.USERPROFILE) lines.push(`USERPROFILE: ${String(data.env.USERPROFILE)}`);
-	      }
-	      if (data?.nodePty) {
-	        lines.push(`node-pty: ${data.nodePty.ok ? 'ok' : `missing (${String(data.nodePty.error || 'error')})`}`);
-	      }
-	      if (data?.platformSmoke?.checks) {
-	        const checks = data.platformSmoke.checks;
-	        lines.push(`platform-smoke: ${data.platformSmoke.ok ? 'ok' : 'issues detected'}`);
-	        const shellId = String(checks?.shell?.id || 'shell');
-	        lines.push(`  shell(${shellId}): ${checks?.shell?.ok ? 'ok' : `fail (${String(checks?.shell?.error || 'missing')})`}`);
-	        lines.push(`  git: ${checks?.git?.ok ? 'ok' : `fail (${String(checks?.git?.error || 'missing')})`}`);
-	        lines.push(`  gh: ${checks?.gh?.ok ? 'ok' : `fail (${String(checks?.gh?.error || 'missing')})`}`);
-	        lines.push(`  gh auth: ${checks?.ghAuth?.ok ? 'ok' : `fail (${String(checks?.ghAuth?.error || 'not authenticated')})`}`);
-	      }
-	      lines.push('');
-
-	      const tools = Array.isArray(data.tools) ? data.tools : [];
-	      tools.forEach((t) => {
-	        const name = String(t?.name || t?.id || 'tool');
-	        if (t?.ok) {
-	          const version = String(t?.version || '').trim();
-	          lines.push(`ok   ${name}${version ? `: ${version}` : ''}`);
-	        } else {
-	          const err = String(t?.error || t?.code || 'missing');
-	          lines.push(`fail ${name}: ${err}`);
+	      const toolMap = new Map(tools.map((tool) => [String(tool?.id || '').trim(), tool]));
+	      const checkMap = new Map(checks.map((check) => [String(check?.id || '').trim(), check]));
+	      const platformLabel = formatPlatform(base.platform || postInstall.platform || firstRun.platform);
+	      const summary = (postInstall.summary && typeof postInstall.summary === 'object')
+	        ? postInstall.summary
+	        : ((firstRun.summary && typeof firstRun.summary === 'object') ? firstRun.summary : {});
+	      const ready = !!summary.ready;
+	      const blockingCount = Number(summary.blockingCount || 0);
+	      const warningCount = Number(summary.warningCount || 0);
+	      const totalChecks = Number(firstRun?.summary?.totalChecks || postInstall?.summary?.totalSteps || 0);
+	      const shellCheck = base?.platformSmoke?.checks?.shell || null;
+	      const shellName = String(shellCheck?.id || (platformLabel === 'Windows' ? 'powershell' : 'bash')).trim();
+	      const nodePty = base?.nodePty || null;
+	      const ghTool = toolMap.get('gh') || null;
+	      const ghAuthTool = toolMap.get('ghAuth') || null;
+	      const claudeTool = toolMap.get('claude') || null;
+	      const codexTool = toolMap.get('codex') || null;
+	      const storageChecks = ['orchestrator-home', 'orchestrator-workspaces', 'repo-scan-root']
+	        .map((id) => checkMap.get(id))
+	        .filter(Boolean);
+	      const runtimeReady = !!shellCheck?.ok && !!nodePty?.ok;
+	      const githubReady = !!ghTool?.ok && !!ghAuthTool?.ok;
+	      const storageReady = storageChecks.length > 0 && storageChecks.every((check) => String(check?.status || '').trim().toLowerCase() === 'pass');
+	      const detectedAgentCount = [claudeTool, codexTool].filter((tool) => !!tool?.ok).length;
+	      const missingAgents = [
+	        claudeTool?.ok ? null : 'Claude CLI',
+	        codexTool?.ok ? null : 'Codex CLI'
+	      ].filter(Boolean);
+	      const scanTone = ready ? 'is-good' : (blockingCount > 0 ? 'is-blocking' : 'is-warning');
+	      const scanLabel = ready ? 'Ready' : (blockingCount > 0 ? 'Needs attention' : 'Advisory');
+	      const summaryCards = [
+	        {
+	          title: 'Terminal runtime',
+	          value: runtimeReady ? 'Ready' : 'Needs attention',
+	          copy: runtimeReady
+	            ? `${shellName === 'powershell' ? 'PowerShell' : shellName} and node-pty are available.`
+	            : String(nodePty?.ok ? (shellCheck?.error || 'Shell runtime is unavailable.') : (nodePty?.error || 'node-pty failed to load.')),
+	          tone: runtimeReady ? 'is-good' : 'is-blocking'
+	        },
+	        {
+	          title: 'GitHub access',
+	          value: githubReady ? 'Ready' : (ghTool?.ok ? 'Login needed' : 'CLI missing'),
+	          copy: githubReady
+	            ? 'GitHub CLI is installed and authenticated.'
+	            : String(ghTool?.ok ? (ghAuthTool?.error || 'Authenticate GitHub CLI to enable review workflows.') : (ghTool?.error || 'GitHub CLI is not installed.')),
+	          tone: githubReady ? 'is-good' : 'is-warning'
+	        },
+	        {
+	          title: 'Workspace storage',
+	          value: storageReady ? 'Ready' : 'Needs attention',
+	          copy: storageReady
+	            ? '~/.orchestrator and ~/GitHub are writable.'
+	            : String(storageChecks.find((check) => String(check?.status || '').trim().toLowerCase() !== 'pass')?.message || 'Local workspace storage needs attention.'),
+	          tone: storageReady ? 'is-good' : 'is-warning'
+	        },
+	        {
+	          title: 'Agent CLIs',
+	          value: detectedAgentCount === 2 ? 'Ready' : (detectedAgentCount === 1 ? 'Partial' : 'Missing'),
+	          copy: detectedAgentCount === 2
+	            ? 'Claude and Codex CLIs are both available.'
+	            : `${missingAgents.join(' and ') || 'Agent CLIs'} not detected in PATH.`,
+	          tone: detectedAgentCount === 2 ? 'is-good' : 'is-warning'
 	        }
+	      ];
+
+	      const findings = steps.length
+	        ? steps.filter((step) => String(step?.status || '').trim().toLowerCase() !== 'pass').map((step) => ({
+	            id: String(step?.id || '').trim(),
+	            title: String(step?.title || step?.id || 'Check').trim(),
+	            message: String(step?.message || '').trim(),
+	            details: String(step?.details || '').trim(),
+	            help: String(step?.help || '').trim(),
+	            command: String(step?.command || '').trim(),
+	            severity: String(step?.severity || '').trim(),
+	            status: String(step?.status || '').trim()
+	          }))
+	        : checks.filter((check) => String(check?.status || '').trim().toLowerCase() !== 'pass').map((check) => ({
+	            id: String(check?.id || '').trim(),
+	            title: String(check?.name || check?.id || 'Check').trim(),
+	            message: String(check?.message || '').trim(),
+	            details: String(check?.details || '').trim(),
+	            help: '',
+	            command: '',
+	            severity: String(check?.severity || '').trim(),
+	            status: String(check?.status || '').trim()
+	          }));
+
+	      const guidanceItems = Array.from(new Set([
+	        ...(Array.isArray(postInstall.guidance) ? postInstall.guidance : []),
+	        ...findings.map((finding) => {
+	          const parts = [];
+	          if (finding.help) parts.push(finding.help);
+	          if (!finding.help && finding.message) parts.push(finding.message);
+	          if (finding.command) parts.push(`Suggested command: ${finding.command}`);
+	          return parts.join(' ').trim();
+	        })
+	      ].map((item) => String(item || '').trim()).filter(Boolean)));
+
+	      const toolPriority = ['node', 'npm', 'git', 'gitIdentity', 'gh', 'ghAuth', 'claude', 'codex', 'ffmpeg', 'python', 'powershell', 'wsl', 'bash'];
+	      const sortedTools = [...tools].sort((left, right) => {
+	        const leftId = String(left?.id || '').trim();
+	        const rightId = String(right?.id || '').trim();
+	        const leftIndex = toolPriority.indexOf(leftId);
+	        const rightIndex = toolPriority.indexOf(rightId);
+	        if (leftIndex >= 0 || rightIndex >= 0) {
+	          if (leftIndex < 0) return 1;
+	          if (rightIndex < 0) return -1;
+	          return leftIndex - rightIndex;
+	        }
+	        return leftId.localeCompare(rightId);
 	      });
 
-	      if (firstRunData?.summary) {
-	        lines.push('');
-	        lines.push('first-run:');
-	        lines.push(`  ready: ${firstRunData.summary.ready ? 'yes' : 'no'}`);
-	        lines.push(`  blocking: ${Number(firstRunData.summary.blockingCount || 0)}`);
-	        lines.push(`  warnings: ${Number(firstRunData.summary.warningCount || 0)}`);
-	        lines.push(`  repairable actions: ${Number(firstRunData.summary.repairableCount || 0)}`);
-	        const checks = Array.isArray(firstRunData?.checks) ? firstRunData.checks : [];
-	        checks.forEach((check) => {
-	          const status = String(check?.status || '').trim() || 'unknown';
-	          const severity = String(check?.severity || '').trim() || 'info';
-	          const name = String(check?.name || check?.id || 'check');
-	          const msg = String(check?.message || '').trim();
-	          lines.push(`  ${status} [${severity}] ${name}${msg ? `: ${msg}` : ''}`);
-	        });
-	      }
+	      summaryEl.innerHTML = `
+	        <div class="diagnostics-banner ${scanTone}">
+	          <div class="diagnostics-banner-copy">
+	            <div class="diagnostics-eyebrow">Read-only scan</div>
+	            <div class="diagnostics-banner-title-row">
+	              <span class="diagnostics-pill ${scanTone}">${escape(scanLabel)}</span>
+	              <span class="diagnostics-banner-title">Environment readiness</span>
+	            </div>
+	            <p class="diagnostics-banner-text">Checks terminal runtime, Git and GitHub access, local workspace storage, and agent CLIs without making any changes.</p>
+	          </div>
+	          <div class="diagnostics-chip-row">
+	            <span class="diagnostics-chip">Platform: ${escape(platformLabel)}</span>
+	            <span class="diagnostics-chip">Blocking: ${escape(blockingCount)}</span>
+	            <span class="diagnostics-chip">Warnings: ${escape(warningCount)}</span>
+	            <span class="diagnostics-chip">Checks: ${escape(totalChecks)}</span>
+	          </div>
+	        </div>
+	        <div class="diagnostics-card-grid">
+	          ${summaryCards.map((card) => `
+	            <article class="diagnostics-card ${card.tone}">
+	              <div class="diagnostics-card-title">${escape(card.title)}</div>
+	              <div class="diagnostics-card-value">${escape(card.value)}</div>
+	              <p class="diagnostics-card-copy">${escape(card.copy)}</p>
+	            </article>
+	          `).join('')}
+	        </div>
+	      `;
 
-	      if (wizardData?.summary) {
-	        lines.push('');
-	        lines.push('install-wizard:');
-	        lines.push(`  ready: ${wizardData.summary.ready ? 'yes' : 'no'}`);
-	        lines.push(`  blocking: ${Number(wizardData.summary.blockingCount || 0)}`);
-	        lines.push(`  warnings: ${Number(wizardData.summary.warningCount || 0)}`);
-	        const steps = Array.isArray(wizardData?.steps) ? wizardData.steps : [];
-	        steps.forEach((step) => {
-	          const status = String(step?.status || 'unknown').trim();
-	          const sev = String(step?.severity || 'info').trim();
-	          const title = String(step?.title || step?.id || 'step').trim();
-	          const msg = String(step?.message || '').trim();
-	          const auto = String(step?.autoFixActionId || '').trim();
-	          const cmd = String(step?.command || '').trim();
-	          const actionHints = [];
-	          if (auto) actionHints.push(`auto:${auto}`);
-	          if (cmd) actionHints.push(`cmd:${cmd}`);
-	          const hint = actionHints.length ? ` [${actionHints.join(' | ')}]` : '';
-	          lines.push(`  ${status} [${sev}] ${title}${msg ? `: ${msg}` : ''}${hint}`);
-	        });
-	        const guidance = Array.isArray(wizardData?.guidance) ? wizardData.guidance : [];
-	        guidance.slice(0, 5).forEach((line) => {
-	          const text = String(line || '').trim();
-	          if (text) lines.push(`  hint: ${text}`);
-	        });
-	      }
+	      guidanceEl.innerHTML = guidanceItems.length ? `
+	        <section class="diagnostics-section-card">
+	          <div class="diagnostics-section-title">Guidance</div>
+	          <ul class="diagnostics-guidance-list">
+	            ${guidanceItems.map((item) => `<li>${escape(item)}</li>`).join('')}
+	          </ul>
+	        </section>
+	      ` : '';
 
-	      out.textContent = lines.join('\n').trim() || 'No diagnostics available.';
+	      detailsEl.innerHTML = `
+	        <div class="diagnostics-details-grid">
+	          <section class="diagnostics-section-card">
+	            <div class="diagnostics-section-title">Findings</div>
+	            <div class="diagnostics-findings-list">
+	              ${findings.length ? findings.map((finding) => {
+	                const tone = getToneClass({ status: finding.status, severity: finding.severity });
+	                const label = getSeverityLabel({ status: finding.status, severity: finding.severity });
+	                const description = finding.message || finding.details || finding.help || 'Review this item.';
+	                return `
+	                  <article class="diagnostics-item ${tone}">
+	                    <div class="diagnostics-item-header">
+	                      <span class="diagnostics-pill ${tone}">${escape(label)}</span>
+	                      <div class="diagnostics-item-title">${escape(finding.title)}</div>
+	                    </div>
+	                    <p class="diagnostics-item-copy">${escape(description)}</p>
+	                    ${finding.help && finding.help !== description ? `<p class="diagnostics-item-detail">${escape(finding.help)}</p>` : ''}
+	                    ${finding.command ? `<code class="diagnostics-item-command">${escape(finding.command)}</code>` : ''}
+	                  </article>
+	                `;
+	              }).join('') : '<div class="diagnostics-empty-state compact">No issues found in the latest scan.</div>'}
+	            </div>
+	          </section>
+	          <section class="diagnostics-section-card">
+	            <div class="diagnostics-section-title">Detected tools</div>
+	            <div class="diagnostics-tools-list">
+	              ${sortedTools.map((tool) => {
+	                const tone = getToneClass({ ok: !!tool?.ok, severity: tool?.ok ? 'info' : 'warning' });
+	                const label = tool?.ok ? 'Detected' : 'Missing';
+	                const meta = tool?.ok
+	                  ? String(tool?.version || tool?.command || 'Available').trim()
+	                  : String(tool?.error || tool?.code || 'Not detected').trim();
+	                return `
+	                  <article class="diagnostics-item ${tone}">
+	                    <div class="diagnostics-item-header">
+	                      <span class="diagnostics-pill ${tone}">${escape(label)}</span>
+	                      <div class="diagnostics-item-title">${escape(String(tool?.name || tool?.id || 'Tool'))}</div>
+	                    </div>
+	                    <p class="diagnostics-item-copy">${escape(meta)}</p>
+	                  </article>
+	                `;
+	              }).join('')}
+	            </div>
+	          </section>
+	        </div>
+	      `;
 	    };
 
-	    const refreshBase = async () => {
-	      const res = await fetch('/api/diagnostics');
-	      const data = await res.json().catch(() => ({}));
-	      if (!res.ok || data?.ok === false) {
-	        throw new Error(String(data?.error || `HTTP ${res.status}`));
+	    const loadJson = async (url) => {
+	      const response = await fetch(url);
+	      const data = await response.json().catch(() => ({}));
+	      if (!response.ok || data?.ok === false) {
+	        throw new Error(String(data?.error || `HTTP ${response.status}`));
 	      }
-	      state.base = data;
 	      return data;
 	    };
 
-	    const refreshFirstRun = async () => {
-	      const res = await fetch('/api/diagnostics/first-run');
-	      const data = await res.json().catch(() => ({}));
-	      if (!res.ok || data?.ok === false) {
-	        throw new Error(String(data?.error || `HTTP ${res.status}`));
-	      }
-	      state.firstRun = data;
-	      renderRepairActions(data);
-	      return data;
+	    const setLoading = (loading) => {
+	      btn.disabled = !!loading;
+	      btn.textContent = loading ? 'Scanning…' : buttonLabel;
+	      btn.setAttribute('aria-busy', loading ? 'true' : 'false');
 	    };
 
-	    const refreshInstallWizard = async () => {
-	      const res = await fetch('/api/diagnostics/install-wizard');
-	      const data = await res.json().catch(() => ({}));
-	      if (!res.ok || data?.ok === false) {
-	        throw new Error(String(data?.error || `HTTP ${res.status}`));
-	      }
-	      state.wizard = data;
-	      return data;
-	    };
-
-	    const refresh = async (mode = 'all') => {
-	      btn.disabled = true;
-	      if (btnFirstRun) btnFirstRun.disabled = true;
-	      if (btnInstallWizard) btnInstallWizard.disabled = true;
-	      if (btnRepairSafe) btnRepairSafe.disabled = true;
-	      if (statusEl) statusEl.textContent = 'Loading…';
+	    const refresh = async () => {
+	      setLoading(true);
+	      if (statusEl) statusEl.textContent = 'Scanning…';
 	      try {
-	        if (mode === 'base') {
-	          await refreshBase();
-	        } else if (mode === 'first-run') {
-	          await refreshFirstRun();
-	        } else if (mode === 'install-wizard') {
-	          await Promise.all([refreshBase(), refreshFirstRun(), refreshInstallWizard()]);
-	        } else {
-	          await Promise.all([refreshBase(), refreshFirstRun(), refreshInstallWizard()]);
-	        }
-	        render(state.base, state.firstRun, state.wizard);
-	        const stamp = String(state.wizard?.generatedAt || state.firstRun?.generatedAt || state.base?.generatedAt || '');
-	        if (statusEl) statusEl.textContent = `Updated: ${stamp}`;
-	      } catch (err) {
-	        out.textContent = `Failed to load diagnostics: ${String(err?.message || err)}`;
-	        if (repairEl) repairEl.innerHTML = '';
-	        if (statusEl) statusEl.textContent = '';
-	      } finally {
-	        btn.disabled = false;
-	        if (btnFirstRun) btnFirstRun.disabled = false;
-	        if (btnInstallWizard) btnInstallWizard.disabled = false;
-	        if (btnRepairSafe) btnRepairSafe.disabled = false;
-	      }
-	    };
+	        const requests = [
+	          { key: 'base', url: '/api/diagnostics' },
+	          { key: 'firstRun', url: '/api/diagnostics/first-run' },
+	          { key: 'postInstall', url: '/api/diagnostics/post-install' }
+	        ];
+	        const results = await Promise.allSettled(requests.map((request) => loadJson(request.url)));
+	        const nextState = { base: null, firstRun: null, postInstall: null };
+	        const errors = [];
 
-	    btn.addEventListener('click', () => refresh('all'));
-	    btnFirstRun?.addEventListener('click', () => refresh('first-run'));
-	    btnInstallWizard?.addEventListener('click', () => refresh('install-wizard'));
-	    btnRepairSafe?.addEventListener('click', async () => {
-	      btnRepairSafe.disabled = true;
-	      if (statusEl) statusEl.textContent = 'Running safe auto-fix…';
-	      try {
-	        const res = await fetch('/api/diagnostics/first-run/repair-safe', { method: 'POST' });
-	        const data = await res.json().catch(() => ({}));
-	        if (!res.ok || data?.ok === false) {
-	          throw new Error(String(data?.error || data?.message || `HTTP ${res.status}`));
+	        results.forEach((result, index) => {
+	          const { key } = requests[index];
+	          if (result.status === 'fulfilled') {
+	            nextState[key] = result.value;
+	            return;
+	          }
+	          nextState[key] = null;
+	          errors.push(String(result.reason?.message || result.reason || `${key} failed`));
+	        });
+
+	        if (!nextState.base && !nextState.firstRun && !nextState.postInstall) {
+	          throw new Error(errors[0] || 'Failed to load diagnostics.');
 	        }
 
-	        const diagnostics = data?.diagnostics;
-	        if (diagnostics && typeof diagnostics === 'object') {
-	          state.firstRun = diagnostics;
-	          renderRepairActions(state.firstRun);
-	        } else {
-	          await refreshFirstRun();
-	        }
-	        if (!state.base) await refreshBase();
-	        await refreshInstallWizard().catch(() => {});
-	        render(state.base, state.firstRun, state.wizard);
+	        state.base = nextState.base;
+	        state.firstRun = nextState.firstRun;
+	        state.postInstall = nextState.postInstall;
+	        render();
 
-	        const appliedCount = Number(data?.appliedCount || 0);
-	        const failedCount = Number(data?.failedCount || 0);
-	        const skippedManualCount = Number(data?.skippedManualCount || 0);
-	        if (failedCount > 0) {
-	          this.showToast?.(`Auto-fix applied ${appliedCount}, failed ${failedCount}`, 'warning');
-	        } else {
-	          const tail = skippedManualCount > 0 ? `, ${skippedManualCount} manual step(s) left` : '';
-	          this.showToast?.(`Auto-fix applied ${appliedCount}${tail}`, 'success');
+	        const stamp = formatTimestamp(
+	          nextState.postInstall?.generatedAt ||
+	          nextState.firstRun?.generatedAt ||
+	          nextState.base?.generatedAt
+	        );
+	        if (statusEl) {
+	          statusEl.textContent = errors.length
+	            ? `Partial scan${stamp ? ` • ${stamp}` : ''}`
+	            : `Updated${stamp ? ` • ${stamp}` : ''}`;
 	        }
-	        if (statusEl) statusEl.textContent = 'Safe auto-fix completed';
 	      } catch (error) {
-	        this.showToast?.(`Safe auto-fix failed: ${String(error?.message || error)}`, 'error');
+	        renderFailure(`Failed to load diagnostics: ${String(error?.message || error)}`);
 	        if (statusEl) statusEl.textContent = '';
 	      } finally {
-	        btnRepairSafe.disabled = false;
+	        setLoading(false);
 	      }
-	    });
-	    repairEl?.addEventListener('click', async (event) => {
-	      const target = event.target.closest('[data-diagnostics-repair]');
-	      if (!target) return;
-	      const action = String(target.getAttribute('data-diagnostics-repair') || '').trim();
-	      if (!action) return;
-	      target.disabled = true;
-	      if (statusEl) statusEl.textContent = `Running repair: ${action}…`;
-	      try {
-	        const res = await fetch('/api/diagnostics/first-run/repair', {
-	          method: 'POST',
-	          headers: { 'Content-Type': 'application/json' },
-	          body: JSON.stringify({ action })
-	        });
-	        const data = await res.json().catch(() => ({}));
-	        if (!res.ok || data?.ok === false) {
-	          throw new Error(String(data?.error || data?.message || `HTTP ${res.status}`));
-	        }
-	        const repair = data?.repair || {};
-	        if (repair.manual) {
-	          this.showToast?.(String(repair?.message || 'Manual action required'), 'warning');
-	        } else {
-	          this.showToast?.(String(repair?.message || 'Repair completed'), 'success');
-	        }
-		        if (data?.diagnostics) {
-		          state.firstRun = data.diagnostics;
-		          renderRepairActions(state.firstRun);
-		        } else {
-		          await refreshFirstRun();
-		        }
-		        if (!state.base) await refreshBase();
-		        await refreshInstallWizard().catch(() => {});
-		        render(state.base, state.firstRun, state.wizard);
-	        if (statusEl) statusEl.textContent = `Repair completed: ${action}`;
-	      } catch (error) {
-	        this.showToast?.(`Repair failed: ${String(error?.message || error)}`, 'error');
-	        if (statusEl) statusEl.textContent = '';
-	      } finally {
-	        target.disabled = false;
-	      }
-	    });
+	    };
+
+	    this.refreshDiagnosticsPanel = () => refresh();
+	    renderEmpty();
+	    btn.addEventListener('click', () => refresh());
 	  }
 
 	  openDiagnosticsPanel({ refresh = true } = {}) {
@@ -9546,7 +9627,7 @@ class ClaudeOrchestrator {
 	      });
 	      setTimeout(() => {
 	        try {
-	          document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+	          document.getElementById('diagnostics-summary')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
 	        } catch {
 	          // ignore
 	        }
