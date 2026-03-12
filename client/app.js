@@ -2339,26 +2339,34 @@ class ClaudeOrchestrator {
       });
     }
 
-    // Template management buttons
-    document.getElementById('reset-to-defaults').addEventListener('click', () => {
-      this.resetToDefaults();
-    });
+	    // Template management buttons
+	    const resetToDefaultsBtn = document.getElementById('reset-to-defaults');
+	    if (resetToDefaultsBtn) {
+	      resetToDefaultsBtn.addEventListener('click', () => {
+	        this.resetToDefaults();
+	      });
+	    }
 
-    document.getElementById('save-as-default').addEventListener('click', () => {
-      this.saveAsDefault();
-    });
+	    const saveAsDefaultBtn = document.getElementById('save-as-default');
+	    if (saveAsDefaultBtn) {
+	      saveAsDefaultBtn.addEventListener('click', () => {
+	        this.saveAsDefault();
+	      });
+	    }
 
-    // Git update buttons
-    document.getElementById('check-updates').addEventListener('click', () => {
-      this.checkForUpdates();
-    });
+	    // Git update buttons
+	    const checkUpdatesBtn = document.getElementById('check-updates');
+	    if (checkUpdatesBtn) {
+	      checkUpdatesBtn.addEventListener('click', () => {
+	        this.checkForUpdates();
+	      });
+	    }
 
-    const pullUpdatesBtn = document.getElementById('pull-updates');
-    const checkUpdatesBtn = document.getElementById('check-updates');
-    if (this.isTauriRuntime()) {
-      if (checkUpdatesBtn) checkUpdatesBtn.textContent = 'Check App Updates';
-      if (pullUpdatesBtn) {
-        pullUpdatesBtn.textContent = 'Install App Update';
+	    const pullUpdatesBtn = document.getElementById('pull-updates');
+	    if (this.isTauriRuntime()) {
+	      if (checkUpdatesBtn) checkUpdatesBtn.textContent = 'Check App Updates';
+	      if (pullUpdatesBtn) {
+	        pullUpdatesBtn.textContent = 'Install App Update';
         pullUpdatesBtn.addEventListener('click', () => {
           this.installDesktopAppUpdate();
         });
@@ -2370,13 +2378,19 @@ class ClaudeOrchestrator {
     }
 
     // Notification dismiss buttons
-    document.getElementById('dismiss-settings-notification').addEventListener('click', () => {
-      document.getElementById('settings-update-notification').classList.add('hidden');
-    });
+	    const dismissSettingsNotificationBtn = document.getElementById('dismiss-settings-notification');
+	    if (dismissSettingsNotificationBtn) {
+	      dismissSettingsNotificationBtn.addEventListener('click', () => {
+	        document.getElementById('settings-update-notification')?.classList.add('hidden');
+	      });
+	    }
 
-    document.getElementById('dismiss-git-notification').addEventListener('click', () => {
-      document.getElementById('git-update-notification').classList.add('hidden');
-    });
+	    const dismissGitNotificationBtn = document.getElementById('dismiss-git-notification');
+	    if (dismissGitNotificationBtn) {
+	      dismissGitNotificationBtn.addEventListener('click', () => {
+	        document.getElementById('git-update-notification')?.classList.add('hidden');
+	      });
+	    }
 
     // Workflow notification settings (server-persisted)
     const workflowNotifyMode = document.getElementById('workflow-notify-mode');
@@ -17619,17 +17633,18 @@ class ClaudeOrchestrator {
     setTimeout(checkAndStart, 1000); // Initial delay for terminal setup
   }
 
-  async checkForSettingsUpdates() {
-    try {
-      const response = await fetch('/api/user-settings/check-updates');
-      if (response.ok) {
-        const result = await response.json();
+	  async checkForSettingsUpdates() {
+	    try {
+	      const notification = document.getElementById('settings-update-notification');
+	      if (!notification) return;
+	      const response = await fetch('/api/user-settings/check-updates');
+	      if (response.ok) {
+	        const result = await response.json();
 
-        if (result && result.hasUpdates) {
-          const notification = document.getElementById('settings-update-notification');
-          notification.classList.remove('hidden');
-          console.log('Settings updates available:', result);
-        }
+	        if (result && result.hasUpdates) {
+	          notification.classList.remove('hidden');
+	          console.log('Settings updates available:', result);
+	        }
       }
     } catch (error) {
       console.error('Error checking for settings updates:', error);
@@ -17728,21 +17743,23 @@ class ClaudeOrchestrator {
       return;
     }
 
-    try {
-      this.showTemporaryMessage('Checking for updates...', 'info');
+	    try {
+	      this.showTemporaryMessage('Checking for updates...', 'info');
 
-      const response = await fetch('/api/git/check-updates');
-      if (response.ok) {
-        const result = await response.json();
+	      const response = await fetch('/api/git/check-updates');
+	      if (response.ok) {
+	        const result = await response.json();
 
-        if (result.hasUpdates) {
-          const notification = document.getElementById('git-update-notification');
-          const textElement = document.getElementById('git-notification-text');
-          textElement.textContent = `${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available on ${result.currentBranch}`;
-          notification.classList.remove('hidden');
+	        if (result.hasUpdates) {
+	          const notification = document.getElementById('git-update-notification');
+	          const textElement = document.getElementById('git-notification-text');
+	          if (textElement) {
+	            textElement.textContent = `${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available on ${result.currentBranch}`;
+	          }
+	          notification?.classList.remove('hidden');
 
-          this.showTemporaryMessage(`Found ${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available`, 'success');
-        } else if (result.hasUpdates === false) {
+	          this.showTemporaryMessage(`Found ${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available`, 'success');
+	        } else if (result.hasUpdates === false) {
           this.showTemporaryMessage('Repository is up to date', 'success');
         } else {
           this.showTemporaryMessage('Unable to check for updates', 'error');
@@ -17769,14 +17786,13 @@ class ClaudeOrchestrator {
         headers: { 'Content-Type': 'application/json' }
       });
 
-      if (response.ok) {
-        const result = await response.json();
+	      if (response.ok) {
+	        const result = await response.json();
 
-        if (result.success) {
-          // Success message will be handled by socket event
-          const notification = document.getElementById('git-update-notification');
-          notification.classList.add('hidden');
-        } else {
+	        if (result.success) {
+	          // Success message will be handled by socket event
+	          document.getElementById('git-update-notification')?.classList.add('hidden');
+	        } else {
           this.showTemporaryMessage(result.error || 'Failed to pull changes', 'error');
 
           // Show specific error details if available
