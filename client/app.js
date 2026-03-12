@@ -4064,19 +4064,15 @@ class ClaudeOrchestrator {
   }
 
   shouldRenderTerminalButton(buttonId) {
+    // Permanently hidden buttons — never shown regardless of config
+    const alwaysHidden = new Set(['review', 'focus', 'newProject', 'claudeStart', 'refresh', 'interrupt', 'build']);
+    if (alwaysHidden.has(buttonId)) return false;
+
     const visibility = this.getTerminalVisibilityConfig();
     const map = {
-      focus: 'showOnlyWorktree',
-      newProject: 'createNewProject',
-      interrupt: 'interrupt',
-      claudeStart: 'startClaudeWithSettings',
       claudeModal: 'startAgentOptions',
-      refresh: 'refreshTerminal',
-      review: 'assignCodeReview',
-      build: 'buildProductionZip',
       kill: 'forceKill'
     };
-    if (buttonId === 'review') return false; // permanently hidden
     const key = map[buttonId];
     if (!key) return true;
     return visibility[key] !== false;
@@ -4130,14 +4126,6 @@ class ClaudeOrchestrator {
     const buttonDefs = cascadedConfig.buttons[terminalType] || {};
     const buttons = [];
 
-    // Always add focus + create-project quick action first
-    if (this.shouldRenderTerminalButton('focus')) {
-      buttons.push(this.renderButton('focus', this.buttonRegistry.focus, sessionId));
-    }
-    if (this.shouldRenderTerminalButton('newProject')) {
-      buttons.push(this.renderButton('newProject', this.buttonRegistry.newProject, sessionId));
-    }
-
     // Render configured buttons
     for (const [buttonId, buttonConfig] of Object.entries(buttonDefs)) {
       const registryEntry = this.buttonRegistry[buttonId];
@@ -4187,21 +4175,12 @@ class ClaudeOrchestrator {
    */
   getDefaultButtons(terminalType, sessionId = '') {
     if (terminalType === 'claude') {
-      const ids = [
-        'focus',
-        'newProject',
-        'claudeStart',
-        'claudeModal',
-        'refresh',
-        'interrupt',
-        'review',
-        'build'
-      ];
+      const ids = ['claudeModal'];
       return ids
         .filter((id) => this.shouldRenderTerminalButton(id))
         .map((id) => this.renderButton(id, this.buttonRegistry[id], sessionId));
     } else {
-      const ids = ['focus', 'newProject', 'build', 'interrupt', 'kill'];
+      const ids = ['kill'];
       return ids
         .filter((id) => this.shouldRenderTerminalButton(id))
         .map((id) => this.renderButton(id, this.buttonRegistry[id], sessionId));
