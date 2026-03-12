@@ -1,0 +1,30 @@
+<svg width="400" height="180" viewBox="0 0 400 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Commander panel mockup -->
+  <rect x="10" y="10" width="380" height="160" rx="8" fill="#0a0a0f" stroke="rgba(0,229,255,0.15)" stroke-width="1"/>
+  <rect x="10" y="10" width="380" height="26" rx="8" fill="#111118"/>
+  <rect x="10" y="28" width="380" height="8" fill="#111118"/>
+  <text x="24" y="28" font-family="sans-serif" font-weight="600" font-size="10" fill="#00e5ff">Commander</text>
+  <circle cx="370" cy="24" r="4" fill="#10b981"/>
+
+  <!-- Commander conversation -->
+  <rect x="20" y="44" width="260" height="24" rx="4" fill="rgba(0,229,255,0.08)"/>
+  <text x="28" y="59" font-family="sans-serif" font-size="9" fill="#00e5ff">Launch all T3 cards from Trello</text>
+
+  <text x="28" y="82" font-family="monospace" font-size="8" fill="#9ca3af">Launching 4 agents across worktrees...</text>
+
+  <rect x="28" y="90" width="340" height="16" rx="3" fill="rgba(255,255,255,0.03)"/>
+  <text x="36" y="101" font-family="monospace" font-size="8" fill="#10b981">✓ work1</text>
+  <text x="80" y="101" font-family="monospace" font-size="8" fill="#9ca3af">claude-code → feat/auth</text>
+
+  <rect x="28" y="110" width="340" height="16" rx="3" fill="rgba(255,255,255,0.03)"/>
+  <text x="36" y="121" font-family="monospace" font-size="8" fill="#10b981">✓ work2</text>
+  <text x="80" y="121" font-family="monospace" font-size="8" fill="#9ca3af">codex → fix/search</text>
+
+  <rect x="28" y="130" width="340" height="16" rx="3" fill="rgba(255,255,255,0.03)"/>
+  <text x="36" y="141" font-family="monospace" font-size="8" fill="#10b981">✓ work3</text>
+  <text x="80" y="141" font-family="monospace" font-size="8" fill="#9ca3af">claude-code → refactor/api</text>
+
+  <rect x="28" y="150" width="340" height="16" rx="3" fill="rgba(37,99,235,0.1)"/>
+  <text x="36" y="161" font-family="monospace" font-size="8" fill="#2563eb">⟳ work4</text>
+  <text x="80" y="161" font-family="monospace" font-size="8" fill="#9ca3af">codex → feat/dashboard</text>
+</svg>
