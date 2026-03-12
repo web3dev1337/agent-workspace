@@ -349,30 +349,33 @@ class Dashboard {
     const desktopResourceStack = [processSection, desktopResourcesGrid].filter(Boolean).join('');
     const desktopSidebar = `
       <aside class="dashboard-side-panel">
-        <div class="dashboard-side-overview">
-          <div class="dashboard-side-stats">
-            <div class="dashboard-side-stat">
-              <strong>${escapeHtml(activeWorkspaces.length)}</strong>
-              <span>Active</span>
+        <div class="dashboard-side-header">
+          <div class="dashboard-side-overview">
+            <div class="dashboard-side-stats">
+              <div class="dashboard-side-stat">
+                <strong>${escapeHtml(activeWorkspaces.length)}</strong>
+                <span>Active</span>
+              </div>
+              <div class="dashboard-side-stat">
+                <strong>${escapeHtml(inactiveWorkspaces.length)}</strong>
+                <span>Standby</span>
+              </div>
             </div>
-            <div class="dashboard-side-stat">
-              <strong>${escapeHtml(inactiveWorkspaces.length)}</strong>
-              <span>Standby</span>
+          </div>
+          <div class="dashboard-side-divider" aria-hidden="true"></div>
+          <div class="dashboard-side-stack">
+            <div class="dashboard-side-pill is-active">
+              <span>Workspaces</span>
+              <strong>${escapeHtml(totalWorkspaceCount)}</strong>
             </div>
           </div>
         </div>
-
-        <div class="dashboard-side-stack">
-          <div class="dashboard-side-pill is-active">
-            <span>Workspaces</span>
-            <strong>${escapeHtml(totalWorkspaceCount)}</strong>
-          </div>
-        </div>
+        <div class="dashboard-side-scroll" aria-hidden="true"></div>
 
         ${(visibility.createSection !== false) ? `
-          <div class="dashboard-side-action">
+          <div class="dashboard-side-footer">
             <button class="btn-primary workspace-create-empty-btn dashboard-side-create-btn">
-              ➕ New Workspace
+              ✚ New Workspace
             </button>
           </div>
         ` : ''}

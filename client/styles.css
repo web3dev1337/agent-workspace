@@ -14575,7 +14575,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 /* Dashboard Layout */
 .dashboard-wrapper {
   --dashboard-shell-pad: clamp(0.85rem, 1.2vw, 1.3rem);
-  --dashboard-rail-width: 196px;
+  --dashboard-rail-width: var(--sidebar-width);
   --dashboard-window-fill:
     linear-gradient(165deg, rgba(7, 13, 24, 0.94) 0%, rgba(8, 16, 28, 0.88) 48%, rgba(6, 12, 24, 0.96) 100%);
   --dashboard-panel-fill: linear-gradient(180deg, rgba(9, 16, 28, 0.68), rgba(8, 13, 24, 0.34));
@@ -14609,7 +14609,20 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-layout-desktop {
-  grid-template-rows: auto 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  padding: 0 var(--dashboard-shell-pad) var(--dashboard-shell-pad) 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.dashboard-layout-desktop::before {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.dashboard-layout-desktop::after {
+  inset: 14px 14px 14px 0;
+  border-radius: 0 24px 24px 0;
 }
 
 .dashboard-wrapper::before,
@@ -14663,8 +14676,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .dashboard-layout-desktop .dashboard-topbar {
   position: absolute;
-  top: 0.9rem;
-  left: calc(var(--dashboard-rail-width) + 0.9rem);
+  top: 0.95rem;
+  left: calc(var(--dashboard-rail-width) + 0.95rem);
   right: auto;
   justify-content: flex-start;
 }
@@ -14673,10 +14686,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: grid;
   grid-template-columns: var(--dashboard-rail-width) minmax(0, 1fr);
   gap: 0;
+  height: 100%;
   min-height: 0;
   position: relative;
   z-index: 1;
-  margin: calc(var(--dashboard-shell-pad) * -1) calc(var(--dashboard-shell-pad) * -1) calc(var(--dashboard-shell-pad) * -1);
+  margin: 0 calc(var(--dashboard-shell-pad) * -1) calc(var(--dashboard-shell-pad) * -1) 0;
 }
 
 .dashboard-desktop-body {
@@ -14689,65 +14703,58 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-side-panel {
-  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0;
   min-width: 0;
   min-height: 0;
-  padding: 0.95rem 0.75rem 0.95rem calc(var(--dashboard-shell-pad) + 0.75rem);
+  padding: 0;
   border: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid var(--border-color);
   border-radius: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 18%),
-    linear-gradient(180deg, rgba(12, 21, 36, 0.88), rgba(7, 13, 24, 0.9));
-  box-shadow: 18px 0 38px rgba(2, 6, 23, 0.14);
+  background: var(--bg-secondary);
   overflow: hidden;
 }
 
 .dashboard-side-panel::before,
 .dashboard-side-panel::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
+  display: none;
 }
 
-.dashboard-side-panel::before {
-  inset: 0;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 14%, transparent), transparent 24%),
-    radial-gradient(220px 220px at 18% 12%, rgba(255, 255, 255, 0.07), transparent 72%);
-  opacity: 0.9;
+.dashboard-side-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.dashboard-side-panel::after {
-  inset: 0 0 0 auto;
-  width: 2px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 54%, transparent), transparent 85%);
-  opacity: 0.9;
+.dashboard-side-footer {
+  padding: var(--space-md);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
 }
 
-.dashboard-side-overview,
-.dashboard-side-stack,
-.dashboard-side-action {
-  position: relative;
-  z-index: 1;
+.dashboard-side-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .dashboard-side-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
+  padding: var(--space-md);
 }
 
 .dashboard-side-stat {
   display: grid;
   gap: 0.18rem;
-  padding: 0.65rem 0.55rem;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.045);
+  padding: 0.7rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
 }
 
 .dashboard-side-stat strong {
@@ -14766,6 +14773,13 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .dashboard-side-stack {
   display: grid;
   gap: 0.45rem;
+  padding: 0.75rem var(--space-md) var(--space-md);
+}
+
+.dashboard-side-divider {
+  height: 1px;
+  background: var(--border-color);
+  opacity: 0.6;
 }
 
 .dashboard-side-pill {
@@ -14774,12 +14788,12 @@ body.dependency-onboarding-active #dependency-setup-modal {
   justify-content: space-between;
   gap: 0.55rem;
   min-width: 0;
-  padding: 0.58rem 0.62rem;
-  border-radius: 0;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.04);
+  padding: 0.68rem 0.72rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
   color: color-mix(in srgb, var(--text-primary) 92%, white 8%);
-  font-size: 0.74rem;
+  font-size: 0.76rem;
 }
 
 .dashboard-side-pill span {
@@ -14792,25 +14806,20 @@ body.dependency-onboarding-active #dependency-setup-modal {
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.18rem 0.42rem;
-  border-radius: 0;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
 }
 
 .dashboard-side-pill.is-active {
-  border-color: color-mix(in srgb, var(--accent-primary) 42%, rgba(255, 255, 255, 0.08));
-  background: color-mix(in srgb, var(--accent-primary) 16%, rgba(255, 255, 255, 0.04));
-}
-
-.dashboard-side-action {
-  margin-top: auto;
-  display: block;
+  border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-tertiary));
 }
 
 .dashboard-side-create-btn {
   width: 100%;
   justify-content: center;
-  padding: 0.7rem 0.78rem !important;
-  border-radius: 4px !important;
+  padding: 0.76rem 0.95rem !important;
+  border-radius: var(--radius-sm) !important;
   color: #09110b !important;
   border: 1px solid color-mix(in srgb, var(--accent-success) 66%, rgba(255, 255, 255, 0.12)) !important;
   background:
@@ -14860,6 +14869,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
   grid-template-columns: minmax(0, 1.45fr) minmax(18rem, 0.92fr);
   gap: 0.85rem;
   align-items: stretch;
+  height: 100%;
   min-height: 0;
   position: relative;
   z-index: 1;
