@@ -225,7 +225,8 @@
         "autoCreateExtraWhenBusy": true,
         "autoCreateMinNumber": 9,
         "autoCreateMaxNumber": 25,
-        "considerOtherWorkspaces": true
+        "considerOtherWorkspaces": true,
+        "showDetailedChooserMetadata": false
       },
       "workflow": {
         "mode": "review",

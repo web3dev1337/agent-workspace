@@ -2078,24 +2078,29 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
             // Detect nested worktrees inside repo directory (work1..work8)
             try {
               const nestedEntries = [];
-              for (let i = 1; i <= 8; i++) {
-                const worktreeName = `work${i}`;
-                const worktreePath = path.join(projectPath, worktreeName);
-                try {
-                  const wtStat = await fs.stat(worktreePath);
-                  nestedEntries.push({
-                    id: worktreeName,
-                    name: worktreeName,
-                    path: worktreePath,
-                    number: i,
-                    lastModifiedMs: wtStat.mtimeMs,
-                    createdMs: wtStat.birthtimeMs || wtStat.ctimeMs || 0
-                  });
-                } catch (wtError) {
-                  // Worktree does not exist
-                }
+              const projectEntries = await fs.readdir(projectPath, { withFileTypes: true });
+              for (const projectEntry of projectEntries) {
+                if (!projectEntry.isDirectory()) continue;
+                const nestedMatch = projectEntry.name.match(/^work(\d+)$/i);
+                if (!nestedMatch) continue;
+
+                const worktreeNumber = Number(nestedMatch[1]);
+                if (!Number.isFinite(worktreeNumber)) continue;
+
+                const worktreeName = `work${worktreeNumber}`;
+                const worktreePath = path.join(projectPath, projectEntry.name);
+                const wtStat = await fs.stat(worktreePath);
+                nestedEntries.push({
+                  id: worktreeName,
+                  name: projectEntry.name,
+                  path: worktreePath,
+                  number: worktreeNumber,
+                  lastModifiedMs: wtStat.mtimeMs,
+                  createdMs: wtStat.birthtimeMs || wtStat.ctimeMs || 0
+                });
               }
               if (nestedEntries.length) {
+                nestedEntries.sort((a, b) => (a.number || 0) - (b.number || 0));
                 repoEntry.worktreeDirs = nestedEntries;
                 const maxNested = nestedEntries.reduce((max, entry) => Math.max(max, entry.lastModifiedMs || 0), 0);
                 if (maxNested) {

@@ -2310,6 +2310,8 @@ class SessionManager extends EventEmitter {
 	    if (this.gitHelper) {
 	      try {
 	        await this.updateGitBranch(worktreeId, worktreePath, true);
+          includeSessionState(claudeSessionId);
+          includeSessionState(serverSessionId);
 	      } catch (error) {
 	        logger.error('Failed to update git branch for new worktree', { worktreeId, error: error.message });
 	      }

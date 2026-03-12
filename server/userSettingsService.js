@@ -303,6 +303,7 @@ class UserSettingsService {
             autoCreateMinNumber: 9,
             autoCreateMaxNumber: 25,
             considerOtherWorkspaces: true,
+            showDetailedChooserMetadata: false,
             // Quick Worktree: per-repo create-count presets.
             createPresets: { small: 2, medium: 4, large: 6 },
             // Keyed by repo path -> 'small'|'medium'|'large' (or empty for default).

@@ -810,6 +810,15 @@ class ProjectsBoardUI {
       } catch (error) {
         this.orchestrator?.showToast?.(String(error?.message || error), 'error');
       }
+      return;
+    }
+
+    const projectCard = event.target?.closest?.('.projects-board-card');
+    if (projectCard) {
+      event.preventDefault();
+      const projectKey = String(projectCard.dataset?.projectKey || '').trim();
+      if (!projectKey) return;
+      await this.orchestrator?.startProjectWorktreeFromBoardKey?.(projectKey);
     }
   }
 }
