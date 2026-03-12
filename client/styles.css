@@ -7681,8 +7681,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
   bottom: 0;
   background: var(--bg-primary);
   z-index: 1000;
-  padding: 2rem;
-  overflow-y: auto;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .dashboard-topbar {
@@ -14269,66 +14270,150 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 /* Dashboard Bento Design Updates */
 
+.dashboard-container {
+  background:
+    radial-gradient(1100px 680px at -10% -20%, color-mix(in srgb, var(--accent-primary) 22%, transparent), transparent 60%),
+    radial-gradient(820px 560px at 110% 0%, rgba(56, 189, 248, 0.12), transparent 58%),
+    linear-gradient(155deg, color-mix(in srgb, var(--bg-primary) 90%, #08111d) 0%, color-mix(in srgb, var(--bg-primary) 96%, #0b1320) 50%, var(--bg-primary) 100%);
+}
+
+.dashboard-container::before,
+.dashboard-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dashboard-container::before {
+  background:
+    radial-gradient(420px 260px at 12% 18%, rgba(255, 255, 255, 0.05), transparent 72%),
+    radial-gradient(540px 320px at 78% 86%, rgba(255, 255, 255, 0.04), transparent 74%);
+  opacity: 0.9;
+}
+
+.dashboard-container::after {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 22%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02), transparent 28%, transparent 72%, rgba(255, 255, 255, 0.02));
+}
+
 .dashboard-title-group {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.dashboard-brand-orb {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 180deg at 50% 50%,
+      color-mix(in srgb, var(--accent-primary-hover) 88%, white 12%) 0deg,
+      color-mix(in srgb, var(--accent-primary-pressed) 86%, #08111d 14%) 180deg,
+      color-mix(in srgb, var(--accent-primary-hover) 88%, white 12%) 360deg
+    );
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent-primary) 48%, transparent);
+  animation: dashboard-brand-orb-spin 4s linear infinite;
+}
+
+@keyframes dashboard-brand-orb-spin {
+  100% { transform: rotate(360deg); }
 }
 
 .dashboard-title-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-pressed) 100%);
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.32), transparent 40%),
+    linear-gradient(145deg, color-mix(in srgb, var(--accent-primary) 82%, white 18%) 0%, color-mix(in srgb, var(--accent-primary-pressed) 78%, #07111c) 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 16px rgba(31, 111, 235, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.22);
+  flex-shrink: 0;
 }
 
 .dashboard-title-group h1 {
-  font-size: 1.6rem;
-  font-weight: 700;
+  font-size: 1.94rem;
+  font-weight: 760;
   margin: 0;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
+  letter-spacing: -0.035em;
+  color: color-mix(in srgb, var(--text-primary) 96%, white 4%);
 }
 
 .dashboard-title-group p {
-  margin: 2px 0 0;
-  color: var(--text-primary);
+  margin: 0.2rem 0 0;
+  color: color-mix(in srgb, var(--text-primary) 74%, transparent);
   font-size: 0.95rem;
-  opacity: 0.7;
+  line-height: 1.35;
 }
 
 
 
 
 .dashboard-section-title {
-  font-size: 1.15rem;
-  font-weight: 600;
-  margin: 0 0 var(--space-sm) 0;
-  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 680;
+  margin: 0 0 0.15rem 0;
+  color: color-mix(in srgb, var(--text-primary) 92%, white 8%);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
+  letter-spacing: -0.018em;
+}
+
+.dashboard-section-title::after {
+  content: "";
+  flex: 1 1 56px;
+  height: 1px;
+  min-width: 36px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-primary) 38%, transparent), transparent);
+  opacity: 0.8;
+}
+
+.dashboard-section-meta {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text-primary) 82%, transparent);
+  opacity: 1;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .bento-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 0.75rem;
+}
+
+.dashboard-bento-section {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
 }
 
 .dashboard-bento-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: var(--space-sm);
+  margin-bottom: 0.55rem;
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--text-primary);
+  position: relative;
+  z-index: 1;
 }
 
 .dashboard-bento-header svg {
@@ -14340,9 +14425,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .dashboard-bento-body {
   flex: 1;
   color: var(--text-primary);
-  font-size: 0.9rem;
-  margin-bottom: var(--space-sm);
-  opacity: 0.85;
+  font-size: 0.88rem;
+  margin-bottom: 0.65rem;
+  opacity: 0.88;
+  position: relative;
+  z-index: 1;
 }
 
 .dashboard-bento-actions {
@@ -14350,6 +14437,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .bento-btn {
@@ -14357,14 +14446,15 @@ body.dependency-onboarding-active #dependency-setup-modal {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
   font-size: 0.8rem;
-  font-weight: 500;
+  font-weight: 560;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.2s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  backdrop-filter: blur(12px);
 }
 
 .bento-btn svg {
@@ -14374,9 +14464,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .bento-btn:hover {
-  background: var(--accent-primary);
-  color: var(--text-on-accent);
-  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 18%, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent-primary) 60%, rgba(255, 255, 255, 0.16));
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.12);
 }
 
 .bento-btn:hover svg {
@@ -14389,12 +14481,13 @@ body.dependency-onboarding-active #dependency-setup-modal {
   gap: 6px;
   font-size: 0.8rem;
   padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 560;
+  backdrop-filter: blur(12px);
 }
 
 
@@ -14409,17 +14502,19 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
-  opacity: 0.7;
+  opacity: 0.82;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.2s, background 0.2s, border-color 0.2s, opacity 0.2s;
 }
 
 .btn-icon:hover {
-  background: var(--bg-hover);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: color-mix(in srgb, var(--accent-primary) 44%, rgba(255, 255, 255, 0.08));
+  transform: translateY(-1px);
   opacity: 1;
 }
 
@@ -14433,9 +14528,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .bento-workspace-health {
   margin-top: 8px;
   padding: 10px;
-  border-radius: 10px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
 .health-info-row {
@@ -14457,19 +14552,20 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .bento-quick-link {
-  border-radius: 10px !important;
-  background: var(--bg-tertiary) !important;
-  border: 1px solid var(--border-color) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   padding: var(--space-sm) var(--space-md) !important;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   color: var(--text-primary) !important;
+  backdrop-filter: blur(12px);
 }
 
 .bento-quick-link:hover {
-  background: var(--bg-hover) !important;
-  border-color: var(--accent-primary) !important;
+  background: color-mix(in srgb, var(--accent-primary) 16%, rgba(255, 255, 255, 0.06)) !important;
+  border-color: color-mix(in srgb, var(--accent-primary) 60%, rgba(255, 255, 255, 0.08)) !important;
   transform: translateY(-1px) !important;
 }
 
@@ -14478,136 +14574,559 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 /* Dashboard Layout */
 .dashboard-wrapper {
-  max-width: 1800px;
-  margin: 0 auto;
-  padding: 0 var(--space-lg) var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  color: #fff;
-  gap: var(--space-sm);
+  --dashboard-shell-pad: clamp(0.85rem, 1.2vw, 1.3rem);
+  --dashboard-rail-width: var(--sidebar-width);
+  --dashboard-window-fill:
+    linear-gradient(165deg, rgba(7, 13, 24, 0.94) 0%, rgba(8, 16, 28, 0.88) 48%, rgba(6, 12, 24, 0.96) 100%);
+  --dashboard-panel-fill: linear-gradient(180deg, rgba(9, 16, 28, 0.68), rgba(8, 13, 24, 0.34));
+  --dashboard-panel-border: rgba(255, 255, 255, 0.1);
+  --dashboard-panel-shadow: 0 24px 60px rgba(2, 6, 23, 0.2);
+  --dashboard-card-fill: linear-gradient(180deg, rgba(18, 27, 43, 0.84), rgba(10, 16, 28, 0.86));
+  --dashboard-card-border: rgba(255, 255, 255, 0.08);
+  --dashboard-card-accent: color-mix(in srgb, var(--accent-primary) 80%, white 20%);
+  width: 100%;
+  margin: 0;
+  padding: var(--dashboard-shell-pad);
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  color: var(--text-primary);
+  gap: 0.95rem;
   height: 100%;
+  min-height: 0;
   overflow: hidden;
+  position: relative;
+  isolation: isolate;
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 14%),
+    var(--dashboard-window-fill);
+  box-shadow:
+    0 32px 90px rgba(2, 6, 23, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+}
+
+.dashboard-layout-desktop {
+  grid-template-rows: minmax(0, 1fr);
+  padding: 0 var(--dashboard-shell-pad) var(--dashboard-shell-pad) 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.dashboard-layout-desktop::before {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.dashboard-layout-desktop::after {
+  inset: 14px 14px 14px 0;
+  border-radius: 0 24px 24px 0;
+}
+
+.dashboard-wrapper::before,
+.dashboard-wrapper::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.dashboard-wrapper::before {
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(640px 260px at 16% 0%, color-mix(in srgb, var(--accent-primary) 18%, transparent), transparent 70%),
+    radial-gradient(480px 360px at 100% 100%, rgba(255, 255, 255, 0.04), transparent 72%);
+  opacity: 0.9;
+}
+
+.dashboard-wrapper::after {
+  inset: 14px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .dashboard-header-modern {
-  padding: var(--space-sm) 0 0 0;
+  padding: 0.15rem 0.2rem 0;
   margin-bottom: 0;
+  min-width: 0;
+  position: relative;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+  z-index: 1;
+}
+
+.dashboard-header-modern::before {
+  display: none;
+}
+
+.dashboard-wrapper .dashboard-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 0;
+  position: relative;
+  z-index: 4;
+}
+
+.dashboard-layout-desktop .dashboard-topbar {
+  position: absolute;
+  top: 0.95rem;
+  left: calc(var(--dashboard-rail-width) + 0.95rem);
+  right: auto;
+  justify-content: flex-start;
+}
+
+.dashboard-desktop-shell {
+  display: grid;
+  grid-template-columns: var(--dashboard-rail-width) minmax(0, 1fr);
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+  margin: 0 calc(var(--dashboard-shell-pad) * -1) calc(var(--dashboard-shell-pad) * -1) 0;
+}
+
+.dashboard-desktop-body {
+  padding: 1rem var(--dashboard-shell-pad) var(--dashboard-shell-pad) 0.95rem;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0.55rem;
+}
+
+.dashboard-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--border-color);
+  border-radius: 0;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.dashboard-side-panel::before,
+.dashboard-side-panel::after {
+  display: none;
+}
+
+.dashboard-side-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dashboard-side-footer {
+  padding: var(--space-md);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.dashboard-side-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.dashboard-side-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: var(--space-md);
+}
+
+.dashboard-side-stat {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.7rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.dashboard-side-stat strong {
+  font-size: 1rem;
+  font-weight: 720;
+  letter-spacing: -0.03em;
+}
+
+.dashboard-side-stat span {
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--text-primary) 66%, transparent);
+}
+
+.dashboard-side-stack {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem var(--space-md) var(--space-md);
+}
+
+.dashboard-side-divider {
+  height: 1px;
+  background: var(--border-color);
+  opacity: 0.6;
+}
+
+.dashboard-side-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.68rem 0.72rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: color-mix(in srgb, var(--text-primary) 92%, white 8%);
+  font-size: 0.76rem;
+}
+
+.dashboard-side-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-side-pill strong {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dashboard-side-pill.is-active {
+  border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-tertiary));
+}
+
+.dashboard-side-create-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 0.76rem 0.95rem !important;
+  border-radius: var(--radius-sm) !important;
+  color: #09110b !important;
+  border: 1px solid color-mix(in srgb, var(--accent-success) 66%, rgba(255, 255, 255, 0.12)) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-success) 66%, white 34%) 0%, color-mix(in srgb, var(--accent-success) 86%, #08111d 14%) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    0 14px 24px rgba(2, 6, 23, 0.16) !important;
+  font-size: 0.8rem !important;
+  font-weight: 660 !important;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.dashboard-side-create-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    0 18px 28px rgba(2, 6, 23, 0.2) !important;
+}
+
+.dashboard-desktop-header {
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  min-width: 0;
+  text-align: center;
+  padding: 0.35rem 0 0.15rem;
+}
+
+.dashboard-desktop-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.dashboard-desktop-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 760;
+  letter-spacing: -0.035em;
+  color: color-mix(in srgb, var(--text-primary) 97%, white 3%);
 }
 
 .dashboard-main-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  gap: var(--space-lg);
-  flex: 1;
+  grid-template-columns: minmax(0, 1.45fr) minmax(18rem, 0.92fr);
+  gap: 0.85rem;
+  align-items: stretch;
+  height: 100%;
   min-height: 0;
-  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-main-content-single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .dashboard-content-left {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  height: 100%;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  display: grid;
+  gap: 0.72rem;
+  min-width: 0;
+  align-content: start;
+  min-height: 0;
+  position: relative;
+  isolation: isolate;
+  padding: 0.85rem 0.9rem 0.92rem;
+  overflow: hidden;
 }
 
 .dashboard-content-right {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  height: 100%;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  display: grid;
+  gap: 0.72rem;
+  min-width: 0;
+  align-content: start;
+  min-height: 0;
+  position: relative;
+  isolation: isolate;
+  padding: 0.85rem 0.9rem 0.92rem;
+  overflow: hidden;
+}
+
+.dashboard-resource-stack {
+  display: grid;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.dashboard-content-left::before,
+.dashboard-content-right::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 18%),
+    var(--dashboard-panel-fill);
+  border: 1px solid var(--dashboard-panel-border);
+  box-shadow: var(--dashboard-panel-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.dashboard-content-left::after,
+.dashboard-content-right::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-primary) 36%, transparent), transparent 72%);
+  opacity: 0.8;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.dashboard-content-left::before {
+  background:
+    linear-gradient(130deg, color-mix(in srgb, var(--accent-primary) 10%, transparent), transparent 42%),
+    linear-gradient(180deg, rgba(8, 15, 28, 0.86), rgba(6, 12, 22, 0.78));
+}
+
+.dashboard-content-right::before {
+  background:
+    linear-gradient(130deg, rgba(255, 255, 255, 0.04), transparent 40%),
+    linear-gradient(180deg, rgba(12, 21, 36, 0.86), rgba(7, 13, 24, 0.84));
+}
+
+.dashboard-resource-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 0.75rem;
+  min-width: 0;
+  align-items: start;
+  min-height: 0;
+}
+
+.dashboard-workspaces-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(185px, 100%), 1fr));
 }
 
 /* Create Workspace Banner */
 .dashboard-create-banner {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 14px 16px;
-  flex-shrink: 0;
-  align-self: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.55rem 0.8rem;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  justify-self: start;
+}
+
+.dashboard-create-info {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
 }
 
 .dashboard-create-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 680;
+  letter-spacing: -0.012em;
+  color: color-mix(in srgb, var(--text-primary) 96%, white 4%);
 }
 
 .dashboard-create-desc {
-  color: inherit;
-  font-size: 0.78rem;
-  opacity: 0.6;
+  color: color-mix(in srgb, var(--text-primary) 70%, transparent);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  opacity: 1;
+  max-width: 30rem;
 }
 
 .dashboard-create-btn {
-  padding: 6px 14px !important;
-  border-radius: 8px !important;
-  font-weight: 600 !important;
-  font-size: 0.82rem !important;
+  padding: 0.45rem 0.85rem !important;
+  border-radius: 999px !important;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 62%, rgba(255, 255, 255, 0.08)) !important;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent-primary) 72%, white 14%), color-mix(in srgb, var(--accent-primary-pressed) 86%, #08111d 14%)) !important;
+  box-shadow: 0 14px 26px rgba(2, 6, 23, 0.16) !important;
+  font-weight: 640 !important;
+  font-size: 0.79rem !important;
   white-space: nowrap;
+}
+
+.dashboard-create-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 28px rgba(2, 6, 23, 0.2) !important;
+}
+
+@media (max-width: 720px) {
+  .dashboard-create-banner {
+    width: 100%;
+    justify-self: stretch;
+    align-items: flex-start;
+  }
 }
 
 /* Bento Cards */
 .dashboard-bento-card {
   display: flex;
   flex-direction: column;
-  background: var(--bg-secondary);
-  border-radius: 14px;
-  border: 1px solid var(--border-color);
-  padding: var(--space-md);
-  box-shadow: var(--shadow-soft);
+  background: var(--dashboard-card-fill);
+  border-radius: 16px;
+  border: 1px solid var(--dashboard-card-border);
+  padding: 0.9rem;
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 .dashboard-bento-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-  border-color: var(--accent-primary);
+  box-shadow: 0 22px 44px rgba(2, 6, 23, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border-color: color-mix(in srgb, var(--dashboard-card-accent) 54%, rgba(255, 255, 255, 0.08));
+}
+
+.dashboard-bento-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: min(42%, 180px);
+  height: 3px;
+  background: linear-gradient(90deg, var(--dashboard-card-accent), transparent);
+  opacity: 0.95;
+}
+
+.dashboard-bento-card::after {
+  content: "";
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  right: -92px;
+  top: -118px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--dashboard-card-accent) 16%, transparent), transparent 70%);
+  pointer-events: none;
+  opacity: 0.82;
 }
 
 /* Workspace Grid */
 .bento-workspace-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: var(--space-md);
 }
 
 /* Workspace Cards */
 .bento-workspace-card {
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.045), transparent 48%),
+    linear-gradient(180deg, rgba(17, 26, 41, 0.88), rgba(10, 16, 28, 0.9));
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s, background 0.2s;
+  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.16);
+  position: relative;
 }
 
 .bento-workspace-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-  border-color: var(--accent-primary);
+  box-shadow: 0 20px 40px rgba(2, 6, 23, 0.22);
+  border-color: color-mix(in srgb, var(--accent-primary) 40%, rgba(255, 255, 255, 0.08));
+}
+
+.bento-workspace-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 90%, white 10%), transparent 80%);
+  opacity: 0.9;
+}
+
+.bento-workspace-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), transparent 42%);
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .bento-workspace-icon {
-  width: 40px;
-  height: 40px;
-  background: var(--bg-tertiary);
-  border-radius: 10px;
+  width: 42px;
+  height: 42px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.24), transparent 42%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(148, 163, 184, 0.04));
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .bento-workspace-card .workspace-card-header {
@@ -14625,24 +15144,25 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .bento-workspace-card .workspace-info h3 {
   font-size: 1rem;
   margin: 0;
-  color: var(--text-primary);
+  color: color-mix(in srgb, var(--text-primary) 98%, white 2%);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.02em;
 }
 
 .bento-workspace-card .workspace-type {
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   margin: 2px 0 0 0;
-  color: var(--text-primary);
-  opacity: 0.6;
+  color: color-mix(in srgb, var(--text-primary) 72%, transparent);
+  opacity: 1;
 }
 
 .bento-workspace-card .last-used {
   font-size: 0.75rem;
   margin: 0;
-  color: var(--text-primary);
-  opacity: 0.6;
+  color: color-mix(in srgb, var(--text-primary) 72%, transparent);
+  opacity: 1;
 }
 
 .bento-card-footer {
@@ -14650,8 +15170,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
   justify-content: space-between;
   align-items: center;
   padding: 8px 14px;
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--border-color);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.02));
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   gap: 8px;
   margin-top: auto;
 }
@@ -14674,36 +15194,46 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .ports-dashboard-grid {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 0.55rem;
+  align-content: start;
   flex: 1;
-  overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .port-dashboard-card {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: 10px 12px;
-  background: var(--bg-tertiary);
-  border-radius: 8px;
-  border-left: 4px solid var(--border-color);
+  gap: 0.65rem;
+  padding: 0.75rem 0.8rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.2s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  backdrop-filter: blur(12px);
 }
 
 .port-dashboard-card:hover {
-  background: var(--bg-hover);
-  transform: translateX(4px);
-  border-color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent-primary) 44%, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 14px 24px rgba(2, 6, 23, 0.12);
 }
 
 .port-card-icon {
-  font-size: 1.3rem;
-  min-width: 28px;
+  width: 2.15rem;
+  height: 2.15rem;
+  min-width: 2.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
   text-align: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .port-card-info {
@@ -14716,16 +15246,17 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .port-card-name {
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.015em;
 }
 
 .port-card-context {
-  font-size: 0.75rem;
-  color: var(--text-primary);
-  opacity: 0.6;
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--text-primary) 70%, transparent);
+  opacity: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -14733,16 +15264,422 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .port-card-port {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  background: var(--bg-primary);
-  padding: 3px 7px;
-  border-radius: 6px;
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  font-size: 0.74rem;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.22rem 0.52rem;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--text-primary) 90%, white 10%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-left: auto;
 }
 
-@media (max-width: 1200px) {
-  .dashboard-main-content {
-    grid-template-columns: 1fr;
+.dashboard-quick-links .quick-links-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(124px, 100%), 1fr));
+  gap: var(--space-sm);
+}
+
+.dashboard-quick-links > .quick-links-grid {
+  display: block;
+}
+
+.dashboard-quick-links .quick-links-container {
+  gap: 0.65rem;
+}
+
+.dashboard-quick-links .quick-links-section {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.dashboard-quick-links .quick-links-section h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  opacity: 0.7;
+}
+
+.dashboard-quick-links .quick-links-section .quick-links-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(124px, 100%), 1fr));
+  gap: 0.45rem;
+}
+
+.dashboard-quick-links .bento-quick-link {
+  width: 100%;
+  min-width: 0;
+  padding: 0.6rem 0.7rem !important;
+  font-size: 0.78rem;
+  gap: 0.45rem;
+}
+
+.dashboard-quick-links .quick-link-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-compact-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-sm);
+  min-height: 0;
+}
+
+.dashboard-compact-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.dashboard-compact-tab {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-radius: 12px;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  backdrop-filter: blur(12px);
+}
+
+.dashboard-compact-tab:hover {
+  border-color: color-mix(in srgb, var(--accent-primary) 50%, rgba(255, 255, 255, 0.08));
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 20px rgba(2, 6, 23, 0.1);
+}
+
+.dashboard-compact-tab.is-active {
+  background: color-mix(in srgb, var(--accent-primary) 20%, rgba(255, 255, 255, 0.08));
+  border-color: color-mix(in srgb, var(--accent-primary) 56%, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.dashboard-status { --dashboard-card-accent: color-mix(in srgb, var(--accent-primary) 78%, white 22%); }
+.dashboard-telemetry { --dashboard-card-accent: color-mix(in srgb, var(--accent-primary-hover) 76%, white 16%); }
+.dashboard-polecats { --dashboard-card-accent: var(--accent-warning); }
+.dashboard-discord { --dashboard-card-accent: color-mix(in srgb, var(--accent-warning) 55%, var(--accent-danger) 45%); }
+.dashboard-projects { --dashboard-card-accent: var(--accent-success); }
+.dashboard-advice { --dashboard-card-accent: color-mix(in srgb, var(--accent-primary) 62%, var(--accent-success) 38%); }
+.dashboard-readiness { --dashboard-card-accent: color-mix(in srgb, var(--accent-success) 74%, white 26%); }
+.dashboard-quick-links { --dashboard-card-accent: color-mix(in srgb, var(--accent-primary) 84%, white 16%); }
+.ports-dashboard-section { --dashboard-card-accent: color-mix(in srgb, var(--accent-success) 58%, var(--accent-primary) 42%); }
+
+.dashboard-layout-desktop .dashboard-workspaces-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 0.72rem;
+}
+
+.dashboard-layout-desktop .bento-workspace-card {
+  display: flex;
+  gap: 0;
+  min-height: 132px;
+  padding: 0;
+  border-radius: 12px;
+  background:
+    linear-gradient(125deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), transparent 42%),
+    linear-gradient(180deg, rgba(12, 19, 32, 0.9), rgba(9, 15, 25, 0.95));
+}
+
+.dashboard-layout-desktop .bento-workspace-card .workspace-card-header {
+  padding: 0.8rem 0.84rem 0.2rem;
+  margin: 0;
+  min-width: 0;
+  gap: 0.68rem;
+  align-items: flex-start;
+}
+
+.dashboard-layout-desktop .bento-workspace-card .workspace-card-body {
+  padding: 0 0.84rem 0.58rem;
+  display: block;
+  min-width: 0;
+}
+
+.dashboard-layout-desktop .bento-workspace-card .workspace-meta {
+  display: block;
+  white-space: normal;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.dashboard-layout-desktop .bento-workspace-card .workspace-card-footer {
+  padding: 0 0.84rem 0.84rem;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.dashboard-layout-desktop .bento-workspace-card .workspace-health {
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
+}
+
+.dashboard-layout-desktop .bento-workspace-card .health-subtext {
+  display: none;
+}
+
+.dashboard-layout-desktop .bento-workspace-card.active {
+  border-color: color-mix(in srgb, var(--accent-primary) 54%, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 22px 44px rgba(2, 6, 23, 0.24);
+  background:
+    linear-gradient(125deg, color-mix(in srgb, var(--accent-primary) 13%, transparent), transparent 45%),
+    linear-gradient(180deg, rgba(10, 28, 32, 0.92), rgba(9, 15, 25, 0.94));
+}
+
+.dashboard-layout-desktop .bento-workspace-card .workspace-info h3 {
+  font-size: 0.98rem;
+  font-weight: 690;
+  line-height: 1.18;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.dashboard-layout-desktop .bento-workspace-card .workspace-type {
+  font-size: 0.68rem;
+  margin-top: 0.15rem;
+}
+
+.dashboard-layout-desktop .bento-workspace-card .last-used {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.48rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.68rem;
+}
+
+.dashboard-layout-desktop .workspace-open-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.48rem 0.64rem;
+  border-radius: 10px;
+  font-size: 0.74rem;
+  font-weight: 620;
+  box-shadow: 0 10px 20px rgba(2, 6, 23, 0.12);
+}
+
+.dashboard-layout-desktop .bento-action-group .btn-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+.dashboard-compact-panel-shell {
+  min-height: 0;
+}
+
+.dashboard-compact-panel {
+  display: none;
+  min-height: 0;
+}
+
+.dashboard-compact-panel.is-active {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-section {
+  gap: 0.55rem;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-section-title {
+  font-size: 1rem;
+  margin-bottom: 0;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .bento-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+  gap: 0.75rem;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-card {
+  padding: 0.8rem;
+  border-radius: 12px;
+}
+
+.dashboard-layout-desktop .dashboard-resource-cards .dashboard-bento-card {
+  height: 100%;
+}
+
+.dashboard-layout-desktop .dashboard-content-right > .dashboard-resource-cards:only-child {
+  height: 100%;
+}
+
+.dashboard-layout-desktop .dashboard-content-right > .dashboard-resource-cards:only-child > .dashboard-bento-card:only-child {
+  min-height: 100%;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-header {
+  margin-bottom: 8px;
+  font-size: 0.98rem;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-body {
+  font-size: 0.84rem;
+  margin-bottom: 8px;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-actions {
+  gap: 5px;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .bento-btn,
+.dashboard-layout-desktop .dashboard-content-right .bento-checkbox-label {
+  padding: 5px 8px;
+  font-size: 0.74rem;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .ports-dashboard-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+}
+
+.dashboard-layout-desktop .dashboard-content-right .port-dashboard-card {
+  padding: 0.66rem 0.7rem;
+  border-radius: 10px;
+}
+
+.dashboard-layout-compact .dashboard-bento-card {
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.dashboard-layout-compact .dashboard-bento-header {
+  margin-bottom: 8px;
+  font-size: 0.98rem;
+}
+
+.dashboard-layout-compact .dashboard-bento-body {
+  font-size: 0.84rem;
+  margin-bottom: 8px;
+}
+
+.dashboard-layout-compact .dashboard-bento-actions {
+  gap: 5px;
+}
+
+.dashboard-layout-compact .bento-btn,
+.dashboard-layout-compact .bento-checkbox-label {
+  padding: 5px 8px;
+  font-size: 0.74rem;
+}
+
+.dashboard-layout-compact .bento-workspace-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+  gap: 10px;
+}
+
+.dashboard-layout-compact .bento-workspace-icon {
+  width: 34px;
+  height: 34px;
+  font-size: 17px;
+}
+
+.dashboard-layout-compact .bento-workspace-card .workspace-card-header {
+  padding: 10px 12px 2px;
+  gap: 10px;
+}
+
+.dashboard-layout-compact .bento-workspace-card .workspace-card-body {
+  padding: 2px 12px 8px;
+}
+
+.dashboard-layout-compact .bento-workspace-card .workspace-info h3 {
+  font-size: 0.92rem;
+}
+
+.dashboard-layout-compact .bento-workspace-card .workspace-type,
+.dashboard-layout-compact .bento-workspace-card .last-used {
+  font-size: 0.68rem;
+}
+
+.dashboard-layout-compact .bento-card-footer {
+  padding: 8px 12px;
+}
+
+.dashboard-layout-compact .workspace-card-footer .btn-primary,
+.dashboard-layout-compact .workspace-card-footer .btn-secondary,
+.dashboard-layout-compact .btn-cta-empty,
+.dashboard-layout-compact .bento-btn-primary {
+  padding: 0.4rem 0.55rem;
+  font-size: 0.72rem;
+}
+
+.dashboard-layout-compact .btn-icon,
+.dashboard-layout-compact .bento-action-group .btn-icon {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-wrapper {
+    gap: var(--space-sm);
+    border-radius: 26px;
+  }
+
+  .dashboard-title-group {
+    align-items: flex-start;
+  }
+
+  .dashboard-title-group h1 {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-title-group {
+    gap: var(--space-sm);
+  }
+
+  .dashboard-title-group h1 {
+    font-size: 1.25rem;
+  }
+
+  .dashboard-title-group p {
+    font-size: 0.9rem;
+  }
+
+  .dashboard-compact-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dashboard-layout-compact .bento-grid,
+  .dashboard-layout-compact .bento-workspace-grid,
+  .dashboard-layout-compact .ports-dashboard-grid,
+  .dashboard-layout-compact .quick-links-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-layout-compact .port-dashboard-card {
+    padding: 9px 10px;
+  }
+}
+
+@media (max-width: 460px) {
+  .dashboard-wrapper {
+    --dashboard-shell-pad: 0.7rem;
+    padding: var(--dashboard-shell-pad);
+    border-radius: 22px;
+  }
+
+  .dashboard-compact-tabs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-layout-compact .bento-grid,
+  .dashboard-layout-compact .bento-workspace-grid,
+  .dashboard-layout-compact .ports-dashboard-grid,
+  .dashboard-layout-compact .quick-links-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
