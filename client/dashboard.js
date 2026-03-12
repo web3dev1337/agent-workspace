@@ -261,7 +261,7 @@ class Dashboard {
           <div class="dashboard-create-desc">Set up a new workspace environment to begin building.</div>
         </div>
         <button id="dashboard-add-workspace-btn" class="btn-primary workspace-create-empty-btn dashboard-create-btn">
-          ➕ Create Workspace
+          + Create Workspace
         </button>
       </div>
     ` : '';
@@ -309,16 +309,15 @@ class Dashboard {
     return `
       <div class="dashboard-wrapper">
         <div class="dashboard-topbar">
-          ${canReturnToWorkspaces ? `<button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back</button>` : '<div></div>'}
+          ${canReturnToWorkspaces ? `<button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to workspaces</button>` : '<div></div>'}
           ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status"></div>` : '<div></div>'}
         </div>
         
         <div class="dashboard-header-modern">
           <div class="dashboard-title-group">
-            <div class="dashboard-title-icon" style="font-size:24px;">🏠</div>
+            <div class="dashboard-title-icon" aria-hidden="true"></div>
             <div>
               <h1>Agent Workspace</h1>
-              <p>Select a workspace to begin development</p>
             </div>
           </div>
         </div>
@@ -3481,7 +3480,7 @@ class Dashboard {
           </button>
           <div class="bento-action-group">
             <button class="btn-icon workspace-rename-btn" title="Rename workspace">
-              ✎
+              ✏️
             </button>
             <button class="btn-icon workspace-delete-btn btn-danger-icon" title="Delete workspace">
               🗑️
@@ -3583,16 +3582,14 @@ class Dashboard {
   setupEventListeners() {
     // Back button to return to the current tabbed workspace view (when available)
     document.getElementById('dashboard-back-btn')?.addEventListener('click', () => {
-      this.orchestrator.hideDashboard();
+      this.returnToWorkspaceView();
     });
 
     // Workspace card click handlers
     document.querySelectorAll('.workspace-open-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const card = e.target.closest('.workspace-card');
-        const workspaceId = card.dataset.workspaceId;
-        this.openWorkspace(workspaceId);
+        this.returnToWorkspaceView();
       });
     });
 
@@ -3651,7 +3648,7 @@ class Dashboard {
     this._escHandler = (e) => {
       if (e.key !== 'Escape' || !this.isVisible) return;
       if (this.orchestrator.tabManager?.tabs?.size) {
-        this.orchestrator.hideDashboard();
+        this.returnToWorkspaceView();
       }
     };
     document.addEventListener('keydown', this._escHandler);
@@ -3783,6 +3780,10 @@ class Dashboard {
 
     const wizard = new WorkspaceWizard(this.orchestrator);
     wizard.show(options);
+  }
+
+  returnToWorkspaceView() {
+    this.orchestrator.hideDashboard();
   }
 
   async createEmptyWorkspaceQuick() {
