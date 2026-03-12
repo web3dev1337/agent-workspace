@@ -1,3 +1,25 @@
+const HIDDEN_SETTINGS_SECTION_IDS = new Set([
+  'command-catalog',
+  'discord',
+  'identity',
+  'license',
+  'pager-pollcat',
+  'pr-merge-automation',
+  'quick-review',
+  'review-inbox',
+  'scheduler',
+  'tasks',
+  'tasks-launch',
+  'workflow-notifications'
+]);
+
+const normalizeSettingsSectionId = (value, fallback = '') => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  || fallback;
+
 // Enhanced Agent Workspace with sidebar and flexible viewing
 class ClaudeOrchestrator {
   constructor() {
@@ -2023,16 +2045,20 @@ class ClaudeOrchestrator {
 
 	    // Grid layout dropdown removed - using dynamic layout now
 
-	    // Settings
-		    const settingsToggle = document.getElementById('settings-toggle');
-		    const openSettingsPanel = ({ focusSearch = true, sectionId = null, behavior = 'auto' } = {}) => {
-		      const panel = document.getElementById('settings-panel');
-		      if (!panel) return;
-		      panel.classList.remove('hidden');
-		      this.settingsPanelNavigationController?.reset?.();
-		      if (sectionId) {
-		        this.settingsPanelNavigationController?.openSectionById?.(sectionId, {
-		          scrollIntoView: true,
+		    // Settings
+			    const settingsToggle = document.getElementById('settings-toggle');
+			    const openSettingsPanel = ({ focusSearch = true, sectionId = null, behavior = 'auto' } = {}) => {
+			      const panel = document.getElementById('settings-panel');
+			      if (!panel) return;
+			      const normalizedSectionId = normalizeSettingsSectionId(sectionId, '');
+			      if (normalizedSectionId && HIDDEN_SETTINGS_SECTION_IDS.has(normalizedSectionId)) {
+			        sectionId = null;
+			      }
+			      panel.classList.remove('hidden');
+			      this.settingsPanelNavigationController?.reset?.();
+			      if (sectionId) {
+			        this.settingsPanelNavigationController?.openSectionById?.(sectionId, {
+			          scrollIntoView: true,
 		          behavior
 		        });
 		      }
@@ -9314,32 +9340,26 @@ class ClaudeOrchestrator {
 	  }
 
 	  setupSettingsPanelNavigation() {
-	    const panel = document.getElementById('settings-panel');
-	    if (!panel) return;
-	    const sectionsContainer = panel.querySelector('.settings-sections-container');
-	    const mainScroll = document.getElementById('settings-main');
-	    const searchEl = document.getElementById('settings-search');
-	    if (!sectionsContainer || !mainScroll) return;
+		    const panel = document.getElementById('settings-panel');
+		    if (!panel) return;
+		    const sectionsContainer = panel.querySelector('.settings-sections-container');
+		    const mainScroll = document.getElementById('settings-main');
+		    const searchEl = document.getElementById('settings-search');
+		    if (!sectionsContainer || !mainScroll) return;
 
-	    const sections = Array.from(sectionsContainer.querySelectorAll('.setting-section'));
-	    const titleForSection = (sectionEl) => {
-	      const raw = sectionEl.getAttribute('data-section-title')
-	        || sectionEl.querySelector('.setting-section-toggle-title')?.textContent
-	        || Array.from(sectionEl.children).find((child) => child.matches?.('h4, h5'))?.textContent;
-	      const title = String(raw || '').trim();
-	      return title || 'Section';
-	    };
-	    const slugify = (value, fallback) => String(value || '')
-	      .trim()
-	      .toLowerCase()
-	      .replace(/[^a-z0-9]+/g, '-')
-	      .replace(/^-+|-+$/g, '')
-	      || fallback;
+		    const sections = [];
+		    const titleForSection = (sectionEl) => {
+		      const raw = sectionEl.getAttribute('data-section-title')
+		        || sectionEl.querySelector('.setting-section-toggle-title')?.textContent
+		        || Array.from(sectionEl.children).find((child) => child.matches?.('h4, h5'))?.textContent;
+		      const title = String(raw || '').trim();
+		      return title || 'Section';
+		    };
 
-	    const setSectionCollapsed = (sectionEl, collapsed) => {
-	      sectionEl.classList.toggle('is-collapsed', collapsed);
-	      const toggleEl = sectionEl.querySelector('.setting-section-toggle');
-	      toggleEl?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+		    const setSectionCollapsed = (sectionEl, collapsed) => {
+		      sectionEl.classList.toggle('is-collapsed', collapsed);
+		      const toggleEl = sectionEl.querySelector('.setting-section-toggle');
+		      toggleEl?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
 	    };
 	    const expandSection = (sectionEl, { scrollIntoView = false, behavior = 'smooth' } = {}) => {
 	      if (!sectionEl) return;
@@ -9355,16 +9375,20 @@ class ClaudeOrchestrator {
 	    const reset = () => {
 	      if (searchEl) searchEl.value = '';
 	      sections.forEach((sectionEl) => sectionEl.classList.remove('settings-filter-hidden'));
-	      collapseAllSections();
-	      mainScroll.scrollTo({ top: 0, behavior: 'auto' });
-	    };
+		      collapseAllSections();
+		      mainScroll.scrollTo({ top: 0, behavior: 'auto' });
+		    };
 
-	    sections.forEach((sectionEl, idx) => {
-	      const title = titleForSection(sectionEl);
-	      const sectionId = slugify(sectionEl.getAttribute('data-section-id') || title, `sec-${idx}`);
-	      sectionEl.setAttribute('data-section-id', sectionId);
-	      sectionEl.setAttribute('data-section-title', title);
-	      sectionEl.id = `settings-${sectionId}`;
+		    Array.from(sectionsContainer.querySelectorAll('.setting-section')).forEach((sectionEl, idx) => {
+		      const title = titleForSection(sectionEl);
+		      const sectionId = normalizeSettingsSectionId(sectionEl.getAttribute('data-section-id') || title, `sec-${idx}`);
+		      if (HIDDEN_SETTINGS_SECTION_IDS.has(sectionId)) {
+		        sectionEl.remove();
+		        return;
+		      }
+		      sectionEl.setAttribute('data-section-id', sectionId);
+		      sectionEl.setAttribute('data-section-title', title);
+		      sectionEl.id = `settings-${sectionId}`;
 
 	      const headingEl = Array.from(sectionEl.children).find((child) => child.matches?.('h4, h5'));
 	      if (headingEl) {
@@ -9398,14 +9422,15 @@ class ClaudeOrchestrator {
 
 	        headingEl.replaceWith(toggleEl);
 	        sectionEl.appendChild(bodyEl);
-	      }
+		      }
 
-	      setSectionCollapsed(sectionEl, true);
-	    });
+		      setSectionCollapsed(sectionEl, true);
+		      sections.push(sectionEl);
+		    });
 
-	    if (searchEl) {
-	      const applyFilter = () => {
-	        const query = String(searchEl.value || '').trim().toLowerCase();
+		    if (searchEl) {
+		      const applyFilter = () => {
+		        const query = String(searchEl.value || '').trim().toLowerCase();
 
 	        if (!query) {
 	          sections.forEach((sectionEl) => sectionEl.classList.remove('settings-filter-hidden'));
@@ -9433,17 +9458,19 @@ class ClaudeOrchestrator {
 	      });
 	    }
 
-	    this.settingsPanelNavigationController = {
-	      reset,
-	      openSectionById: (sectionId, options = {}) => {
-	        const normalizedId = `settings-${slugify(sectionId, sectionId)}`;
-	        const target = sections.find((sectionEl) => sectionEl.id === normalizedId)
-	          || sections.find((sectionEl) => sectionEl.getAttribute('data-section-id') === sectionId);
-	        if (!target) return;
-	        expandSection(target, options);
-	      }
-	    };
-	    reset();
+		    this.settingsPanelNavigationController = {
+		      reset,
+		      openSectionById: (sectionId, options = {}) => {
+		        const normalizedSectionId = normalizeSettingsSectionId(sectionId, '');
+		        if (!normalizedSectionId || HIDDEN_SETTINGS_SECTION_IDS.has(normalizedSectionId)) return;
+		        const normalizedId = `settings-${normalizedSectionId}`;
+		        const target = sections.find((sectionEl) => sectionEl.id === normalizedId)
+		          || sections.find((sectionEl) => sectionEl.getAttribute('data-section-id') === normalizedSectionId);
+		        if (!target) return;
+		        expandSection(target, options);
+		      }
+		    };
+		    reset();
 	  }
 
 	  setupDiagnosticsPanel() {

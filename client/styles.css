@@ -5590,6 +5590,23 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: none !important;
 }
 
+.setting-section:is(
+  [data-section-id="workflow-notifications"],
+  [data-section-id="review-inbox"],
+  [data-section-id="quick-review"],
+  [data-section-id="command-catalog"],
+  [data-section-id="discord"],
+  [data-section-id="scheduler"],
+  [data-section-id="pager-pollcat"],
+  [data-section-id="license"],
+  [data-section-id="tasks"],
+  [data-section-id="pr-merge-automation"],
+  [data-section-id="tasks-launch"],
+  [data-section-id="identity"]
+) {
+  display: none !important;
+}
+
 /* Review Console */
 .review-console-warning {
   margin: 10px 12px 14px;
