@@ -3360,16 +3360,16 @@ class ClaudeOrchestrator {
   getNextWorktreeIdForRepo(repo, { minNumber } = {}) {
     const min = Number.isFinite(Number(minNumber)) ? Number(minNumber) : this.autoCreateWorktreeMinNumber;
     const entries = Array.isArray(repo?.worktreeDirs) ? repo.worktreeDirs : [];
-    let maxExisting = 0;
+    const existingNumbers = new Set();
     for (const e of entries) {
       const id = String(e?.id || '');
       const m = id.match(/^work(\d+)$/i);
-      if (!m) continue;
-      const n = Number(m[1]);
-      if (Number.isFinite(n)) maxExisting = Math.max(maxExisting, n);
+      if (m && Number.isFinite(Number(m[1]))) existingNumbers.add(Number(m[1]));
     }
-    const start = Math.max(min, maxExisting + 1);
-    return `work${start}`;
+    // Find the first number >= min that doesn't already exist on disk
+    let n = Math.max(min, 1);
+    while (existingNumbers.has(n)) n++;
+    return `work${n}`;
   }
 
   async autoCreateExtraWorktreeForRepo(repo, { startTier, worktreeId } = {}) {
