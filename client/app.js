@@ -31924,7 +31924,7 @@ class ClaudeOrchestrator {
       return `${name} (${safe || '?'})`;
     };
     const presetButtons = `
-      <div class="quick-create-presets" title="Per-repo create presets">
+      <div class="quick-create-presets" title="Per-repo create presets" style="display:none">
         <button class="btn-secondary quick-create-preset-btn ${createPreset === 'small' ? 'is-selected' : ''}"
                 type="button"
                 data-repo-path="${repo.path}"
