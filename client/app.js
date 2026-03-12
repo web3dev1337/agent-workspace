@@ -30983,11 +30983,11 @@ class ClaudeOrchestrator {
         </div>
         <div class="quick-worktree-toolbar">
           <input type="text" id="quick-worktree-search" placeholder="Search repos..." class="search-input">
-          <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees">
+          <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees" style="display:none">
             <input type="checkbox" id="worktree-modal-keep-open">
             Keep open
           </label>
-          <button class="btn-secondary quick-advanced-btn">Advanced</button>
+          <button class="btn-secondary quick-advanced-btn" style="display:none">Advanced</button>
         </div>
         <div class="modal-body quick-worktree-body">
           <div class="quick-tab-panel active" data-tab="start">
@@ -31022,7 +31022,7 @@ class ClaudeOrchestrator {
                   T4
                 </label>
               </div>
-              <div class="quick-control-group">
+              <div class="quick-control-group" style="display:none">
                 <span class="quick-control-label">Edited within</span>
                 <label class="quick-radio">
                   <input type="radio" name="quick-recency" value="all">
@@ -31069,7 +31069,7 @@ class ClaudeOrchestrator {
                   Show done
                 </label>
               </div>
-              <div class="quick-control-group">
+              <div class="quick-control-group" style="display:none">
                 <span class="quick-control-label">Create</span>
                 <input type="number" id="quick-worktree-create-count" class="quick-number-input" min="1" max="8" value="${this.quickWorktreeCreateCount}" title="How many new worktrees to create (work9+)" />
                 <label class="quick-checkbox" title="Create terminals but keep them hidden (skip auto-start)">
