@@ -6,6 +6,7 @@ const HIDDEN_SETTINGS_SECTION_IDS = new Set([
   'license',
   'pager-pollcat',
   'pr-merge-automation',
+  'projects-chats',
   'quick-review',
   'review-inbox',
   'scheduler',
@@ -8733,10 +8734,11 @@ class ClaudeOrchestrator {
 
   getSimpleModeConfig() {
     const cfg = this.userSettings?.global?.ui?.simpleMode || {};
+    const disabled = HIDDEN_SETTINGS_SECTION_IDS.has('projects-chats');
     return {
-      enabled: cfg.enabled !== false,
-      startupOpen: cfg.startupOpen === true,
-      hotkeys: cfg.hotkeys !== false,
+      enabled: disabled ? false : (cfg.enabled !== false),
+      startupOpen: disabled ? false : (cfg.startupOpen === true),
+      hotkeys: disabled ? false : (cfg.hotkeys !== false),
       showHints: cfg.showHints !== false
     };
   }
@@ -18518,6 +18520,10 @@ class ClaudeOrchestrator {
   }
 
   async showProjectChatsShell() {
+    if (!this.getSimpleModeConfig().enabled) {
+      this.showToast?.('Projects + Chats is currently disabled', 'warning');
+      return;
+    }
     const existing = document.getElementById('projects-chats-shell');
     if (existing) existing.remove();
     const simpleCfg = this.getSimpleModeConfig();

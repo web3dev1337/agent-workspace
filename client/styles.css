@@ -5600,6 +5600,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
   [data-section-id="scheduler"],
   [data-section-id="pager-pollcat"],
   [data-section-id="license"],
+  [data-section-id="projects-chats"],
   [data-section-id="tasks"],
   [data-section-id="pr-merge-automation"],
   [data-section-id="tasks-launch"],
