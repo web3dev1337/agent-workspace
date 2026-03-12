@@ -716,15 +716,15 @@ To avoid conflicts when developing the Orchestrator itself while using it for ot
 **Full installation (Production + Dev instances):**
 
 ```bash
-# 1. Production instance (port 3000)
+# 1. Production instance (default ports 9460-9463)
 git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/automation/claude-orchestrator/master
 cd ~/GitHub/tools/automation/claude-orchestrator/master
 
 cat > .env << 'EOF'
-ORCHESTRATOR_PORT=3000
-CLIENT_PORT=2080
-TAURI_DEV_PORT=1420
-DIFF_VIEWER_PORT=7655
+ORCHESTRATOR_PORT=9460
+CLIENT_PORT=9461
+DIFF_VIEWER_PORT=9462
+TAURI_DEV_PORT=9463
 LOG_LEVEL=info
 NODE_ENV=development
 ENABLE_FILE_WATCHING=true
@@ -733,15 +733,15 @@ EOF
 npm install
 cd diff-viewer && npm install && cd ..
 
-# 2. Dev instance (port 4000)
+# 2. Dev instance (offset by +10)
 git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 
 cat > .env << 'EOF'
-ORCHESTRATOR_PORT=4000
-CLIENT_PORT=2081
-TAURI_DEV_PORT=1421
-DIFF_VIEWER_PORT=7656
+ORCHESTRATOR_PORT=9470
+CLIENT_PORT=9471
+DIFF_VIEWER_PORT=9472
+TAURI_DEV_PORT=9473
 LOG_LEVEL=info
 NODE_ENV=development
 ENABLE_FILE_WATCHING=true
@@ -756,28 +756,38 @@ cd diff-viewer && npm install && cd ..
 #### Production Instance (Your Daily Work):
 ```bash
 cd ~/GitHub/tools/automation/claude-orchestrator/master
-npm start           # Runs on ports 3000/2080/7655
+npm start           # Runs on ports 9460/9461/9462
 ```
 
 #### Development Instance (Modifying the Orchestrator):
 ```bash
 cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
-npm start           # Runs on ports 4000/2081/7656
+npm start           # Runs on ports 9470/9471/9472
 ```
 
 ### Quick Reference:
 
-| Purpose | Directory | Command | Ports | Use Case |
+| Purpose | Directory | Command | Ports (server/client/diff) | Use Case |
 |---------|-----------|---------|-------|----------|
-| **Production** | ~/GitHub/tools/automation/claude-orchestrator/master | `npm start` | 3000/2080/7655 | Your daily Claude work |
-| **Development** | ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev | `npm start` | 4000/2081/7656 | Modifying Orchestrator |
+| **Production** | ~/GitHub/tools/automation/claude-orchestrator/master | `npm start` | 9460/9461/9462 | Your daily Claude work |
+| **Development** | ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev | `npm start` | 9470/9471/9472 | Modifying Orchestrator |
+
+### Port Defaults (centralized in `server/portDefaults.js`):
+| Port | Purpose | Env Variable |
+|------|---------|-------------|
+| 9460 | Orchestrator server (Express + Socket.IO) | `ORCHESTRATOR_PORT` |
+| 9461 | Client dev server (Web UI) | `CLIENT_PORT` |
+| 9462 | Diff viewer | `DIFF_VIEWER_PORT` |
+| 9463 | Tauri dev port | `TAURI_DEV_PORT` |
+
+Override any port via `.env` — the defaults in `server/portDefaults.js` are used when no env var is set.
 
 ### What Gets Started:
 All commands run these 4 services:
 - **Server** (Express backend with hot-reload)
-- **Client** (Web UI dev server)
+- **Client** (Web UI dev server — proxies to backend, use this URL in browser)
 - **Tauri** (Native desktop app)
-- **Diff Viewer** (PR review tool on port 7655 for prod, 7656 for dev)
+- **Diff Viewer** (PR review tool)
 
 ### Important Notes:
 - **DO NOT touch the production `master/` instance when developing:** if you’re working in `claude-orchestrator-dev/` (feature branches / PRs), treat `~/GitHub/tools/automation/claude-orchestrator/master` as **run-only**. Do all code changes + commits in `claude-orchestrator-dev/`, then open PRs into `main`. Only `git pull` in `master/` when you explicitly want to update the running production copy.
