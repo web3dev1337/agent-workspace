@@ -14557,17 +14557,23 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 /* Create Workspace Banner */
 .dashboard-create-banner {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.85rem;
+  justify-content: flex-start;
+  gap: 0.65rem;
   padding: 0;
   margin: 0;
   min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  justify-self: start;
 }
 
 .dashboard-create-info {
   min-width: 0;
+  display: grid;
+  gap: 0.15rem;
 }
 
 .dashboard-create-title {
@@ -14592,7 +14598,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 @media (max-width: 720px) {
   .dashboard-create-banner {
-    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    justify-self: stretch;
     align-items: flex-start;
   }
 }
