@@ -393,11 +393,11 @@ class UserSettingsService {
               assigneesByBoard: {}
             }
           },
-          diffViewer: {
-            theme: 'dark'
-          }
-        }
-      },
+	          diffViewer: {
+	            theme: 'light'
+	          }
+	        }
+	      },
       perTerminal: {
         // sessionId -> override settings
         // Example:

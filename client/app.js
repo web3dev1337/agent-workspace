@@ -1,4 +1,5 @@
 const HIDDEN_SETTINGS_SECTION_IDS = new Set([
+  'appearance',
   'command-catalog',
   'discord',
   'identity',
@@ -964,11 +965,11 @@ class ClaudeOrchestrator {
   }
 
   async init() {
-    try {
-      // Initialize managers
-      this.terminalManager = new TerminalManager(this);
-      this.terminalManager.autosuggestEnabled = this.settings.autoSuggestions !== false;
-      this.notificationManager = new NotificationManager(this);
+	    try {
+	      // Initialize managers
+	      this.terminalManager = new TerminalManager(this);
+	      this.terminalManager.autosuggestEnabled = false;
+	      this.notificationManager = new NotificationManager(this);
       this.agentModalManager = new AgentModalManager(this);
 
       // Initialize tab manager for multi-workspace support
@@ -1096,11 +1097,6 @@ class ClaudeOrchestrator {
       // Initialize sidebar ports and set up auto-refresh
       this.refreshSidebarPorts();
       setInterval(() => this.refreshSidebarPorts(), 30000); // Refresh every 30s
-
-      // Request notification permission if enabled
-      if (this.settings.notifications) {
-        this.notificationManager.requestPermission();
-      }
 
 	      // Set up UI
 	      this.setupEventListeners();
@@ -1767,10 +1763,7 @@ class ClaudeOrchestrator {
           console.log(`Opening localhost for initialization: ${localhostUrl}`);
           window.open(localhostUrl, '_blank');
 
-          // Show notification that server is ready
-          if (this.settings.notifications) {
-            this.showNotification('Server Ready', `Server ${sessionId.replace('-server', '')} is running on port ${port}. Click 🎮 to play!`);
-          }
+          this.showNotification('Server Ready', `Server ${sessionId.replace('-server', '')} is running on port ${port}. Click 🎮 to play!`);
         }, 2000); // Wait 2 seconds for server to fully start
       });
 
@@ -1814,48 +1807,17 @@ class ClaudeOrchestrator {
       'view-servers-only': null,
       'view-presets': null,
       'close-presets': null,
-      'settings-toggle': null,
-      'close-settings': null,
-      'notification-toggle': null,
-      'notifications-panel': null,
-      'close-notifications': null,
-      'notifications-clear': null,
-      'notifications-mark-read': null,
-      'enable-notifications': null,
-      'enable-sounds': null,
-      'auto-scroll': null,
-      'theme-select': null,
-      'workflow-notify-mode': null,
-      'workflow-notify-tier1-interrupts': null,
-      'workflow-notify-review-nudges': null,
-      'worktrees-show-detailed-chooser-metadata': null,
-      'tasks-theme-select': null,
-      'tasks-launch-global-prefix': null,
-      'tasks-launch-include-title': null,
-      'review-inbox-mode': null,
-      'review-inbox-tiers': null,
-      'review-inbox-pr-only': null,
-      'review-inbox-unreviewed': null,
-      'review-inbox-prioritize-active': null,
-      'review-inbox-auto-console': null,
-      'review-inbox-auto-advance': null,
-      'review-inbox-project': null,
-      'quick-review-mode': null,
-      'quick-review-tiers': null,
-      'quick-review-pr-only': null,
-      'quick-review-unreviewed': null,
-      'quick-review-prioritize-active': null,
-      'quick-review-auto-console': null,
-      'quick-review-auto-advance': null,
-      'quick-review-project': null,
-      'trello-me-username': null,
-      'identity-claim-name': null,
-      'identity-save': null,
-      'identity-clear': null,
-      'identity-saved-list': null,
-      'global-skip-permissions': null,
-      'reset-to-defaults': null,
-      'save-as-default': null,
+	      'settings-toggle': null,
+	      'close-settings': null,
+	      'notification-toggle': null,
+	      'notifications-panel': null,
+	      'close-notifications': null,
+	      'notifications-clear': null,
+	      'notifications-mark-read': null,
+	      'auto-scroll': null,
+	      'global-skip-permissions': null,
+	      'reset-to-defaults': null,
+	      'save-as-default': null,
       'check-updates': null,
       'pull-updates': null,
 	      'dismiss-settings-notification': null,
@@ -2112,108 +2074,19 @@ class ClaudeOrchestrator {
 	      closeSettingsPanel();
 	    });
 
-    // Settings inputs
-    document.getElementById('enable-notifications').addEventListener('change', (e) => {
-      this.settings.notifications = e.target.checked;
-      this.saveSettings();
-      if (e.target.checked) {
-        this.notificationManager.requestPermission();
-      }
-    });
-
-    document.getElementById('enable-sounds').addEventListener('change', (e) => {
-      this.settings.sounds = e.target.checked;
-      this.saveSettings();
-    });
-
-    document.getElementById('auto-scroll').addEventListener('change', (e) => {
-      this.settings.autoScroll = e.target.checked;
-      this.saveSettings();
-    });
-
-    document.getElementById('auto-suggestions').addEventListener('change', (e) => {
-      this.settings.autoSuggestions = e.target.checked;
-      this.saveSettings();
-      if (this.terminalManager) {
-        this.terminalManager.autosuggestEnabled = e.target.checked;
-        if (!e.target.checked) {
-          for (const sessionId of this.terminalManager.terminals.keys()) {
-            this.terminalManager.clearSuggestion(sessionId);
-          }
-        }
-      }
-    });
-
-    document.getElementById('theme-select').addEventListener('change', (e) => {
-      this.settings.theme = e.target.value;
-      this.saveSettings();
-      this.applyTheme();
-      // Persist via server user settings so it survives reloads across devices/worktrees.
-      this.updateGlobalUserSetting('ui.theme', e.target.value);
-    });
-
-	    const applySkinSelection = (rawSkin, { persist = true } = {}) => {
-	      const candidate = String(rawSkin || '').trim().toLowerCase();
-	      const skin = this.getKnownSkins().includes(candidate) ? candidate : 'default';
-	      this.settings.skin = skin;
-	      this.saveSettings();
-	      this.applyTheme();
-	      this.syncSkinGallerySelection();
-	      if (persist) this.updateGlobalUserSetting('ui.skin', skin);
-	    };
-
-	    const skinSelect = document.getElementById('skin-select');
-	    if (skinSelect) {
-	      skinSelect.addEventListener('change', (e) => {
-	        applySkinSelection(e.target.value, { persist: true });
+	    // Settings inputs
+	    const autoScroll = document.getElementById('auto-scroll');
+	    if (autoScroll) {
+	      autoScroll.addEventListener('change', (e) => {
+	        this.settings.autoScroll = e.target.checked;
+	        this.saveSettings();
 	      });
 	    }
 
-	    document.querySelectorAll('[data-skin-swatch]').forEach((btn) => {
-	      btn.addEventListener('click', () => {
-	        const next = String(btn?.dataset?.skinSwatch || '').trim().toLowerCase();
-	        applySkinSelection(next, { persist: true });
-	      });
-	    });
-
-		    const skinIntensityRange = document.getElementById('skin-intensity-range');
-		    const skinIntensityValue = document.getElementById('skin-intensity-value');
-		    if (skinIntensityRange) {
-		      let t = null;
-		      const apply = (raw) => {
-		        const v0 = Number(raw);
-		        const v = Number.isFinite(v0) ? Math.min(100, Math.max(0, Math.round(v0))) : 100;
-		        this.settings.skinIntensity = v;
-		        this.saveSettings();
-		        if (skinIntensityValue) skinIntensityValue.textContent = `${v}%`;
-		        this.applyTheme();
-		        if (t) clearTimeout(t);
-		        t = setTimeout(() => this.updateGlobalUserSetting('ui.skinIntensity', v), 250);
-		      };
-		      skinIntensityRange.addEventListener('input', (e) => apply(e.target.value));
-		      skinIntensityRange.addEventListener('change', (e) => apply(e.target.value));
-		    }
-
-		    // Settings UI helpers: search + section jump so the panel doesn’t feel like an endless scroll.
-		    this.setupSettingsPanelNavigation();
-		    this.setupDiagnosticsPanel();
-		    this.setupDependencySetupWizard();
-
-	    const tasksThemeSelect = document.getElementById('tasks-theme-select');
-	    if (tasksThemeSelect) {
-	      tasksThemeSelect.addEventListener('change', (e) => {
-	        const next = e.target.value;
-	        this.updateGlobalUserSetting('ui.tasks.theme', next);
-      });
-    }
-
-    const trelloMeUsername = document.getElementById('trello-me-username');
-    if (trelloMeUsername) {
-      trelloMeUsername.addEventListener('change', (e) => {
-        const v = String(e.target.value || '').trim();
-        this.updateGlobalUserSetting('ui.tasks.me.trelloUsername', v);
-      });
-    }
+			    // Settings UI helpers: search + section jump so the panel doesn’t feel like an endless scroll.
+			    this.setupSettingsPanelNavigation();
+			    this.setupDiagnosticsPanel();
+			    this.setupDependencySetupWizard();
 
     // PR merge automation settings (server-persisted)
     const prMergeEnabled = document.getElementById('pr-merge-auto-enabled');
@@ -2375,16 +2248,9 @@ class ClaudeOrchestrator {
       if (trelloSaveOnlyBtn) trelloSaveOnlyBtn.addEventListener('click', () => doTrelloSave(false));
     }
 
-    const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
-    if (diffViewerThemeSelect) {
-      diffViewerThemeSelect.addEventListener('change', (e) => {
-        this.updateGlobalUserSetting('ui.diffViewer.theme', e.target.value);
-      });
-    }
-
-    // User settings (terminal flags)
-    document.getElementById('global-skip-permissions').addEventListener('change', (e) => {
-      this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
+	    // User settings (terminal flags)
+	    document.getElementById('global-skip-permissions').addEventListener('change', (e) => {
+	      this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
     });
 
     const globalZaiProvider = document.getElementById('global-zai-provider');
@@ -2541,28 +2407,13 @@ class ClaudeOrchestrator {
         this.refreshBranchLabels();
       });
     }
-    const branchesColorize = document.getElementById('branches-colorize');
-    if (branchesColorize) {
-      branchesColorize.addEventListener('change', async (e) => {
-        await this.updateGlobalUserSetting('ui.branches.colorize', !!e.target.checked);
-        this.refreshBranchLabels();
-      });
-    }
-    const branchesShowAtSidebar = document.getElementById('branches-show-at-sidebar');
-    if (branchesShowAtSidebar) {
-      branchesShowAtSidebar.addEventListener('change', async (e) => {
-        await this.updateGlobalUserSetting('ui.branches.showAtInSidebar', !!e.target.checked);
-        this.refreshBranchLabels();
-      });
-    }
-    const worktreesShowDetailedChooserMetadata = document.getElementById('worktrees-show-detailed-chooser-metadata');
-    if (worktreesShowDetailedChooserMetadata) {
-      worktreesShowDetailedChooserMetadata.addEventListener('change', async (e) => {
-        this.showDetailedQuickWorktreeChooserMetadata = !!e.target.checked;
-        this.closeQuickWorktreeMenu();
-        await this.updateGlobalUserSetting('ui.worktrees.showDetailedChooserMetadata', !!e.target.checked);
-      });
-    }
+	    const branchesColorize = document.getElementById('branches-colorize');
+	    if (branchesColorize) {
+	      branchesColorize.addEventListener('change', async (e) => {
+	        await this.updateGlobalUserSetting('ui.branches.colorize', !!e.target.checked);
+	        this.refreshBranchLabels();
+	      });
+	    }
 
     // Review Console settings (server-persisted)
     const reviewConsolePreset = document.getElementById('review-console-preset');
@@ -3392,13 +3243,13 @@ class ClaudeOrchestrator {
     this.updateWorkflowModeButtons();
   }
 
-  syncWorktreeCreationFromUserSettings() {
-    const cfg = this.userSettings?.global?.ui?.worktrees || {};
-    this.autoCreateExtraWorktreesWhenBusy = cfg.autoCreateExtraWhenBusy !== false;
-    this.showDetailedQuickWorktreeChooserMetadata = cfg.showDetailedChooserMetadata === true;
-    const min = Number(cfg.autoCreateMinNumber);
-    const max = Number(cfg.autoCreateMaxNumber);
-    if (Number.isFinite(min) && min >= 1) this.autoCreateWorktreeMinNumber = Math.round(min);
+	  syncWorktreeCreationFromUserSettings() {
+	    const cfg = this.userSettings?.global?.ui?.worktrees || {};
+	    this.autoCreateExtraWorktreesWhenBusy = cfg.autoCreateExtraWhenBusy !== false;
+	    this.showDetailedQuickWorktreeChooserMetadata = false;
+	    const min = Number(cfg.autoCreateMinNumber);
+	    const max = Number(cfg.autoCreateMaxNumber);
+	    if (Number.isFinite(min) && min >= 1) this.autoCreateWorktreeMinNumber = Math.round(min);
     if (Number.isFinite(max) && max >= this.autoCreateWorktreeMinNumber) this.autoCreateWorktreeMaxNumber = Math.round(max);
   }
 
@@ -5674,14 +5525,14 @@ class ClaudeOrchestrator {
     });
   }
 
-  getBranchLabelConfig() {
-    const cfg = this.userSettings?.global?.ui?.branches || {};
-    return {
-      hidePrefixes: cfg.hidePrefixes !== false,
-      colorize: cfg.colorize !== false,
-      showAtInSidebar: !!cfg.showAtInSidebar
-    };
-  }
+	  getBranchLabelConfig() {
+	    const cfg = this.userSettings?.global?.ui?.branches || {};
+	    return {
+	      hidePrefixes: cfg.hidePrefixes !== false,
+	      colorize: cfg.colorize !== false,
+	      showAtInSidebar: false
+	    };
+	  }
 
   getIdentityClaimName() {
     const fromIdentity = String(this.userSettings?.global?.ui?.identity?.claimName || '').trim();
@@ -8020,66 +7871,41 @@ class ClaudeOrchestrator {
     const branch = session ? session.branch : '';
 
     this.showToast(`Claude ${worktreeId} ready ${branch ? `(${branch})` : ''}`, 'success', { durationMs: 3000 });
-
-    // Play notification sound if enabled
-    if (this.settings.sounds) {
-      this.playNotificationSound();
-    }
-
-    // Browser notification if enabled
-    if (this.settings.notifications && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification(`Claude ${worktreeId} Ready`, {
-        body: `Claude finished responding and is ready for input ${branch ? `(${branch})` : ''}`,
-        icon: '/favicon.ico',
-        tag: `claude-ready-${sessionId}` // Prevent duplicates
-      });
-    }
   }
 
-  showNotification(title, message) {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, {
-        body: message,
-        icon: '/favicon.ico'
-      });
-    }
-  }
+	  showNotification(title, message) {
+	    const knownTypes = new Set(['success', 'warning', 'error', 'info']);
+	    const raw = String(message || '').trim().toLowerCase();
+	    const type = knownTypes.has(raw) ? raw : 'info';
+	    const text = knownTypes.has(raw)
+	      ? String(title || '').trim()
+	      : [String(title || '').trim(), String(message || '').trim()].filter(Boolean).join(': ');
+	    if (!text) return;
+	    this.showToast?.(text, type);
+	  }
 
-  playNotificationSound() {
-    // Create a simple notification sound
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
+	  loadSettings() {
+	    const stored = localStorage.getItem('claude-orchestrator-settings');
+	    const defaults = {
+	      notifications: false,
+	      sounds: false,
+	      autoScroll: true,
+	      autoSuggestions: false,
+	      theme: 'dark',
+	      skin: 'blue'
+	    };
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+	    if (stored) {
+	      return {
+	        ...defaults,
+	        ...JSON.parse(stored),
+	        notifications: false,
+	        sounds: false,
+	        autoSuggestions: false
+	      };
+	    }
 
-    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-    oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.3);
-  }
-
-  loadSettings() {
-    const stored = localStorage.getItem('claude-orchestrator-settings');
-    const defaults = {
-      notifications: true,
-      sounds: true,
-      autoScroll: true,
-      autoSuggestions: true,
-      theme: 'dark',
-      skin: 'blue'
-    };
-
-    if (stored) {
-      return { ...defaults, ...JSON.parse(stored) };
-    }
-
-    return defaults;
+	    return defaults;
   }
 
   loadServerLaunchSettings() {
@@ -8885,15 +8711,6 @@ class ClaudeOrchestrator {
 	    this.settings.skinIntensity = nextIntensity;
 	    this.saveSettings();
 	    this.applyTheme();
-
-	    const themeSelect = document.getElementById('theme-select');
-	    if (themeSelect) themeSelect.value = userTheme;
-	    const skinSelect = document.getElementById('skin-select');
-	    if (skinSelect) skinSelect.value = nextSkin;
-	    const skinIntensityRange = document.getElementById('skin-intensity-range');
-	    if (skinIntensityRange) skinIntensityRange.value = String(nextIntensity);
-	    const skinIntensityValue = document.getElementById('skin-intensity-value');
-	    if (skinIntensityValue) skinIntensityValue.textContent = `${nextIntensity}%`;
 	    this.syncSkinGallerySelection();
 	  }
 
@@ -9021,22 +8838,8 @@ class ClaudeOrchestrator {
 
 	  syncSettingsUI() {
 	    // Sync checkbox states with settings
-	    document.getElementById('enable-notifications').checked = this.settings.notifications;
-	    document.getElementById('enable-sounds').checked = this.settings.sounds;
-	    document.getElementById('auto-scroll').checked = this.settings.autoScroll;
-	    document.getElementById('auto-suggestions').checked = this.settings.autoSuggestions !== false;
-	    document.getElementById('theme-select').value = this.settings.theme;
-	    const skinSelect = document.getElementById('skin-select');
-	    if (skinSelect) skinSelect.value = this.settings.skin || 'default';
-	    this.syncSkinGallerySelection();
-	    const skinIntensityRange = document.getElementById('skin-intensity-range');
-	    if (skinIntensityRange) {
-	      const v0 = Number(this.settings.skinIntensity);
-	      const v = Number.isFinite(v0) ? Math.min(100, Math.max(0, Math.round(v0))) : 100;
-	      skinIntensityRange.value = String(v);
-	      const label = document.getElementById('skin-intensity-value');
-	      if (label) label.textContent = `${v}%`;
-	    }
+	    const autoScroll = document.getElementById('auto-scroll');
+	    if (autoScroll) autoScroll.checked = this.settings.autoScroll;
 
 	    // Sync user settings UI if loaded
 	    if (this.userSettings) {
@@ -17145,47 +16948,6 @@ class ClaudeOrchestrator {
       }
     }
 
-    // Update diff viewer settings UI
-    const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
-    if (diffViewerThemeSelect) {
-      diffViewerThemeSelect.value = this.userSettings.global?.ui?.diffViewer?.theme || 'light';
-    }
-
-    // Sync UI theme (light/dark) from server settings if present.
-    const themeSelect = document.getElementById('theme-select');
-    if (themeSelect) {
-      const theme = this.userSettings.global?.ui?.theme;
-      if (theme === 'light' || theme === 'dark') {
-        themeSelect.value = theme;
-      }
-    }
-
-	    const skinSelect = document.getElementById('skin-select');
-	    if (skinSelect) {
-	      const skin = this.userSettings.global?.ui?.skin;
-	      skinSelect.value = this.getKnownSkins().includes(skin) ? skin : 'default';
-	    }
-	    this.syncSkinGallerySelection();
-
-	    const skinIntensityRange = document.getElementById('skin-intensity-range');
-	    const skinIntensityValue = document.getElementById('skin-intensity-value');
-	    if (skinIntensityRange) {
-	      const raw = Number(this.userSettings.global?.ui?.skinIntensity);
-	      const v = Number.isFinite(raw) ? Math.min(100, Math.max(0, Math.round(raw))) : 100;
-	      skinIntensityRange.value = String(v);
-	      if (skinIntensityValue) skinIntensityValue.textContent = `${v}%`;
-	    }
-
-    const tasksThemeSelect = document.getElementById('tasks-theme-select');
-    if (tasksThemeSelect) {
-      const tasksTheme = this.userSettings.global?.ui?.tasks?.theme;
-      if (tasksTheme === 'light' || tasksTheme === 'dark' || tasksTheme === 'inherit') {
-        tasksThemeSelect.value = tasksTheme;
-      } else {
-        tasksThemeSelect.value = 'inherit';
-      }
-    }
-
     // Workflow notification settings UI
     const workflowNotifyMode = document.getElementById('workflow-notify-mode');
     if (workflowNotifyMode) {
@@ -17214,16 +16976,6 @@ class ClaudeOrchestrator {
     if (branchesColorize) {
       const cfg = this.userSettings.global?.ui?.branches || {};
       branchesColorize.checked = cfg.colorize !== false;
-    }
-    const branchesShowAtSidebar = document.getElementById('branches-show-at-sidebar');
-    if (branchesShowAtSidebar) {
-      const cfg = this.userSettings.global?.ui?.branches || {};
-      branchesShowAtSidebar.checked = !!cfg.showAtInSidebar;
-    }
-    const worktreesShowDetailedChooserMetadata = document.getElementById('worktrees-show-detailed-chooser-metadata');
-    if (worktreesShowDetailedChooserMetadata) {
-      const cfg = this.userSettings.global?.ui?.worktrees || {};
-      worktreesShowDetailedChooserMetadata.checked = cfg.showDetailedChooserMetadata === true;
     }
 
     // Review Console settings UI

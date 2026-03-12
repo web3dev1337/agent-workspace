@@ -5591,6 +5591,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .setting-section:is(
+  [data-section-id="appearance"],
   [data-section-id="workflow-notifications"],
   [data-section-id="review-inbox"],
   [data-section-id="quick-review"],
@@ -5756,6 +5757,26 @@ body.dependency-onboarding-active #dependency-setup-modal {
   padding: 8px 10px;
   background: var(--bg-tertiary);
   margin: 10px 0;
+}
+
+.settings-glossary .setting-section-toggle-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.settings-glossary .setting-section-toggle-title::before {
+  content: '?';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.85em;
+  font-weight: 700;
 }
 
 .settings-glossary details[open] {

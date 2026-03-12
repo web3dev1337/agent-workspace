@@ -213,157 +213,70 @@
             </div>
             <div class="settings-main" id="settings-main">
                 <div class="settings-sections-container">
+                        <div class="setting-section settings-glossary" data-section-id="glossary" data-section-title="Glossary">
+                            <h4>Glossary</h4>
+                            <p class="setting-description">New here? Skim this first for a quick mental model of the Orchestrator.</p>
+
+                            <details>
+                                <summary><strong>Workspace</strong></summary>
+                                <div class="setting-description">A saved configuration that groups worktrees/terminals for a project
+                                    (or many repos in a mixed workspace). Opening a workspace starts its sessions.</div>
+                            </details>
+
+                            <details>
+                                <summary><strong>Worktree</strong></summary>
+                                <div class="setting-description">A git worktree folder (e.g. <code>work6</code>) on disk. One
+                                    worktree usually has an <em>Agent</em> terminal and (optionally) a paired <em>Server</em>
+                                    terminal.</div>
+                            </details>
+
+                            <details>
+                                <summary><strong>Terminal / Session</strong></summary>
+                                <div class="setting-description">A running process (PTY) owned by the Orchestrator. It can be
+                                    recovered after restart unless you explicitly close it.</div>
+                            </details>
+
+                            <details>
+                                <summary><strong>Agent vs Server</strong></summary>
+                                <div class="setting-description"><strong>Agent</strong> runs Claude/Codex work.
+                                    <strong>Server</strong> runs your dev server (game/app). They’re paired per worktree and should
+                                    generally live/die together.</div>
+                            </details>
+
+                            <details>
+                                <summary><strong>Close vs Remove</strong></summary>
+                                <div class="setting-description">
+                                    <div><strong>Close terminal (×)</strong>: stops the running processes for that worktree (agent + server). The worktree stays in the workspace and can be re-opened.</div>
+                                    <div style="margin-top:6px;"><strong>Remove worktree (🗑)</strong>: removes the worktree from the workspace config, closes its terminals, and clears recoverables. Files on disk are kept.</div>
+                                    <div style="margin-top:6px;"><strong>Close chat</strong>: marks thread status as closed (and can optionally close linked sessions via API flag).</div>
+                                    <div style="margin-top:6px;"><strong>Archive chat</strong>: marks thread status as archived (and can optionally close linked sessions via API flag).</div>
+                                </div>
+                            </details>
+                        </div>
+
                         <div class="setting-section" data-section-id="general" data-section-title="General Settings">
                             <h4>General Settings</h4>
-                            <div class="setting-group">
-                                <label>
-                                    <input type="checkbox" id="enable-notifications" checked />
-                                    Enable Browser Notifications
-                                </label>
-                            </div>
-                            <div class="setting-group">
-                                <label>
-                                    <input type="checkbox" id="enable-sounds" checked />
-                                    Enable Sound Alerts
-                                </label>
-                            </div>
                             <div class="setting-group">
                                 <label>
                                     <input type="checkbox" id="auto-scroll" checked />
                                     Auto-scroll Terminals
                                 </label>
                             </div>
-                            <div class="setting-group">
-                                <label>
-                                    <input type="checkbox" id="auto-suggestions" checked />
-                                    Terminal Autosuggestions
-                                </label>
-                                <p class="setting-description">Fish/zsh-style command suggestions from shell history. Press → to accept.</p>
-                            </div>
                         </div>
 
-                        <div class="setting-section" data-section-id="appearance" data-section-title="Appearance">
-                            <h4>Appearance</h4>
-                            <div class="setting-subsection">
-                                <h5>Theme &amp; Skin</h5>
-                                <div class="setting-group">
-                                    <label>
-                                        Theme:
-                                        <select id="theme-select">
-                                            <option value="dark">Dark</option>
-                                            <option value="light">Light</option>
-                                        </select>
-                                    </label>
-                                </div>
-                                <div class="setting-group">
-                                    <label>
-                                        Skin:
-                                        <select id="skin-select">
-                                            <option value="default">Default</option>
-                                            <option value="blue">Blue</option>
-                                            <option value="purple">Purple</option>
-                                            <option value="emerald">Emerald</option>
-                                            <option value="amber">Amber</option>
-                                            <option value="high-contrast">High Contrast</option>
-                                        </select>
-                                    </label>
-                                    <p class="setting-description">Controls accent styling; works with Light/Dark.</p>
-                                </div>
-                                <div class="setting-group">
-                                    <label>
-                                        Skin intensity:
-                                        <input id="skin-intensity-range" type="range" min="0" max="100" step="5" value="100" />
-                                        <span id="skin-intensity-value" class="mono" style="margin-left:8px; opacity:0.85;">100%</span>
-                                    </label>
-                                    <p class="setting-description">How strongly the selected skin tints neutral UI surfaces (0% = neutral,
-                                        100% = full skin).</p>
-                                </div>
-                                <div class="setting-group">
-                                    <div class="skin-gallery" id="skin-gallery">
-                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="default" title="Default skin">
-                                            <span class="skin-swatch-paint skin-default"></span>
-                                            <span>Default</span>
-                                        </button>
-                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="blue" title="Blue skin">
-                                            <span class="skin-swatch-paint skin-blue"></span>
-                                            <span>Blue</span>
-                                        </button>
-                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="purple" title="Purple skin">
-                                            <span class="skin-swatch-paint skin-purple"></span>
-                                            <span>Purple</span>
-                                        </button>
-                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="emerald" title="Emerald skin">
-                                            <span class="skin-swatch-paint skin-emerald"></span>
-                                            <span>Emerald</span>
-                                        </button>
-                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="amber" title="Amber skin">
-                                            <span class="skin-swatch-paint skin-amber"></span>
-                                            <span>Amber</span>
-                                        </button>
-                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="high-contrast" title="High contrast skin">
-                                            <span class="skin-swatch-paint skin-high-contrast"></span>
-                                            <span>High Contrast</span>
-                                        </button>
-                                    </div>
-                                    <p class="setting-description">Theme gallery: click a swatch to switch skins instantly.</p>
-                                </div>
+                        <div class="setting-section" data-section-id="branch-labels" data-section-title="Branch Labels">
+                            <h4>Branch Labels</h4>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="branches-hide-prefixes" />
+                                    Hide branch prefixes (e.g. <code>feature/</code>, <code>fix/</code>)
+                                </label>
                             </div>
-                            <div class="setting-subsection">
-                                <h5>App Surfaces</h5>
-                                <div class="setting-group">
-                                    <label>
-                                        Tasks Theme:
-                                        <select id="tasks-theme-select">
-                                            <option value="inherit">Follow App</option>
-                                            <option value="light">Light</option>
-                                            <option value="dark">Dark</option>
-                                        </select>
-                                    </label>
-                                </div>
-                                <div class="setting-group">
-                                    <label>
-                                        <strong>Diff Viewer Theme:</strong>
-                                        <select id="diff-viewer-theme">
-                                            <option value="light">Light (GitHub)</option>
-                                            <option value="dark">Dark</option>
-                                        </select>
-                                    </label>
-                                    <p class="setting-description">Controls the theme for the Advanced Diff Viewer (port 7655).</p>
-                                </div>
-                            </div>
-                            <div class="setting-subsection">
-                                <h5>Labels &amp; Hints</h5>
-                                <div class="setting-group">
-                                    <label>
-                                        <input type="checkbox" id="branches-hide-prefixes" />
-                                        Hide branch prefixes (e.g. <code>feature/</code>, <code>fix/</code>)
-                                    </label>
-                                </div>
-                                <div class="setting-group">
-                                    <label>
-                                        <input type="checkbox" id="branches-colorize" />
-                                        Colorize branch labels by type
-                                    </label>
-                                </div>
-                                <div class="setting-group">
-                                    <label>
-                                        <input type="checkbox" id="branches-show-at-sidebar" />
-                                        Prefix branch with “@” in sidebar
-                                    </label>
-                                </div>
-                                <div class="setting-group">
-                                    <label>
-                                        <input type="checkbox" id="worktrees-show-detailed-chooser-metadata" />
-                                        Show detailed metadata in Quick Work chooser
-                                    </label>
-                                    <p class="setting-description">Off by default for a cleaner menu. Turn this on to show branch, PR, dirty state, and risk details inside the worktree dropdown.</p>
-                                </div>
-                                <div class="setting-group">
-                                    <label>
-                                        <input type="checkbox" id="simple-mode-show-hints" />
-                                        Show quick hints in shell
-                                    </label>
-                                </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="branches-colorize" />
+                                    Colorize branch labels by type
+                                </label>
                             </div>
                         </div>
 
@@ -436,54 +349,19 @@
                     </label>
                     <p class="setting-description">If enabled, opens the shell automatically once workspaces load.</p>
                 </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="simple-mode-hotkeys" />
-                        Enable Projects + Chats hotkey (Alt+P)
-                    </label>
-                </div>
-            </div>
-
-            <div class="setting-section settings-glossary" data-section-id="glossary" data-section-title="Glossary">
-                <h4>Glossary</h4>
-                <p class="setting-description">A quick mental model for how the Orchestrator is structured.</p>
-
-                <details>
-                    <summary><strong>Workspace</strong></summary>
-                    <div class="setting-description">A saved configuration that groups worktrees/terminals for a project
-                        (or many repos in a mixed workspace). Opening a workspace starts its sessions.</div>
-                </details>
-
-                <details>
-                    <summary><strong>Worktree</strong></summary>
-                    <div class="setting-description">A git worktree folder (e.g. <code>work6</code>) on disk. One
-                        worktree usually has an <em>Agent</em> terminal and (optionally) a paired <em>Server</em>
-                        terminal.</div>
-                </details>
-
-                <details>
-                    <summary><strong>Terminal / Session</strong></summary>
-                    <div class="setting-description">A running process (PTY) owned by the Orchestrator. It can be
-                        recovered after restart unless you explicitly close it.</div>
-                </details>
-
-                <details>
-                    <summary><strong>Agent vs Server</strong></summary>
-                    <div class="setting-description"><strong>Agent</strong> runs Claude/Codex work.
-                        <strong>Server</strong> runs your dev server (game/app). They’re paired per worktree and should
-                        generally live/die together.</div>
-                </details>
-
-                <details>
-                    <summary><strong>Close vs Remove</strong></summary>
-                    <div class="setting-description">
-                        <div><strong>Close terminal (×)</strong>: stops the running processes for that worktree (agent + server). The worktree stays in the workspace and can be re-opened.</div>
-                        <div style="margin-top:6px;"><strong>Remove worktree (🗑)</strong>: removes the worktree from the workspace config, closes its terminals, and clears recoverables. Files on disk are kept.</div>
-                        <div style="margin-top:6px;"><strong>Close chat</strong>: marks thread status as closed (and can optionally close linked sessions via API flag).</div>
-                        <div style="margin-top:6px;"><strong>Archive chat</strong>: marks thread status as archived (and can optionally close linked sessions via API flag).</div>
-                    </div>
-                </details>
-            </div>
+	                <div class="setting-group">
+	                    <label>
+	                        <input type="checkbox" id="simple-mode-hotkeys" />
+	                        Enable Projects + Chats hotkey (Alt+P)
+	                    </label>
+	                </div>
+	                <div class="setting-group">
+	                    <label>
+	                        <input type="checkbox" id="simple-mode-show-hints" />
+	                        Show quick hints in shell
+	                    </label>
+	                </div>
+	            </div>
 
                 <div class="setting-section" data-section-id="diagnostics" data-section-title="Diagnostics">
                 <h4>Diagnostics</h4>
