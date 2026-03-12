@@ -14741,6 +14741,37 @@ body.dependency-onboarding-active #dependency-setup-modal {
   border: 1px solid var(--border-color);
 }
 
+.dashboard-wrapper,
+.dashboard-wrapper :is(
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  span,
+  strong,
+  small,
+  code,
+  label,
+  button,
+  a,
+  .dashboard-create-title,
+  .dashboard-create-desc,
+  .workspace-meta,
+  .port-card-port,
+  .dashboard-project-group-title,
+  .dashboard-project-group-count,
+  .dashboard-project-tile-name,
+  .dashboard-project-tile-subtitle,
+  .dashboard-project-tile-live,
+  .quick-link-label
+) {
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
 @media (max-width: 1200px) {
   .dashboard-main-content {
     grid-template-columns: 1fr;
