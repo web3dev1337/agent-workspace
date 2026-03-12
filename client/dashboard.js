@@ -309,7 +309,7 @@ class Dashboard {
     return `
       <div class="dashboard-wrapper">
         <div class="dashboard-topbar">
-          ${canReturnToWorkspaces ? `<button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back</button>` : '<div></div>'}
+          ${canReturnToWorkspaces ? `<button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to workspaces</button>` : '<div></div>'}
           ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status"></div>` : '<div></div>'}
         </div>
         
