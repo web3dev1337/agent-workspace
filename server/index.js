@@ -2075,19 +2075,23 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
               worktreeLayout: 'nested'
             };
 
-            // Detect nested worktrees inside repo directory (work1..work8)
+            // Detect nested worktrees inside repo directory (work1..workN)
             try {
               const nestedEntries = [];
-              for (let i = 1; i <= 8; i++) {
-                const worktreeName = `work${i}`;
-                const worktreePath = path.join(projectPath, worktreeName);
+              const dirContents = await fs.readdir(projectPath, { withFileTypes: true });
+              for (const dirEntry of dirContents) {
+                if (!dirEntry.isDirectory()) continue;
+                const wtMatch = dirEntry.name.match(/^work(\d+)$/);
+                if (!wtMatch) continue;
+                const worktreeNumber = parseInt(wtMatch[1], 10);
+                const worktreePath = path.join(projectPath, dirEntry.name);
                 try {
                   const wtStat = await fs.stat(worktreePath);
                   nestedEntries.push({
-                    id: worktreeName,
-                    name: worktreeName,
+                    id: dirEntry.name,
+                    name: dirEntry.name,
                     path: worktreePath,
-                    number: i,
+                    number: worktreeNumber,
                     lastModifiedMs: wtStat.mtimeMs,
                     createdMs: wtStat.birthtimeMs || wtStat.ctimeMs || 0
                   });
@@ -2095,6 +2099,7 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
                   // Worktree does not exist
                 }
               }
+              nestedEntries.sort((a, b) => a.number - b.number);
               if (nestedEntries.length) {
                 repoEntry.worktreeDirs = nestedEntries;
                 const maxNested = nestedEntries.reduce((max, entry) => Math.max(max, entry.lastModifiedMs || 0), 0);
