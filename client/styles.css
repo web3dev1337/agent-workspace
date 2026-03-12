@@ -14575,6 +14575,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 /* Dashboard Layout */
 .dashboard-wrapper {
   --dashboard-shell-pad: clamp(0.85rem, 1.2vw, 1.3rem);
+  --dashboard-rail-width: 196px;
   --dashboard-window-fill:
     linear-gradient(165deg, rgba(7, 13, 24, 0.94) 0%, rgba(8, 16, 28, 0.88) 48%, rgba(6, 12, 24, 0.96) 100%);
   --dashboard-panel-fill: linear-gradient(180deg, rgba(9, 16, 28, 0.68), rgba(8, 13, 24, 0.34));
@@ -14662,22 +14663,24 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .dashboard-layout-desktop .dashboard-topbar {
   position: absolute;
-  top: var(--dashboard-shell-pad);
-  right: var(--dashboard-shell-pad);
+  top: 0.9rem;
+  left: calc(var(--dashboard-rail-width) + 0.9rem);
+  right: auto;
+  justify-content: flex-start;
 }
 
 .dashboard-desktop-shell {
   display: grid;
-  grid-template-columns: 196px minmax(0, 1fr);
+  grid-template-columns: var(--dashboard-rail-width) minmax(0, 1fr);
   gap: 0;
   min-height: 0;
   position: relative;
   z-index: 1;
-  margin: 0 calc(var(--dashboard-shell-pad) * -1) calc(var(--dashboard-shell-pad) * -1);
+  margin: calc(var(--dashboard-shell-pad) * -1) calc(var(--dashboard-shell-pad) * -1) calc(var(--dashboard-shell-pad) * -1);
 }
 
 .dashboard-desktop-body {
-  padding: 0.1rem var(--dashboard-shell-pad) var(--dashboard-shell-pad) 0.95rem;
+  padding: 1rem var(--dashboard-shell-pad) var(--dashboard-shell-pad) 0.95rem;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -14846,7 +14849,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .dashboard-desktop-header h1 {
   margin: 0;
-  font-size: 1.72rem;
+  font-size: 2rem;
   font-weight: 760;
   letter-spacing: -0.035em;
   color: color-mix(in srgb, var(--text-primary) 97%, white 3%);

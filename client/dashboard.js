@@ -450,8 +450,8 @@ class Dashboard {
     return `
       <div class="dashboard-wrapper dashboard-layout-${layoutMode}">
         <div class="dashboard-topbar">
-          ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status"></div>` : ''}
           ${canReturnToWorkspaces ? `<button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back</button>` : ''}
+          ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status"></div>` : ''}
         </div>
         
         ${isCompactLayout ? `
