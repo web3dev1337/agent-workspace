@@ -208,107 +208,118 @@
             <button id="close-settings" class="icon-button">✕</button>
         </div>
         <div class="settings-content">
-            <div class="settings-toolbar">
-                <input id="settings-search" type="search" placeholder="Search settings…" autocomplete="off" />
-                <select id="settings-jump" aria-label="Jump to settings section">
-                    <option value="">Jump to…</option>
-                </select>
-            </div>
-            <div class="setting-group">
-                <label>
-                    <input type="checkbox" id="enable-notifications" checked />
-                    Enable Browser Notifications
-                </label>
-            </div>
-            <div class="setting-group">
-                <label>
-                    <input type="checkbox" id="enable-sounds" checked />
-                    Enable Sound Alerts
-                </label>
-            </div>
-            <div class="setting-group">
-                <label>
-                    <input type="checkbox" id="auto-scroll" checked />
-                    Auto-scroll Terminals
-                </label>
-            </div>
-            <div class="setting-group">
-                <label>
-                    <input type="checkbox" id="auto-suggestions" checked />
-                    Terminal Autosuggestions
-                </label>
-                <p class="setting-description">Fish/zsh-style command suggestions from shell history. Press → to accept.</p>
-            </div>
-            <div class="setting-group">
-                <label>
-                    Theme:
-                    <select id="theme-select">
-                        <option value="dark">Dark</option>
-                        <option value="light">Light</option>
-                    </select>
-                </label>
-            </div>
-            <div class="setting-group">
-                <label>
-                    Skin:
-                    <select id="skin-select">
-                        <option value="default">Default</option>
-                        <option value="blue">Blue</option>
-                        <option value="purple">Purple</option>
-                        <option value="emerald">Emerald</option>
-                        <option value="amber">Amber</option>
-                        <option value="high-contrast">High Contrast</option>
-                    </select>
-                </label>
-                <p class="setting-description">Controls accent styling; works with Light/Dark.</p>
-            </div>
-            <div class="setting-group">
-                <label>
-                    Skin intensity:
-                    <input id="skin-intensity-range" type="range" min="0" max="100" step="5" value="100" />
-                    <span id="skin-intensity-value" class="mono" style="margin-left:8px; opacity:0.85;">100%</span>
-                </label>
-                <p class="setting-description">How strongly the selected skin tints neutral UI surfaces (0% = neutral,
-                    100% = full skin).</p>
-            </div>
-            <div class="setting-group">
-                <div class="skin-gallery" id="skin-gallery">
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="default" title="Default skin">
-                        <span class="skin-swatch-paint skin-default"></span>
-                        <span>Default</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="blue" title="Blue skin">
-                        <span class="skin-swatch-paint skin-blue"></span>
-                        <span>Blue</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="purple" title="Purple skin">
-                        <span class="skin-swatch-paint skin-purple"></span>
-                        <span>Purple</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="emerald" title="Emerald skin">
-                        <span class="skin-swatch-paint skin-emerald"></span>
-                        <span>Emerald</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="amber" title="Amber skin">
-                        <span class="skin-swatch-paint skin-amber"></span>
-                        <span>Amber</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="high-contrast" title="High contrast skin">
-                        <span class="skin-swatch-paint skin-high-contrast"></span>
-                        <span>High Contrast</span>
-                    </button>
-                </div>
-                <p class="setting-description">Theme gallery: click a swatch to switch skins instantly.</p>
-            </div>
+            <div class="settings-layout">
+                <aside class="settings-sidebar">
+                    <nav id="settings-nav" aria-label="Settings sections">
+                        <!-- Navigation items will be injected by JS -->
+                    </nav>
+                </aside>
+                <main class="settings-main" id="settings-main">
+                    <div class="settings-toolbar">
+                        <input id="settings-search" type="search" placeholder="Search settings…" autocomplete="off" />
+                        <select id="settings-jump" aria-label="Jump to settings section">
+                            <option value="">Jump to…</option>
+                        </select>
+                    </div>
+                    <div class="settings-sections-container">
+                        <div class="setting-section" data-section-id="general" data-section-title="General Settings">
+                            <h4>General Settings</h4>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="enable-notifications" checked />
+                                    Enable Browser Notifications
+                                </label>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="enable-sounds" checked />
+                                    Enable Sound Alerts
+                                </label>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="auto-scroll" checked />
+                                    Auto-scroll Terminals
+                                </label>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="auto-suggestions" checked />
+                                    Terminal Autosuggestions
+                                </label>
+                                <p class="setting-description">Fish/zsh-style command suggestions from shell history. Press → to accept.</p>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    Theme:
+                                    <select id="theme-select">
+                                        <option value="dark">Dark</option>
+                                        <option value="light">Light</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    Skin:
+                                    <select id="skin-select">
+                                        <option value="default">Default</option>
+                                        <option value="blue">Blue</option>
+                                        <option value="purple">Purple</option>
+                                        <option value="emerald">Emerald</option>
+                                        <option value="amber">Amber</option>
+                                        <option value="high-contrast">High Contrast</option>
+                                    </select>
+                                </label>
+                                <p class="setting-description">Controls accent styling; works with Light/Dark.</p>
+                            </div>
+                            <div class="setting-group">
+                                <label>
+                                    Skin intensity:
+                                    <input id="skin-intensity-range" type="range" min="0" max="100" step="5" value="100" />
+                                    <span id="skin-intensity-value" class="mono" style="margin-left:8px; opacity:0.85;">100%</span>
+                                </label>
+                                <p class="setting-description">How strongly the selected skin tints neutral UI surfaces (0% = neutral,
+                                    100% = full skin).</p>
+                            </div>
+                            <div class="setting-group">
+                                <div class="skin-gallery" id="skin-gallery">
+                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="default" title="Default skin">
+                                        <span class="skin-swatch-paint skin-default"></span>
+                                        <span>Default</span>
+                                    </button>
+                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="blue" title="Blue skin">
+                                        <span class="skin-swatch-paint skin-blue"></span>
+                                        <span>Blue</span>
+                                    </button>
+                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="purple" title="Purple skin">
+                                        <span class="skin-swatch-paint skin-purple"></span>
+                                        <span>Purple</span>
+                                    </button>
+                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="emerald" title="Emerald skin">
+                                        <span class="skin-swatch-paint skin-emerald"></span>
+                                        <span>Emerald</span>
+                                    </button>
+                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="amber" title="Amber skin">
+                                        <span class="skin-swatch-paint skin-amber"></span>
+                                        <span>Amber</span>
+                                    </button>
+                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="high-contrast" title="High contrast skin">
+                                        <span class="skin-swatch-paint skin-high-contrast"></span>
+                                        <span>High Contrast</span>
+                                    </button>
+                                </div>
+                                <p class="setting-description">Theme gallery: click a swatch to switch skins instantly.</p>
+                            </div>
+                        </div>
 
-            <div class="setting-section">
+                        <div class="setting-section" data-section-id="workspace" data-section-title="Workspace">
                 <h4>Workspace</h4>
                 <div class="setting-group">
                     <button id="rename-workspace-btn" class="header-btn" style="width:auto">Rename current workspace</button>
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="workflow-notifications" data-section-title="Workflow Notifications">
                 <h4>Workflow Notifications</h4>
                 <div class="setting-group">
                     <label>
@@ -336,7 +347,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="branch-labels" data-section-title="Branch Labels">
                 <h4>Branch Labels</h4>
                 <div class="setting-group">
                     <label>
@@ -358,7 +369,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="worktrees" data-section-title="Worktrees">
                 <h4>Worktrees</h4>
                 <div class="setting-group">
                     <label>
@@ -369,7 +380,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="review-console" data-section-title="Review Console">
                 <h4>Review Console</h4>
                 <div class="setting-group">
                     <label>
@@ -416,7 +427,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="review-inbox" data-section-title="Review Inbox">
                 <h4>Review Inbox</h4>
                 <div class="setting-group">
                     <label>
@@ -479,7 +490,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="quick-review" data-section-title="Quick Review">
                 <h4>Quick Review</h4>
                 <div class="setting-group">
                     <label>
@@ -542,7 +553,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="projects-chats" data-section-title="Projects + Chats">
                 <h4>Projects + Chats</h4>
                 <div class="setting-group">
                     <label>
@@ -571,7 +582,7 @@
                 </div>
             </div>
 
-            <div class="setting-section settings-glossary">
+            <div class="setting-section settings-glossary" data-section-id="glossary" data-section-title="Glossary">
                 <h4>Glossary</h4>
                 <p class="setting-description">A quick mental model for how the Orchestrator is structured.</p>
 
@@ -612,7 +623,7 @@
                 </details>
             </div>
 
-                <div class="setting-section">
+                <div class="setting-section" data-section-id="diagnostics" data-section-title="Diagnostics">
                 <h4>Diagnostics</h4>
                 <div class="setting-group">
                     <button id="diagnostics-refresh" class="template-btn secondary">Refresh diagnostics</button>
@@ -629,7 +640,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="command-catalog" data-section-title="Command Catalog">
                 <h4>Command Catalog</h4>
                 <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items: flex-end;">
                     <label>
@@ -648,7 +659,7 @@
                 </div>
             </div>
 
-	            <div class="setting-section">
+	            <div class="setting-section" data-section-id="discord" data-section-title="Discord">
 	                <h4>Discord</h4>
 	                <div class="setting-group">
 	                    <label>
@@ -659,7 +670,7 @@
 	                </div>
 	            </div>
 
-                <div class="setting-section">
+                <div class="setting-section" data-section-id="scheduler" data-section-title="Scheduler">
                     <h4>Scheduler</h4>
                     <div class="setting-group">
                         <label>
@@ -704,7 +715,7 @@
                     </div>
                 </div>
 
-                <div class="setting-section">
+                <div class="setting-section" data-section-id="pager-pollcat" data-section-title="Pager / Pollcat">
                     <h4>Pager / Pollcat</h4>
                     <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
                         <label>
@@ -776,7 +787,7 @@
                     </div>
                 </div>
 
-	            <div class="setting-section">
+	            <div class="setting-section" data-section-id="license" data-section-title="License">
 	                <h4>License</h4>
 	                <div class="setting-group">
 	                    <div id="license-status" class="mono" style="opacity:0.85;">Loading…</div>
@@ -796,26 +807,28 @@
 	                </div>
 	            </div>
 
-	            <div class="setting-group">
-	                <label>
-	                    Tasks Theme:
-                    <select id="tasks-theme-select">
-                        <option value="inherit">Follow App</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                    </select>
-                </label>
-            </div>
+                <div class="setting-section" data-section-id="tasks" data-section-title="Tasks">
+                    <h4>Tasks</h4>
+                    <div class="setting-group">
+                        <label>
+                            Tasks Theme:
+                            <select id="tasks-theme-select">
+                                <option value="inherit">Follow App</option>
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            Trello Username (Me):
+                            <input id="trello-me-username" type="text" placeholder="(auto)" style="width: 180px;" />
+                        </label>
+                        <p class="setting-description">Override for “assigned to me” filtering.</p>
+                    </div>
+                </div>
 
-            <div class="setting-group">
-                <label>
-                    Trello Username (Me):
-                    <input id="trello-me-username" type="text" placeholder="(auto)" style="width: 180px;" />
-                </label>
-                <p class="setting-description">Override for “assigned to me” filtering.</p>
-            </div>
-
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="pr-merge-automation" data-section-title="PR Merge Automation">
                 <h4>PR Merge Automation</h4>
                 <div class="setting-group">
                     <label>
@@ -845,7 +858,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="tasks-launch" data-section-title="Tasks Launch">
                 <h4>Tasks Launch</h4>
                 <div class="setting-group">
                     <label>
@@ -864,7 +877,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="identity" data-section-title="Identity">
                 <h4>Identity</h4>
                 <div class="setting-group">
                     <label>
@@ -883,7 +896,7 @@
                 </div>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="trello-integration" data-section-title="Trello Integration">
                 <h4>Trello Integration</h4>
                 <div class="setting-group">
                     <div id="trello-status" style="margin-bottom: 8px;"></div>
@@ -910,7 +923,7 @@
                 <p class="setting-description" style="margin-top: 4px; opacity: 0.7;">Credentials are saved locally to <code>~/.trello-credentials</code> (file permissions 600). They are never sent to any external service except the Trello API.</p>
             </div>
 
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="diff-viewer" data-section-title="Diff Viewer">
                 <h4>Diff Viewer</h4>
                 <div class="setting-group">
                     <label>
@@ -925,7 +938,7 @@
             </div>
 
             <!-- Terminal Settings -->
-            <div class="setting-section">
+            <div class="setting-section" data-section-id="terminal-settings" data-section-title="Terminal Settings">
                 <h4>Terminal Settings</h4>
 
                 <div class="setting-group">
@@ -1054,6 +1067,9 @@
                         </div>
                     </div>
                 </div>
+            </div>
+                    </div>
+                </main>
             </div>
         </div>
     </div>
