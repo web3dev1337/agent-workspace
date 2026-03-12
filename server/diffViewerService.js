@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
+const { PORTS } = require('./portDefaults');
 const winston = require('winston');
 
 const logger = winston.createLogger({
@@ -24,7 +25,7 @@ function getDefaultShell() {
 class DiffViewerService {
   constructor() {
     this.diffViewerRoot = path.join(__dirname, '..', 'diff-viewer');
-    this.port = parseInt(process.env.DIFF_VIEWER_PORT || '7655', 10);
+    this.port = PORTS.DIFF_VIEWER;
     this.baseUrl = `http://localhost:${this.port}`;
 
     this.processInfo = null; // { pid, startedAt, logPath }

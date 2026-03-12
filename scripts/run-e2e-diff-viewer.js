@@ -5,7 +5,7 @@ const node = process.execPath;
 const pick = path.join(__dirname, 'pick-free-port.js');
 
 const picked = spawnSync(node, [pick], {
-  env: { ...process.env, PORT_START: process.env.DIFF_VIEWER_TEST_PORT || '7655' },
+  env: { ...process.env, PORT_START: process.env.DIFF_VIEWER_TEST_PORT || '9462' },
   encoding: 'utf8',
 });
 

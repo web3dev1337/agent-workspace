@@ -2,7 +2,7 @@ require('dotenv').config();
 const { defineConfig } = require('@playwright/test');
 
 // This config validates the app works when served via the **client dev server**
-// (e.g. http://localhost:2080/2081/2082...), where `/api/*` must be proxied to
+// (e.g. http://localhost:9461), where `/api/*` must be proxied to
 // the backend. This catches regressions where the UI hard-codes backend ports.
 
 const DEFAULT_BACKEND_PORT = 4001;

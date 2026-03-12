@@ -2,10 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const { PORTS } = require('../server/portDefaults');
 
 const app = express();
-const BASE_PORT = parseInt(process.env.CLIENT_PORT || '2080', 10);
-const SERVER_PORT = process.env.ORCHESTRATOR_PORT || 3000;
+const BASE_PORT = PORTS.CLIENT;
+const SERVER_PORT = PORTS.ORCHESTRATOR;
 
 // Proxy socket.io requests to the backend server (with WebSocket support).
 // Use pathFilter instead of Express mount path to avoid path stripping.
@@ -35,7 +36,7 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-let port = Number.isFinite(BASE_PORT) ? BASE_PORT : 2080;
+let port = Number.isFinite(BASE_PORT) ? BASE_PORT : 9461;
 const MAX_PORT_ATTEMPTS = 20;
 let attempts = 0;
 

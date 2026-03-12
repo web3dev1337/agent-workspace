@@ -133,6 +133,7 @@ const {
   normalizeThreadWorktreeId,
   pickReusableWorktreeId
 } = require('./threadWorktreeSelection');
+const { PORTS } = require('./portDefaults');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -299,7 +300,7 @@ const quickLinksService = QuickLinksService.getInstance();
 const recommendationsService = RecommendationsService.getInstance();
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
-activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 3000) });
+activityFeed.track('server.started', { port: PORTS.ORCHESTRATOR });
 const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
 const agentProviderService = AgentProviderService.getInstance({ agentManager, logger });
@@ -8102,7 +8103,7 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
 });
 
 // Start server
-const PORT = Number(process.env.ORCHESTRATOR_PORT || 3000);
+const PORT = PORTS.ORCHESTRATOR;
 const hostPolicy = evaluateBindSecurity({
   host: process.env.ORCHESTRATOR_HOST || process.env.HOST,
   authToken: AUTH_TOKEN,

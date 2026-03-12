@@ -6,6 +6,7 @@ const winston = require('winston');
 const { validateWorkspace, getWorkspaceTypeInfo, getDefaultWorkspaceConfig } = require('./workspaceTypes');
 const { ConfigDiscoveryService } = require('./configDiscoveryService');
 const { GitHubRepoService } = require('./githubRepoService');
+const { PORTS } = require('./portDefaults');
 const { createProject } = require('../scripts/create-project');
 
 const logger = winston.createLogger({
@@ -670,7 +671,7 @@ class WorkspaceManager {
         }
       ],
       server: {
-        port: process.env.ORCHESTRATOR_PORT || 3000,
+        port: PORTS.ORCHESTRATOR,
         host: '0.0.0.0'
       },
       ui: {

@@ -249,7 +249,7 @@ function createMasterConfig(oldConfig) {
     ],
 
     server: {
-      port: oldConfig.server?.port || 3000,
+      port: oldConfig.server?.port || 9460,
       host: oldConfig.server?.host || '0.0.0.0'
     },
 

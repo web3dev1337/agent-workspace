@@ -31,7 +31,7 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
-PORT="${DIFF_VIEWER_PORT:-7655}"
+PORT="${DIFF_VIEWER_PORT:-9462}"
 
 echo "🎯 Starting server on port ${PORT}..."
 echo "📋 Access the diff viewer at: http://localhost:${PORT}"

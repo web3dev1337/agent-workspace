@@ -1,7 +1,7 @@
 // Debug script to test the API
 const fetch = require('node-fetch');
 
-const BASE_URL = process.env.DIFF_VIEWER_BASE_URL || 'http://localhost:7655';
+const BASE_URL = process.env.DIFF_VIEWER_BASE_URL || 'http://localhost:9462';
 const OWNER = process.env.DIFF_VIEWER_DEBUG_OWNER || 'facebook';
 const REPO = process.env.DIFF_VIEWER_DEBUG_REPO || 'react';
 const PR_NUMBER = process.env.DIFF_VIEWER_DEBUG_PR || '25000';

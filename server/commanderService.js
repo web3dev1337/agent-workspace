@@ -11,6 +11,8 @@ const path = require('path');
 const os = require('os');
 const winston = require('winston');
 
+const { PORTS } = require('./portDefaults');
+
 const HOME_DIR = process.env.HOME || os.homedir();
 
 const logger = winston.createLogger({
@@ -181,7 +183,7 @@ class CommanderService {
     // never needs manual prompt edits when new commands are added.
     setTimeout(() => {
       try {
-        const port = process.env.ORCHESTRATOR_PORT || 3000;
+        const port = PORTS.ORCHESTRATOR;
         const baseUrl = `http://localhost:${port}`;
         this.sendInput(
           `\n# Orchestrator control (self-updating)\n` +
@@ -204,7 +206,7 @@ class CommanderService {
   async gatherSessionsInfo() {
     try {
       const http = require('http');
-      const port = process.env.ORCHESTRATOR_PORT || 3000;
+      const port = PORTS.ORCHESTRATOR;
 
       return new Promise((resolve) => {
         const req = http.get(`http://localhost:${port}/api/commander/sessions`, (res) => {

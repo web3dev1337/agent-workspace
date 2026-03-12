@@ -8,7 +8,7 @@ module.exports = {
     max_memory_restart: '1G',
     env: {
       NODE_ENV: 'production',
-      DIFF_VIEWER_PORT: 7655
+      DIFF_VIEWER_PORT: 9462
     },
     error_file: './logs/pm2-error.log',
     out_file: './logs/pm2-out.log',

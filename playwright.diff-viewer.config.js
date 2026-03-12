@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { defineConfig } = require('@playwright/test');
 
-const DEFAULT_DIFF_VIEWER_PORT = 7655;
+const DEFAULT_DIFF_VIEWER_PORT = 9462;
 const DIFF_VIEWER_PORT = Number.parseInt(process.env.DIFF_VIEWER_TEST_PORT || '', 10) || DEFAULT_DIFF_VIEWER_PORT;
 
 module.exports = defineConfig({

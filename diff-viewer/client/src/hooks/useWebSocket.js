@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import io from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_WS_URL || 'http://localhost:7655';
+const SOCKET_URL = import.meta.env.VITE_WS_URL || 'http://localhost:9462';
 
 export const useWebSocket = (diffType, owner, repo, id) => {
   const [socket, setSocket] = useState(null);

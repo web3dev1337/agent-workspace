@@ -6,7 +6,7 @@ require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
-const PORT = process.env.DIFF_VIEWER_PORT || 7655;
+const PORT = process.env.DIFF_VIEWER_PORT || 9462;
 const HOST = process.env.DIFF_VIEWER_HOST || '127.0.0.1';
 
 // Initialize WebSocket

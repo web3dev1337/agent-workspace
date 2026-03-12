@@ -1759,7 +1759,7 @@ class ClaudeOrchestrator {
       const timeoutId = setTimeout(() => {
         if (!this.socket.connected) {
           console.error('Connection timeout - server may not be reachable');
-          this.showError('Connection timeout - please check if server is running on port 3000');
+          this.showError('Connection timeout - please check if server is running');
           reject(new Error('Connection timeout'));
         }
       }, 10000);
@@ -8369,7 +8369,7 @@ class ClaudeOrchestrator {
 
                     <div class="setting-item">
                       <label>Server Port</label>
-                      <input type="number" id="server-port" value="${settings.port || 3000}" min="1000" max="65535"
+                      <input type="number" id="server-port" value="${settings.port || 9460}" min="1000" max="65535"
                              class="setting-input" onchange="window.orchestrator.updateConfigSummary()">
                     </div>
 
@@ -8481,7 +8481,7 @@ class ClaudeOrchestrator {
       nodeEnv: envVars.match(/NODE_ENV=(\w+)/)?.[1] || 'development',
       memoryLimit: parseInt(nodeOptions.match(/--max-old-space-size=(\d+)/)?.[1] || '4096'),
       debugMode: envVars.includes('DEBUG=*'),
-      port: parseInt(envVars.match(/PORT=(\d+)/)?.[1] || '3000'),
+      port: parseInt(envVars.match(/PORT=(\d+)/)?.[1] || '9460'),
 
       // Advanced
       extraEnv: envVars.replace(/AUTO_START_WITH_BOTS=\w+|NODE_ENV=\w+|DEBUG=\*|PORT=\d+/g, '').trim(),
@@ -11269,7 +11269,7 @@ class ClaudeOrchestrator {
 
     this.showToast('Starting Advanced Diff Viewer…', 'info');
 
-    let baseUrl = 'http://localhost:7655';
+    let baseUrl = 'http://localhost:9462';
     try {
       const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
       const data = await resp.json();
@@ -11350,7 +11350,7 @@ class ClaudeOrchestrator {
       // ignore
     }
 
-    let baseUrl = 'http://localhost:7655';
+    let baseUrl = 'http://localhost:9462';
     try {
       const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
       const data = await resp.json();
@@ -12498,7 +12498,7 @@ class ClaudeOrchestrator {
 		        };
 
 			        const ensureDiffViewerBaseUrl = async () => {
-			          let baseUrl = 'http://localhost:7655';
+			          let baseUrl = 'http://localhost:9462';
 			          let running = false;
 			          const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
 			          const data = await resp.json().catch(() => ({}));
@@ -14020,7 +14020,7 @@ class ClaudeOrchestrator {
 	        if (closeBtn) closeBtn.disabled = !embedded;
 	      };
 
-	      let baseUrl = 'http://localhost:7655';
+	      let baseUrl = 'http://localhost:9462';
 	      const ensureDiffViewer = async () => {
 	        const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
 	        const data = await resp.json().catch(() => ({}));
@@ -30630,9 +30630,7 @@ class ClaudeOrchestrator {
     if (existing) existing.remove();
 
     // Fetch ports
-    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
-                      window.location.port === '2081' ? 'http://localhost:4000' :
-                      window.location.origin;
+    const serverUrl = window.location.origin;
 
     let portsData = { ports: [], count: 0 };
     try {
@@ -30742,9 +30740,7 @@ class ClaudeOrchestrator {
     const newLabel = prompt(`Enter custom label for port ${port}:`, currentName);
     if (newLabel === null) return; // Cancelled
 
-    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
-                      window.location.port === '2081' ? 'http://localhost:4000' :
-                      window.location.origin;
+    const serverUrl = window.location.origin;
 
     try {
       const response = await fetch(`${serverUrl}/api/ports/label`, {
@@ -30767,9 +30763,7 @@ class ClaudeOrchestrator {
   }
 
   async refreshSidebarPorts() {
-    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
-                      window.location.port === '2081' ? 'http://localhost:4000' :
-                      window.location.origin;
+    const serverUrl = window.location.origin;
 
     const listEl = document.getElementById('ports-sidebar-list');
     const countEl = document.getElementById('ports-count');
@@ -31259,7 +31253,7 @@ class ClaudeOrchestrator {
 
   async showAddWorktreeModalAdvanced() {
     try {
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const serverUrl = window.location.origin;
       const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
       const allRepos = await response.json();
       await this.getProjectsBoard({ force: false }).catch(() => {});
@@ -31276,7 +31270,7 @@ class ClaudeOrchestrator {
 
     try {
       await this.getProjectsBoard({ force: false }).catch(() => {});
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const serverUrl = window.location.origin;
       const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
       const repos = await response.json();
 
@@ -32173,7 +32167,7 @@ class ClaudeOrchestrator {
       if (this.quickWorktreeConversationsLoaded && !force) return;
       listEl.innerHTML = '<div class="loading">Loading recent conversations...</div>';
 
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const serverUrl = window.location.origin;
       const limit = this.quickWorktreeConversationLimit || 100;
       const response = await fetch(`${serverUrl}/api/conversations/recent?limit=${limit}`);
       const conversations = await response.json();
