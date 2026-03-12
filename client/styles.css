@@ -7681,8 +7681,10 @@ body.dependency-onboarding-active #dependency-setup-modal {
   bottom: 0;
   background: var(--bg-primary);
   z-index: 1000;
-  padding: 2rem;
+  padding: clamp(0.75rem, 2vw, 2rem);
+  box-sizing: border-box;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .dashboard-topbar {
@@ -14317,7 +14319,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .bento-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: var(--space-md);
 }
 
@@ -14478,15 +14480,16 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 /* Dashboard Layout */
 .dashboard-wrapper {
-  max-width: none;
-  margin: 0;
-  padding: 0 var(--space-lg) var(--space-lg);
+  width: 100%;
+  max-width: 1520px;
+  margin: 0 auto;
+  padding: 0 0 var(--space-lg);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   color: #fff;
-  gap: var(--space-sm);
-  height: 100%;
-  overflow: auto;
+  gap: var(--space-md);
+  min-height: 100%;
 }
 
 .dashboard-header-modern {
@@ -14497,28 +14500,23 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .dashboard-main-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
   gap: var(--space-lg);
-  flex: 1;
-  min-height: 0;
+  align-items: start;
 }
 
 .dashboard-content-left {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  height: 100%;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  min-width: 0;
 }
 
 .dashboard-content-right {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  height: 100%;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  min-width: 0;
 }
 
 /* Create Workspace Banner */
@@ -14576,7 +14574,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 /* Workspace Grid */
 .bento-workspace-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: var(--space-md);
 }
 
@@ -14676,9 +14674,6 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  flex: 1;
-  overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .port-dashboard-card {
@@ -14740,24 +14735,57 @@ body.dependency-onboarding-active #dependency-setup-modal {
   border: 1px solid var(--border-color);
 }
 
-/* Scale down dashboard on smaller screens */
+/* Reflow dashboard on smaller screens instead of shrinking everything */
 @media (max-width: 1200px) {
   .dashboard-main-content {
-    grid-template-columns: 1fr;
-  }
-  .dashboard-wrapper {
-    zoom: 0.85;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 900px) {
-  .dashboard-wrapper {
-    zoom: 0.75;
+  .dashboard-title-group {
+    align-items: flex-start;
+  }
+
+  .dashboard-title-group h1 {
+    font-size: 1.4rem;
+  }
+
+  .dashboard-topbar {
+    flex-wrap: wrap;
+    align-items: flex-start;
   }
 }
 
 @media (max-width: 600px) {
   .dashboard-wrapper {
-    zoom: 0.6;
+    padding-bottom: var(--space-md);
+  }
+
+  .dashboard-title-group {
+    gap: var(--space-sm);
+  }
+
+  .dashboard-title-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .dashboard-title-group h1 {
+    font-size: 1.25rem;
+  }
+
+  .dashboard-title-group p {
+    font-size: 0.9rem;
+  }
+
+  .bento-grid,
+  .bento-workspace-grid,
+  .workspace-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-wrapper {
+    gap: var(--space-sm);
   }
 }
