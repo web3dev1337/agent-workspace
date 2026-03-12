@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Workspace | Unified AI Orchestration</title>
-  <meta name="description" content="All your agents in one workspace. All your projects in one workspace. Claude Max and Codex plan compatible.">
+  <title>Agent Workspace | All Your Agents, One Workspace</title>
+  <meta name="description" content="Run multiple CLI agents in parallel across different repos with complete local control. Claude Max and Codex plan compatible. Zero telemetry.">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
 <body>
   <!-- Dynamic Background -->
   <canvas id="neural-bg"></canvas>
-  
+
   <div class="ambient-lights">
     <div class="light cyan"></div>
     <div class="light blue-deep"></div>
@@ -27,8 +27,8 @@
       <span>Agent Workspace</span>
     </a>
     <div class="nav-items">
-      <a href="#orchestration">Orchestration</a>
-      <a href="#integrations">Integrations</a>
+      <a href="#features">Features</a>
+      <a href="#compatibility">Compatibility</a>
       <a href="https://github.com/web3dev1337/claude-orchestrator" class="btn-glass" target="_blank">Repository <span class="arrow">↗</span></a>
     </div>
   </nav>
@@ -41,7 +41,7 @@
           <span class="gradient-text multi-color">One workspace.</span>
         </h1>
         <p class="hero-lead">
-          All your projects in one workspace. Bring order to the chaos and run multiple agents simultaneously across different repos with complete local control.
+          All your projects in one workspace. Run multiple CLI agents in parallel across different repos with complete local control. No external telemetry.
         </p>
         <div class="action-row">
           <a class="btn-glow" href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank">
@@ -52,7 +52,7 @@
           </a>
         </div>
         <div class="plan-compat">
-          <span class="compat-text">Claude Code & Codex plan compatible</span>
+          <span class="compat-text">Claude Max plan & Codex plan compatible</span>
         </div>
       </div>
 
@@ -63,18 +63,19 @@
             <div class="address-bar">workspace://local/orchestrator</div>
           </div>
           <div class="panel-body">
-            <img src="assets/orchestrator-ui.png" alt="UI" class="ui-img">
+            <img src="assets/orchestrator-ui.png" alt="Agent Workspace UI" class="ui-img">
             <div class="overlay-scanline"></div>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="bento-grid" id="orchestration">
+    <section class="bento-grid" id="features">
+      <!-- Row 1 -->
       <div class="bento-item span-2 reveal">
         <div class="bento-inner">
-          <h3 class="bento-title">Use Multiple Agents</h3>
-          <p class="bento-desc">Deploy specialized agents for different tasks. Have one agent reviewing PRs while another writes tests—all within the same unified UI. Total asynchronous mastery.</p>
+          <h3 class="bento-title">Multi-Agent Terminals</h3>
+          <p class="bento-desc">Run Claude Code, Codex, Gemini CLI, OpenCode &mdash; any CLI agent in dedicated terminals. Each worktree pairs an agent terminal with a server terminal for running commands in the same directory.</p>
           <div class="visual-placeholder network-anim">
             <div class="dot d1"></div><div class="dot d2"></div><div class="dot d3"></div>
             <svg class="lines"><path d="M20,50 Q50,20 80,50 T140,50" /></svg>
@@ -84,28 +85,85 @@
 
       <div class="bento-item reveal" style="--delay: 0.1s">
         <div class="bento-inner glass-dark">
-          <h3 class="bento-title text-cyan">Unified Sandbox</h3>
-          <p class="bento-desc">We orchestrate your existing CLI tools (like Claude Code) in a shared workspace. Maintain complete visibility over what your agents can access and execute within your repositories.</p>
-          <div class="shield-icon">🛡️</div>
+          <h3 class="bento-title text-cyan">Bring Your Own Plan</h3>
+          <p class="bento-desc">Works with your Claude Max subscription, Codex plan, or your own API keys. Your credentials never leave your machine.</p>
+          <div class="bento-icon">🔑</div>
+        </div>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="bento-item reveal" style="--delay: 0.15s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title text-blue-deep">Zero Telemetry</h3>
+          <p class="bento-desc">No external analytics, no data collection, no phone home. Everything runs locally on your machine.</p>
+          <div class="bento-icon">🔒</div>
         </div>
       </div>
 
       <div class="bento-item reveal" style="--delay: 0.2s">
         <div class="bento-inner glass-dark">
-          <h3 class="bento-title text-blue-deep">Multi-Project</h3>
-          <p class="bento-desc">Manage multiple repositories and worktrees simultaneously. Context switching is a thing of the past.</p>
+          <h3 class="bento-title">Workspaces & Worktrees</h3>
+          <p class="bento-desc">Group git repositories into workspaces. Each workspace supports multiple worktrees running side by side &mdash; different branches, different repos, same view.</p>
           <div class="folder-stack">
             <div class="folder"></div><div class="folder"></div><div class="folder"></div>
           </div>
         </div>
       </div>
+
+      <div class="bento-item reveal" style="--delay: 0.25s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title text-cyan">Built-in Diff Viewer</h3>
+          <p class="bento-desc">Quick access to pull requests with a full inbuilt code review tool. Review diffs without leaving your workspace.</p>
+          <div class="bento-icon">📋</div>
+        </div>
+      </div>
+
+      <!-- Row 3 -->
+      <div class="bento-item span-2 reveal" style="--delay: 0.1s">
+        <div class="bento-inner">
+          <h3 class="bento-title">Commander</h3>
+          <p class="bento-desc">A top-level AI (usually Claude, but configurable) that controls the interface. It can send commands to any terminal, launch agents, pull tasks from your task board &mdash; hands-free automation from a single prompt.</p>
+          <div class="visual-placeholder network-anim">
+            <div class="dot d1"></div><div class="dot d2"></div><div class="dot d3"></div>
+            <svg class="lines"><path d="M20,50 Q50,20 80,50 T140,50" /></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="bento-item reveal" style="--delay: 0.2s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title text-blue-deep">Task Integration</h3>
+          <p class="bento-desc">Pull tasks from Trello today. GitHub Issues, Linear, and locally-backed tasks coming soon.</p>
+          <div class="bento-icon">✅</div>
+        </div>
+      </div>
+
+      <!-- Row 4 -->
+      <div class="bento-item reveal" style="--delay: 0.15s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title">Tier System</h3>
+          <p class="bento-desc">Organize sessions by priority. T1 Focus for active work, T2 Review, T3 Background for autonomous tasks, T4 for the rest. Hide and show as needed.</p>
+          <div class="bento-icon">⚡</div>
+        </div>
+      </div>
+
+      <div class="bento-item span-2 reveal" style="--delay: 0.2s">
+        <div class="bento-inner">
+          <h3 class="bento-title">Shipped With Agent Workspace</h3>
+          <p class="bento-desc">Built over 8 months. 100% of our code has been shipped using Agent Workspace. It's not a demo &mdash; it's our daily driver.</p>
+          <div class="visual-placeholder network-anim">
+            <div class="dot d1"></div><div class="dot d2"></div><div class="dot d3"></div>
+            <svg class="lines"><path d="M20,50 Q50,20 80,50 T140,50" /></svg>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <section class="integration-fluid" id="integrations">
+    <section class="integration-fluid" id="compatibility">
       <div class="integration-content reveal">
-        <h2 class="section-title">Seamless Ecosystem.</h2>
-        <p class="section-desc">Bring your existing API keys or CLI logins. Agent Workspace acts as the ultimate wrapper around your preferred tools. Claude Code and Codex plan compatible directly from the terminal.</p>
-        
+        <h2 class="section-title">Bring Your CLI.</h2>
+        <p class="section-desc">Works with your existing CLI logins and API keys. Agent Workspace wraps your preferred tools &mdash; run them directly from the terminal, side by side, in the same workspace.</p>
+
         <div class="logo-showcase">
           <div class="showcase-card">
             <div class="card-glow claude-glow"></div>
@@ -114,7 +172,7 @@
             </div>
             <span class="card-name">Claude Code</span>
           </div>
-          
+
           <div class="connection-line">
             <div class="pulse-dot"></div>
           </div>
@@ -127,6 +185,8 @@
             <span class="card-name">Codex</span>
           </div>
         </div>
+
+        <p class="coming-soon-note">Gemini CLI, OpenCode, Aider, and any CLI agent that runs in a terminal.</p>
       </div>
     </section>
 
