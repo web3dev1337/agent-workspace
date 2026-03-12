@@ -4942,7 +4942,6 @@ class ClaudeOrchestrator {
       this.refreshTier1Busy();
       this.buildSidebar();
       this.updateTerminalGrid();
-      if (nextTier) this.showToast(`Tier set to T${nextTier}`, 'success');
     } catch (e) {
       this.showToast(String(e?.message || e), 'error');
       // Re-render to ensure the selector reflects stored data.
