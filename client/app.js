@@ -31542,12 +31542,13 @@ class ClaudeOrchestrator {
 
     // Find the oldest worktree (least recently modified)
     let oldestId = null;
-    if (allWorktrees.length) {
+    if (allWorktrees.length > 0) {
       let oldestTime = Infinity;
       for (const wt of allWorktrees) {
-        const lastActivity = this.getWorktreeLastActivity(resolvedRepo, wt.id);
-        const effective = Math.max(wt.lastModifiedMs || 0, lastActivity || 0);
-        if (effective < oldestTime) {
+        const mtime = Number(wt.lastModifiedMs) || 0;
+        const activity = Number(this.getWorktreeLastActivity(resolvedRepo, wt.id)) || 0;
+        const effective = Math.max(mtime, activity) || 0;
+        if (effective < oldestTime || (effective === 0 && oldestId === null)) {
           oldestTime = effective;
           oldestId = wt.id;
         }
