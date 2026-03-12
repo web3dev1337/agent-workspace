@@ -14276,15 +14276,17 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-title-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-pressed) 100%);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 16px rgba(31, 111, 235, 0.25);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: conic-gradient(from 180deg at 50% 50%, #52d3ff 0deg, #4b92ff 180deg, #52d3ff 360deg);
+  flex-shrink: 0;
+  box-shadow: 0 0 20px rgba(82, 211, 255, 0.7);
+  animation: dashboard-title-orb-spin 4s linear infinite;
+}
+
+@keyframes dashboard-title-orb-spin {
+  100% { transform: rotate(360deg); }
 }
 
 .dashboard-title-group h1 {

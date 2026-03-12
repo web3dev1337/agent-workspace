@@ -315,7 +315,7 @@ class Dashboard {
         
         <div class="dashboard-header-modern">
           <div class="dashboard-title-group">
-            <div class="dashboard-title-icon" style="font-size:24px;">🏠</div>
+            <div class="dashboard-title-icon" aria-hidden="true"></div>
             <div>
               <h1>Agent Workspace</h1>
             </div>
