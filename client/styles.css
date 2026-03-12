@@ -14499,27 +14499,22 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(200px, 420px);
   gap: var(--space-lg);
-  flex: 1;
+  flex: 1 1 0%;
   min-height: 0;
-  overflow: hidden;
 }
 
 .dashboard-content-left {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  height: 100%;
   min-height: 0;
-  overflow: hidden;
 }
 
 .dashboard-content-right {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  height: 100%;
   min-height: 0;
-  overflow: hidden;
 }
 
 /* Create Workspace Banner */
@@ -14532,8 +14527,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 14px 16px;
-  flex-shrink: 0;
+  flex-shrink: 1;
   align-self: flex-start;
+  min-height: 0;
 }
 
 .dashboard-create-title {
@@ -14566,6 +14562,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
   padding: var(--space-md);
   box-shadow: var(--shadow-soft);
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dashboard-bento-card:hover {
@@ -14578,7 +14576,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .bento-workspace-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  grid-auto-rows: minmax(0, 1fr);
   gap: var(--space-md);
+  min-height: 0;
 }
 
 /* Workspace Cards */
@@ -14589,6 +14589,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
 }
 
@@ -14619,7 +14620,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .bento-workspace-card .workspace-card-body {
   padding: 4px 14px 10px 14px;
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .bento-workspace-card .workspace-info h3 {
@@ -14669,7 +14672,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 /* Running Services - bigger container */
 .ports-dashboard-section {
-  flex: 1;
+  flex: 1 1 0%;
   min-height: 0;
 }
 
@@ -14677,9 +14680,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  flex: 1;
+  flex: 1 1 0%;
   min-height: 0;
-  overflow: hidden;
 }
 
 .port-dashboard-card {
@@ -14692,6 +14694,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
   border-left: 4px solid var(--border-color);
   cursor: pointer;
   transition: all 0.2s;
+  flex-shrink: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .port-dashboard-card:hover {
@@ -14742,14 +14747,15 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-bento-section {
+  flex: 1 1 0%;
   min-height: 0;
-  overflow: hidden;
-  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .dashboard-bento-section .bento-workspace-grid {
+  flex: 1 1 0%;
   min-height: 0;
-  overflow: hidden;
 }
 
 @media (max-width: 1200px) {
