@@ -59,10 +59,16 @@
             <button id="commander-toggle" class="header-btn commander-btn" title="Commander (Top-Level AI)" data-ui-visibility="header.commander">
                 🎖️ Commander
             </button>
+            <button id="projects-board-btn" class="header-btn header-nav-btn" title="Projects kanban board" data-ui-visibility="header.projectsBoard">
+                <span class="header-nav-icon">🗂</span> Projects
+            </button>
+            <button id="tasks-btn" class="header-btn header-nav-btn" title="Browse tasks (Trello)" data-ui-visibility="header.tasks">
+                <span class="header-nav-icon">✅</span> Tasks
+            </button>
+            <button id="ports-btn" class="header-btn header-nav-btn" title="View running services" data-ui-visibility="header.ports">
+                <span class="header-nav-icon">🔌</span> Ports
+            </button>
             <div class="header-actions">
-                <button id="projects-board-btn" class="header-btn header-nav-btn" title="Projects kanban board" data-ui-visibility="header.projectsBoard">
-                    <span class="header-nav-icon">🗂</span> Projects
-                </button>
                 <button id="greenfield-btn" class="header-btn" title="Create new project" data-ui-visibility="header.newProject">
                     ➕ New Project
                 </button>
@@ -108,13 +114,6 @@
                 <button id="workflow-focus-tier2" class="header-btn" title="Focus: hide Tier 2 while Tier 1 is busy" data-ui-visibility="header.focusTier2">T2 Auto</button>
                 <button id="workflow-focus-autoswap" class="header-btn" title="Focus: auto-swap to Tier 2 while Tier 1 is busy" data-ui-visibility="header.focusSwap">Swap T2</button>
                 <div id="process-banner-holder" data-ui-visibility="processBanner"><div id="process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div></div>
-                <button id="tasks-btn" class="header-btn header-nav-btn" title="Browse tasks (Trello)" data-ui-visibility="header.tasks">
-                    <span class="header-nav-icon">✅</span> Tasks
-                </button>
-                <!-- Moved to Settings panel -->
-                <button id="ports-btn" class="header-btn header-nav-btn" title="View running services" data-ui-visibility="header.ports">
-                    <span class="header-nav-icon">🔌</span> Ports
-                </button>
                 <button id="recommendations-toggle" class="icon-button" title="System Recommendations" onclick="window.recommendationsUI && window.recommendationsUI.toggle()" data-ui-visibility="header.recommendations">
                     <span class="notification-badge recommendations-badge" id="recommendations-badge" style="display:none">0</span>
                     🔧
