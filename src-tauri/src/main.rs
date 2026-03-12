@@ -572,7 +572,7 @@ fn main() {
                 });
 
                 // Pick ephemeral port + per-launch auth token (local-only).
-                let port = pick_free_port().unwrap_or(9470);
+                let port = pick_free_port().unwrap_or(3000);
                 let token = Uuid::new_v4().to_string();
 
                 let node_cmd = resolve_node_command(&app_handle);

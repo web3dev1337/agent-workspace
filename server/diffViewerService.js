@@ -24,7 +24,7 @@ function getDefaultShell() {
 class DiffViewerService {
   constructor() {
     this.diffViewerRoot = path.join(__dirname, '..', 'diff-viewer');
-    this.port = parseInt(process.env.DIFF_VIEWER_PORT || '9472', 10);
+    this.port = parseInt(process.env.DIFF_VIEWER_PORT || '7655', 10);
     this.baseUrl = `http://localhost:${this.port}`;
 
     this.processInfo = null; // { pid, startedAt, logPath }

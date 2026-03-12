@@ -4,8 +4,8 @@ const path = require('path');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
-const BASE_PORT = parseInt(process.env.CLIENT_PORT || '9471', 10);
-const SERVER_PORT = process.env.ORCHESTRATOR_PORT || 9470;
+const BASE_PORT = parseInt(process.env.CLIENT_PORT || '2080', 10);
+const SERVER_PORT = process.env.ORCHESTRATOR_PORT || 3000;
 
 // Proxy socket.io requests to the backend server
 app.use('/socket.io', createProxyMiddleware({
@@ -29,7 +29,7 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-let port = Number.isFinite(BASE_PORT) ? BASE_PORT : 9471;
+let port = Number.isFinite(BASE_PORT) ? BASE_PORT : 2080;
 const MAX_PORT_ATTEMPTS = 20;
 let attempts = 0;
 

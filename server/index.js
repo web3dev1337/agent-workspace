@@ -299,7 +299,7 @@ const quickLinksService = QuickLinksService.getInstance();
 const recommendationsService = RecommendationsService.getInstance();
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
-activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 9470) });
+activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 3000) });
 const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
 const agentProviderService = AgentProviderService.getInstance({ agentManager, logger });
@@ -7590,7 +7590,7 @@ app.post('/api/commander/execute-text', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'text too long' });
     }
 
-    // Keep the parser context in sync with Commander's current UI state.
+    // Keep the parser context in sync with Commander’s current UI state.
     try {
       const snapshot = commanderContextService.getSnapshot({ workspaceManager, commanderService, commandRegistry });
       voiceCommandService.setContext(snapshot?.context || {});
@@ -8107,8 +8107,7 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
 });
 
 // Start server
-const DESIRED_PORT = Number(process.env.ORCHESTRATOR_PORT || 9470);
-const MAX_PORT_ATTEMPTS = 10;
+const PORT = Number(process.env.ORCHESTRATOR_PORT || 3000);
 const hostPolicy = evaluateBindSecurity({
   host: process.env.ORCHESTRATOR_HOST || process.env.HOST,
   authToken: AUTH_TOKEN,
@@ -8117,85 +8116,64 @@ const hostPolicy = evaluateBindSecurity({
 const HOST = hostPolicy.host;
 
 if (!hostPolicy.allowStart) {
-  logger.error('Refusing to bind to a non-loopback host without AUTH_TOKEN. Set AUTH_TOKEN or set ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH=1 to override.', { host: HOST, port: DESIRED_PORT });
+  logger.error('Refusing to bind to a non-loopback host without AUTH_TOKEN. Set AUTH_TOKEN or set ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH=1 to override.', { host: HOST, port: PORT });
   process.exit(1);
 }
 
-function tryListen(port, attempt) {
-  httpServer.listen(port, HOST, () => {
-    if (port !== DESIRED_PORT) {
-      logger.info(`Port ${DESIRED_PORT} in use, bound to port ${port} instead`);
+httpServer.listen(PORT, HOST, () => {
+  logger.info(`Server running on http://${HOST}:${PORT}`);
+  if (!hostPolicy.isLoopback) {
+    const bindType = hostPolicy.isBindAll ? 'bind-all' : 'explicit-host';
+    logger.info(`LAN access enabled (${bindType}) on port ${PORT}`);
+    if (!hostPolicy.hasAuthToken) {
+      logger.warn('LAN access is enabled without AUTH_TOKEN. This is insecure; anyone on the network can control this orchestrator.', { host: HOST, port: PORT });
     }
-    logger.info(`Server running on http://${HOST}:${port}`);
-    // Expose actual port for other services to discover
-    process.env.ORCHESTRATOR_PORT = String(port);
+  }
+  if (hostPolicy.hasAuthToken) {
+    logger.info('Authentication enabled');
+  }
 
-    if (!hostPolicy.isLoopback) {
-      const bindType = hostPolicy.isBindAll ? 'bind-all' : 'explicit-host';
-      logger.info(`LAN access enabled (${bindType}) on port ${port}`);
-      if (!hostPolicy.hasAuthToken) {
-        logger.warn('LAN access is enabled without AUTH_TOKEN. This is insecure; anyone on the network can control this orchestrator.', { host: HOST, port });
+  // Start the Advanced Diff Viewer in the background.
+  // Default: enabled, since users expect the 🔍 diff viewer to be ready without manual terminal steps.
+  const autoStartRaw = String(process.env.AUTO_START_DIFF_VIEWER ?? 'true').toLowerCase();
+  const shouldAutoStartDiffViewer = !['0', 'false', 'no'].includes(autoStartRaw);
+  if (shouldAutoStartDiffViewer) {
+    diffViewerService.ensureRunning().catch((error) => {
+      logger.warn('Diff viewer auto-start failed', { error: error.message });
+    });
+  }
+  
+  // Initialize sessions
+  const shouldAutoEnsureDiscordServices = (() => {
+    const envRaw = String(process.env.DISCORD_AUTO_ENSURE_SERVICES ?? '').trim().toLowerCase();
+    if (envRaw) return !['0', 'false', 'no'].includes(envRaw);
+
+    try {
+      const cfg = userSettingsService?.settings?.global?.ui?.discord || {};
+      return cfg.autoEnsureServicesAtStartup === true;
+    } catch {
+      return false;
+    }
+  })();
+
+  workspaceSystemReady
+    .then((workspaceReady) => {
+      if (!workspaceReady) {
+        return;
       }
-    }
-    if (hostPolicy.hasAuthToken) {
-      logger.info('Authentication enabled');
-    }
-
-    // Start the Advanced Diff Viewer in the background.
-    // Default: enabled, since users expect the diff viewer to be ready without manual terminal steps.
-    const autoStartRaw = String(process.env.AUTO_START_DIFF_VIEWER ?? 'true').toLowerCase();
-    const shouldAutoStartDiffViewer = !['0', 'false', 'no'].includes(autoStartRaw);
-    if (shouldAutoStartDiffViewer) {
-      diffViewerService.ensureRunning().catch((error) => {
-        logger.warn('Diff viewer auto-start failed', { error: error.message });
-      });
-    }
-
-    // Initialize sessions
-    const shouldAutoEnsureDiscordServices = (() => {
-      const envRaw = String(process.env.DISCORD_AUTO_ENSURE_SERVICES ?? '').trim().toLowerCase();
-      if (envRaw) return !['0', 'false', 'no'].includes(envRaw);
-
-      try {
-        const cfg = userSettingsService?.settings?.global?.ui?.discord || {};
-        return cfg.autoEnsureServicesAtStartup === true;
-      } catch {
-        return false;
-      }
-    })();
-
-    workspaceSystemReady
-      .then((workspaceReady) => {
-        if (!workspaceReady) {
-          return;
-        }
-        return sessionManager.initializeSessions();
-      })
-      .then(() => {
-        if (!shouldAutoEnsureDiscordServices) return;
-        // Don't block server startup; just best-effort keep Services running after restarts.
-        return discordIntegrationService.ensureDiscordServices({ sessionManager, workspaceManager })
-          .then(() => logger.info('Discord services ensured on startup'))
-          .catch((error) => logger.warn('Failed to ensure Discord services on startup', { error: error.message }));
-      })
-      .catch((error) => {
-        logger.error('Failed to initialize sessions', { error: error.message, stack: error.stack });
-      });
-  });
-
-  httpServer.once('error', (err) => {
-    if (err.code === 'EADDRINUSE' && attempt < MAX_PORT_ATTEMPTS) {
-      logger.warn(`Port ${port} in use, trying ${port + 1}...`);
-      httpServer.close();
-      tryListen(port + 1, attempt + 1);
-    } else {
-      logger.error('Failed to start server', { error: err.message, port, attempts: attempt });
-      process.exit(1);
-    }
-  });
-}
-
-tryListen(DESIRED_PORT, 1);
+      return sessionManager.initializeSessions();
+    })
+    .then(() => {
+      if (!shouldAutoEnsureDiscordServices) return;
+      // Don’t block server startup; just best-effort keep Services running after restarts.
+      return discordIntegrationService.ensureDiscordServices({ sessionManager, workspaceManager })
+        .then(() => logger.info('Discord services ensured on startup'))
+        .catch((error) => logger.warn('Failed to ensure Discord services on startup', { error: error.message }));
+    })
+    .catch((error) => {
+      logger.error('Failed to initialize sessions', { error: error.message, stack: error.stack });
+    });
+});
 
 // Graceful shutdown
 process.on('SIGTERM', () => shutdown('SIGTERM'));

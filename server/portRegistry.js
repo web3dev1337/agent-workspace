@@ -26,12 +26,12 @@ const logger = winston.createLogger({
 const PORT_RANGE_START = 8080;
 const PORT_RANGE_END = 8199;
 const RESERVED_PORTS = [
-  9470,  // Agent Workspace server
-  9471,  // Client dev server
-  9472,  // Diff viewer
-  3000,  // Legacy / alternate server
-  4000,  // Legacy / alternate dev server
-  2080,  // Legacy client
+  3000,  // Agent Workspace server
+  4000,  // Agent Workspace dev server
+  2080,  // Client dev server
+  2081,  // Client dev server (dev instance)
+  7655,  // Diff viewer
+  7656,  // Diff viewer (dev instance)
 ];
 
 class PortRegistry {
@@ -588,12 +588,12 @@ class PortRegistry {
   identifyService(port, processName, projectInfo = null) {
     // Known ports mapping
     const knownPorts = {
-      9470: { name: 'Agent Workspace', type: 'orchestrator', icon: '🎛️' },
-      9471: { name: 'Agent Workspace Client', type: 'client', icon: '🖥️' },
-      9472: { name: 'Diff Viewer', type: 'diff-viewer', icon: '📝' },
-      3000: { name: 'Agent Workspace (Legacy)', type: 'orchestrator', icon: '🎛️' },
+      3000: { name: 'Agent Workspace', type: 'orchestrator', icon: '🎛️' },
       4000: { name: 'Agent Workspace (Dev)', type: 'orchestrator-dev', icon: '🔧' },
-      2080: { name: 'Agent Workspace Client (Legacy)', type: 'client', icon: '🖥️' },
+      2080: { name: 'Orchestrator Client', type: 'client', icon: '🖥️' },
+      2081: { name: 'Orchestrator Client (Dev)', type: 'client-dev', icon: '🖥️' },
+      7655: { name: 'Diff Viewer', type: 'diff-viewer', icon: '📝' },
+      7656: { name: 'Diff Viewer (Dev)', type: 'diff-viewer-dev', icon: '📝' },
       5173: { name: 'Vite Dev Server', type: 'vite', icon: '⚡' },
       5174: { name: 'Vite Dev Server', type: 'vite', icon: '⚡' },
       3001: { name: 'React Dev Server', type: 'react', icon: '⚛️' },
