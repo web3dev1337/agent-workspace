@@ -1806,6 +1806,7 @@ class ClaudeOrchestrator {
       'workflow-notify-mode': null,
       'workflow-notify-tier1-interrupts': null,
       'workflow-notify-review-nudges': null,
+      'worktrees-show-detailed-chooser-metadata': null,
       'tasks-theme-select': null,
       'tasks-launch-global-prefix': null,
       'tasks-launch-include-title': null,
@@ -2517,6 +2518,14 @@ class ClaudeOrchestrator {
       branchesShowAtSidebar.addEventListener('change', async (e) => {
         await this.updateGlobalUserSetting('ui.branches.showAtInSidebar', !!e.target.checked);
         this.refreshBranchLabels();
+      });
+    }
+    const worktreesShowDetailedChooserMetadata = document.getElementById('worktrees-show-detailed-chooser-metadata');
+    if (worktreesShowDetailedChooserMetadata) {
+      worktreesShowDetailedChooserMetadata.addEventListener('change', async (e) => {
+        this.showDetailedQuickWorktreeChooserMetadata = !!e.target.checked;
+        this.closeQuickWorktreeMenu();
+        await this.updateGlobalUserSetting('ui.worktrees.showDetailedChooserMetadata', !!e.target.checked);
       });
     }
 
@@ -3351,6 +3360,7 @@ class ClaudeOrchestrator {
   syncWorktreeCreationFromUserSettings() {
     const cfg = this.userSettings?.global?.ui?.worktrees || {};
     this.autoCreateExtraWorktreesWhenBusy = cfg.autoCreateExtraWhenBusy !== false;
+    this.showDetailedQuickWorktreeChooserMetadata = cfg.showDetailedChooserMetadata === true;
     const min = Number(cfg.autoCreateMinNumber);
     const max = Number(cfg.autoCreateMaxNumber);
     if (Number.isFinite(min) && min >= 1) this.autoCreateWorktreeMinNumber = Math.round(min);
@@ -4804,22 +4814,7 @@ class ClaudeOrchestrator {
       return;
     }
 
-    const recommended = this.getRecommendedWorktree(repo);
-    if (!recommended?.id || !recommended?.path) {
-      this.showToast?.(`No free worktrees: ${repo.name || key}`, 'warning');
-      return;
-    }
-
-    await this.quickStartWorktree({
-      repoPath: repo.path,
-      repoType: repo.type,
-      repoName: repo.name,
-      worktreeId: recommended.id,
-      worktreePath: recommended.path,
-      repositoryRoot: repo.path,
-      keepOpen: true,
-      explicitSelection: true
-    });
+    await this.runQuickWorktreePrimaryActionForRepo(repo, { keepOpen: true });
   }
 
   getWorktreePathForSidebarEntry(worktree) {
@@ -17124,6 +17119,11 @@ class ClaudeOrchestrator {
     if (branchesShowAtSidebar) {
       const cfg = this.userSettings.global?.ui?.branches || {};
       branchesShowAtSidebar.checked = !!cfg.showAtInSidebar;
+    }
+    const worktreesShowDetailedChooserMetadata = document.getElementById('worktrees-show-detailed-chooser-metadata');
+    if (worktreesShowDetailedChooserMetadata) {
+      const cfg = this.userSettings.global?.ui?.worktrees || {};
+      worktreesShowDetailedChooserMetadata.checked = cfg.showDetailedChooserMetadata === true;
     }
 
     // Review Console settings UI
@@ -30953,7 +30953,14 @@ class ClaudeOrchestrator {
         <div class="modal-header">
           <div class="quick-worktree-title">
             <h3>Quick Work</h3>
-            <div class="quick-worktree-tabs">
+            <details class="quick-worktree-help">
+              <summary class="quick-worktree-help-btn" title="How Quick Work works" aria-label="How Quick Work works">?</summary>
+              <div class="quick-worktree-help-popover">
+                <div><strong>Use</strong> starts a free worktree.</div>
+                <div><strong>Create</strong> makes the next numbered worktree. Managed worktrees start at <code>work9</code> by default.</div>
+              </div>
+            </details>
+            <div class="quick-worktree-tabs" style="display: none;">
               <button class="quick-tab-btn active" data-tab="start">Start work</button>
               <button class="quick-tab-btn" data-tab="resume">Resume</button>
             </div>
@@ -30962,11 +30969,11 @@ class ClaudeOrchestrator {
         </div>
         <div class="quick-worktree-toolbar">
           <input type="text" id="quick-worktree-search" placeholder="Search repos..." class="search-input">
-          <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees">
+          <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees" style="display:none">
             <input type="checkbox" id="worktree-modal-keep-open">
             Keep open
           </label>
-          <button class="btn-secondary quick-advanced-btn">Advanced</button>
+          <button class="btn-secondary quick-advanced-btn" style="display:none">Advanced</button>
         </div>
         <div class="modal-body quick-worktree-body">
           <div class="quick-tab-panel active" data-tab="start">
@@ -31001,7 +31008,7 @@ class ClaudeOrchestrator {
                   T4
                 </label>
               </div>
-              <div class="quick-control-group">
+              <div class="quick-control-group" style="display:none">
                 <span class="quick-control-label">Edited within</span>
                 <label class="quick-radio">
                   <input type="radio" name="quick-recency" value="all">
@@ -31048,7 +31055,7 @@ class ClaudeOrchestrator {
                   Show done
                 </label>
               </div>
-              <div class="quick-control-group">
+              <div class="quick-control-group" style="display:none">
                 <span class="quick-control-label">Create</span>
                 <input type="number" id="quick-worktree-create-count" class="quick-number-input" min="1" max="8" value="${this.quickWorktreeCreateCount}" title="How many new worktrees to create (work9+)" />
                 <label class="quick-checkbox" title="Create terminals but keep them hidden (skip auto-start)">
@@ -31061,7 +31068,7 @@ class ClaudeOrchestrator {
               <div class="loading">Loading repos...</div>
             </div>
           </div>
-          <div class="quick-tab-panel" data-tab="resume">
+          <div class="quick-tab-panel" data-tab="resume" style="display: none;">
             <div class="quick-conv-toolbar">
               <div class="quick-conv-controls">
                 <button class="btn-secondary quick-conv-more-btn">Load more</button>
@@ -31418,7 +31425,7 @@ class ClaudeOrchestrator {
         return;
       }
 
-      const menuBtn = event.target.closest('.quick-start-menu-btn');
+      const menuBtn = event.target.closest('.quick-choose-btn, .quick-start-menu-btn');
       if (menuBtn) {
         event.preventDefault();
         event.stopPropagation();
@@ -31426,38 +31433,32 @@ class ClaudeOrchestrator {
         return;
       }
 
-      const btn = event.target.closest('.quick-start-btn');
+      const btn = event.target.closest('.quick-primary-action-btn, .quick-start-btn');
       if (!btn) return;
 
       const repoPath = btn.dataset.repoPath;
       const repoType = btn.dataset.repoType;
       const repoName = btn.dataset.repoName;
-      const worktreeId = btn.dataset.worktreeId;
-      const worktreePath = btn.dataset.worktreePath;
-      const repositoryRoot = btn.dataset.repoRoot || repoPath;
+      const primaryMode = btn.dataset.primaryMode || 'use';
       const keepOpen = (event && (event.ctrlKey || event.metaKey)) || this.getWorktreeModalKeepOpen();
-
-      if (!worktreeId || !worktreePath) {
-        this.showTemporaryMessage('No available worktrees for this repo', 'error');
-        return;
-      }
+      const repos = Array.isArray(this.quickWorktreeReposRaw) ? this.quickWorktreeReposRaw : [];
+      const repo = repos.find((r) => String(r?.path || '').trim() === String(repoPath || '').trim()) || {
+        path: repoPath,
+        type: repoType,
+        name: repoName,
+        worktreeDirs: []
+      };
 
       (async () => {
         const prevText = btn.textContent;
         try {
           btn.disabled = true;
           btn.classList.add('is-starting');
-          btn.textContent = 'Starting…';
-          await this.quickStartWorktree({
-            repoPath,
-            repoType,
-            repoName,
-            worktreeId,
-            worktreePath,
-            repositoryRoot,
-            keepOpen,
-            explicitSelection: false
-          });
+          btn.textContent = primaryMode === 'create' ? 'Creating…' : 'Starting…';
+          await this.runQuickWorktreePrimaryActionForRepo(repo, { keepOpen });
+          if (!keepOpen && (primaryMode === 'create' || primaryMode === 'use' || primaryMode === 'use-root')) {
+            document.getElementById('quick-worktree-modal')?.remove();
+          }
         } catch (err) {
           console.error('Quick start worktree failed:', err);
           this.showToast(String(err?.message || err), 'error');
@@ -31508,14 +31509,14 @@ class ClaudeOrchestrator {
       : null;
 
     const resolvedRepo = repo || { path: repoPath, type: repoType, name: repoName, worktreeDirs: [] };
-
-    const oldest = this.getRecommendedWorktree(resolvedRepo);
-    const recent = this.getMostRecentWorktree(resolvedRepo);
+    const uiState = this.getQuickWorktreeUiState(resolvedRepo);
+    const suggested = uiState.recommendedExisting;
+    const recent = uiState.mostRecentExisting;
 
     const allWorktrees = (() => {
       const entries = Array.isArray(resolvedRepo.worktreeDirs) ? resolvedRepo.worktreeDirs : [];
       if (!entries.length) {
-        return [{ id: 'root', path: repoPath, number: 0 }];
+        return uiState.rootFallback?.path ? [uiState.rootFallback] : [];
       }
       return entries
         .map(e => ({
@@ -31530,50 +31531,90 @@ class ClaudeOrchestrator {
     menu.className = 'quick-worktree-menu';
     menu.innerHTML = `
       <div class="quick-menu-section">
-        ${oldest ? `
+        <div class="quick-menu-label">Quick actions</div>
+        ${suggested ? `
           <button class="quick-menu-item"
+                  data-action="use"
+                  data-base-label="${this.escapeHtml(`Use ${this.getQuickWorktreeDisplayName(suggested.id)}`)}"
                   data-repo-path="${this.escapeHtml(repoPath)}"
                   data-repo-type="${this.escapeHtml(repoType)}"
                   data-repo-name="${this.escapeHtml(repoName)}"
                   data-repo-root="${this.escapeHtml(repositoryRoot)}"
-                  data-worktree-id="${this.escapeHtml(oldest.id)}"
-                  data-worktree-path="${this.escapeHtml(oldest.path)}">
-            🕰️ Start oldest (${this.escapeHtml(oldest.id)})
+                  data-worktree-id="${this.escapeHtml(suggested.id)}"
+                  data-worktree-path="${this.escapeHtml(suggested.path)}">
+            Use suggested ${this.escapeHtml(this.getQuickWorktreeDisplayName(suggested.id))}
           </button>
         ` : ''}
-        ${recent && (!oldest || recent.id !== oldest.id) ? `
+        ${recent && (!suggested || recent.id !== suggested.id) ? `
           <button class="quick-menu-item"
+                  data-action="use"
+                  data-base-label="${this.escapeHtml(`Use newest ${this.getQuickWorktreeDisplayName(recent.id)}`)}"
                   data-repo-path="${this.escapeHtml(repoPath)}"
                   data-repo-type="${this.escapeHtml(repoType)}"
                   data-repo-name="${this.escapeHtml(repoName)}"
                   data-repo-root="${this.escapeHtml(repositoryRoot)}"
                   data-worktree-id="${this.escapeHtml(recent.id)}"
                   data-worktree-path="${this.escapeHtml(recent.path)}">
-            🆕 Start most recent (${this.escapeHtml(recent.id)})
+            Use newest ${this.escapeHtml(this.getQuickWorktreeDisplayName(recent.id))}
+          </button>
+        ` : ''}
+        ${uiState.canCreate ? `
+          <button class="quick-menu-item quick-menu-item-create"
+                  data-action="create"
+                  data-repo-path="${this.escapeHtml(repoPath)}"
+                  data-repo-type="${this.escapeHtml(repoType)}"
+                  data-repo-name="${this.escapeHtml(repoName)}"
+                  data-repo-root="${this.escapeHtml(repositoryRoot)}"
+                  data-next-id="${this.escapeHtml(uiState.nextId)}">
+            Create ${this.escapeHtml(this.getQuickWorktreeDisplayName(uiState.nextId))}
+          </button>
+        ` : ''}
+        ${!uiState.canCreate && uiState.rootFallback?.path ? `
+          <button class="quick-menu-item"
+                  data-action="use"
+                  data-base-label="Use repo root"
+                  data-repo-path="${this.escapeHtml(repoPath)}"
+                  data-repo-type="${this.escapeHtml(repoType)}"
+                  data-repo-name="${this.escapeHtml(repoName)}"
+                  data-repo-root="${this.escapeHtml(repositoryRoot)}"
+                  data-worktree-id="${this.escapeHtml(uiState.rootFallback.id)}"
+                  data-worktree-path="${this.escapeHtml(uiState.rootFallback.path)}">
+            Use repo root
           </button>
         ` : ''}
       </div>
 
+      ${allWorktrees.length ? `
       <div class="quick-menu-divider"></div>
-
       <div class="quick-menu-section">
+        <div class="quick-menu-label">All detected worktrees</div>
         ${allWorktrees.map(entry => {
+          const isOpenHere = this.getCurrentWorkspaceSessionIdsForWorktree(repoPath, entry.id, repoName).length > 0;
+          if (isOpenHere) return '';
           const inUse = this.isWorktreeInUse(repoPath, entry.id, repoName);
-          const statusLabel = inUse ? ' • in use' : '';
+          const busyElsewhere = inUse;
+          const displayId = this.getQuickWorktreeDisplayName(entry.id);
+          const baseLabel = busyElsewhere
+            ? `${displayId} busy elsewhere`
+            : `Use ${displayId}`;
           return `
             <button class="quick-menu-item"
+                    data-action="${busyElsewhere ? 'busy' : 'use'}"
                     data-in-use="${inUse ? 'true' : 'false'}"
+                    data-base-label="${this.escapeHtml(baseLabel)}"
                     data-repo-path="${this.escapeHtml(repoPath)}"
                     data-repo-type="${this.escapeHtml(repoType)}"
                     data-repo-name="${this.escapeHtml(repoName)}"
                     data-repo-root="${this.escapeHtml(repositoryRoot)}"
                     data-worktree-id="${this.escapeHtml(entry.id)}"
-                    data-worktree-path="${this.escapeHtml(entry.path)}">
-              ${this.escapeHtml(entry.id)}${statusLabel}
+                    data-worktree-path="${this.escapeHtml(entry.path)}"
+                    ${busyElsewhere ? 'disabled' : ''}>
+              ${this.escapeHtml(baseLabel)}
             </button>
           `;
         }).join('')}
       </div>
+      ` : ''}
     `;
 
     document.body.appendChild(menu);
@@ -31582,18 +31623,36 @@ class ClaudeOrchestrator {
     const rect = anchorButton.getBoundingClientRect();
     const menuWidth = 280;
     const left = Math.min(window.innerWidth - menuWidth - 12, Math.max(12, rect.left));
-    const top = Math.min(window.innerHeight - 12, rect.bottom + 6);
 
     menu.style.position = 'fixed';
     menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
     menu.style.minWidth = `${menuWidth}px`;
-    menu.style.zIndex = '1100';
+    menu.style.zIndex = '2100';
+
+    // Position above the button; measure after appending so offsetHeight is available
+    const menuHeight = menu.offsetHeight || 200;
+    const topAbove = rect.top - menuHeight - 6;
+    menu.style.top = `${Math.max(12, topAbove)}px`;
 
     const onMenuClick = (e) => {
       const item = e.target.closest('.quick-menu-item');
       if (!item) return;
       const keepOpen = (e.ctrlKey || e.metaKey) || this.getWorktreeModalKeepOpen();
+      const action = item.dataset.action || '';
+
+      if (action === 'create') {
+        const startTier = Number(this.quickWorktreeStartTier);
+        this.quickCreateExtraWorktreesForRepo({
+          repoPath: item.dataset.repoPath,
+          repoType: item.dataset.repoType,
+          repoName: item.dataset.repoName,
+          count: 1,
+          background: false,
+          startTier
+        }).catch(() => {});
+        this.closeQuickWorktreeMenu();
+        return;
+      }
 
       const worktreeId = item.dataset.worktreeId;
       const worktreePath = item.dataset.worktreePath;
@@ -31604,7 +31663,7 @@ class ClaudeOrchestrator {
       const repoType = item.dataset.repoType;
       const repoName = item.dataset.repoName;
 
-      if (inUse) {
+      if (action === 'show' || inUse) {
         this.addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName, true, keepOpen);
       } else {
         this.quickStartWorktree({
@@ -31648,6 +31707,7 @@ class ClaudeOrchestrator {
 
   async enrichQuickWorktreeMenuWithMetadata(menuEl) {
     if (!menuEl) return;
+    if (!this.showDetailedQuickWorktreeChooserMetadata) return;
 
     const items = Array.from(menuEl.querySelectorAll('.quick-menu-item'))
       .filter(btn => !!btn.dataset.worktreePath);
@@ -31686,6 +31746,7 @@ class ClaudeOrchestrator {
       }
 
       const id = btn.dataset.worktreeId || '';
+      const baseLabel = btn.dataset.baseLabel || this.getQuickWorktreeDisplayName(id);
       let suffix = prLabel ? ` • ${prLabel}` : '';
       if (dirty > 0) suffix += ` • dirty:${dirty}`;
       if (behind > 0 || ahead > 0) {
@@ -31703,18 +31764,153 @@ class ClaudeOrchestrator {
         else if (risk === 'low') btn.classList.add('risk-low');
       }
 
-      // Keep the special "Start ..." labels intact, but append metadata.
-      if (btn.textContent.includes('Start oldest') || btn.textContent.includes('Start most recent')) {
-        btn.textContent = `${btn.textContent.split(' • ')[0]} • ${branch}${suffix}`;
-      } else {
-        btn.textContent = `${id} • ${branch}${suffix}`;
-      }
+      btn.textContent = `${baseLabel} • ${branch}${suffix}`;
 
       if (prClass) {
         btn.classList.remove('pr-open', 'pr-draft', 'pr-merged', 'pr-closed', 'pr-unknown');
         btn.classList.add(prClass);
       }
     });
+  }
+
+  getQuickWorktreeDisplayName(worktreeId) {
+    const id = String(worktreeId || '').trim();
+    if (!id) return 'worktree';
+    return id === 'root' ? 'repo root' : id;
+  }
+
+  findRepoWorktreeEntry(repo, worktreeId) {
+    const r = repo && typeof repo === 'object' ? repo : null;
+    const id = String(worktreeId || '').trim();
+    if (!r || !id) return null;
+
+    if (id === 'root') {
+      const repoPath = String(r.path || '').trim();
+      return repoPath ? { id: 'root', path: repoPath, number: 0, isRoot: true } : null;
+    }
+
+    const entries = Array.isArray(r.worktreeDirs) ? r.worktreeDirs : [];
+    const entry = entries.find((candidate) => String(candidate?.id || '').trim() === id);
+    if (!entry) return null;
+
+    return {
+      ...entry,
+      id,
+      path: String(entry.path || `${r.path}/${id}`),
+      number: Number(entry.number || parseInt(id.replace(/^work/i, ''), 10) || 0),
+      isRoot: false
+    };
+  }
+
+  getQuickWorktreeUiState(repo) {
+    const r = repo && typeof repo === 'object' ? repo : {};
+    const recommended = this.getRecommendedWorktree(r);
+    const mostRecent = this.getMostRecentWorktree(r);
+    const recommendedExisting = recommended?.id && recommended.id !== 'root' ? recommended : null;
+    const mostRecentExisting = mostRecent?.id && mostRecent.id !== 'root' ? mostRecent : null;
+    const rootFallback = recommended?.id === 'root'
+      ? recommended
+      : (mostRecent?.id === 'root' ? mostRecent : this.findRepoWorktreeEntry(r, 'root'));
+    const entries = Array.isArray(r.worktreeDirs) ? r.worktreeDirs : [];
+    const totalCount = entries.length;
+    const availableCount = entries.filter((entry) => entry?.id && !this.isWorktreeInUse(r.path, entry.id, r.name)).length;
+    const nextId = this.getNextWorktreeIdForRepo(r);
+    const nextNumber = Number(String(nextId || '').replace(/^work/i, ''));
+    const canCreate = !!(this.currentWorkspace?.id && Number.isFinite(nextNumber) && nextNumber <= this.autoCreateWorktreeMaxNumber);
+
+    let primaryMode = 'none';
+    let primaryLabel = 'Unavailable';
+    let summaryBadge = 'Unavailable';
+    let summaryTone = 'disabled';
+    let summaryText = 'Open a workspace before adding worktrees.';
+
+    if (recommendedExisting?.id && recommendedExisting?.path) {
+      primaryMode = 'use';
+      primaryLabel = `Use ${this.getQuickWorktreeDisplayName(recommendedExisting.id)}`;
+      summaryBadge = 'Suggested';
+      summaryTone = 'suggested';
+      summaryText = availableCount > 1
+        ? `${availableCount} free worktrees found. This suggests the least recently used slot.`
+        : 'A free worktree is ready to use for this repo.';
+    } else if (canCreate) {
+      primaryMode = 'create';
+      primaryLabel = `Create ${this.getQuickWorktreeDisplayName(nextId)}`;
+      summaryBadge = totalCount > 0 ? 'Create new' : 'First worktree';
+      summaryTone = 'create';
+      summaryText = totalCount > 0
+        ? `All ${totalCount} detected worktrees are busy. Create ${this.getQuickWorktreeDisplayName(nextId)} for a fresh slot.`
+        : `No existing worktrees detected. Create ${this.getQuickWorktreeDisplayName(nextId)} to add this repo to the workspace.`;
+    } else if (rootFallback?.path) {
+      primaryMode = 'use-root';
+      primaryLabel = `Use ${this.getQuickWorktreeDisplayName(rootFallback.id)}`;
+      summaryBadge = 'Repo root';
+      summaryTone = 'root';
+      summaryText = 'No managed worktrees were detected for this repo.';
+    } else if (totalCount > 0) {
+      summaryBadge = 'Busy';
+      summaryTone = 'busy';
+      summaryText = 'All detected worktrees are currently in use.';
+    }
+
+    return {
+      recommended,
+      recommendedExisting,
+      mostRecent,
+      mostRecentExisting,
+      rootFallback,
+      totalCount,
+      availableCount,
+      nextId,
+      canCreate,
+      primaryMode,
+      primaryLabel,
+      summaryBadge,
+      summaryTone,
+      summaryText
+    };
+  }
+
+  async runQuickWorktreePrimaryActionForRepo(repo, { keepOpen = false } = {}) {
+    const r = repo && typeof repo === 'object' ? repo : null;
+    if (!r?.path) {
+      this.showTemporaryMessage('Repo not found', 'error');
+      return false;
+    }
+
+    const uiState = this.getQuickWorktreeUiState(r);
+    const primaryWorktree = uiState.primaryMode === 'use'
+      ? uiState.recommendedExisting
+      : (uiState.primaryMode === 'use-root' ? uiState.rootFallback : null);
+
+    if (uiState.primaryMode === 'create') {
+      const startTier = Number(this.quickWorktreeStartTier);
+      await this.quickCreateExtraWorktreesForRepo({
+        repoPath: r.path,
+        repoType: r.type,
+        repoName: r.name,
+        count: 1,
+        background: false,
+        startTier
+      });
+      return true;
+    }
+
+    if (primaryWorktree?.id && primaryWorktree?.path) {
+      await this.quickStartWorktree({
+        repoPath: r.path,
+        repoType: r.type,
+        repoName: r.name,
+        worktreeId: primaryWorktree.id,
+        worktreePath: primaryWorktree.path,
+        repositoryRoot: r.path,
+        keepOpen,
+        explicitSelection: true
+      });
+      return true;
+    }
+
+    this.showTemporaryMessage(`No available worktrees for ${r.name || 'this repo'}`, 'warning');
+    return false;
   }
 
   renderQuickRepoList(repos) {
@@ -31883,50 +32079,17 @@ class ClaudeOrchestrator {
   }
 
   renderQuickRepoRow(repo) {
-    const recommended = this.getRecommendedWorktree(repo);
-    const mostRecent = this.getMostRecentWorktree(repo);
-    const hasWorktrees = Array.isArray(repo.worktreeDirs) && repo.worktreeDirs.length > 0;
-    const actionLabel = recommended ? `Start (${recommended.id})` : (hasWorktrees ? 'All busy' : 'No worktrees');
+    const uiState = this.getQuickWorktreeUiState(repo);
     const displayPath = repo.relativePath || repo.path || '';
     const displayPathLabel = displayPath.startsWith('/') ? displayPath : `~/${displayPath}`;
     const isFavorite = (this.quickWorktreeFavorites || new Set()).has(repo.path);
     const favoriteLabel = isFavorite ? '★' : '☆';
-    const nextId = this.getNextWorktreeIdForRepo(repo);
-    const nextNumber = Number(String(nextId || '').replace(/^work/i, ''));
-    const canCreate = !!(this.currentWorkspace?.id && Number.isFinite(nextNumber) && nextNumber <= this.autoCreateWorktreeMaxNumber);
-    const createCount = this.getQuickWorktreeCreateCountForRepoPath(repo.path);
-    const createPreset = this.getQuickWorktreeCreatePresetForRepoPath(repo.path);
-    const presetCounts = this.getQuickWorktreeCreatePresets();
-    const presetTitleFor = (name) => {
-      const n = Number(presetCounts?.[name]);
-      const safe = Number.isFinite(n) && n >= 1 ? Math.min(8, Math.round(n)) : '';
-      return `${name} (${safe || '?'})`;
-    };
-    const presetButtons = `
-      <div class="quick-create-presets" title="Per-repo create presets">
-        <button class="btn-secondary quick-create-preset-btn ${createPreset === 'small' ? 'is-selected' : ''}"
-                type="button"
-                data-repo-path="${repo.path}"
-                data-preset="small"
-                title="${this.escapeHtml(presetTitleFor('small'))}">
-          S
-        </button>
-        <button class="btn-secondary quick-create-preset-btn ${createPreset === 'medium' ? 'is-selected' : ''}"
-                type="button"
-                data-repo-path="${repo.path}"
-                data-preset="medium"
-                title="${this.escapeHtml(presetTitleFor('medium'))}">
-          M
-        </button>
-        <button class="btn-secondary quick-create-preset-btn ${createPreset === 'large' ? 'is-selected' : ''}"
-                type="button"
-                data-repo-path="${repo.path}"
-                data-preset="large"
-                title="${this.escapeHtml(presetTitleFor('large'))}">
-          L
-        </button>
-      </div>
-    `;
+    const primaryWorktree = uiState.primaryMode === 'use'
+      ? uiState.recommendedExisting
+      : (uiState.primaryMode === 'use-root' ? uiState.rootFallback : null);
+    const chooseTitle = uiState.canCreate
+      ? `Choose a specific worktree or create ${uiState.nextId}`
+      : 'Choose a specific worktree';
 
     return `
       <div class="quick-repo-row"
@@ -31937,6 +32100,10 @@ class ClaudeOrchestrator {
           <div class="quick-repo-info">
             <div class="quick-repo-name">${this.escapeHtml(repo.name)}</div>
             <div class="quick-repo-path">${this.escapeHtml(displayPathLabel)}</div>
+            <div class="quick-repo-summary">
+              <span class="quick-summary-badge quick-summary-${this.escapeHtml(uiState.summaryTone)}">${this.escapeHtml(uiState.summaryBadge)}</span>
+              <span class="quick-summary-text">${this.escapeHtml(uiState.summaryText)}</span>
+            </div>
           </div>
         </div>
         <div class="quick-repo-actions">
@@ -31945,40 +32112,27 @@ class ClaudeOrchestrator {
                   title="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}">
             ${favoriteLabel}
           </button>
-          ${recommended ? `<span class="quick-worktree-pill">${recommended.id}</span>` : ''}
-          ${presetButtons}
-          <button class="btn-secondary quick-create-btn"
+          <button class="btn-primary quick-primary-action-btn"
                   data-repo-path="${repo.path}"
                   data-repo-type="${repo.type}"
                   data-repo-name="${repo.name}"
-                  title="${canCreate ? `Create ${createCount} new worktree(s) starting at ${nextId}` : 'Cannot create more worktrees for this repo'}"
-                  ${canCreate ? '' : 'disabled'}>
-            ➕ ${this.escapeHtml(nextId)}×${createCount}
+                  data-repo-root="${repo.path}"
+                  data-primary-mode="${uiState.primaryMode}"
+                  data-next-id="${this.escapeHtml(uiState.nextId)}"
+                  data-worktree-id="${this.escapeHtml(primaryWorktree?.id || '')}"
+                  data-worktree-path="${this.escapeHtml(primaryWorktree?.path || '')}"
+                  title="${this.escapeHtml(uiState.summaryText)}"
+                  ${uiState.primaryMode === 'none' ? 'disabled' : ''}>
+            ${this.escapeHtml(uiState.primaryLabel)}
           </button>
-          <div class="quick-start-group">
-            <button class="btn-primary quick-start-btn"
-                    data-repo-path="${repo.path}"
-                    data-repo-type="${repo.type}"
-                    data-repo-name="${repo.name}"
-                    data-repo-root="${repo.path}"
-                    data-worktree-id="${recommended ? recommended.id : ''}"
-                    data-worktree-path="${recommended ? recommended.path : ''}"
-                    ${recommended ? '' : 'disabled'}>
-              ${actionLabel}
-            </button>
-            <button class="btn-secondary quick-start-menu-btn"
-                    data-repo-path="${repo.path}"
-                    data-repo-type="${repo.type}"
-                    data-repo-name="${repo.name}"
-                    data-repo-root="${repo.path}"
-                    data-oldest-id="${recommended ? recommended.id : ''}"
-                    data-oldest-path="${recommended ? recommended.path : ''}"
-                    data-recent-id="${mostRecent ? mostRecent.id : ''}"
-                    data-recent-path="${mostRecent ? mostRecent.path : ''}"
-                    title="Choose worktree">
-              ▾
-            </button>
-          </div>
+          <button class="btn-secondary quick-choose-btn"
+                  data-repo-path="${repo.path}"
+                  data-repo-type="${repo.type}"
+                  data-repo-name="${repo.name}"
+                  data-repo-root="${repo.path}"
+                  title="${this.escapeHtml(chooseTitle)}">
+            Choose…
+          </button>
         </div>
       </div>
     `;
@@ -32424,7 +32578,7 @@ class ClaudeOrchestrator {
     });
   }
 
-	  isWorktreeInUse(repoPath, worktreeId, repoNameOverride = null) {
+  isWorktreeInUse(repoPath, worktreeId, repoNameOverride = null) {
 	    // Check if this worktree has ACTIVE SESSIONS, not just workspace config
 	    // A worktree is "in use" only if there are actual terminal sessions for it
 
@@ -32489,6 +32643,53 @@ class ClaudeOrchestrator {
 
     // No active sessions for this worktree - it's available
     return false;
+  }
+
+  getCurrentWorkspaceSessionIdsForWorktree(repoPath, worktreeId, repoNameOverride = null) {
+    if (!this.currentWorkspace) return [];
+
+    const normalizePath = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').trim();
+    const repoPathNorm = normalizePath(repoPath);
+    const targetRepoName = (repoNameOverride || repoPathNorm.split('/').pop() || '').toLowerCase();
+    const sessionIds = [];
+
+    for (const [sessionId, session] of this.sessions) {
+      if (session.workspace) {
+        if (session.workspace !== this.currentWorkspace.id) continue;
+      } else if (this.currentWorkspace.workspaceType === 'mixed-repo') {
+        const terminals = Array.isArray(this.currentWorkspace.terminals) ? this.currentWorkspace.terminals : [];
+        if (!terminals.some(t => t && t.id === sessionId)) continue;
+      }
+
+      const sessionWorktreeId = session.worktreeId
+        || sessionId.match(/-(work\d+)-/)?.[1]
+        || sessionId.split('-')[0];
+      if (sessionWorktreeId !== worktreeId) continue;
+
+      const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
+      const cwd = normalizePath(session?.config?.cwd || session?.cwd || '');
+      const derivedRepoRoot = (cwd && sessionWorktreeId && cwd.endsWith(`/${sessionWorktreeId}`))
+        ? cwd.slice(0, -(`/${sessionWorktreeId}`).length)
+        : cwd;
+      const sessionRepoPath = normalizePath(session?.repositoryRoot || derivedRepoRoot || '');
+
+      if (repoPathNorm && sessionRepoPath && repoPathNorm === sessionRepoPath) {
+        sessionIds.push(sessionId);
+        continue;
+      }
+
+      if (!sessionRepoName && normalizePath(this.currentWorkspace.repository?.path) === repoPathNorm) {
+        sessionIds.push(sessionId);
+        continue;
+      }
+
+      if (sessionRepoName && targetRepoName && sessionRepoName === targetRepoName) {
+        if (repoPathNorm && sessionRepoPath && repoPathNorm !== sessionRepoPath) continue;
+        sessionIds.push(sessionId);
+      }
+    }
+
+    return sessionIds;
   }
 
   async applyStartTierToNewSessions(sessionIds, tier) {
@@ -32679,7 +32880,7 @@ class ClaudeOrchestrator {
     let resolvedWorktreeId = String(worktreeId || '').trim();
     let resolvedWorktreePath = String(worktreePath || '').trim();
 
-    if (!explicitSelection) {
+    if (!explicitSelection && (!resolvedWorktreeId || !resolvedWorktreePath)) {
       const repos = Array.isArray(this.quickWorktreeReposRaw) ? this.quickWorktreeReposRaw : [];
       const repo = repos.find((r) => String(r?.path || '').trim() === String(repoPath || '').trim()) || null;
       const best = await this.pickBestFreeWorktreeForRepo(repo, {
@@ -33127,7 +33328,7 @@ class ClaudeOrchestrator {
 
     const requestedWorktreeId = String(worktreeId || '').trim();
     const requested = requestedWorktreeId
-      ? (Array.isArray(repo.worktrees) ? repo.worktrees.find((w) => String(w?.id || '') === requestedWorktreeId) : null)
+      ? this.findRepoWorktreeEntry(repo, requestedWorktreeId)
       : null;
 
     const recommended = requested || this.getRecommendedWorktree(repo);
@@ -33235,7 +33436,7 @@ class ClaudeOrchestrator {
 
     const requestedWorktreeId = String(worktreeId || '').trim();
     const requested = requestedWorktreeId
-      ? (Array.isArray(repo.worktrees) ? repo.worktrees.find((w) => String(w?.id || '') === requestedWorktreeId) : null)
+      ? this.findRepoWorktreeEntry(repo, requestedWorktreeId)
       : null;
     const recommended = requested || this.getRecommendedWorktree(repo);
 
@@ -33349,7 +33550,7 @@ class ClaudeOrchestrator {
 
     const requestedWorktreeId = String(worktreeId || '').trim();
     const requested = requestedWorktreeId
-      ? (Array.isArray(repo.worktrees) ? repo.worktrees.find((w) => String(w?.id || '') === requestedWorktreeId) : null)
+      ? this.findRepoWorktreeEntry(repo, requestedWorktreeId)
       : null;
     const recommended = requested || this.getRecommendedWorktree(repo);
 

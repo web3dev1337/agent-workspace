@@ -1,0 +1,5 @@
+- [x] Hide tab buttons (Start work / Resume) in Quick Work modal
+- [x] Hide resume tab panel
+- [x] Syntax check passes
+- [ ] Commit and push
+- [ ] Create PR

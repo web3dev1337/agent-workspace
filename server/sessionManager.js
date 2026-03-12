@@ -747,6 +747,8 @@ class SessionManager extends EventEmitter {
         HOME: homeDir, // Use a stable home directory for Claude/Codex config resolution
         TERM: 'xterm-color'
       };
+      // Remove CLAUDECODE so spawned terminals can launch Claude Code independently
+      delete env.CLAUDECODE;
 
       // Preserve the existing Linux dev PATH hack, but never apply it on Windows (path separator differs).
       if (process.platform !== 'win32') {
@@ -2308,6 +2310,8 @@ class SessionManager extends EventEmitter {
 	    if (this.gitHelper) {
 	      try {
 	        await this.updateGitBranch(worktreeId, worktreePath, true);
+          includeSessionState(claudeSessionId);
+          includeSessionState(serverSessionId);
 	      } catch (error) {
 	        logger.error('Failed to update git branch for new worktree', { worktreeId, error: error.message });
 	      }
