@@ -261,7 +261,7 @@ class Dashboard {
           <div class="dashboard-create-desc">Set up a new workspace environment to begin building.</div>
         </div>
         <button id="dashboard-add-workspace-btn" class="btn-primary workspace-create-empty-btn dashboard-create-btn">
-          ➕ Create Workspace
+          + Create Workspace
         </button>
       </div>
     ` : '';
