@@ -4076,6 +4076,7 @@ class ClaudeOrchestrator {
       build: 'buildProductionZip',
       kill: 'forceKill'
     };
+    if (buttonId === 'review') return false; // permanently hidden
     const key = map[buttonId];
     if (!key) return true;
     return visibility[key] !== false;
