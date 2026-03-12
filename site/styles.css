@@ -190,7 +190,7 @@ body {
 
 /* Hero Section Fluid */
 .hero-fluid {
-  min-height: 100vh;
+  min-height: min(100vh, 900px);
   padding: 12vh max(5vw, 2rem) 5vh;
   display: grid;
   grid-template-columns: 1fr 1fr;
