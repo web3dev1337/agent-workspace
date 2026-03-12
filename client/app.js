@@ -31711,12 +31711,14 @@ class ClaudeOrchestrator {
         else if (risk === 'low') btn.classList.add('risk-low');
       }
 
-      // Keep the special "Start ..." labels intact, but append metadata.
-      if (btn.textContent.includes('Start oldest') || btn.textContent.includes('Start most recent')) {
-        btn.textContent = `${btn.textContent.split(' • ')[0]} • ${branch}${suffix}`;
-      } else {
-        btn.textContent = `${id} • ${branch}${suffix}`;
-      }
+      // Preserve "in use" / "oldest" labels from initial render
+      const existingLabels = [];
+      const rawText = btn.textContent || '';
+      if (rawText.includes('in use')) existingLabels.push('in use');
+      if (rawText.includes('oldest')) existingLabels.push('oldest');
+      const tagsStr = existingLabels.length ? ` • ${existingLabels.join(' • ')}` : '';
+
+      btn.textContent = `${id} • ${branch}${suffix}${tagsStr}`;
 
       if (prClass) {
         btn.classList.remove('pr-open', 'pr-draft', 'pr-merged', 'pr-closed', 'pr-unknown');
