@@ -7,18 +7,24 @@ const app = express();
 const BASE_PORT = parseInt(process.env.CLIENT_PORT || '2080', 10);
 const SERVER_PORT = process.env.ORCHESTRATOR_PORT || 3000;
 
-// Proxy socket.io requests to the backend server
-app.use('/socket.io', createProxyMiddleware({
+// Proxy socket.io requests to the backend server (with WebSocket support).
+// Use pathFilter instead of Express mount path to avoid path stripping.
+// When mounted via app.use('/socket.io', proxy), Express strips the prefix
+// from req.url, so the proxy forwards /?EIO=4 instead of /socket.io/?EIO=4.
+const socketProxy = createProxyMiddleware({
     target: `http://localhost:${SERVER_PORT}`,
+    pathFilter: '/socket.io',
     ws: true,
     changeOrigin: true
-}));
+});
+app.use(socketProxy);
 
-// Proxy API requests to the backend server
-app.use('/api', createProxyMiddleware({
+// Proxy API, bootstrap, health, and replay-viewer requests to the backend server.
+// These are all server-rendered routes that don't exist as static files.
+app.use(createProxyMiddleware({
     target: `http://localhost:${SERVER_PORT}`,
+    pathFilter: ['/api', '/bootstrap', '/health', '/replay-viewer'],
     changeOrigin: true
-    // Remove pathRewrite to preserve default behavior
 }));
 
 // Serve static files from client directory
