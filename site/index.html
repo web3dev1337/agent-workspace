@@ -41,7 +41,7 @@
           <span class="gradient-text multi-color">One workspace.</span>
         </h1>
         <p class="hero-lead">
-          All your projects in one workspace. Run multiple CLI agents in parallel across different repos with complete local control. No external telemetry.
+          All your projects in one workspace. Run multiple CLI agents in parallel across different repos. Runs on your hardware, accessed through the browser or the desktop app. No external telemetry.
         </p>
         <div class="action-row">
           <a class="btn-glow" href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank">
@@ -71,11 +71,11 @@
     </section>
 
     <section class="bento-grid" id="features">
-      <!-- Row 1 -->
+      <!-- Row 1: BYOP prominent + Runs Locally -->
       <div class="bento-item span-2 reveal">
         <div class="bento-inner">
-          <h3 class="bento-title">Multi-Agent Terminals</h3>
-          <p class="bento-desc">Run Claude Code, Codex, Gemini CLI, OpenCode &mdash; any CLI agent in dedicated terminals. Each worktree pairs an agent terminal with a server terminal for running commands in the same directory.</p>
+          <h3 class="bento-title">Bring Your Own Plan</h3>
+          <p class="bento-desc">Works with your Claude Max subscription, Codex plan, or your own API keys. Use your existing CLI logins &mdash; your credentials never leave your machine.</p>
           <div class="visual-placeholder network-anim">
             <div class="dot d1"></div><div class="dot d2"></div><div class="dot d3"></div>
             <svg class="lines"><path d="M20,50 Q50,20 80,50 T140,50" /></svg>
@@ -85,18 +85,18 @@
 
       <div class="bento-item reveal" style="--delay: 0.1s">
         <div class="bento-inner glass-dark">
-          <h3 class="bento-title text-cyan">Bring Your Own Plan</h3>
-          <p class="bento-desc">Works with your Claude Max subscription, Codex plan, or your own API keys. Your credentials never leave your machine.</p>
-          <div class="bento-icon">🔑</div>
+          <h3 class="bento-title text-cyan">Runs Locally</h3>
+          <p class="bento-desc">Runs on your own hardware. Access through the browser or the native desktop app. Zero external telemetry, zero data collection.</p>
+          <div class="bento-icon">🔒</div>
         </div>
       </div>
 
-      <!-- Row 2 -->
+      <!-- Row 2: Multi-Agent + Workspaces + Diff Viewer -->
       <div class="bento-item reveal" style="--delay: 0.15s">
         <div class="bento-inner glass-dark">
-          <h3 class="bento-title text-blue-deep">Zero Telemetry</h3>
-          <p class="bento-desc">No external analytics, no data collection, no phone home. Everything runs locally on your machine.</p>
-          <div class="bento-icon">🔒</div>
+          <h3 class="bento-title text-blue-deep">Multi-Agent Terminals</h3>
+          <p class="bento-desc">Run Claude Code, Codex, Gemini CLI, OpenCode &mdash; any CLI agent in dedicated terminals. Each worktree pairs an agent terminal with a server terminal.</p>
+          <div class="bento-icon">⚡</div>
         </div>
       </div>
 
@@ -118,7 +118,7 @@
         </div>
       </div>
 
-      <!-- Row 3 -->
+      <!-- Row 3: Commander + Tasks -->
       <div class="bento-item span-2 reveal" style="--delay: 0.1s">
         <div class="bento-inner">
           <h3 class="bento-title">Commander</h3>
@@ -138,12 +138,12 @@
         </div>
       </div>
 
-      <!-- Row 4 -->
+      <!-- Row 4: Tiers + Shipped With -->
       <div class="bento-item reveal" style="--delay: 0.15s">
         <div class="bento-inner glass-dark">
           <h3 class="bento-title">Tier System</h3>
-          <p class="bento-desc">Organize sessions by priority. T1 Focus for active work, T2 Review, T3 Background for autonomous tasks, T4 for the rest. Hide and show as needed.</p>
-          <div class="bento-icon">⚡</div>
+          <p class="bento-desc">Organize sessions by priority. T1 Focus for active work, T2 Review for PRs, T3 Background for autonomous tasks, T4 for the rest. Hide and show as needed.</p>
+          <div class="bento-icon">🎯</div>
         </div>
       </div>
 
@@ -162,31 +162,39 @@
     <section class="integration-fluid" id="compatibility">
       <div class="integration-content reveal">
         <h2 class="section-title">Bring Your CLI.</h2>
-        <p class="section-desc">Works with your existing CLI logins and API keys. Agent Workspace wraps your preferred tools &mdash; run them directly from the terminal, side by side, in the same workspace.</p>
+        <p class="section-desc">Agent Workspace wraps your preferred CLI tools. Run them directly from the terminal, side by side, in the same workspace. Bring your existing logins and API keys.</p>
 
-        <div class="logo-showcase">
-          <div class="showcase-card">
-            <div class="card-glow claude-glow"></div>
-            <div class="card-front white-bg-prominent">
+        <div class="cli-grid">
+          <div class="cli-card">
+            <div class="cli-card-inner white-bg-prominent">
               <img src="assets/claude-logo.svg" alt="Claude Code" class="hi-res-logo">
             </div>
             <span class="card-name">Claude Code</span>
           </div>
 
-          <div class="connection-line">
-            <div class="pulse-dot"></div>
-          </div>
-
-          <div class="showcase-card">
-            <div class="card-glow codex-glow"></div>
-            <div class="card-front white-bg-prominent">
+          <div class="cli-card">
+            <div class="cli-card-inner white-bg-prominent">
               <img src="assets/codex-logo.png" alt="Codex" class="hi-res-logo">
             </div>
             <span class="card-name">Codex</span>
           </div>
+
+          <div class="cli-card">
+            <div class="cli-card-inner white-bg-prominent">
+              <img src="assets/gemini-icon.svg" alt="Gemini CLI" class="hi-res-logo">
+            </div>
+            <span class="card-name">Gemini CLI</span>
+          </div>
+
+          <div class="cli-card">
+            <div class="cli-card-inner cli-placeholder">
+              <span class="cli-question">?</span>
+            </div>
+            <span class="card-name">Grok CLI <span class="when-elon">when, Elon?</span></span>
+          </div>
         </div>
 
-        <p class="coming-soon-note">Gemini CLI, OpenCode, Aider, and any CLI agent that runs in a terminal.</p>
+        <p class="coming-soon-note">Plus OpenCode, Aider, and any CLI agent that runs in a terminal.</p>
       </div>
     </section>
 

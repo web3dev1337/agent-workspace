@@ -656,6 +656,57 @@ a.btn-glow {
   transform: scale(1.1) translateY(-10px);
 }
 
+.cli-grid {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3rem;
+  flex-wrap: wrap;
+}
+
+.cli-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.cli-card-inner {
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.cli-card:hover .cli-card-inner {
+  transform: scale(1.1) translateY(-10px);
+}
+
+.cli-placeholder {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 2px dashed rgba(255, 255, 255, 0.2) !important;
+  box-shadow: none !important;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 140px;
+  height: 140px;
+  border-radius: 30px;
+}
+
+.cli-question {
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.when-elon {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.6;
+  margin-top: 0.25rem;
+}
+
 .coming-soon-note {
   margin-top: 3rem;
   color: var(--text-muted);
