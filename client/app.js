@@ -31568,6 +31568,7 @@ class ClaudeOrchestrator {
           return `
             <button class="quick-menu-item"
                     data-in-use="${inUse ? 'true' : 'false'}"
+                    data-is-oldest="${isOldest ? 'true' : 'false'}"
                     data-repo-path="${this.escapeHtml(repoPath)}"
                     data-repo-type="${this.escapeHtml(repoType)}"
                     data-repo-name="${this.escapeHtml(repoName)}"
@@ -31711,12 +31712,11 @@ class ClaudeOrchestrator {
         else if (risk === 'low') btn.classList.add('risk-low');
       }
 
-      // Preserve "in use" / "oldest" labels from initial render
-      const existingLabels = [];
-      const rawText = btn.textContent || '';
-      if (rawText.includes('in use')) existingLabels.push('in use');
-      if (rawText.includes('oldest')) existingLabels.push('oldest');
-      const tagsStr = existingLabels.length ? ` • ${existingLabels.join(' • ')}` : '';
+      // Preserve "in use" / "oldest" labels from data attributes
+      const tagParts = [];
+      if (btn.dataset.inUse === 'true') tagParts.push('in use');
+      if (btn.dataset.isOldest === 'true') tagParts.push('oldest');
+      const tagsStr = tagParts.length ? ` • ${tagParts.join(' • ')}` : '';
 
       btn.textContent = `${id} • ${branch}${suffix}${tagsStr}`;
 
