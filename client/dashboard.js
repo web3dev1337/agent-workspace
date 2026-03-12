@@ -274,6 +274,18 @@ class Dashboard {
       </div>
     ` : '';
 
+    const createSection = (visibility.createSection !== false) ? `
+      <div class="dashboard-create-banner">
+        <div class="dashboard-create-info">
+          <div class="dashboard-create-title">✨ Get Started</div>
+          <div class="dashboard-create-desc">Set up a new workspace environment to begin building.</div>
+        </div>
+        <button id="dashboard-add-workspace-btn" class="btn-primary workspace-create-empty-btn dashboard-create-btn">
+          ➕ Create Workspace
+        </button>
+      </div>
+    ` : '';
+
     const quickLinksSection = (visibility.quickLinks !== false) ? `
       <div class="dashboard-bento-card dashboard-quick-links">
         <div class="dashboard-bento-header">
@@ -297,9 +309,6 @@ class Dashboard {
     ` : '';
 
     const workspaceCards = [];
-    if (visibility.createSection !== false) {
-      workspaceCards.push(this.generateCreateWorkspaceCard(), this.generateCreateProjectCard());
-    }
     if (visibility.workspacesActive !== false) {
       workspaceCards.push(...activeWorkspaces.map((ws) => this.generateWorkspaceCard(ws, true)));
     }
@@ -328,7 +337,7 @@ class Dashboard {
     const resourcesSection = resourcesCards.join('');
 
     const compactTabs = [
-      workspaceSection ? { id: 'workspaces', label: 'Workspaces', content: workspaceSection } : null,
+      (createSection || workspaceSection) ? { id: 'workspaces', label: 'Workspaces', content: `${createSection}${workspaceSection}` } : null,
       processSection ? { id: 'process', label: 'Process', content: processSection } : null,
       resourcesSection ? { id: 'resources', label: 'Resources', content: resourcesSection } : null
     ].filter(Boolean);
@@ -349,6 +358,7 @@ class Dashboard {
       ? `
         <div class="dashboard-main-content">
           <div class="dashboard-content-left">
+            ${createSection}
             ${workspaceSection}
           </div>
           <div class="dashboard-content-right dashboard-resource-stack">
@@ -356,7 +366,7 @@ class Dashboard {
           </div>
         </div>
       `
-      : (workspaceSection || desktopResourceStack);
+      : ([createSection, workspaceSection, desktopResourceStack].filter(Boolean).join(''));
 
     const compactLayout = `
       <div class="dashboard-compact-shell">
