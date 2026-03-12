@@ -14497,7 +14497,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .dashboard-main-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 420px);
   gap: var(--space-lg);
   flex: 1;
   min-height: 0;
@@ -14509,8 +14509,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
   flex-direction: column;
   gap: var(--space-md);
   height: 100%;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dashboard-content-right {
@@ -14518,8 +14518,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
   flex-direction: column;
   gap: var(--space-md);
   height: 100%;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Create Workspace Banner */
@@ -14577,7 +14577,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 /* Workspace Grid */
 .bento-workspace-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: var(--space-md);
 }
 
@@ -14678,8 +14678,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
   flex-direction: column;
   gap: var(--space-sm);
   flex: 1;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .port-dashboard-card {
@@ -14741,8 +14741,26 @@ body.dependency-onboarding-active #dependency-setup-modal {
   border: 1px solid var(--border-color);
 }
 
+.dashboard-bento-section {
+  min-height: 0;
+  overflow: hidden;
+  flex: 1;
+}
+
+.dashboard-bento-section .bento-workspace-grid {
+  min-height: 0;
+  overflow: hidden;
+}
+
 @media (max-width: 1200px) {
   .dashboard-main-content {
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 280px);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-main-content {
     grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
   }
 }
