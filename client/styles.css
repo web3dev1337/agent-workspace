@@ -14586,6 +14586,10 @@ body.dependency-onboarding-active #dependency-setup-modal {
   backdrop-filter: blur(20px);
 }
 
+.dashboard-layout-desktop {
+  grid-template-rows: auto 1fr;
+}
+
 .dashboard-wrapper::before,
 .dashboard-wrapper::after {
   content: "";
@@ -14625,37 +14629,255 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: none;
 }
 
+.dashboard-desktop-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 0.9rem;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-desktop-body {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+}
+
+.dashboard-side-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.9rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 18%),
+    linear-gradient(180deg, rgba(12, 21, 36, 0.88), rgba(7, 13, 24, 0.9));
+  box-shadow: 0 22px 50px rgba(2, 6, 23, 0.18);
+  overflow: hidden;
+}
+
+.dashboard-side-panel::before,
+.dashboard-side-panel::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.dashboard-side-panel::before {
+  inset: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 14%, transparent), transparent 24%),
+    radial-gradient(220px 220px at 18% 12%, rgba(255, 255, 255, 0.07), transparent 72%);
+  opacity: 0.9;
+}
+
+.dashboard-side-panel::after {
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 54%, transparent), transparent 85%);
+  opacity: 0.9;
+}
+
+.dashboard-side-brand,
+.dashboard-side-stack,
+.dashboard-side-action {
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-side-brand {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dashboard-side-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.dashboard-side-title-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-on-accent);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.28), transparent 38%),
+    linear-gradient(145deg, color-mix(in srgb, var(--accent-primary) 84%, white 16%), color-mix(in srgb, var(--accent-primary-pressed) 88%, #08111d 12%));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.2);
+}
+
+.dashboard-side-title-copy {
+  min-width: 0;
+}
+
+.dashboard-side-title-copy h1 {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 720;
+  letter-spacing: -0.024em;
+  color: color-mix(in srgb, var(--text-primary) 98%, white 2%);
+}
+
+.dashboard-side-title-copy p {
+  margin: 0.18rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--text-primary) 72%, transparent);
+}
+
+.dashboard-side-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.dashboard-side-stat {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.65rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.dashboard-side-stat strong {
+  font-size: 1rem;
+  font-weight: 720;
+  letter-spacing: -0.03em;
+}
+
+.dashboard-side-stat span {
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--text-primary) 66%, transparent);
+}
+
+.dashboard-side-stack {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.dashboard-side-section-label {
+  font-size: 0.68rem;
+  font-weight: 680;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text-primary) 58%, transparent);
+}
+
+.dashboard-side-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.62rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  color: color-mix(in srgb, var(--text-primary) 92%, white 8%);
+  font-size: 0.8rem;
+}
+
+.dashboard-side-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-side-pill strong {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.18rem 0.42rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dashboard-side-pill.is-active {
+  border-color: color-mix(in srgb, var(--accent-primary) 42%, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--accent-primary) 16%, rgba(255, 255, 255, 0.04));
+}
+
+.dashboard-side-action {
+  margin-top: auto;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.dashboard-side-action-copy {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.dashboard-side-action-copy strong {
+  font-size: 0.82rem;
+  font-weight: 680;
+  color: color-mix(in srgb, var(--text-primary) 95%, white 5%);
+}
+
+.dashboard-side-action-copy span {
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--text-primary) 68%, transparent);
+}
+
+.dashboard-side-create-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 0.62rem 0.78rem !important;
+  border-radius: 12px !important;
+  font-size: 0.8rem !important;
+  font-weight: 660 !important;
+}
+
 .dashboard-main-content {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(22rem, 0.95fr);
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1.45fr) minmax(18rem, 0.92fr);
+  gap: 0.85rem;
   align-items: stretch;
   min-height: 0;
   position: relative;
   z-index: 1;
 }
 
+.dashboard-main-content-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .dashboard-content-left {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.72rem;
   min-width: 0;
   align-content: start;
   min-height: 0;
   position: relative;
   isolation: isolate;
-  padding: 1.05rem 1.05rem 1.1rem;
+  padding: 0.85rem 0.9rem 0.92rem;
   overflow: hidden;
 }
 
 .dashboard-content-right {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.72rem;
   min-width: 0;
   align-content: start;
   min-height: 0;
   position: relative;
   isolation: isolate;
-  padding: 1.05rem 1.05rem 1.1rem;
+  padding: 0.85rem 0.9rem 0.92rem;
   overflow: hidden;
 }
 
@@ -14670,7 +14892,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 28px;
+  border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 18%),
     var(--dashboard-panel-fill);
@@ -14684,8 +14906,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .dashboard-content-right::after {
   content: "";
   position: absolute;
-  left: 22px;
-  right: 22px;
+  left: 18px;
+  right: 18px;
   top: 0;
   height: 1px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent-primary) 36%, transparent), transparent 72%);
@@ -14785,9 +15007,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: flex;
   flex-direction: column;
   background: var(--dashboard-card-fill);
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid var(--dashboard-card-border);
-  padding: var(--space-md);
+  padding: 0.9rem;
   box-shadow: 0 18px 40px rgba(2, 6, 23, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
   min-width: 0;
@@ -15125,63 +15347,56 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .ports-dashboard-section { --dashboard-card-accent: color-mix(in srgb, var(--accent-success) 58%, var(--accent-primary) 42%); }
 
 .dashboard-layout-desktop .dashboard-workspaces-grid {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 0.72rem;
 }
 
 .dashboard-layout-desktop .bento-workspace-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) auto auto;
-  grid-template-areas: "header body footer";
-  align-items: center;
-  gap: 0.95rem;
-  min-height: 84px;
-  padding: 0.95rem 1rem 0.95rem 1.05rem;
+  display: flex;
+  gap: 0;
+  min-height: 132px;
+  padding: 0;
+  border-radius: 12px;
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--accent-primary) 6%, transparent), transparent 35%),
-    linear-gradient(180deg, rgba(12, 19, 32, 0.9), rgba(9, 15, 25, 0.94));
+    linear-gradient(125deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), transparent 42%),
+    linear-gradient(180deg, rgba(12, 19, 32, 0.9), rgba(9, 15, 25, 0.95));
 }
 
 .dashboard-layout-desktop .bento-workspace-card .workspace-card-header {
-  grid-area: header;
-  padding: 0;
+  padding: 0.8rem 0.84rem 0.2rem;
   margin: 0;
   min-width: 0;
-  gap: 0.85rem;
+  gap: 0.68rem;
+  align-items: flex-start;
 }
 
 .dashboard-layout-desktop .bento-workspace-card .workspace-card-body {
-  grid-area: body;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
+  padding: 0 0.84rem 0.58rem;
+  display: block;
   min-width: 0;
 }
 
 .dashboard-layout-desktop .bento-workspace-card .workspace-meta {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-  padding: 0.42rem 0.68rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: block;
+  white-space: normal;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 
 .dashboard-layout-desktop .bento-workspace-card .workspace-card-footer {
-  grid-area: footer;
-  padding: 0;
+  padding: 0 0.84rem 0.84rem;
   margin: 0;
   background: transparent;
   border: 0;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .dashboard-layout-desktop .bento-workspace-card .workspace-health {
-  margin-top: 0;
-  padding: 0.5rem 0.65rem;
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
 }
 
 .dashboard-layout-desktop .bento-workspace-card .health-subtext {
@@ -15192,29 +15407,49 @@ body.dependency-onboarding-active #dependency-setup-modal {
   border-color: color-mix(in srgb, var(--accent-primary) 54%, rgba(255, 255, 255, 0.08));
   box-shadow: 0 22px 44px rgba(2, 6, 23, 0.24);
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--accent-primary) 12%, transparent), transparent 40%),
+    linear-gradient(125deg, color-mix(in srgb, var(--accent-primary) 13%, transparent), transparent 45%),
     linear-gradient(180deg, rgba(10, 28, 32, 0.92), rgba(9, 15, 25, 0.94));
 }
 
 .dashboard-layout-desktop .bento-workspace-card .workspace-info h3 {
-  font-size: 1.02rem;
+  font-size: 0.98rem;
   font-weight: 690;
+  line-height: 1.18;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .dashboard-layout-desktop .bento-workspace-card .workspace-type {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  margin-top: 0.15rem;
 }
 
 .dashboard-layout-desktop .bento-workspace-card .last-used {
-  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.48rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.68rem;
 }
 
 .dashboard-layout-desktop .workspace-open-btn {
-  padding: 0.48rem 0.82rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.48rem 0.64rem;
+  border-radius: 10px;
+  font-size: 0.74rem;
   font-weight: 620;
   box-shadow: 0 10px 20px rgba(2, 6, 23, 0.12);
+}
+
+.dashboard-layout-desktop .bento-action-group .btn-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
 }
 
 .dashboard-compact-panel-shell {
@@ -15246,8 +15481,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-layout-desktop .dashboard-content-right .dashboard-bento-card {
-  padding: 0.9rem;
-  border-radius: 18px;
+  padding: 0.8rem;
+  border-radius: 12px;
 }
 
 .dashboard-layout-desktop .dashboard-resource-cards .dashboard-bento-card {
@@ -15287,7 +15522,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-layout-desktop .dashboard-content-right .port-dashboard-card {
-  padding: 0.72rem 0.76rem;
+  padding: 0.66rem 0.7rem;
+  border-radius: 10px;
 }
 
 .dashboard-layout-compact .dashboard-bento-card {

@@ -315,6 +315,7 @@ class Dashboard {
     if (visibility.workspacesAll !== false) {
       workspaceCards.push(...inactiveWorkspaces.map((ws) => this.generateWorkspaceCard(ws, false)));
     }
+    const totalWorkspaceCount = workspaceCards.length;
 
     const workspaceMeta = [
       visibility.workspacesActive !== false ? `${activeWorkspaces.length} active` : '',
@@ -354,11 +355,65 @@ class Dashboard {
       `
       : '';
     const desktopResourceStack = [processSection, desktopResourcesGrid].filter(Boolean).join('');
-    const desktopLayout = (workspaceSection && desktopResourceStack)
+    const desktopSidebar = `
+      <aside class="dashboard-side-panel">
+        <div class="dashboard-side-brand">
+          <div class="dashboard-side-title-group">
+            <div class="dashboard-side-title-icon" style="font-size:24px;">🏠</div>
+            <div class="dashboard-side-title-copy">
+              <h1>Agent Workspace</h1>
+              <p>${escapeHtml(totalWorkspaceCount)} workspace${totalWorkspaceCount === 1 ? '' : 's'} ready to open</p>
+            </div>
+          </div>
+          <div class="dashboard-side-stats">
+            <div class="dashboard-side-stat">
+              <strong>${escapeHtml(activeWorkspaces.length)}</strong>
+              <span>Active</span>
+            </div>
+            <div class="dashboard-side-stat">
+              <strong>${escapeHtml(inactiveWorkspaces.length)}</strong>
+              <span>Standby</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-side-stack">
+          <div class="dashboard-side-section-label">Visible Panels</div>
+          <div class="dashboard-side-pill is-active">
+            <span>Workspaces</span>
+            <strong>${escapeHtml(totalWorkspaceCount)}</strong>
+          </div>
+          ${desktopResourceStack ? `
+            <div class="dashboard-side-pill">
+              <span>Resources</span>
+              <strong>${escapeHtml(resourcesCards.length)}</strong>
+            </div>
+          ` : ''}
+          ${processSection ? `
+            <div class="dashboard-side-pill">
+              <span>Process</span>
+              <strong>Live</strong>
+            </div>
+          ` : ''}
+        </div>
+
+        ${(visibility.createSection !== false) ? `
+          <div class="dashboard-side-action">
+            <div class="dashboard-side-action-copy">
+              <strong>New Workspace</strong>
+              <span>Start another environment without leaving the dashboard.</span>
+            </div>
+            <button class="btn-primary workspace-create-empty-btn dashboard-side-create-btn">
+              ➕ New Workspace
+            </button>
+          </div>
+        ` : ''}
+      </aside>
+    `;
+    const desktopBody = (workspaceSection && desktopResourceStack)
       ? `
         <div class="dashboard-main-content">
           <div class="dashboard-content-left">
-            ${createSection}
             ${workspaceSection}
           </div>
           <div class="dashboard-content-right dashboard-resource-stack">
@@ -366,7 +421,28 @@ class Dashboard {
           </div>
         </div>
       `
-      : ([createSection, workspaceSection, desktopResourceStack].filter(Boolean).join(''));
+      : `
+        <div class="dashboard-main-content dashboard-main-content-single">
+          ${workspaceSection ? `
+            <div class="dashboard-content-left">
+              ${workspaceSection}
+            </div>
+          ` : ''}
+          ${desktopResourceStack ? `
+            <div class="dashboard-content-right dashboard-resource-stack">
+              ${desktopResourceStack}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    const desktopLayout = `
+      <div class="dashboard-desktop-shell">
+        ${desktopSidebar}
+        <div class="dashboard-desktop-body">
+          ${desktopBody}
+        </div>
+      </div>
+    `;
 
     const compactLayout = `
       <div class="dashboard-compact-shell">
@@ -404,15 +480,17 @@ class Dashboard {
           ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status"></div>` : '<div></div>'}
         </div>
         
-        <div class="dashboard-header-modern">
-          <div class="dashboard-title-group">
-            <div class="dashboard-title-icon" style="font-size:24px;">🏠</div>
-            <div>
-              <h1>Agent Workspace</h1>
-              <p>Select a workspace to begin development</p>
+        ${isCompactLayout ? `
+          <div class="dashboard-header-modern">
+            <div class="dashboard-title-group">
+              <div class="dashboard-title-icon" style="font-size:24px;">🏠</div>
+              <div>
+                <h1>Agent Workspace</h1>
+                <p>Select a workspace to begin development</p>
+              </div>
             </div>
           </div>
-        </div>
+        ` : ''}
 
         ${isCompactLayout ? compactLayout : desktopLayout}
       </div>
