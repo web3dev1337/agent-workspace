@@ -1,0 +1,39 @@
+<svg width="400" height="200" viewBox="0 0 400 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Two terminal windows side by side -->
+  <!-- Terminal 1: Agent -->
+  <rect x="10" y="10" width="185" height="180" rx="8" fill="#0a0a0f" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  <rect x="10" y="10" width="185" height="28" rx="8" fill="#111118"/>
+  <rect x="10" y="30" width="185" height="8" fill="#111118"/>
+  <circle cx="26" cy="24" r="4" fill="#ff5f56"/>
+  <circle cx="38" cy="24" r="4" fill="#ffbd2e"/>
+  <circle cx="50" cy="24" r="4" fill="#27c93f"/>
+  <text x="105" y="27" text-anchor="middle" font-family="monospace" font-size="9" fill="#9ca3af">claude-code</text>
+  <!-- Agent terminal content -->
+  <text x="20" y="55" font-family="monospace" font-size="9" fill="#ec4899">❯</text>
+  <text x="32" y="55" font-family="monospace" font-size="9" fill="#e5e7eb">claude --dangerously-skip-permissions</text>
+  <text x="20" y="72" font-family="monospace" font-size="9" fill="#00e5ff">╭ Claude Code</text>
+  <text x="20" y="89" font-family="monospace" font-size="9" fill="#9ca3af">│ Working on feat/auth...</text>
+  <text x="20" y="106" font-family="monospace" font-size="9" fill="#10b981">│ ✓ Created login.ts</text>
+  <text x="20" y="123" font-family="monospace" font-size="9" fill="#10b981">│ ✓ Added middleware</text>
+  <text x="20" y="140" font-family="monospace" font-size="9" fill="#2563eb">│ Running tests...</text>
+  <rect x="20" y="150" width="60" height="3" rx="1" fill="#00e5ff" opacity="0.6"/>
+  <rect x="20" y="150" width="35" height="3" rx="1" fill="#00e5ff"/>
+
+  <!-- Terminal 2: Server -->
+  <rect x="205" y="10" width="185" height="180" rx="8" fill="#0a0a0f" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  <rect x="205" y="10" width="185" height="28" rx="8" fill="#111118"/>
+  <rect x="205" y="30" width="185" height="8" fill="#111118"/>
+  <circle cx="221" cy="24" r="4" fill="#ff5f56"/>
+  <circle cx="233" cy="24" r="4" fill="#ffbd2e"/>
+  <circle cx="245" cy="24" r="4" fill="#27c93f"/>
+  <text x="300" y="27" text-anchor="middle" font-family="monospace" font-size="9" fill="#9ca3af">server</text>
+  <!-- Server terminal content -->
+  <text x="215" y="55" font-family="monospace" font-size="9" fill="#ec4899">❯</text>
+  <text x="227" y="55" font-family="monospace" font-size="9" fill="#e5e7eb">npm run dev</text>
+  <text x="215" y="72" font-family="monospace" font-size="9" fill="#10b981">✔ Server running on :3000</text>
+  <text x="215" y="89" font-family="monospace" font-size="9" fill="#9ca3af">GET /api/users 200 12ms</text>
+  <text x="215" y="106" font-family="monospace" font-size="9" fill="#9ca3af">POST /api/auth 201 45ms</text>
+  <text x="215" y="123" font-family="monospace" font-size="9" fill="#ffbd2e">WARN: rate limit hit</text>
+  <text x="215" y="140" font-family="monospace" font-size="9" fill="#9ca3af">GET /api/users 200 8ms</text>
+  <text x="215" y="157" font-family="monospace" font-size="9" fill="#9ca3af">GET /api/health 200 2ms</text>
+</svg>

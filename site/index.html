@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Workspace | Unified AI Orchestration</title>
-  <meta name="description" content="All your agents in one workspace. All your projects in one workspace. Claude Max and Codex plan compatible.">
+  <title>Agent Workspace | All Your Agents, One Workspace</title>
+  <meta name="description" content="Run multiple CLI agents in parallel across different repos with complete local control. Claude Max and Codex plan compatible. Zero telemetry.">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
 <body>
   <!-- Dynamic Background -->
   <canvas id="neural-bg"></canvas>
-  
+
   <div class="ambient-lights">
     <div class="light cyan"></div>
     <div class="light blue-deep"></div>
@@ -27,8 +27,8 @@
       <span>Agent Workspace</span>
     </a>
     <div class="nav-items">
-      <a href="#orchestration">Orchestration</a>
-      <a href="#integrations">Integrations</a>
+      <a href="#features">Features</a>
+      <a href="#compatibility">Compatibility</a>
       <a href="https://github.com/web3dev1337/claude-orchestrator" class="btn-glass" target="_blank">Repository <span class="arrow">↗</span></a>
     </div>
   </nav>
@@ -36,12 +36,16 @@
   <main>
     <section class="hero-fluid">
       <div class="hero-content reveal">
+        <div class="status-pill">
+          <span class="ping"></span>
+          Free & Open Source
+        </div>
         <h1 class="mega-title">
-          All your agents.<br>
-          <span class="gradient-text multi-color">One workspace.</span>
+          All your Agents.<br>
+          <span class="gradient-text multi-color">One Workspace.</span>
         </h1>
         <p class="hero-lead">
-          All your projects in one workspace. Bring order to the chaos and run multiple agents simultaneously across different repos with complete local control.
+          All your projects in one workspace. Run multiple CLI agents in parallel across different repos. Runs on your hardware, accessed through the desktop app or the browser. No external telemetry.
         </p>
         <div class="action-row">
           <a class="btn-glow" href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank">
@@ -52,7 +56,7 @@
           </a>
         </div>
         <div class="plan-compat">
-          <span class="compat-text">Claude Code & Codex plan compatible</span>
+          <span class="compat-text">Claude Max plan & Codex plan compatible</span>
         </div>
       </div>
 
@@ -63,92 +67,215 @@
             <div class="address-bar">workspace://local/orchestrator</div>
           </div>
           <div class="panel-body">
-            <img src="assets/orchestrator-ui.png" alt="UI" class="ui-img">
+            <img src="assets/orchestrator-ui.png" alt="Agent Workspace UI" class="ui-img">
             <div class="overlay-scanline"></div>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="bento-grid" id="orchestration">
+    <section class="integration-fluid" id="compatibility">
+      <div class="integration-content reveal">
+        <h2 class="section-title">A GUI for your TUIs.</h2>
+        <p class="section-desc">Bring your CLIs. <span class="text-cyan">Agent Workspace</span> wraps your preferred terminal tools &mdash; run them side by side in the same workspace with your existing logins and API keys.</p>
+
+        <div class="cli-grid">
+          <div class="cli-card">
+            <div class="cli-card-inner white-bg-prominent">
+              <img src="assets/claude-logo.svg" alt="Claude Code" class="hi-res-logo">
+            </div>
+            <span class="card-name">Claude Code</span>
+          </div>
+
+          <div class="cli-card">
+            <div class="cli-card-inner white-bg-prominent">
+              <img src="assets/codex-logo.png" alt="Codex" class="hi-res-logo">
+            </div>
+            <span class="card-name">Codex</span>
+          </div>
+
+          <div class="cli-card">
+            <div class="cli-card-inner white-bg-prominent">
+              <img src="assets/gemini-icon.svg" alt="Gemini CLI" class="hi-res-logo">
+            </div>
+            <span class="card-name">Gemini CLI</span>
+          </div>
+
+          <div class="cli-card">
+            <div class="cli-card-inner white-bg-prominent">
+              <img src="assets/opencode-logo.svg" alt="OpenCode" class="hi-res-logo">
+            </div>
+            <span class="card-name">OpenCode</span>
+          </div>
+
+          <div class="cli-card">
+            <div class="cli-card-inner white-bg-prominent grok-card">
+              <img src="assets/grok-logo.png" alt="Grok CLI" class="hi-res-logo">
+              <span class="grok-question">?</span>
+            </div>
+            <span class="card-name">Grok CLI?</span>
+            <span class="when-elon">WEN, ELON?</span>
+          </div>
+
+          <div class="cli-card">
+            <div class="cli-card-inner cli-any-agent">
+              <span class="cli-any-text">&gt;_</span>
+            </div>
+            <span class="card-name text-cyan">Any CLI Agent</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bento-grid" id="features">
+      <!-- Row 1: BYOP prominent + Runs Locally -->
       <div class="bento-item span-2 reveal">
         <div class="bento-inner">
-          <h3 class="bento-title">Use Multiple Agents</h3>
-          <p class="bento-desc">Deploy specialized agents for different tasks. Have one agent reviewing PRs while another writes tests—all within the same unified UI. Total asynchronous mastery.</p>
+          <h3 class="bento-title">Bring Your Own Plan</h3>
+          <p class="bento-desc">Works with your Claude Max subscription, Codex plan, or your own API keys. Use your existing CLI logins &mdash; your credentials never leave your machine.</p>
+          <img src="assets/mockup-byop.svg" alt="API keys stored locally" class="bento-mockup">
+        </div>
+      </div>
+
+      <div class="bento-item reveal" style="--delay: 0.1s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title text-cyan">Runs Locally</h3>
+          <p class="bento-desc">Runs on your own hardware. Access through the desktop app or the browser. Zero external telemetry, zero data collection.</p>
+          <div class="bento-icon">🔒</div>
+        </div>
+      </div>
+
+      <!-- Row 2: Native Terminals + Workspaces + Diff Viewer -->
+      <div class="bento-item reveal" style="--delay: 0.15s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title text-blue-deep">Native Terminals</h3>
+          <p class="bento-desc">Uses real terminal sessions under the hood &mdash; not a wrapper, not an emulator. CLI tools run exactly as they would in your own shell. Low chance of breakage across versions.</p>
+          <div class="bento-icon">⚡</div>
+        </div>
+      </div>
+
+      <div class="bento-item reveal" style="--delay: 0.2s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title">Workspaces & Worktrees</h3>
+          <p class="bento-desc">Group git repositories into workspaces. Each workspace supports multiple worktrees running side by side &mdash; different branches, different repos, same view.</p>
+          <div class="folder-stack">
+            <div class="folder"></div><div class="folder"></div><div class="folder"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bento-item reveal" style="--delay: 0.25s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title text-cyan">Built-in Diff Viewer</h3>
+          <p class="bento-desc">Quick access to pull requests with a full inbuilt code review tool. Review diffs without leaving your workspace.</p>
+          <img src="assets/mockup-diffviewer.svg" alt="Diff viewer" class="bento-mockup">
+        </div>
+      </div>
+
+      <!-- Row 3: Commander + Tasks -->
+      <div class="bento-item span-2 reveal" style="--delay: 0.1s">
+        <div class="bento-inner">
+          <h3 class="bento-title">Commander</h3>
+          <p class="bento-desc">A top-level AI (usually Claude, but configurable) that controls the interface. It can send commands to any terminal, launch agents, pull tasks from your task board &mdash; hands-free automation from a single prompt.</p>
+          <img src="assets/mockup-commander.svg" alt="Commander launching agents" class="bento-mockup">
+        </div>
+      </div>
+
+      <div class="bento-item reveal" style="--delay: 0.2s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title text-blue-deep">Task Integration</h3>
+          <p class="bento-desc">Pull tasks from Trello today. GitHub Issues, Linear, and locally-backed tasks coming soon.</p>
+          <div class="bento-icon">✅</div>
+        </div>
+      </div>
+
+      <!-- Row 4: Tiers + Shipped With -->
+      <div class="bento-item reveal" style="--delay: 0.15s">
+        <div class="bento-inner glass-dark">
+          <h3 class="bento-title">Tier System</h3>
+          <p class="bento-desc">Organize sessions by priority. T1 Focus for active deep work, T2 Backup runs alongside or when T1 is blocked, T3 Background for batch prompt and batch review, T4 Overnight for long-running autonomous tasks. Hide and show as needed.</p>
+          <img src="assets/mockup-tiers.svg" alt="Tier system T1-T4" class="bento-mockup">
+        </div>
+      </div>
+
+      <div class="bento-item span-2 reveal" style="--delay: 0.2s">
+        <div class="bento-inner">
+          <h3 class="bento-title">Shipped With <span class="text-cyan">Agent Workspace</span></h3>
+          <p class="bento-desc">Built in July 2025 and used every day since. Refined over 8 months of daily use &mdash; 100% of our code has been shipped using <span class="text-cyan">Agent Workspace</span>.</p>
           <div class="visual-placeholder network-anim">
             <div class="dot d1"></div><div class="dot d2"></div><div class="dot d3"></div>
             <svg class="lines"><path d="M20,50 Q50,20 80,50 T140,50" /></svg>
           </div>
         </div>
       </div>
-
-      <div class="bento-item reveal" style="--delay: 0.1s">
-        <div class="bento-inner glass-dark">
-          <h3 class="bento-title text-cyan">Unified Sandbox</h3>
-          <p class="bento-desc">We orchestrate your existing CLI tools (like Claude Code) in a shared workspace. Maintain complete visibility over what your agents can access and execute within your repositories.</p>
-          <div class="shield-icon">🛡️</div>
-        </div>
-      </div>
-
-      <div class="bento-item reveal" style="--delay: 0.2s">
-        <div class="bento-inner glass-dark">
-          <h3 class="bento-title text-blue-deep">Multi-Project</h3>
-          <p class="bento-desc">Manage multiple repositories and worktrees simultaneously. Context switching is a thing of the past.</p>
-          <div class="folder-stack">
-            <div class="folder"></div><div class="folder"></div><div class="folder"></div>
-          </div>
-        </div>
-      </div>
     </section>
 
-    <section class="integration-fluid" id="integrations">
-      <div class="integration-content reveal">
-        <h2 class="section-title">Seamless Ecosystem.</h2>
-        <p class="section-desc">Bring your existing API keys or CLI logins. Agent Workspace acts as the ultimate wrapper around your preferred tools. Claude Code and Codex plan compatible directly from the terminal.</p>
-        
-        <div class="logo-showcase">
-          <div class="showcase-card">
-            <div class="card-glow claude-glow"></div>
-            <div class="card-front white-bg-prominent">
-              <img src="assets/claude-logo.svg" alt="Claude Code" class="hi-res-logo">
-            </div>
-            <span class="card-name">Claude Code</span>
-          </div>
-          
-          <div class="connection-line">
-            <div class="pulse-dot"></div>
-          </div>
+    <section class="install-section reveal" id="install">
+      <h2 class="section-title">Install</h2>
+      <p class="section-desc">Get up and running in under a minute.</p>
 
-          <div class="showcase-card">
-            <div class="card-glow codex-glow"></div>
-            <div class="card-front white-bg-prominent">
-              <img src="assets/codex-logo.png" alt="Codex" class="hi-res-logo">
-            </div>
-            <span class="card-name">Codex</span>
+      <div class="install-tabs">
+        <button class="install-tab active" data-tab="windows">Windows</button>
+        <button class="install-tab" data-tab="mac">Mac</button>
+        <button class="install-tab" data-tab="linux">Linux / WSL</button>
+      </div>
+
+      <div class="install-panels">
+        <div class="install-panel active" id="tab-windows">
+          <div class="install-option">
+            <a class="btn-glow install-download" id="install-main-btn" href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank">Download Windows App</a>
+          </div>
+          <div class="install-divider"><span>or run from source</span></div>
+          <div class="install-cmd">
+            <code>git clone https://github.com/web3dev1337/claude-orchestrator.git</code>
+            <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/claude-orchestrator.git">Copy</button>
+          </div>
+          <div class="install-cmd">
+            <code>cd claude-orchestrator && npm install</code>
+            <button class="copy-btn" data-copy="cd claude-orchestrator && npm install">Copy</button>
+          </div>
+          <div class="install-cmd">
+            <code>npm start</code>
+            <button class="copy-btn" data-copy="npm start">Copy</button>
           </div>
         </div>
-      </div>
-    </section>
 
-    <section class="terminal-fluid reveal" id="terminal-start">
-      <div class="terminal-wrapper">
-        <div class="terminal-window">
-          <div class="term-header">
-            <div class="term-buttons"><span></span><span></span><span></span></div>
-            <div class="term-title">~ / agent-workspace</div>
+        <div class="install-panel" id="tab-mac">
+          <div class="install-option">
+            <span class="btn-outline install-download install-source-label">Run the commands below</span>
           </div>
-          <div class="term-body">
-            <div class="line"><span class="prompt">❯</span> <span class="command typing-1">git clone https://github.com/web3dev1337/claude-orchestrator.git</span></div>
-            <div class="line hidden response-1">Cloning into 'claude-orchestrator'...</div>
-            <div class="line hidden response-1 text-success">done.</div>
-            <div class="line hidden cmd-2"><span class="prompt">❯</span> <span class="command typing-2">cd claude-orchestrator && npm install</span></div>
-            <div class="line hidden response-2">added 847 packages in 12s</div>
-            <div class="line hidden cmd-3"><span class="prompt">❯</span> <span class="command typing-3">npm start</span></div>
-            <div class="line hidden response-3 text-cyan">◆ Starting server on port 3000...</div>
-            <div class="line hidden response-3 text-blue-deep">◆ Client ready at http://localhost:2080</div>
-            <div class="line hidden response-3 text-success">✔ Agent Workspace is running.</div>
-            <div class="line hidden cmd-4"><span class="prompt blink">_</span></div>
+          <div class="install-cmd">
+            <code>git clone https://github.com/web3dev1337/claude-orchestrator.git</code>
+            <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/claude-orchestrator.git">Copy</button>
           </div>
+          <div class="install-cmd">
+            <code>cd claude-orchestrator && npm install</code>
+            <button class="copy-btn" data-copy="cd claude-orchestrator && npm install">Copy</button>
+          </div>
+          <div class="install-cmd">
+            <code>npm start</code>
+            <button class="copy-btn" data-copy="npm start">Copy</button>
+          </div>
+          <p class="install-note">Opens at <span class="text-cyan">http://localhost:9461</span> in your browser. Mac desktop app coming soon.</p>
+        </div>
+
+        <div class="install-panel" id="tab-linux">
+          <div class="install-option">
+            <span class="btn-outline install-download install-source-label">Run the commands below</span>
+          </div>
+          <div class="install-cmd">
+            <code>git clone https://github.com/web3dev1337/claude-orchestrator.git</code>
+            <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/claude-orchestrator.git">Copy</button>
+          </div>
+          <div class="install-cmd">
+            <code>cd claude-orchestrator && npm install</code>
+            <button class="copy-btn" data-copy="cd claude-orchestrator && npm install">Copy</button>
+          </div>
+          <div class="install-cmd">
+            <code>npm start</code>
+            <button class="copy-btn" data-copy="npm start">Copy</button>
+          </div>
+          <p class="install-note">Opens at <span class="text-cyan">http://localhost:9461</span> in your browser.</p>
         </div>
       </div>
     </section>
@@ -163,6 +290,7 @@
       <div class="footer-links">
         <a href="https://github.com/web3dev1337/claude-orchestrator" target="_blank">GitHub</a>
         <a href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank">Download</a>
+        <a href="https://github.com/web3dev1337/claude-orchestrator" target="_blank">Run from Source</a>
       </div>
       <div class="copyright">© 2026 / Unified AI Infrastructure</div>
     </div>

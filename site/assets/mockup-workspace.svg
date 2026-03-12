@@ -1,0 +1,116 @@
+<svg width="800" height="500" viewBox="0 0 800 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Full workspace mockup for hero -->
+  <rect width="800" height="500" rx="12" fill="#0a0a0f"/>
+
+  <!-- Header bar -->
+  <rect width="800" height="40" rx="12" fill="#111118"/>
+  <rect y="32" width="800" height="8" fill="#111118"/>
+  <circle cx="20" cy="20" r="5" fill="#ff5f56"/>
+  <circle cx="36" cy="20" r="5" fill="#ffbd2e"/>
+  <circle cx="52" cy="20" r="5" fill="#27c93f"/>
+  <!-- Tabs -->
+  <rect x="80" y="8" width="120" height="24" rx="4" fill="rgba(0,229,255,0.15)" stroke="rgba(0,229,255,0.3)" stroke-width="1"/>
+  <text x="140" y="24" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#00e5ff">Zoo Game</text>
+  <rect x="208" y="8" width="100" height="24" rx="4" fill="rgba(255,255,255,0.05)"/>
+  <text x="258" y="24" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#9ca3af">HyFire</text>
+  <rect x="316" y="8" width="24" height="24" rx="4" fill="rgba(255,255,255,0.05)"/>
+  <text x="328" y="25" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#9ca3af">+</text>
+
+  <!-- Sidebar -->
+  <rect y="40" width="180" height="460" fill="#0d0d14"/>
+  <line x1="180" y1="40" x2="180" y2="500" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <text x="16" y="68" font-family="sans-serif" font-weight="600" font-size="11" fill="#9ca3af">WORKTREES</text>
+
+  <!-- Worktree items -->
+  <rect x="8" y="78" width="164" height="32" rx="4" fill="rgba(0,229,255,0.1)"/>
+  <circle cx="24" cy="94" r="4" fill="#10b981"/>
+  <text x="34" y="91" font-family="monospace" font-size="9" fill="#fff">work1</text>
+  <text x="34" y="102" font-family="monospace" font-size="8" fill="#9ca3af">feat/auth</text>
+  <rect x="130" y="86" width="30" height="14" rx="3" fill="rgba(0,229,255,0.2)"/>
+  <text x="145" y="96" text-anchor="middle" font-family="monospace" font-size="8" fill="#00e5ff">T1</text>
+
+  <rect x="8" y="116" width="164" height="32" rx="4" fill="rgba(255,255,255,0.03)"/>
+  <circle cx="24" cy="132" r="4" fill="#ffbd2e"/>
+  <text x="34" y="129" font-family="monospace" font-size="9" fill="#e5e7eb">work2</text>
+  <text x="34" y="140" font-family="monospace" font-size="8" fill="#9ca3af">fix/search</text>
+  <rect x="130" y="124" width="30" height="14" rx="3" fill="rgba(37,99,235,0.2)"/>
+  <text x="145" y="134" text-anchor="middle" font-family="monospace" font-size="8" fill="#2563eb">T2</text>
+
+  <rect x="8" y="154" width="164" height="32" rx="4" fill="rgba(255,255,255,0.03)"/>
+  <circle cx="24" cy="170" r="4" fill="#10b981"/>
+  <text x="34" y="167" font-family="monospace" font-size="9" fill="#e5e7eb">work3</text>
+  <text x="34" y="178" font-family="monospace" font-size="8" fill="#9ca3af">refactor/api</text>
+  <rect x="130" y="162" width="30" height="14" rx="3" fill="rgba(255,255,255,0.1)"/>
+  <text x="145" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#9ca3af">T3</text>
+
+  <!-- Terminal grid - 2x2 -->
+  <!-- Top left: Agent Terminal -->
+  <rect x="190" y="48" width="298" height="218" rx="6" fill="#0a0a0f" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <rect x="190" y="48" width="298" height="24" rx="6" fill="#111118"/>
+  <rect x="190" y="66" width="298" height="6" fill="#111118"/>
+  <text x="200" y="64" font-family="monospace" font-size="8" fill="#10b981">●</text>
+  <text x="212" y="64" font-family="monospace" font-size="8" fill="#e5e7eb">work1</text>
+  <text x="260" y="64" font-family="monospace" font-size="8" fill="#9ca3af">claude-code</text>
+  <text x="440" y="64" font-family="monospace" font-size="8" fill="#00e5ff">T1</text>
+
+  <text x="200" y="90" font-family="monospace" font-size="9" fill="#ec4899">❯</text>
+  <text x="212" y="90" font-family="monospace" font-size="9" fill="#e5e7eb">Implementing auth middleware...</text>
+  <text x="200" y="108" font-family="monospace" font-size="9" fill="#00e5ff">╭ Claude Code v2.1</text>
+  <text x="200" y="126" font-family="monospace" font-size="9" fill="#9ca3af">│ Reading src/middleware/auth.ts</text>
+  <text x="200" y="144" font-family="monospace" font-size="9" fill="#10b981">│ ✓ Created jwt.ts</text>
+  <text x="200" y="162" font-family="monospace" font-size="9" fill="#10b981">│ ✓ Updated routes.ts</text>
+  <text x="200" y="180" font-family="monospace" font-size="9" fill="#2563eb">│ Writing tests...</text>
+  <rect x="200" y="190" width="80" height="3" rx="1" fill="rgba(0,229,255,0.3)"/>
+  <rect x="200" y="190" width="50" height="3" rx="1" fill="#00e5ff"/>
+
+  <!-- Top right: Server Terminal -->
+  <rect x="494" y="48" width="298" height="218" rx="6" fill="#0a0a0f" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <rect x="494" y="48" width="298" height="24" rx="6" fill="#111118"/>
+  <rect x="494" y="66" width="298" height="6" fill="#111118"/>
+  <text x="504" y="64" font-family="monospace" font-size="8" fill="#10b981">●</text>
+  <text x="516" y="64" font-family="monospace" font-size="8" fill="#e5e7eb">work1</text>
+  <text x="564" y="64" font-family="monospace" font-size="8" fill="#9ca3af">server</text>
+
+  <text x="504" y="90" font-family="monospace" font-size="9" fill="#ec4899">❯</text>
+  <text x="516" y="90" font-family="monospace" font-size="9" fill="#e5e7eb">npm run dev</text>
+  <text x="504" y="108" font-family="monospace" font-size="9" fill="#10b981">✔ Listening on :3000</text>
+  <text x="504" y="126" font-family="monospace" font-size="9" fill="#9ca3af">GET  /api/users    200  12ms</text>
+  <text x="504" y="144" font-family="monospace" font-size="9" fill="#9ca3af">POST /api/login    201  45ms</text>
+  <text x="504" y="162" font-family="monospace" font-size="9" fill="#10b981">GET  /api/session  200   4ms</text>
+  <text x="504" y="180" font-family="monospace" font-size="9" fill="#ffbd2e">WARN rate-limit 429</text>
+  <text x="504" y="198" font-family="monospace" font-size="9" fill="#9ca3af">GET  /api/health   200   1ms</text>
+
+  <!-- Bottom left: Agent Terminal 2 -->
+  <rect x="190" y="272" width="298" height="218" rx="6" fill="#0a0a0f" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <rect x="190" y="272" width="298" height="24" rx="6" fill="#111118"/>
+  <rect x="190" y="290" width="298" height="6" fill="#111118"/>
+  <text x="200" y="288" font-family="monospace" font-size="8" fill="#ffbd2e">●</text>
+  <text x="212" y="288" font-family="monospace" font-size="8" fill="#e5e7eb">work2</text>
+  <text x="260" y="288" font-family="monospace" font-size="8" fill="#9ca3af">codex</text>
+  <text x="440" y="288" font-family="monospace" font-size="8" fill="#2563eb">T2</text>
+
+  <text x="200" y="314" font-family="monospace" font-size="9" fill="#ec4899">❯</text>
+  <text x="212" y="314" font-family="monospace" font-size="9" fill="#e5e7eb">codex --dangerously-bypass...</text>
+  <text x="200" y="332" font-family="monospace" font-size="9" fill="#2563eb">Codex (gpt-5.3)</text>
+  <text x="200" y="350" font-family="monospace" font-size="9" fill="#9ca3af">Fixing search indexer...</text>
+  <text x="200" y="368" font-family="monospace" font-size="9" fill="#10b981">✓ Updated search.ts</text>
+  <text x="200" y="386" font-family="monospace" font-size="9" fill="#10b981">✓ Added fuzzy matching</text>
+  <text x="200" y="404" font-family="monospace" font-size="9" fill="#9ca3af">Running lint...</text>
+
+  <!-- Bottom right: Server Terminal 2 -->
+  <rect x="494" y="272" width="298" height="218" rx="6" fill="#0a0a0f" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <rect x="494" y="272" width="298" height="24" rx="6" fill="#111118"/>
+  <rect x="494" y="290" width="298" height="6" fill="#111118"/>
+  <text x="504" y="288" font-family="monospace" font-size="8" fill="#ffbd2e">●</text>
+  <text x="516" y="288" font-family="monospace" font-size="8" fill="#e5e7eb">work2</text>
+  <text x="564" y="288" font-family="monospace" font-size="8" fill="#9ca3af">server</text>
+
+  <text x="504" y="314" font-family="monospace" font-size="9" fill="#ec4899">❯</text>
+  <text x="516" y="314" font-family="monospace" font-size="9" fill="#e5e7eb">npm test</text>
+  <text x="504" y="332" font-family="monospace" font-size="9" fill="#10b981">PASS src/search.test.ts</text>
+  <text x="504" y="350" font-family="monospace" font-size="9" fill="#10b981">  ✓ fuzzy match (12ms)</text>
+  <text x="504" y="368" font-family="monospace" font-size="9" fill="#10b981">  ✓ exact match (3ms)</text>
+  <text x="504" y="386" font-family="monospace" font-size="9" fill="#10b981">  ✓ empty query (1ms)</text>
+  <text x="504" y="404" font-family="monospace" font-size="9" fill="#e5e7eb">Tests: 3 passed, 3 total</text>
+  <text x="504" y="422" font-family="monospace" font-size="9" fill="#10b981">✔ All tests passed</text>
+</svg>

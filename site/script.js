@@ -111,7 +111,30 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.cmd-4').classList.remove('hidden');
   }
 
-  // 5. Neural Network / Particle Canvas Background
+  // 5. Install Tabs & Copy Buttons
+  document.querySelectorAll('.install-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(btn.dataset.copy).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    });
+  });
+
+  // 6. Neural Network / Particle Canvas Background
   const canvas = document.getElementById('neural-bg');
   if (canvas) {
     const ctx = canvas.getContext('2d');
