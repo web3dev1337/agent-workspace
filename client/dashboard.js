@@ -408,7 +408,10 @@ class Dashboard {
         ${desktopSidebar}
         <div class="dashboard-desktop-body">
           <div class="dashboard-desktop-header">
-            <h1>Agent Workspace</h1>
+            <div class="dashboard-desktop-title-group">
+              <div class="brand-orb dashboard-brand-orb" aria-hidden="true"></div>
+              <h1>Agent Workspace</h1>
+            </div>
           </div>
           ${desktopBody}
         </div>
@@ -447,14 +450,14 @@ class Dashboard {
     return `
       <div class="dashboard-wrapper dashboard-layout-${layoutMode}">
         <div class="dashboard-topbar">
-          ${canReturnToWorkspaces ? `<button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back</button>` : '<div></div>'}
-          ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status"></div>` : '<div></div>'}
+          ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status"></div>` : ''}
+          ${canReturnToWorkspaces ? `<button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back</button>` : ''}
         </div>
         
         ${isCompactLayout ? `
           <div class="dashboard-header-modern">
             <div class="dashboard-title-group">
-              <div class="dashboard-title-icon" style="font-size:24px;">🏠</div>
+              <div class="brand-orb dashboard-brand-orb" aria-hidden="true"></div>
               <div>
                 <h1>Agent Workspace</h1>
                 <p>Select a workspace to begin development</p>

@@ -14305,6 +14305,26 @@ body.dependency-onboarding-active #dependency-setup-modal {
   min-width: 0;
 }
 
+.dashboard-brand-orb {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 180deg at 50% 50%,
+      color-mix(in srgb, var(--accent-primary-hover) 88%, white 12%) 0deg,
+      color-mix(in srgb, var(--accent-primary-pressed) 86%, #08111d 14%) 180deg,
+      color-mix(in srgb, var(--accent-primary-hover) 88%, white 12%) 360deg
+    );
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent-primary) 48%, transparent);
+  animation: dashboard-brand-orb-spin 4s linear infinite;
+}
+
+@keyframes dashboard-brand-orb-spin {
+  100% { transform: rotate(360deg); }
+}
+
 .dashboard-title-icon {
   width: 50px;
   height: 50px;
@@ -14322,7 +14342,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-title-group h1 {
-  font-size: 1.72rem;
+  font-size: 1.94rem;
   font-weight: 760;
   margin: 0;
   letter-spacing: -0.035em;
@@ -14630,6 +14650,22 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: none;
 }
 
+.dashboard-wrapper .dashboard-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 0;
+  position: relative;
+  z-index: 4;
+}
+
+.dashboard-layout-desktop .dashboard-topbar {
+  position: absolute;
+  top: var(--dashboard-shell-pad);
+  right: var(--dashboard-shell-pad);
+}
+
 .dashboard-desktop-shell {
   display: grid;
   grid-template-columns: 196px minmax(0, 1fr);
@@ -14798,12 +14834,19 @@ body.dependency-onboarding-active #dependency-setup-modal {
   align-items: center;
   min-width: 0;
   text-align: center;
-  padding: 0.15rem 0 0.1rem;
+  padding: 0.35rem 0 0.15rem;
+}
+
+.dashboard-desktop-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
 }
 
 .dashboard-desktop-header h1 {
   margin: 0;
-  font-size: 1.28rem;
+  font-size: 1.72rem;
   font-weight: 760;
   letter-spacing: -0.035em;
   color: color-mix(in srgb, var(--text-primary) 97%, white 3%);
@@ -15578,21 +15621,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
   .dashboard-title-group h1 {
     font-size: 1.4rem;
   }
-
-  .dashboard-topbar {
-    flex-wrap: wrap;
-    align-items: flex-start;
-  }
 }
 
 @media (max-width: 600px) {
   .dashboard-title-group {
     gap: var(--space-sm);
-  }
-
-  .dashboard-title-icon {
-    width: 40px;
-    height: 40px;
   }
 
   .dashboard-title-group h1 {
