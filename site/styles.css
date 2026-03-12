@@ -127,7 +127,7 @@ body {
   align-items: center;
   gap: 1rem;
   text-decoration: none;
-  color: #fff;
+  color: var(--cyan);
   font-weight: 700;
   font-size: 1.25rem;
   letter-spacing: -0.02em;
