@@ -244,117 +244,126 @@
 
                         <div class="setting-section" data-section-id="appearance" data-section-title="Appearance">
                             <h4>Appearance</h4>
-                            <div class="setting-group">
-                                <label>
-                                    Theme:
-                                    <select id="theme-select">
-                                        <option value="dark">Dark</option>
-                                        <option value="light">Light</option>
-                                    </select>
-                                </label>
-                            </div>
-                            <div class="setting-group">
-                                <label>
-                                    Skin:
-                                    <select id="skin-select">
-                                        <option value="default">Default</option>
-                                        <option value="blue">Blue</option>
-                                        <option value="purple">Purple</option>
-                                        <option value="emerald">Emerald</option>
-                                        <option value="amber">Amber</option>
-                                        <option value="high-contrast">High Contrast</option>
-                                    </select>
-                                </label>
-                                <p class="setting-description">Controls accent styling; works with Light/Dark.</p>
-                            </div>
-                            <div class="setting-group">
-                                <label>
-                                    Skin intensity:
-                                    <input id="skin-intensity-range" type="range" min="0" max="100" step="5" value="100" />
-                                    <span id="skin-intensity-value" class="mono" style="margin-left:8px; opacity:0.85;">100%</span>
-                                </label>
-                                <p class="setting-description">How strongly the selected skin tints neutral UI surfaces (0% = neutral,
-                                    100% = full skin).</p>
-                            </div>
-                            <div class="setting-group">
-                                <div class="skin-gallery" id="skin-gallery">
-                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="default" title="Default skin">
-                                        <span class="skin-swatch-paint skin-default"></span>
-                                        <span>Default</span>
-                                    </button>
-                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="blue" title="Blue skin">
-                                        <span class="skin-swatch-paint skin-blue"></span>
-                                        <span>Blue</span>
-                                    </button>
-                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="purple" title="Purple skin">
-                                        <span class="skin-swatch-paint skin-purple"></span>
-                                        <span>Purple</span>
-                                    </button>
-                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="emerald" title="Emerald skin">
-                                        <span class="skin-swatch-paint skin-emerald"></span>
-                                        <span>Emerald</span>
-                                    </button>
-                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="amber" title="Amber skin">
-                                        <span class="skin-swatch-paint skin-amber"></span>
-                                        <span>Amber</span>
-                                    </button>
-                                    <button type="button" class="skin-swatch-btn" data-skin-swatch="high-contrast" title="High contrast skin">
-                                        <span class="skin-swatch-paint skin-high-contrast"></span>
-                                        <span>High Contrast</span>
-                                    </button>
+                            <div class="setting-subsection">
+                                <h5>Theme &amp; Skin</h5>
+                                <div class="setting-group">
+                                    <label>
+                                        Theme:
+                                        <select id="theme-select">
+                                            <option value="dark">Dark</option>
+                                            <option value="light">Light</option>
+                                        </select>
+                                    </label>
                                 </div>
-                                <p class="setting-description">Theme gallery: click a swatch to switch skins instantly.</p>
+                                <div class="setting-group">
+                                    <label>
+                                        Skin:
+                                        <select id="skin-select">
+                                            <option value="default">Default</option>
+                                            <option value="blue">Blue</option>
+                                            <option value="purple">Purple</option>
+                                            <option value="emerald">Emerald</option>
+                                            <option value="amber">Amber</option>
+                                            <option value="high-contrast">High Contrast</option>
+                                        </select>
+                                    </label>
+                                    <p class="setting-description">Controls accent styling; works with Light/Dark.</p>
+                                </div>
+                                <div class="setting-group">
+                                    <label>
+                                        Skin intensity:
+                                        <input id="skin-intensity-range" type="range" min="0" max="100" step="5" value="100" />
+                                        <span id="skin-intensity-value" class="mono" style="margin-left:8px; opacity:0.85;">100%</span>
+                                    </label>
+                                    <p class="setting-description">How strongly the selected skin tints neutral UI surfaces (0% = neutral,
+                                        100% = full skin).</p>
+                                </div>
+                                <div class="setting-group">
+                                    <div class="skin-gallery" id="skin-gallery">
+                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="default" title="Default skin">
+                                            <span class="skin-swatch-paint skin-default"></span>
+                                            <span>Default</span>
+                                        </button>
+                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="blue" title="Blue skin">
+                                            <span class="skin-swatch-paint skin-blue"></span>
+                                            <span>Blue</span>
+                                        </button>
+                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="purple" title="Purple skin">
+                                            <span class="skin-swatch-paint skin-purple"></span>
+                                            <span>Purple</span>
+                                        </button>
+                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="emerald" title="Emerald skin">
+                                            <span class="skin-swatch-paint skin-emerald"></span>
+                                            <span>Emerald</span>
+                                        </button>
+                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="amber" title="Amber skin">
+                                            <span class="skin-swatch-paint skin-amber"></span>
+                                            <span>Amber</span>
+                                        </button>
+                                        <button type="button" class="skin-swatch-btn" data-skin-swatch="high-contrast" title="High contrast skin">
+                                            <span class="skin-swatch-paint skin-high-contrast"></span>
+                                            <span>High Contrast</span>
+                                        </button>
+                                    </div>
+                                    <p class="setting-description">Theme gallery: click a swatch to switch skins instantly.</p>
+                                </div>
                             </div>
-                            <div class="setting-group">
-                                <label>
-                                    Tasks Theme:
-                                    <select id="tasks-theme-select">
-                                        <option value="inherit">Follow App</option>
-                                        <option value="light">Light</option>
-                                        <option value="dark">Dark</option>
-                                    </select>
-                                </label>
+                            <div class="setting-subsection">
+                                <h5>App Surfaces</h5>
+                                <div class="setting-group">
+                                    <label>
+                                        Tasks Theme:
+                                        <select id="tasks-theme-select">
+                                            <option value="inherit">Follow App</option>
+                                            <option value="light">Light</option>
+                                            <option value="dark">Dark</option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <div class="setting-group">
+                                    <label>
+                                        <strong>Diff Viewer Theme:</strong>
+                                        <select id="diff-viewer-theme">
+                                            <option value="light">Light (GitHub)</option>
+                                            <option value="dark">Dark</option>
+                                        </select>
+                                    </label>
+                                    <p class="setting-description">Controls the theme for the Advanced Diff Viewer (port 7655).</p>
+                                </div>
                             </div>
-                            <div class="setting-group">
-                                <label>
-                                    <strong>Diff Viewer Theme:</strong>
-                                    <select id="diff-viewer-theme">
-                                        <option value="light">Light (GitHub)</option>
-                                        <option value="dark">Dark</option>
-                                    </select>
-                                </label>
-                                <p class="setting-description">Controls the theme for the Advanced Diff Viewer (port 7655).</p>
-                            </div>
-                            <div class="setting-group">
-                                <label>
-                                    <input type="checkbox" id="branches-hide-prefixes" />
-                                    Hide branch prefixes (e.g. <code>feature/</code>, <code>fix/</code>)
-                                </label>
-                            </div>
-                            <div class="setting-group">
-                                <label>
-                                    <input type="checkbox" id="branches-colorize" />
-                                    Colorize branch labels by type
-                                </label>
-                            </div>
-                            <div class="setting-group">
-                                <label>
-                                    <input type="checkbox" id="branches-show-at-sidebar" />
-                                    Prefix branch with “@” in sidebar
-                                </label>
-                            </div>
-                            <div class="setting-group">
-                                <label>
-                                    <input type="checkbox" id="worktrees-show-detailed-chooser-metadata" />
-                                    Show detailed metadata in Quick Work chooser
-                                </label>
-                                <p class="setting-description">Off by default for a cleaner menu. Turn this on to show branch, PR, dirty state, and risk details inside the worktree dropdown.</p>
-                            </div>
-                            <div class="setting-group">
-                                <label>
-                                    <input type="checkbox" id="simple-mode-show-hints" />
-                                    Show quick hints in shell
-                                </label>
+                            <div class="setting-subsection">
+                                <h5>Labels &amp; Hints</h5>
+                                <div class="setting-group">
+                                    <label>
+                                        <input type="checkbox" id="branches-hide-prefixes" />
+                                        Hide branch prefixes (e.g. <code>feature/</code>, <code>fix/</code>)
+                                    </label>
+                                </div>
+                                <div class="setting-group">
+                                    <label>
+                                        <input type="checkbox" id="branches-colorize" />
+                                        Colorize branch labels by type
+                                    </label>
+                                </div>
+                                <div class="setting-group">
+                                    <label>
+                                        <input type="checkbox" id="branches-show-at-sidebar" />
+                                        Prefix branch with “@” in sidebar
+                                    </label>
+                                </div>
+                                <div class="setting-group">
+                                    <label>
+                                        <input type="checkbox" id="worktrees-show-detailed-chooser-metadata" />
+                                        Show detailed metadata in Quick Work chooser
+                                    </label>
+                                    <p class="setting-description">Off by default for a cleaner menu. Turn this on to show branch, PR, dirty state, and risk details inside the worktree dropdown.</p>
+                                </div>
+                                <div class="setting-group">
+                                    <label>
+                                        <input type="checkbox" id="simple-mode-show-hints" />
+                                        Show quick hints in shell
+                                    </label>
+                                </div>
                             </div>
                         </div>
 

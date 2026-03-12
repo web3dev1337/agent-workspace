@@ -5698,6 +5698,27 @@ body.dependency-onboarding-active #dependency-setup-modal {
   font-weight: 600;
 }
 
+.setting-subsection {
+  margin-bottom: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.setting-subsection:last-child {
+  margin-bottom: 0;
+}
+
+.setting-subsection h5 {
+  margin-top: 0;
+}
+
+.setting-subsection .setting-group:last-child,
+.setting-subsection .setting-description:last-child {
+  margin-bottom: 0;
+}
+
 .setting-group label small {
   display: block;
   color: var(--text-tertiary);
