@@ -14478,8 +14478,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 /* Dashboard Layout */
 .dashboard-wrapper {
-  max-width: 1800px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   padding: 0 var(--space-lg) var(--space-lg);
   display: flex;
   flex-direction: column;
