@@ -14515,7 +14515,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .dashboard-main-content {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(24rem, 1.05fr);
+  grid-template-columns: minmax(0, 1.7fr) minmax(25rem, 1fr);
   gap: var(--space-md);
   align-items: start;
   min-height: 0;
@@ -14539,12 +14539,20 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .dashboard-resource-stack {
   display: grid;
-  gap: var(--space-md);
+  gap: 0.8rem;
   min-width: 0;
 }
 
+.dashboard-resource-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 0.75rem;
+  min-width: 0;
+  align-items: start;
+}
+
 .dashboard-workspaces-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(185px, 100%), 1fr));
 }
 
 /* Create Workspace Banner */
@@ -14768,7 +14776,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .dashboard-quick-links .quick-links-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(124px, 100%), 1fr));
   gap: var(--space-sm);
 }
 
@@ -14793,7 +14801,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-quick-links .quick-links-section .quick-links-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(124px, 100%), 1fr));
   gap: 0.45rem;
 }
 
@@ -14860,6 +14868,57 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .dashboard-compact-panel.is-active {
   display: grid;
   gap: var(--space-md);
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-section {
+  gap: 0.55rem;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-section-title {
+  font-size: 1rem;
+  margin-bottom: 0;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .bento-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+  gap: 0.75rem;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-card {
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.dashboard-layout-desktop .dashboard-resource-cards .dashboard-bento-card {
+  height: 100%;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-header {
+  margin-bottom: 8px;
+  font-size: 0.98rem;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-body {
+  font-size: 0.84rem;
+  margin-bottom: 8px;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .dashboard-bento-actions {
+  gap: 5px;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .bento-btn,
+.dashboard-layout-desktop .dashboard-content-right .bento-checkbox-label {
+  padding: 5px 8px;
+  font-size: 0.74rem;
+}
+
+.dashboard-layout-desktop .dashboard-content-right .ports-dashboard-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+}
+
+.dashboard-layout-desktop .dashboard-content-right .port-dashboard-card {
+  padding: 9px 10px;
 }
 
 .dashboard-layout-compact .dashboard-bento-card {

@@ -324,7 +324,8 @@ class Dashboard {
       </div>
     ` : '';
 
-    const resourcesSection = [quickLinksSection, runningServicesSection].filter(Boolean).join('');
+    const resourcesCards = [quickLinksSection, runningServicesSection].filter(Boolean);
+    const resourcesSection = resourcesCards.join('');
 
     const compactTabs = [
       workspaceSection ? { id: 'workspaces', label: 'Workspaces', content: workspaceSection } : null,
@@ -336,23 +337,26 @@ class Dashboard {
       this.compactTab = compactTabs[0]?.id || 'workspaces';
     }
 
-    const desktopTopSection = processSection && resourcesSection
+    const desktopResourcesGrid = resourcesCards.length
+      ? `
+        <div class="dashboard-resource-cards">
+          ${resourcesCards.join('')}
+        </div>
+      `
+      : '';
+    const desktopResourceStack = [processSection, desktopResourcesGrid].filter(Boolean).join('');
+    const desktopLayout = (workspaceSection && desktopResourceStack)
       ? `
         <div class="dashboard-main-content">
           <div class="dashboard-content-left">
-            ${processSection}
+            ${workspaceSection}
           </div>
-          <div class="dashboard-content-right">
-            ${resourcesSection}
+          <div class="dashboard-content-right dashboard-resource-stack">
+            ${desktopResourceStack}
           </div>
         </div>
       `
-      : (processSection || resourcesSection);
-
-    const desktopLayout = `
-      ${desktopTopSection}
-      ${workspaceSection}
-    `;
+      : (workspaceSection || desktopResourceStack);
 
     const compactLayout = `
       <div class="dashboard-compact-shell">
