@@ -317,17 +317,9 @@ class Dashboard {
     }
     const totalWorkspaceCount = workspaceCards.length;
 
-    const workspaceMeta = [
-      visibility.workspacesActive !== false ? `${activeWorkspaces.length} active` : '',
-      visibility.workspacesAll !== false ? `${inactiveWorkspaces.length} more` : ''
-    ].filter(Boolean).join(' • ');
-
     const workspaceSection = workspaceCards.length ? `
       <div class="dashboard-bento-section dashboard-workspaces-section">
-        <h2 class="dashboard-section-title">
-          Workspaces
-          ${workspaceMeta ? `<span class="dashboard-section-meta">${escapeHtml(workspaceMeta)}</span>` : ''}
-        </h2>
+        <h2 class="dashboard-section-title">Workspaces</h2>
         <div class="workspace-grid bento-workspace-grid dashboard-workspaces-grid">
           ${workspaceCards.join('')}
         </div>
@@ -357,14 +349,7 @@ class Dashboard {
     const desktopResourceStack = [processSection, desktopResourcesGrid].filter(Boolean).join('');
     const desktopSidebar = `
       <aside class="dashboard-side-panel">
-        <div class="dashboard-side-brand">
-          <div class="dashboard-side-title-group">
-            <div class="dashboard-side-title-icon" style="font-size:24px;">🏠</div>
-            <div class="dashboard-side-title-copy">
-              <h1>Agent Workspace</h1>
-              <p>${escapeHtml(totalWorkspaceCount)} workspace${totalWorkspaceCount === 1 ? '' : 's'} ready to open</p>
-            </div>
-          </div>
+        <div class="dashboard-side-overview">
           <div class="dashboard-side-stats">
             <div class="dashboard-side-stat">
               <strong>${escapeHtml(activeWorkspaces.length)}</strong>
@@ -378,31 +363,14 @@ class Dashboard {
         </div>
 
         <div class="dashboard-side-stack">
-          <div class="dashboard-side-section-label">Visible Panels</div>
           <div class="dashboard-side-pill is-active">
             <span>Workspaces</span>
             <strong>${escapeHtml(totalWorkspaceCount)}</strong>
           </div>
-          ${desktopResourceStack ? `
-            <div class="dashboard-side-pill">
-              <span>Resources</span>
-              <strong>${escapeHtml(resourcesCards.length)}</strong>
-            </div>
-          ` : ''}
-          ${processSection ? `
-            <div class="dashboard-side-pill">
-              <span>Process</span>
-              <strong>Live</strong>
-            </div>
-          ` : ''}
         </div>
 
         ${(visibility.createSection !== false) ? `
           <div class="dashboard-side-action">
-            <div class="dashboard-side-action-copy">
-              <strong>New Workspace</strong>
-              <span>Start another environment without leaving the dashboard.</span>
-            </div>
             <button class="btn-primary workspace-create-empty-btn dashboard-side-create-btn">
               ➕ New Workspace
             </button>
@@ -439,6 +407,9 @@ class Dashboard {
       <div class="dashboard-desktop-shell">
         ${desktopSidebar}
         <div class="dashboard-desktop-body">
+          <div class="dashboard-desktop-header">
+            <h1>Agent Workspace</h1>
+          </div>
           ${desktopBody}
         </div>
       </div>
