@@ -30974,7 +30974,7 @@ class ClaudeOrchestrator {
         <div class="modal-header">
           <div class="quick-worktree-title">
             <h3>Quick Work</h3>
-            <div class="quick-worktree-tabs">
+            <div class="quick-worktree-tabs" style="display: none;">
               <button class="quick-tab-btn active" data-tab="start">Start work</button>
               <button class="quick-tab-btn" data-tab="resume">Resume</button>
             </div>
@@ -31082,7 +31082,7 @@ class ClaudeOrchestrator {
               <div class="loading">Loading repos...</div>
             </div>
           </div>
-          <div class="quick-tab-panel" data-tab="resume">
+          <div class="quick-tab-panel" data-tab="resume" style="display: none;">
             <div class="quick-conv-toolbar">
               <div class="quick-conv-controls">
                 <button class="btn-secondary quick-conv-more-btn">Load more</button>
