@@ -218,7 +218,7 @@
 
     <section class="install-section reveal" id="install">
       <h2 class="section-title">Install</h2>
-      <p class="section-desc">Requires <a href="https://nodejs.org/" target="_blank" class="text-cyan">Node.js</a> (v18+) and <a href="https://git-scm.com/" target="_blank" class="text-cyan">Git</a>.</p>
+      <p class="section-desc">Get up and running in under a minute.</p>
 
       <div class="install-tabs">
         <button class="install-tab active" data-tab="windows">Windows</button>
@@ -229,8 +229,7 @@
       <div class="install-panels">
         <div class="install-panel active" id="tab-windows">
           <div class="install-option">
-            <span class="install-label">Desktop App (Recommended)</span>
-            <a class="btn-glow install-download" href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank">Download .exe</a>
+            <a class="btn-glow install-download" id="install-main-btn" href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank">Download Windows App</a>
           </div>
           <div class="install-divider"><span>or run from source</span></div>
           <div class="install-cmd">
@@ -248,6 +247,9 @@
         </div>
 
         <div class="install-panel" id="tab-mac">
+          <div class="install-option">
+            <span class="btn-outline install-download install-source-label">Run the commands below</span>
+          </div>
           <div class="install-cmd">
             <code>git clone https://github.com/web3dev1337/claude-orchestrator.git</code>
             <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/claude-orchestrator.git">Copy</button>
@@ -264,6 +266,9 @@
         </div>
 
         <div class="install-panel" id="tab-linux">
+          <div class="install-option">
+            <span class="btn-outline install-download install-source-label">Run the commands below</span>
+          </div>
           <div class="install-cmd">
             <code>git clone https://github.com/web3dev1337/claude-orchestrator.git</code>
             <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/claude-orchestrator.git">Copy</button>

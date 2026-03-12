@@ -926,6 +926,12 @@ a.btn-glow {
   font-size: 0.95rem;
 }
 
+.install-source-label {
+  cursor: default;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
 .install-divider {
   display: flex;
   align-items: center;
