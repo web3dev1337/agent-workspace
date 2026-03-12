@@ -14557,16 +14557,17 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 /* Create Workspace Banner */
 .dashboard-create-banner {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 14px 16px;
-  flex-shrink: 0;
-  align-self: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.dashboard-create-info {
+  min-width: 0;
 }
 
 .dashboard-create-title {
@@ -14587,6 +14588,13 @@ body.dependency-onboarding-active #dependency-setup-modal {
   font-weight: 600 !important;
   font-size: 0.82rem !important;
   white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .dashboard-create-banner {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+  }
 }
 
 /* Bento Cards */
