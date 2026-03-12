@@ -9316,13 +9316,10 @@ class ClaudeOrchestrator {
 	  setupSettingsPanelNavigation() {
 	    const panel = document.getElementById('settings-panel');
 	    if (!panel) return;
-	    const content = panel.querySelector('.settings-content');
 	    const sectionsContainer = panel.querySelector('.settings-sections-container');
-	    const navContainer = document.getElementById('settings-nav');
 	    const mainScroll = document.getElementById('settings-main');
 	    const searchEl = document.getElementById('settings-search');
-	    const jumpEl = document.getElementById('settings-jump');
-	    if (!content || !sectionsContainer || !navContainer || !mainScroll) return;
+	    if (!sectionsContainer || !mainScroll) return;
 
 	    const sections = Array.from(sectionsContainer.querySelectorAll('.setting-section'));
 	    const titleForSection = (sectionEl) => {
@@ -9338,51 +9335,19 @@ class ClaudeOrchestrator {
 	      .replace(/[^a-z0-9]+/g, '-')
 	      .replace(/^-+|-+$/g, '')
 	      || fallback;
-	    const navItems = [];
-	    const sectionIndexById = new Map();
 
 	    const setSectionCollapsed = (sectionEl, collapsed) => {
 	      sectionEl.classList.toggle('is-collapsed', collapsed);
 	      const toggleEl = sectionEl.querySelector('.setting-section-toggle');
 	      toggleEl?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
 	    };
-	    const updateActiveNav = () => {
-	      const visibleSections = sections.filter((sectionEl) => !sectionEl.classList.contains('settings-filter-hidden'));
-	      if (!visibleSections.length) {
-	        navItems.forEach((item) => item.classList.remove('active'));
-	        return;
-	      }
-
-	      const containerRect = mainScroll.getBoundingClientRect();
-	      let activeSection = visibleSections[0];
-	      visibleSections.forEach((sectionEl) => {
-	        const rect = sectionEl.getBoundingClientRect();
-	        if (rect.top - containerRect.top <= 72) {
-	          activeSection = sectionEl;
-	        }
-	      });
-
-	      const activeIdx = sectionIndexById.get(activeSection.id);
-	      navItems.forEach((item, idx) => {
-	        const isActive = idx === activeIdx;
-	        item.classList.toggle('active', isActive);
-	        if (isActive && !item.classList.contains('settings-filter-hidden')) {
-	          item.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
-	        }
-	      });
-	    };
 	    const expandSection = (sectionEl, { scrollIntoView = false, behavior = 'smooth' } = {}) => {
 	      if (!sectionEl) return;
 	      sectionEl.classList.remove('settings-filter-hidden');
 	      setSectionCollapsed(sectionEl, false);
-	      const idx = sectionIndexById.get(sectionEl.id);
-	      if (Number.isInteger(idx) && navItems[idx]) {
-	        navItems[idx].classList.remove('settings-filter-hidden');
-	      }
 	      if (scrollIntoView) {
 	        sectionEl.scrollIntoView({ behavior, block: 'start' });
 	      }
-	      updateActiveNav();
 	    };
 	    const collapseAllSections = () => {
 	      sections.forEach((sectionEl) => setSectionCollapsed(sectionEl, true));
@@ -9390,20 +9355,16 @@ class ClaudeOrchestrator {
 	    const reset = () => {
 	      if (searchEl) searchEl.value = '';
 	      sections.forEach((sectionEl) => sectionEl.classList.remove('settings-filter-hidden'));
-	      navItems.forEach((item) => item.classList.remove('settings-filter-hidden'));
 	      collapseAllSections();
 	      mainScroll.scrollTo({ top: 0, behavior: 'auto' });
-	      updateActiveNav();
 	    };
 
-	    navContainer.innerHTML = '';
 	    sections.forEach((sectionEl, idx) => {
 	      const title = titleForSection(sectionEl);
 	      const sectionId = slugify(sectionEl.getAttribute('data-section-id') || title, `sec-${idx}`);
 	      sectionEl.setAttribute('data-section-id', sectionId);
 	      sectionEl.setAttribute('data-section-title', title);
 	      sectionEl.id = `settings-${sectionId}`;
-	      sectionIndexById.set(sectionEl.id, idx);
 
 	      const headingEl = Array.from(sectionEl.children).find((child) => child.matches?.('h4, h5'));
 	      if (headingEl) {
@@ -9433,7 +9394,6 @@ class ClaudeOrchestrator {
 	        toggleEl.addEventListener('click', () => {
 	          const isCollapsed = sectionEl.classList.contains('is-collapsed');
 	          setSectionCollapsed(sectionEl, !isCollapsed);
-	          updateActiveNav();
 	        });
 
 	        headingEl.replaceWith(toggleEl);
@@ -9441,40 +9401,7 @@ class ClaudeOrchestrator {
 	      }
 
 	      setSectionCollapsed(sectionEl, true);
-
-	      const navItem = document.createElement('button');
-	      navItem.type = 'button';
-	      navItem.className = 'settings-nav-item';
-	      navItem.textContent = title;
-	      navItem.addEventListener('click', () => {
-	        expandSection(sectionEl, { scrollIntoView: true, behavior: 'auto' });
-	      });
-	      navContainer.appendChild(navItem);
-	      navItems.push(navItem);
 	    });
-
-	    if (jumpEl) {
-	      try {
-	        const opts = sections.map((sectionEl, idx) => {
-	          const title = this.escapeHtml(titleForSection(sectionEl));
-	          return `<option value="${idx}">${title}</option>`;
-	        }).join('');
-	        jumpEl.innerHTML = `<option value="">Jump to…</option>${opts}`;
-	      } catch {
-	        // ignore
-	      }
-
-	      jumpEl.addEventListener('change', () => {
-	        const raw = String(jumpEl.value || '').trim();
-	        if (!raw) return;
-	        const idx = Number(raw);
-	        const target = Number.isFinite(idx) ? sections[idx] : null;
-	        if (target) {
-	          expandSection(target, { scrollIntoView: true, behavior: 'smooth' });
-	        }
-	        jumpEl.value = '';
-	      });
-	    }
 
 	    if (searchEl) {
 	      const applyFilter = () => {
@@ -9482,23 +9409,19 @@ class ClaudeOrchestrator {
 
 	        if (!query) {
 	          sections.forEach((sectionEl) => sectionEl.classList.remove('settings-filter-hidden'));
-	          navItems.forEach((item) => item.classList.remove('settings-filter-hidden'));
 	          collapseAllSections();
-	          updateActiveNav();
 	          return;
 	        }
 
-	        sections.forEach((sectionEl, idx) => {
+	        sections.forEach((sectionEl) => {
 	          const title = String(titleForSection(sectionEl)).toLowerCase();
 	          const bodyText = String(sectionEl.querySelector('.setting-section-body')?.textContent || '').toLowerCase();
 	          const show = title.includes(query) || bodyText.includes(query);
 	          sectionEl.classList.toggle('settings-filter-hidden', !show);
-	          navItems[idx]?.classList.toggle('settings-filter-hidden', !show);
 	          if (show) {
 	            setSectionCollapsed(sectionEl, false);
 	          }
 	        });
-	        updateActiveNav();
 	      };
 
 	      searchEl.addEventListener('input', applyFilter);
@@ -9510,7 +9433,6 @@ class ClaudeOrchestrator {
 	      });
 	    }
 
-	    mainScroll.addEventListener('scroll', updateActiveNav, { passive: true });
 	    this.settingsPanelNavigationController = {
 	      reset,
 	      openSectionById: (sectionId, options = {}) => {
