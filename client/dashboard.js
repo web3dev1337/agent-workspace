@@ -9,6 +9,9 @@ class Dashboard {
     this.quickLinks = null;
     this._escHandler = null;
     this._projectLaunchInFlight = false;
+    this._resizeHandler = null;
+    this._layoutMode = 'desktop';
+    this.compactTab = 'workspaces';
   }
 
 	  async show() {
@@ -64,6 +67,16 @@ class Dashboard {
       document.removeEventListener('keydown', this._escHandler);
       this._escHandler = null;
     }
+
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+      this._resizeHandler = null;
+    }
+  }
+
+  getLayoutMode() {
+    if (typeof window === 'undefined') return 'desktop';
+    return window.innerWidth <= 1100 ? 'compact' : 'desktop';
   }
 
   render() {
@@ -112,11 +125,18 @@ class Dashboard {
       const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
       return bTime - aTime;
     };
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
     const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
     const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
     const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
     const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
     const showProcessBanner = visibility.processBanner !== false;
+    const layoutMode = this.getLayoutMode();
+    const isCompactLayout = layoutMode === 'compact';
+    this._layoutMode = layoutMode;
 
     // SVG Icons replacing Emojis
     const svgIcon = (path, cls="dashboard-svg-icon") => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -254,18 +274,6 @@ class Dashboard {
       </div>
     ` : '';
 
-    const createSection = (visibility.createSection !== false) ? `
-      <div class="dashboard-create-banner">
-        <div class="dashboard-create-info">
-          <div class="dashboard-create-title">✨ Get Started</div>
-          <div class="dashboard-create-desc">Set up a new workspace environment to begin building.</div>
-        </div>
-        <button id="dashboard-add-workspace-btn" class="btn-primary workspace-create-empty-btn dashboard-create-btn">
-          ➕ Create Workspace
-        </button>
-      </div>
-    ` : '';
-
     const quickLinksSection = (visibility.quickLinks !== false) ? `
       <div class="dashboard-bento-card dashboard-quick-links">
         <div class="dashboard-bento-header">
@@ -288,26 +296,95 @@ class Dashboard {
       </div>
     ` : '';
 
-    const activeSection = (visibility.workspacesActive !== false && activeWorkspaces.length > 0) ? `
-      <div class="dashboard-bento-section">
-        <h2 class="dashboard-section-title">Active Workspaces</h2>
-        <div class="workspace-grid bento-workspace-grid">
-          ${activeWorkspaces.map(ws => this.generateWorkspaceCard(ws, true)).join('')}
+    const workspaceCards = [];
+    if (visibility.createSection !== false) {
+      workspaceCards.push(this.generateCreateWorkspaceCard(), this.generateCreateProjectCard());
+    }
+    if (visibility.workspacesActive !== false) {
+      workspaceCards.push(...activeWorkspaces.map((ws) => this.generateWorkspaceCard(ws, true)));
+    }
+    if (visibility.workspacesAll !== false) {
+      workspaceCards.push(...inactiveWorkspaces.map((ws) => this.generateWorkspaceCard(ws, false)));
+    }
+
+    const workspaceMeta = [
+      visibility.workspacesActive !== false ? `${activeWorkspaces.length} active` : '',
+      visibility.workspacesAll !== false ? `${inactiveWorkspaces.length} more` : ''
+    ].filter(Boolean).join(' • ');
+
+    const workspaceSection = workspaceCards.length ? `
+      <div class="dashboard-bento-section dashboard-workspaces-section">
+        <h2 class="dashboard-section-title">
+          Workspaces
+          ${workspaceMeta ? `<span class="dashboard-section-meta">${escapeHtml(workspaceMeta)}</span>` : ''}
+        </h2>
+        <div class="workspace-grid bento-workspace-grid dashboard-workspaces-grid">
+          ${workspaceCards.join('')}
         </div>
       </div>
     ` : '';
 
-    const allSection = (visibility.workspacesAll !== false) ? `
-      <div class="dashboard-bento-section">
-        <h2 class="dashboard-section-title">All Workspaces</h2>
-        <div class="workspace-grid bento-workspace-grid">
-          ${inactiveWorkspaces.map(ws => this.generateWorkspaceCard(ws, false)).join('')}
+    const resourcesSection = [quickLinksSection, runningServicesSection].filter(Boolean).join('');
+
+    const compactTabs = [
+      workspaceSection ? { id: 'workspaces', label: 'Workspaces', content: workspaceSection } : null,
+      processSection ? { id: 'process', label: 'Process', content: processSection } : null,
+      resourcesSection ? { id: 'resources', label: 'Resources', content: resourcesSection } : null
+    ].filter(Boolean);
+
+    if (!compactTabs.some((tab) => tab.id === this.compactTab)) {
+      this.compactTab = compactTabs[0]?.id || 'workspaces';
+    }
+
+    const desktopTopSection = processSection && resourcesSection
+      ? `
+        <div class="dashboard-main-content">
+          <div class="dashboard-content-left">
+            ${processSection}
+          </div>
+          <div class="dashboard-content-right">
+            ${resourcesSection}
+          </div>
+        </div>
+      `
+      : (processSection || resourcesSection);
+
+    const desktopLayout = `
+      ${desktopTopSection}
+      ${workspaceSection}
+    `;
+
+    const compactLayout = `
+      <div class="dashboard-compact-shell">
+        <div class="dashboard-compact-tabs" role="tablist" aria-label="Dashboard sections">
+          ${compactTabs.map((tab) => `
+            <button
+              type="button"
+              class="dashboard-compact-tab ${tab.id === this.compactTab ? 'is-active' : ''}"
+              data-dashboard-tab="${tab.id}"
+              role="tab"
+              aria-selected="${tab.id === this.compactTab ? 'true' : 'false'}"
+            >
+              ${escapeHtml(tab.label)}
+            </button>
+          `).join('')}
+        </div>
+        <div class="dashboard-compact-panel-shell">
+          ${compactTabs.map((tab) => `
+            <section
+              class="dashboard-compact-panel ${tab.id === this.compactTab ? 'is-active' : ''}"
+              data-dashboard-panel="${tab.id}"
+              role="tabpanel"
+            >
+              ${tab.content}
+            </section>
+          `).join('')}
         </div>
       </div>
-    ` : '';
+    `;
 
     return `
-      <div class="dashboard-wrapper">
+      <div class="dashboard-wrapper dashboard-layout-${layoutMode}">
         <div class="dashboard-topbar">
           ${canReturnToWorkspaces ? `<button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back</button>` : '<div></div>'}
           ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status"></div>` : '<div></div>'}
@@ -323,18 +400,7 @@ class Dashboard {
           </div>
         </div>
 
-        <div class="dashboard-main-content">
-          <div class="dashboard-content-left">
-            ${createSection}
-            ${processSection}
-            ${activeSection}
-            ${allSection}
-          </div>
-          <div class="dashboard-content-right">
-            ${quickLinksSection}
-            ${runningServicesSection}
-          </div>
-        </div>
+        ${isCompactLayout ? compactLayout : desktopLayout}
       </div>
     `;
   }
@@ -3643,6 +3709,45 @@ class Dashboard {
         this.createEmptyWorkspaceQuick();
       });
     });
+
+    document.querySelectorAll('.workspace-create-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.showCreateWorkspaceWizard();
+      });
+    });
+
+    document.querySelectorAll('.workspace-import-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.importWorkspaceFromFile();
+      });
+    });
+
+    document.querySelectorAll('.workspace-create-project-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.showCreateProjectWizard();
+      });
+    });
+
+    document.querySelectorAll('[data-dashboard-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const nextTab = String(btn.dataset.dashboardTab || '').trim();
+        if (!nextTab || nextTab === this.compactTab) return;
+        this.compactTab = nextTab;
+        this.render();
+      });
+    });
+
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+    }
+    this._resizeHandler = () => {
+      if (!this.isVisible) return;
+      const nextLayoutMode = this.getLayoutMode();
+      if (nextLayoutMode !== this._layoutMode) {
+        this.render();
+      }
+    };
+    window.addEventListener('resize', this._resizeHandler);
 
     // ESC: return to tabbed workspaces if dashboard was opened from there
     if (this._escHandler) {
