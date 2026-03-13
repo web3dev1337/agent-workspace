@@ -763,12 +763,12 @@ class WorkspaceTabManager {
    */
   showWorkspaceWizard() {
     if (typeof this.orchestrator.showDashboard === 'function') {
-      this.orchestrator.showDashboard();
+      this.orchestrator.showDashboard({ mode: 'workspace-picker' });
       return;
     }
 
     if (this.orchestrator.dashboard) {
-      this.orchestrator.dashboard.show();
+      this.orchestrator.dashboard.show({ mode: 'workspace-picker' });
       this.orchestrator.isDashboardMode = true;
       return;
     }

@@ -3445,7 +3445,7 @@ class Dashboard {
       : '';
 
     return `
-      <div class="workspace-card bento-workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}">
+      <div class="workspace-card bento-workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}" data-workspace-active="${isActive ? 'true' : 'false'}">
         <div class="workspace-card-header">
           <span class="workspace-icon bento-workspace-icon">${workspace.icon}</span>
           <div class="workspace-info">
@@ -3475,8 +3475,8 @@ class Dashboard {
         </div>
 
         <div class="workspace-card-footer bento-card-footer">
-          <button class="btn-primary workspace-open-btn bento-btn-primary">
-            ↗ Open Workspace
+          <button class="${isActive ? 'btn-secondary workspace-open-btn workspace-open-btn-active' : 'btn-primary workspace-open-btn workspace-open-btn-inactive'} bento-btn-primary">
+            ${isActive ? '↩ Return to Workspace' : '+ Add Workspace'}
           </button>
           <div class="bento-action-group">
             <button class="btn-icon workspace-rename-btn" title="Rename workspace">
@@ -3589,7 +3589,14 @@ class Dashboard {
     document.querySelectorAll('.workspace-open-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.returnToWorkspaceView();
+        const card = e.target.closest('.workspace-card');
+        const workspaceId = card?.dataset?.workspaceId;
+        const isActive = card?.dataset?.workspaceActive === 'true';
+        if (isActive) {
+          this.returnToWorkspaceView(workspaceId);
+          return;
+        }
+        this.openWorkspace(workspaceId);
       });
     });
 
@@ -3782,8 +3789,23 @@ class Dashboard {
     wizard.show(options);
   }
 
-  returnToWorkspaceView() {
+  returnToWorkspaceView(workspaceId = null) {
+    const targetWorkspaceId = String(workspaceId || '').trim();
+    const currentWorkspaceId = String(this.orchestrator.currentWorkspace?.id || '').trim();
+    const tabManager = this.orchestrator.tabManager;
+    const targetTab = targetWorkspaceId && tabManager?.findTabByWorkspaceId
+      ? tabManager.findTabByWorkspaceId(targetWorkspaceId)
+      : null;
+
     this.orchestrator.hideDashboard();
+
+    if (!targetWorkspaceId || targetWorkspaceId === currentWorkspaceId || !targetTab || !tabManager) {
+      return;
+    }
+
+    tabManager.switchTab(targetTab.id).catch?.((error) => {
+      console.error('Failed to switch dashboard target tab:', error);
+    });
   }
 
   async createEmptyWorkspaceQuick() {
@@ -4006,9 +4028,31 @@ class Dashboard {
 
   // Helper methods
   isWorkspaceActive(workspace) {
-    // For now, consider workspace active if it's the current one
-    // In future, this could check for running sessions, recent activity, etc.
-    return workspace.id === this.orchestrator.currentWorkspace?.id;
+    const workspaceId = String(workspace?.id || '').trim();
+    if (!workspaceId) return false;
+    return this.getActiveWorkspaceIds().has(workspaceId);
+  }
+
+  getActiveWorkspaceIds() {
+    const activeIds = new Set();
+    const currentWorkspaceId = String(this.orchestrator.currentWorkspace?.id || '').trim();
+    if (currentWorkspaceId) {
+      activeIds.add(currentWorkspaceId);
+    }
+
+    const tabs = this.orchestrator.tabManager?.tabs;
+    if (!(tabs instanceof Map)) {
+      return activeIds;
+    }
+
+    for (const [, tab] of tabs.entries()) {
+      const tabWorkspaceId = String(tab?.workspaceId || '').trim();
+      if (tabWorkspaceId) {
+        activeIds.add(tabWorkspaceId);
+      }
+    }
+
+    return activeIds;
   }
 
   getLastUsed(workspace) {

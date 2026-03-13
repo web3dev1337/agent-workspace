@@ -1565,7 +1565,7 @@ class ClaudeOrchestrator {
 
         // Initialize dashboard if configured
         if (config.ui.startupDashboard && !active) {
-          this.showDashboard();
+          this.showDashboard({ mode: 'workspace-picker' });
         }
       });
 
@@ -17874,7 +17874,7 @@ class ClaudeOrchestrator {
   }
 
   // Workspace management methods
-  showDashboard() {
+  showDashboard(options = {}) {
     console.log('Showing dashboard...');
     this.isDashboardMode = true;
 
@@ -17890,7 +17890,7 @@ class ClaudeOrchestrator {
     if (sidebar) sidebar.classList.add('hidden');
 
     // Show dashboard
-    this.dashboard.show();
+    this.dashboard.show(options);
   }
 
   async renameWorkspace(workspaceId, name) {
