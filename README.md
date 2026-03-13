@@ -3,6 +3,7 @@
 [![Website](https://img.shields.io/badge/Website-agent--workspace.ai-00d4ff?style=for-the-badge)](https://agent-workspace.ai)
 [![Download](https://img.shields.io/badge/Download-Windows%20App-00d4ff?style=for-the-badge)](https://github.com/web3dev1337/claude-orchestrator/releases/latest)
 [![Follow on X](https://img.shields.io/badge/Follow-%40AIOnlyDeveloper-000000?style=for-the-badge&logo=x)](https://x.com/AIOnlyDeveloper)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
 All your Agents. One Workspace.
 
