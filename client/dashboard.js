@@ -4018,9 +4018,31 @@ class Dashboard {
 
   // Helper methods
   isWorkspaceActive(workspace) {
-    // For now, consider workspace active if it's the current one
-    // In future, this could check for running sessions, recent activity, etc.
-    return workspace.id === this.orchestrator.currentWorkspace?.id;
+    const workspaceId = String(workspace?.id || '').trim();
+    if (!workspaceId) return false;
+    return this.getActiveWorkspaceIds().has(workspaceId);
+  }
+
+  getActiveWorkspaceIds() {
+    const activeIds = new Set();
+    const currentWorkspaceId = String(this.orchestrator.currentWorkspace?.id || '').trim();
+    if (currentWorkspaceId) {
+      activeIds.add(currentWorkspaceId);
+    }
+
+    const tabs = this.orchestrator.tabManager?.tabs;
+    if (!(tabs instanceof Map)) {
+      return activeIds;
+    }
+
+    for (const [, tab] of tabs.entries()) {
+      const tabWorkspaceId = String(tab?.workspaceId || '').trim();
+      if (tabWorkspaceId) {
+        activeIds.add(tabWorkspaceId);
+      }
+    }
+
+    return activeIds;
   }
 
   getLastUsed(workspace) {
