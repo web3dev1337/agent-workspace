@@ -3328,8 +3328,8 @@ app.delete('/api/threads/:id', express.json(), (req, res) => handleArchiveThread
 // Remove worktree from workspace (config only - does NOT delete git worktree folder)
 app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), async (req, res) => {
   try {
-    const { workspaceId, worktreeId } = req.body;
-    logger.info('Removing worktree from workspace configuration (keeping folder intact)', { workspaceId, worktreeId });
+    const { workspaceId, worktreeId, repositoryName } = req.body;
+    logger.info('Removing worktree from workspace configuration (keeping folder intact)', { workspaceId, worktreeId, repositoryName });
 
     const workspace = workspaceManager.getWorkspace(workspaceId);
     if (!workspace) {
@@ -3352,8 +3352,22 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
     const originalTerminalCount = originalTerminals.length;
     const removedTerminalIds = [];
 
+    const repoNameNorm = repositoryName ? String(repositoryName).trim().toLowerCase() : null;
+
+    const terminalMatchesScope = (terminal) => {
+      // If repositoryName was provided, only match terminals belonging to that repo
+      if (repoNameNorm) {
+        const termRepo = String(terminal?.repository?.name || '').trim().toLowerCase();
+        if (termRepo) return termRepo === repoNameNorm;
+        // Fall back to checking terminal ID prefix (e.g. "fps-level-design-work1-claude")
+        const sid = String(terminal?.id || '').trim().toLowerCase();
+        return sid.startsWith(`${repoNameNorm}-`);
+      }
+      return true;
+    };
+
     let nextTerminals = originalTerminals.filter((terminal) => {
-      const matched = terminalMatchesWorktree(terminal, parsedWorktree);
+      const matched = terminalMatchesWorktree(terminal, parsedWorktree) && terminalMatchesScope(terminal);
       if (matched && terminal?.id) removedTerminalIds.push(String(terminal.id));
       return !matched;
     });
@@ -3371,8 +3385,10 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
           || (!!keyExpr && keyExpr.test(sid))
           || (!!worktreeExpr && worktreeExpr.test(sid))
         );
-        if (fallbackMatch && terminal?.id) removedTerminalIds.push(String(terminal.id));
-        return !fallbackMatch;
+        if (!fallbackMatch) return true;
+        if (!terminalMatchesScope(terminal)) return true;
+        if (terminal?.id) removedTerminalIds.push(String(terminal.id));
+        return false;
       });
     }
 
