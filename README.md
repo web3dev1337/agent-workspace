@@ -1,5 +1,9 @@
 # Agent Workspace
 
+[![Website](https://img.shields.io/badge/Website-Live%20Site-00d4ff?style=for-the-badge)](https://web3dev1337.github.io/claude-orchestrator/)
+[![Download](https://img.shields.io/badge/Download-Windows%20App-00d4ff?style=for-the-badge)](https://github.com/web3dev1337/claude-orchestrator/releases/latest)
+[![Follow on X](https://img.shields.io/badge/Follow-%40AIOnlyDeveloper-000000?style=for-the-badge&logo=x)](https://x.com/AIOnlyDeveloper)
+
 A multi-workspace terminal orchestrator for AI coding agents (Claude Code, Codex CLI). Manages unlimited concurrent sessions across multiple repositories with browser-like tabs, dynamic git worktrees, and a native Windows desktop app.
 
 > The repository is named `claude-orchestrator` for historical reasons. The product name is **Agent Workspace**.
