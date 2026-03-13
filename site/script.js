@@ -1,4 +1,39 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // 0. Auto-update copyright year
+  const yearEl = document.getElementById('copy-year');
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+  // 0b. Platform links scroll + select tab
+  document.querySelectorAll('.platform-link[data-select-tab]').forEach(link => {
+    link.addEventListener('click', () => {
+      const tabId = link.dataset.selectTab;
+      const midSection = document.getElementById('install-mid');
+      if (midSection) {
+        midSection.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+        midSection.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
+        const tab = midSection.querySelector(`[data-tab="${tabId}"]`);
+        if (tab) tab.classList.add('active');
+        document.getElementById('tab-' + tabId)?.classList.add('active');
+      }
+    });
+  });
+
+  // 0c. Auto-detect platform and pre-select tabs
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const isLinux = /Linux/.test(navigator.userAgent) && !(/Android/.test(navigator.userAgent));
+  if (isMac || isLinux) {
+    const tabSuffix = isMac ? 'mac' : 'linux';
+    document.querySelectorAll('.install-section').forEach(section => {
+      section.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+      section.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
+      const matchingTab = Array.from(section.querySelectorAll('.install-tab')).find(t => t.dataset.tab.startsWith(tabSuffix));
+      if (matchingTab) {
+        matchingTab.classList.add('active');
+        document.getElementById('tab-' + matchingTab.dataset.tab)?.classList.add('active');
+      }
+    });
+  }
+
   // 1. Navbar Scroll Effect
   const navbar = document.querySelector('.fluid-nav');
   window.addEventListener('scroll', () => {
@@ -112,12 +147,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 5. Install Tabs & Copy Buttons
-  document.querySelectorAll('.install-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+  document.querySelectorAll('.install-section').forEach(section => {
+    section.querySelectorAll('.install-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        section.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+        section.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      });
     });
   });
 
