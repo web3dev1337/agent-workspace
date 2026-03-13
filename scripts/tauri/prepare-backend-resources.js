@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 
 function parseArgs(argv) {
@@ -27,6 +28,11 @@ function copyFile(src, dest) {
   fs.copyFileSync(src, dest);
 }
 
+function hashFile(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
 function run(cmd, args, opts) {
   const res = spawnSync(cmd, args, { stdio: 'inherit', ...opts });
   if (res.error) {
@@ -47,6 +53,51 @@ function runNpm(args, opts) {
   }
   const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   run(npmCmd, args, opts);
+}
+
+function readJson(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(filePath, value) {
+  ensureDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
+}
+
+function normalizeBundledNodePath(value) {
+  const raw = String(value || '').trim();
+  return raw ? path.resolve(raw) : null;
+}
+
+function buildProdInstallStamp({ packageJsonPath, packageLockPath, bundledNodePath }) {
+  return {
+    schemaVersion: 1,
+    platform: process.platform,
+    arch: process.arch,
+    nodeVersion: process.version,
+    packageJsonHash: hashFile(packageJsonPath),
+    packageLockHash: hashFile(packageLockPath),
+    bundledNodePath: bundledNodePath || null,
+    bundledNodeHash: bundledNodePath ? hashFile(bundledNodePath) : null
+  };
+}
+
+function canReuseProdInstall({ stampPath, nodeModulesPath, expectedStamp }) {
+  if (!fs.existsSync(nodeModulesPath) || !fs.existsSync(stampPath)) {
+    return false;
+  }
+
+  const actualStamp = readJson(stampPath);
+  if (!actualStamp || typeof actualStamp !== 'object') {
+    return false;
+  }
+
+  return JSON.stringify(actualStamp) === JSON.stringify(expectedStamp);
 }
 
 function main() {
@@ -89,6 +140,9 @@ function main() {
   // Default: bundle the Node runtime we’re currently running on.
   // This makes `npm run tauri:build` much more “it just works” on Windows.
   const bundledNodePathRaw = bundledNodePathRawFromEnv || (shouldBundleNode ? process.execPath : '');
+  const bundledNodePath = normalizeBundledNodePath(bundledNodePathRaw);
+  const nodeModulesPath = path.join(outDir, 'node_modules');
+  const prodInstallStampPath = path.join(outDir, '.prod-install-stamp.json');
 
   if (clean && fs.existsSync(outDir)) {
     fs.rmSync(outDir, { recursive: true, force: true });
@@ -115,8 +169,7 @@ function main() {
   if (srcUpdaterPublicKey && fs.existsSync(srcUpdaterPublicKey)) {
     copyFile(srcUpdaterPublicKey, path.join(outDir, 'updater.pubkey'));
   }
-  if (bundledNodePathRaw) {
-    const bundledNodePath = path.resolve(String(bundledNodePathRaw));
+  if (bundledNodePath) {
     if (fs.existsSync(bundledNodePath)) {
       const isExe = bundledNodePath.toLowerCase().endsWith('.exe');
       const nodeFilename = isExe ? 'node.exe' : 'node';
@@ -128,13 +181,28 @@ function main() {
   }
 
   if (installProd) {
-    try {
-      runNpm(['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: outDir });
-    } catch (error) {
-      // Some Windows setups have issues with `npm ci` for native modules.
-      // Fall back to `npm install` so contributors can still build installers.
-      console.warn('[tauri] NOTE: npm ci failed, falling back to npm install --omit=dev');
-      runNpm(['install', '--omit=dev', '--no-audit', '--no-fund'], { cwd: outDir });
+    const expectedProdInstallStamp = buildProdInstallStamp({
+      packageJsonPath: path.join(outDir, 'package.json'),
+      packageLockPath: path.join(outDir, 'package-lock.json'),
+      bundledNodePath
+    });
+
+    if (canReuseProdInstall({
+      stampPath: prodInstallStampPath,
+      nodeModulesPath,
+      expectedStamp: expectedProdInstallStamp
+    })) {
+      console.log('[tauri] Reusing cached backend production install');
+    } else {
+      try {
+        runNpm(['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: outDir });
+      } catch (error) {
+        // Some Windows setups have issues with `npm ci` for native modules.
+        // Fall back to `npm install` so contributors can still build installers.
+        console.warn('[tauri] NOTE: npm ci failed, falling back to npm install --omit=dev');
+        runNpm(['install', '--omit=dev', '--no-audit', '--no-fund'], { cwd: outDir });
+      }
+      writeJson(prodInstallStampPath, expectedProdInstallStamp);
     }
   }
 
@@ -143,7 +211,6 @@ function main() {
     throw new Error(`Expected backend entry not found: ${marker}`);
   }
 
-  const nodeModulesPath = path.join(outDir, 'node_modules');
   if (!fs.existsSync(nodeModulesPath)) {
     console.warn(`[tauri] NOTE: ${nodeModulesPath} missing. Packaged builds will require --install-prod.`);
   }

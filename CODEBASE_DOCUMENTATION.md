@@ -16,6 +16,7 @@ SERVICES:   server/statusDetector.js, gitHelper.js   - Core services
 FRONTEND:   client/app.js, client/terminal.js        - Web client
 NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
+PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resources + reusable packaged prod deps
 DIFF:       diff-viewer/                             - Advanced diff viewer component
 SITE:       site/                                    - Standalone showcase site for future GitHub Pages publishing
 PLANS:      PLANS/                                   - Date-stamped planning + implementation notes
@@ -89,6 +90,10 @@ server/auditExportService.js       - Redacted audit export across activity + sch
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
 server/projectTypeService.js       - Project taxonomy loader/validator for category→framework→template metadata (`config/project-types.json`)
+scripts/tauri/prepare-backend-resources.js - Tauri backend packager
+├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
+├─ Prod-deps reuse: repeated `--install-prod` runs skip `npm ci` when package-lock + bundled Node stamp still match
+└─ CI cache: Windows release workflow restores `src-tauri/resources/backend/node_modules` so warm installer builds avoid re-installing backend prod deps
 ```
 
 ### Multi-Workspace System (Core Feature)
