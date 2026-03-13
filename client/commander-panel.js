@@ -29,6 +29,28 @@ class CommanderPanel {
     this.updateCommanderCmdModeButton();
     this.setupSocketListeners();
     await this.fetchStatus();
+    this.updateCommanderTitle();
+  }
+
+  /**
+   * Update the Commander title based on the configured agent
+   */
+  async updateCommanderTitle() {
+    const titleEl = document.getElementById('commander-title-text');
+    if (!titleEl) return;
+    try {
+      const res = await fetch(`${this.serverUrl}/api/agents`);
+      if (res.ok) {
+        const agents = await res.json();
+        if (agents.length === 1) {
+          titleEl.textContent = `Commander ${agents[0].name}`;
+        } else {
+          titleEl.textContent = 'Commander';
+        }
+      }
+    } catch {
+      // keep default
+    }
   }
 
   /**
@@ -51,7 +73,7 @@ class CommanderPanel {
       <div class="commander-titlebar">
         <div class="commander-titlebar-drag">
           <span class="commander-titlebar-icon">🎖️</span>
-          <span class="commander-titlebar-text">Commander Claude</span>
+          <span class="commander-titlebar-text" id="commander-title-text">Commander</span>
           <span class="commander-status" id="commander-status-badge">Stopped</span>
         </div>
         <div class="commander-titlebar-controls">
@@ -74,7 +96,7 @@ class CommanderPanel {
           <option value="continue">Continue</option>
           <option value="resume">Resume</option>
         </select>
-        <button id="commander-sessions" class="commander-btn" title="View sessions" data-ui-visibility="commander.sessions">
+        <button id="commander-sessions" class="commander-btn hidden" title="View sessions" data-ui-visibility="commander.sessions">
           Sessions
         </button>
         <button id="commander-advice" class="commander-btn" title="Show workflow advice" data-ui-visibility="commander.advice">
