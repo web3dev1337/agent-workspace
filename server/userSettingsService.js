@@ -257,7 +257,7 @@ class UserSettingsService {
               startStop: false,
               startClaude: false,
               advice: false,
-              sessions: true,
+              sessions: false,
               modeSelect: false
             }
           },
