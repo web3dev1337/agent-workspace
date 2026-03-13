@@ -10,8 +10,8 @@ If you believe you found a security vulnerability:
 
 1) **Do not open a public issue.**
 2) Send details privately to the maintainer:
-   - GitHub: open a private security advisory (preferred)
-   - Or email: use the contact information listed on the GitHub profile
+   - GitHub: [open a private security advisory](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new) (preferred)
+   - Or DM on X: [@AIOnlyDeveloper](https://x.com/AIOnlyDeveloper)
 
 Please include:
 - a clear description of the issue and impact
