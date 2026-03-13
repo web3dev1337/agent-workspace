@@ -1491,6 +1491,7 @@ class ClaudeOrchestrator {
         this.applyThemeFromUserSettings();
         this.applySimpleModeConfig();
         this.maybeAutoOpenSimpleMode();
+        this.applyUiVisibility();
       });
 
       // Workspace events
