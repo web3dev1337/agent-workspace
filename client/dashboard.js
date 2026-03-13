@@ -6,15 +6,13 @@ class Dashboard {
     this.workspaces = [];
     this.config = {};
     this.isVisible = false;
-    this.openMode = 'overview';
     this.quickLinks = null;
     this._escHandler = null;
     this._projectLaunchInFlight = false;
   }
 
-	  async show(options = {}) {
+	  async show() {
     console.log('Showing dashboard...');
-    this.openMode = String(options?.mode || 'overview').trim() || 'overview';
 
     // Initialize Quick Links if available
     if (window.QuickLinks && !this.quickLinks) {
@@ -3447,7 +3445,7 @@ class Dashboard {
       : '';
 
     return `
-      <div class="workspace-card bento-workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}">
+      <div class="workspace-card bento-workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}" data-workspace-active="${isActive ? 'true' : 'false'}">
         <div class="workspace-card-header">
           <span class="workspace-icon bento-workspace-icon">${workspace.icon}</span>
           <div class="workspace-info">
@@ -3477,8 +3475,8 @@ class Dashboard {
         </div>
 
         <div class="workspace-card-footer bento-card-footer">
-          <button class="btn-primary workspace-open-btn bento-btn-primary">
-            ↗ Open Workspace
+          <button class="${isActive ? 'btn-secondary workspace-open-btn workspace-open-btn-active' : 'btn-primary workspace-open-btn workspace-open-btn-inactive'} bento-btn-primary">
+            ${isActive ? '↩ Return to Workspace' : '+ Add Workspace'}
           </button>
           <div class="bento-action-group">
             <button class="btn-icon workspace-rename-btn" title="Rename workspace">
@@ -3593,11 +3591,12 @@ class Dashboard {
         e.stopPropagation();
         const card = e.target.closest('.workspace-card');
         const workspaceId = card?.dataset?.workspaceId;
-        if (this.shouldOpenWorkspaceFromDashboard()) {
-          this.openWorkspace(workspaceId);
+        const isActive = card?.dataset?.workspaceActive === 'true';
+        if (isActive) {
+          this.returnToWorkspaceView(workspaceId);
           return;
         }
-        this.returnToWorkspaceView();
+        this.openWorkspace(workspaceId);
       });
     });
 
@@ -3790,12 +3789,23 @@ class Dashboard {
     wizard.show(options);
   }
 
-  returnToWorkspaceView() {
-    this.orchestrator.hideDashboard();
-  }
+  returnToWorkspaceView(workspaceId = null) {
+    const targetWorkspaceId = String(workspaceId || '').trim();
+    const currentWorkspaceId = String(this.orchestrator.currentWorkspace?.id || '').trim();
+    const tabManager = this.orchestrator.tabManager;
+    const targetTab = targetWorkspaceId && tabManager?.findTabByWorkspaceId
+      ? tabManager.findTabByWorkspaceId(targetWorkspaceId)
+      : null;
 
-  shouldOpenWorkspaceFromDashboard() {
-    return this.openMode === 'workspace-picker';
+    this.orchestrator.hideDashboard();
+
+    if (!targetWorkspaceId || targetWorkspaceId === currentWorkspaceId || !targetTab || !tabManager) {
+      return;
+    }
+
+    tabManager.switchTab(targetTab.id).catch?.((error) => {
+      console.error('Failed to switch dashboard target tab:', error);
+    });
   }
 
   async createEmptyWorkspaceQuick() {
