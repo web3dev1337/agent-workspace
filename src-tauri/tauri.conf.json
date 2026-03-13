@@ -38,8 +38,11 @@
     ],
     "resources": [
       "resources/backend/*",
+      "resources/backend/config/**/*",
+      "resources/backend/scripts/**/*",
       "resources/backend/server/**/*",
       "resources/backend/client/**/*",
+      "resources/backend/templates/**/*",
       "resources/backend/node/*",
       "resources/backend/node_modules/**/*"
     ]

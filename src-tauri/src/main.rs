@@ -1,14 +1,14 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{Manager, State, Emitter};
-use tokio::sync::mpsc;
-use std::sync::{Arc, Mutex};
 use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use uuid::Uuid;
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_updater::UpdaterExt;
+use tokio::sync::mpsc;
 use url::Url;
+use uuid::Uuid;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -18,10 +18,10 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 #[cfg(target_os = "windows")]
 const DETACHED_PROCESS: u32 = 0x00000008;
 
-mod terminal;
 mod file_watcher;
+mod terminal;
+use file_watcher::{FileEvent, FileWatcherManager};
 use terminal::{TerminalManager, TerminalOutput};
-use file_watcher::{FileWatcherManager, FileEvent};
 
 struct BackendProcess {
     child: Mutex<Option<Child>>,
@@ -29,7 +29,9 @@ struct BackendProcess {
 
 impl BackendProcess {
     fn new() -> Self {
-        Self { child: Mutex::new(None) }
+        Self {
+            child: Mutex::new(None),
+        }
     }
 
     fn set_child(&self, child: Child) {
@@ -49,7 +51,9 @@ impl BackendProcess {
 fn env_truthy(name: &str) -> Option<bool> {
     let raw = std::env::var(name).ok()?;
     let v = raw.trim().to_lowercase();
-    if v.is_empty() { return None; }
+    if v.is_empty() {
+        return None;
+    }
     Some(!matches!(v.as_str(), "0" | "false" | "no" | "off"))
 }
 
@@ -116,16 +120,18 @@ fn resolve_updater_pubkey(app: &tauri::AppHandle) -> Option<String> {
         }
     }
 
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        candidates.push(resource_dir.join("backend").join("updater.pubkey"));
-        candidates.push(resource_dir.join("updater.pubkey"));
+    for root in bundled_resource_roots(app) {
+        candidates.push(root.join("backend").join("updater.pubkey"));
+        candidates.push(root.join("updater.pubkey"));
     }
 
-    candidates.push(
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("updater.pubkey")
-    );
+    if allow_dev_backend_fallback() {
+        candidates.push(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join("updater.pubkey"),
+        );
+    }
 
     for path in candidates {
         let Ok(contents) = std::fs::read_to_string(&path) else {
@@ -145,7 +151,9 @@ fn build_runtime_updater(app: &tauri::AppHandle) -> Result<tauri_plugin_updater:
         .or_else(|| env_truthy("TAURI_UPDATER_ENABLED"))
         .unwrap_or(false);
     if !enabled {
-        return Err("Desktop updater is disabled (set ORCHESTRATOR_UPDATER_ENABLED=1).".to_string());
+        return Err(
+            "Desktop updater is disabled (set ORCHESTRATOR_UPDATER_ENABLED=1).".to_string(),
+        );
     }
 
     let endpoints = parse_updater_endpoints_from_env();
@@ -183,35 +191,72 @@ fn pick_free_port() -> Option<u16> {
         .and_then(|listener| listener.local_addr().ok().map(|addr| addr.port()))
 }
 
-fn resolve_node_command(app: &tauri::AppHandle) -> std::ffi::OsString {
-    if let Ok(p) = std::env::var("ORCHESTRATOR_NODE_PATH") {
-        let trimmed = p.trim();
-        if !trimmed.is_empty() && std::path::Path::new(trimmed).exists() {
-            return trimmed.into();
-        }
+fn allow_dev_backend_fallback() -> bool {
+    cfg!(debug_assertions) || env_truthy("TAURI_ALLOW_DEV_BACKEND_FALLBACK").unwrap_or(false)
+}
+
+fn push_candidate_dir(dirs: &mut Vec<std::path::PathBuf>, candidate: std::path::PathBuf) {
+    if !dirs.iter().any(|existing| existing == &candidate) {
+        dirs.push(candidate);
+    }
+}
+
+fn bundled_resource_roots_from_paths(
+    resource_dir: Option<std::path::PathBuf>,
+    exe_dir: Option<std::path::PathBuf>,
+) -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Some(resource_dir) = resource_dir {
+        push_candidate_dir(&mut roots, resource_dir.clone());
+        push_candidate_dir(&mut roots, resource_dir.join("resources"));
     }
 
-    if let Ok(resource_dir) = app.path().resource_dir() {
+    if let Some(exe_dir) = exe_dir {
+        push_candidate_dir(&mut roots, exe_dir.clone());
+        push_candidate_dir(&mut roots, exe_dir.join("resources"));
+    }
+
+    roots
+}
+
+fn bundled_resource_roots(app: &tauri::AppHandle) -> Vec<std::path::PathBuf> {
+    let resource_dir = app.path().resource_dir().ok();
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|parent| parent.to_path_buf()));
+    bundled_resource_roots_from_paths(resource_dir, exe_dir)
+}
+
+fn resolve_node_command(app: &tauri::AppHandle) -> std::ffi::OsString {
+    for root in bundled_resource_roots(app) {
         let candidates = if cfg!(target_os = "windows") {
             vec![
-                resource_dir.join("backend").join("node").join("node.exe"),
-                resource_dir.join("node").join("node.exe"),
-                resource_dir.join("backend").join("node.exe"),
-                resource_dir.join("node.exe"),
+                root.join("backend").join("node").join("node.exe"),
+                root.join("node").join("node.exe"),
+                root.join("backend").join("node.exe"),
+                root.join("node.exe"),
             ]
         } else {
             vec![
-                resource_dir.join("backend").join("node").join("node"),
-                resource_dir.join("node").join("node"),
-                resource_dir.join("backend").join("node"),
-                resource_dir.join("node"),
+                root.join("backend").join("node").join("node"),
+                root.join("node").join("node"),
+                root.join("backend").join("node"),
+                root.join("node"),
             ]
         };
 
-        for c in candidates {
-            if c.exists() {
-                return c.into_os_string();
+        for candidate in candidates {
+            if candidate.exists() {
+                return candidate.into_os_string();
             }
+        }
+    }
+
+    if let Ok(path) = std::env::var("ORCHESTRATOR_NODE_PATH") {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() && std::path::Path::new(trimmed).exists() {
+            return trimmed.into();
         }
     }
 
@@ -219,10 +264,10 @@ fn resolve_node_command(app: &tauri::AppHandle) -> std::ffi::OsString {
 }
 
 fn resolve_server_entry(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    if let Ok(resource_dir) = app.path().resource_dir() {
+    for root in bundled_resource_roots(app) {
         let candidates = [
-            resource_dir.join("backend").join("server").join("index.js"),
-            resource_dir.join("server").join("index.js"),
+            root.join("backend").join("server").join("index.js"),
+            root.join("server").join("index.js"),
         ];
         for candidate in candidates {
             if candidate.exists() {
@@ -231,38 +276,43 @@ fn resolve_server_entry(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
         }
     }
 
-    // Dev fallback (repo checkout): src-tauri/.. contains server/
-    let candidate = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("server")
-        .join("index.js");
-    if candidate.exists() {
-        return Some(candidate);
+    if allow_dev_backend_fallback() {
+        let candidate = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("server")
+            .join("index.js");
+        if candidate.exists() {
+            return Some(candidate);
+        }
     }
 
     None
 }
 
 fn has_diff_viewer_folder(app: &tauri::AppHandle) -> bool {
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        if resource_dir.join("backend").join("diff-viewer").exists() {
+    for root in bundled_resource_roots(app) {
+        if root.join("backend").join("diff-viewer").exists() {
             return true;
         }
-        if resource_dir.join("diff-viewer").exists() {
+        if root.join("diff-viewer").exists() {
             return true;
         }
     }
 
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("diff-viewer")
-        .exists()
+    allow_dev_backend_fallback()
+        && std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("diff-viewer")
+            .exists()
 }
 
 async fn wait_for_port(port: u16, timeout: Duration) -> bool {
     let start = std::time::Instant::now();
     while start.elapsed() < timeout {
-        if tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+        if tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_ok()
+        {
             return true;
         }
         tokio::time::sleep(Duration::from_millis(150)).await;
@@ -271,7 +321,10 @@ async fn wait_for_port(port: u16, timeout: Duration) -> bool {
 }
 
 async fn navigate_window(window: tauri::WebviewWindow, url: String) {
-    let js = format!("window.location.replace({});", serde_json::to_string(&url).unwrap_or_else(|_| "\"/\"".to_string()));
+    let js = format!(
+        "window.location.replace({});",
+        serde_json::to_string(&url).unwrap_or_else(|_| "\"/\"".to_string())
+    );
     for _ in 0..60 {
         if window.eval(&js).is_ok() {
             break;
@@ -304,7 +357,8 @@ async fn show_bootstrap_error(
     details: Option<String>,
     hint_html: Option<String>,
 ) {
-    let title_json = serde_json::to_string(title).unwrap_or_else(|_| "\"Failed to start\"".to_string());
+    let title_json =
+        serde_json::to_string(title).unwrap_or_else(|_| "\"Failed to start\"".to_string());
     let message_json = serde_json::to_string(message)
         .unwrap_or_else(|_| "\"The backend did not start.\"".to_string());
     let details_json = details
@@ -360,12 +414,13 @@ fn open_external(url: String) -> Result<(), String> {
             if let Ok(_) = std::process::Command::new("powershell.exe")
                 .arg("-c")
                 .arg(format!("Start-Process '{}'", url))
-                .spawn() {
+                .spawn()
+            {
                 return Ok(());
             }
         }
     }
-    
+
     // Fallback to system open
     open::that(&url).map_err(|e| e.to_string())
 }
@@ -431,21 +486,19 @@ async fn install_app_update(app: tauri::AppHandle) -> Result<AppUpdateStatus, St
     status.download_url = Some(update.download_url.to_string());
 
     update
-        .download_and_install(
-            |_chunk_len, _content_len| {},
-            || {},
-        )
+        .download_and_install(|_chunk_len, _content_len| {}, || {})
         .await
         .map_err(|e| format!("Failed to download/install update: {}", e))?;
 
-    status.message = Some("Desktop update installed. Relaunch the app to use the new version.".to_string());
+    status.message =
+        Some("Desktop update installed. Relaunch the app to use the new version.".to_string());
     Ok(status)
 }
 
 #[tauri::command]
 async fn spawn_terminal(
     terminal_manager: State<'_, Arc<TerminalManager>>,
-    session_id: Option<String>
+    session_id: Option<String>,
 ) -> Result<String, String> {
     terminal_manager
         .spawn_terminal(session_id)
@@ -457,7 +510,7 @@ async fn spawn_terminal(
 async fn write_terminal(
     terminal_manager: State<'_, Arc<TerminalManager>>,
     session_id: String,
-    data: String
+    data: String,
 ) -> Result<(), String> {
     terminal_manager
         .write_to_terminal(&session_id, &data)
@@ -469,7 +522,7 @@ async fn resize_terminal(
     terminal_manager: State<'_, Arc<TerminalManager>>,
     session_id: String,
     cols: u16,
-    rows: u16
+    rows: u16,
 ) -> Result<(), String> {
     terminal_manager
         .resize_terminal(&session_id, cols, rows)
@@ -479,7 +532,7 @@ async fn resize_terminal(
 #[tauri::command]
 async fn kill_terminal(
     terminal_manager: State<'_, Arc<TerminalManager>>,
-    session_id: String
+    session_id: String,
 ) -> Result<(), String> {
     terminal_manager
         .kill_terminal(&session_id)
@@ -488,7 +541,7 @@ async fn kill_terminal(
 
 #[tauri::command]
 async fn list_terminals(
-    terminal_manager: State<'_, Arc<TerminalManager>>
+    terminal_manager: State<'_, Arc<TerminalManager>>,
 ) -> Result<Vec<String>, String> {
     Ok(terminal_manager.list_terminals())
 }
@@ -496,7 +549,7 @@ async fn list_terminals(
 #[tauri::command]
 async fn watch_directory(
     file_watcher: State<'_, Arc<FileWatcherManager>>,
-    path: String
+    path: String,
 ) -> Result<(), String> {
     file_watcher
         .watch_directory(path)
@@ -506,7 +559,7 @@ async fn watch_directory(
 #[tauri::command]
 async fn unwatch_directory(
     file_watcher: State<'_, Arc<FileWatcherManager>>,
-    path: String
+    path: String,
 ) -> Result<(), String> {
     file_watcher
         .unwatch_directory(&path)
@@ -515,7 +568,7 @@ async fn unwatch_directory(
 
 #[tauri::command]
 async fn list_watched_paths(
-    file_watcher: State<'_, Arc<FileWatcherManager>>
+    file_watcher: State<'_, Arc<FileWatcherManager>>,
 ) -> Result<Vec<String>, String> {
     Ok(file_watcher.list_watched_paths())
 }
@@ -524,10 +577,10 @@ fn main() {
     // Create channels for terminal output and file events
     let (output_tx, mut output_rx) = mpsc::unbounded_channel::<TerminalOutput>();
     let (file_event_tx, mut file_event_rx) = mpsc::unbounded_channel::<FileEvent>();
-    
+
     // Enable GPU acceleration
     std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "0");
-    
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -540,15 +593,15 @@ fn main() {
             // Create terminal manager
             let terminal_manager = Arc::new(TerminalManager::new(output_tx));
             app.manage(terminal_manager);
-            
+
             // Create file watcher manager
             let file_watcher = Arc::new(FileWatcherManager::new(file_event_tx));
             app.manage(file_watcher);
-            
+
             // Clone app handle for the output handlers
             let app_handle = app.handle().clone();
             let app_handle2 = app.handle().clone();
-            
+
             // Spawn task to handle terminal output
             tauri::async_runtime::spawn(async move {
                 while let Some(output) = output_rx.recv().await {
@@ -556,7 +609,7 @@ fn main() {
                     app_handle.emit("terminal-output", output).unwrap();
                 }
             });
-            
+
             // Spawn task to handle file events
             tauri::async_runtime::spawn(async move {
                 while let Some(event) = file_event_rx.recv().await {
@@ -586,6 +639,16 @@ fn main() {
                             .unwrap_or_else(|_| std::path::PathBuf::from("."))
                     });
                 let _ = std::fs::create_dir_all(&data_dir);
+                let resolved_server = server_entry
+                    .as_ref()
+                    .map(|path| path.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "<missing>".to_string());
+                let resolution_details = format!(
+                    "Resolved backend bootstrap paths.\n\nnode: {}\nserver: {}",
+                    node_cmd.to_string_lossy(),
+                    resolved_server
+                );
+                append_tauri_bootstrap_log(&data_dir, &resolution_details);
 
                 match server_entry {
                     None => {
@@ -700,7 +763,7 @@ fn main() {
                     }
                 }
             }
-            
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -727,4 +790,43 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bundled_resource_roots_from_paths;
+    use std::path::PathBuf;
+
+    #[test]
+    fn resource_roots_cover_install_layouts() {
+        let roots = bundled_resource_roots_from_paths(
+            Some(PathBuf::from("/opt/agent-workspace")),
+            Some(PathBuf::from("/opt/agent-workspace")),
+        );
+
+        assert_eq!(
+            roots,
+            vec![
+                PathBuf::from("/opt/agent-workspace"),
+                PathBuf::from("/opt/agent-workspace/resources"),
+            ]
+        );
+    }
+
+    #[test]
+    fn resource_roots_keep_distinct_resource_and_exe_dirs() {
+        let roots = bundled_resource_roots_from_paths(
+            Some(PathBuf::from("/opt/app/resources")),
+            Some(PathBuf::from("/opt/app")),
+        );
+
+        assert_eq!(
+            roots,
+            vec![
+                PathBuf::from("/opt/app/resources"),
+                PathBuf::from("/opt/app/resources/resources"),
+                PathBuf::from("/opt/app"),
+            ]
+        );
+    }
 }

@@ -57,6 +57,11 @@ function main() {
 
   const srcServer = path.join(repoRoot, 'server');
   const srcClient = path.join(repoRoot, 'client');
+  const srcScripts = path.join(repoRoot, 'scripts');
+  const srcLinuxScripts = path.join(srcScripts, 'linux');
+  const srcTemplates = path.join(repoRoot, 'templates');
+  const srcConfigDir = path.join(repoRoot, 'config');
+  const srcWindowsScripts = path.join(srcScripts, 'windows');
   const srcPkg = path.join(repoRoot, 'package.json');
   const srcLock = path.join(repoRoot, 'package-lock.json');
   const srcConfig = path.join(repoRoot, 'config.json');
@@ -92,6 +97,14 @@ function main() {
   ensureDir(outDir);
   copyDir(srcServer, path.join(outDir, 'server'));
   copyDir(srcClient, path.join(outDir, 'client'));
+  copyFile(
+    path.join(srcScripts, 'create-project.js'),
+    path.join(outDir, 'scripts', 'create-project.js')
+  );
+  if (fs.existsSync(srcLinuxScripts)) copyDir(srcLinuxScripts, path.join(outDir, 'scripts', 'linux'));
+  if (fs.existsSync(srcTemplates)) copyDir(srcTemplates, path.join(outDir, 'templates'));
+  if (fs.existsSync(srcConfigDir)) copyDir(srcConfigDir, path.join(outDir, 'config'));
+  if (fs.existsSync(srcWindowsScripts)) copyDir(srcWindowsScripts, path.join(outDir, 'scripts', 'windows'));
   copyFile(srcPkg, path.join(outDir, 'package.json'));
   if (fs.existsSync(srcLock)) copyFile(srcLock, path.join(outDir, 'package-lock.json'));
   if (fs.existsSync(srcConfig)) copyFile(srcConfig, path.join(outDir, 'config.json'));
