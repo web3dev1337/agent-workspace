@@ -243,4 +243,94 @@ describe('WorkspaceManager', () => {
       expect(res.workspace.terminals[0].worktreePath).toBe(expectedWt);
     });
   });
+
+  describe('deleted workspace archive', () => {
+    let tempDir;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-ws-delete-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    async function createManager() {
+      const manager = new WorkspaceManager();
+      manager.configPath = tempDir;
+      manager.workspacesPath = path.join(tempDir, 'workspaces');
+      manager.deletedWorkspacesPath = path.join(tempDir, 'deleted-workspaces');
+      manager.templatesPath = path.join(tempDir, 'templates');
+      manager.sessionStatesPath = path.join(tempDir, 'session-states');
+      await manager.ensureDirectories();
+      return manager;
+    }
+
+    function buildWorkspace(repoPath, overrides = {}) {
+      return {
+        id: 'test-workspace',
+        name: 'Test Workspace',
+        type: 'website',
+        repository: {
+          path: repoPath,
+          masterBranch: 'main'
+        },
+        terminals: { pairs: 1 },
+        ...overrides
+      };
+    }
+
+    it('moves deleted workspaces into Recently Deleted and restores them', async () => {
+      const repoPath = path.join(tempDir, 'repo');
+      fs.mkdirSync(repoPath, { recursive: true });
+      const manager = await createManager();
+      const workspace = buildWorkspace(repoPath);
+
+      await manager.createWorkspace(workspace);
+
+      const deleted = await manager.deleteWorkspace(workspace.id);
+      expect(manager.workspaces.has(workspace.id)).toBe(false);
+
+      const deletedList = await manager.listDeletedWorkspaces();
+      expect(deletedList).toHaveLength(1);
+      expect(deletedList[0]).toMatchObject({
+        id: workspace.id,
+        deletedId: deleted.deletedId,
+        restoreAvailable: true
+      });
+
+      const restored = await manager.restoreWorkspace(deleted.deletedId);
+      expect(restored).toMatchObject({
+        id: workspace.id,
+        name: workspace.name
+      });
+      expect(manager.workspaces.get(workspace.id)).toMatchObject({
+        id: workspace.id
+      });
+      expect(fs.existsSync(path.join(manager.workspacesPath, `${workspace.id}.json`))).toBe(true);
+      await expect(manager.listDeletedWorkspaces()).resolves.toHaveLength(0);
+    });
+
+    it('marks deleted workspaces as not restorable when the id has been reused', async () => {
+      const repoPath = path.join(tempDir, 'repo');
+      const replacementRepoPath = path.join(tempDir, 'repo-replacement');
+      fs.mkdirSync(repoPath, { recursive: true });
+      fs.mkdirSync(replacementRepoPath, { recursive: true });
+      const manager = await createManager();
+      const workspace = buildWorkspace(repoPath);
+
+      await manager.createWorkspace(workspace);
+      await manager.deleteWorkspace(workspace.id);
+      await manager.createWorkspace(buildWorkspace(replacementRepoPath, {
+        name: 'Replacement Workspace'
+      }));
+
+      const deletedList = await manager.listDeletedWorkspaces();
+      expect(deletedList).toHaveLength(1);
+      expect(deletedList[0]).toMatchObject({
+        id: workspace.id,
+        restoreAvailable: false
+      });
+    });
+  });
 });

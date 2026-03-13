@@ -128,6 +128,22 @@ class SessionManager extends EventEmitter {
       };
     }
   }
+
+  buildPtyOptions(config, env) {
+    const options = {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 24,
+      cwd: config.cwd,
+      env
+    };
+
+    if (process.platform === 'win32') {
+      options.useConpty = true;
+    }
+
+    return options;
+  }
   
   setStatusDetector(detector) {
     this.statusDetector = detector;
@@ -758,13 +774,11 @@ class SessionManager extends EventEmitter {
         }
       }
 
-      const ptyProcess = pty.spawn(config.command, config.args, {
-        name: 'xterm-color',
-        cols: 80,
-        rows: 24,
-        cwd: config.cwd,
-        env
-      });
+      const ptyProcess = pty.spawn(
+        config.command,
+        config.args,
+        this.buildPtyOptions(config, env)
+      );
 
       const initialCwd = config.cwd || process.cwd();
       
@@ -2732,6 +2746,35 @@ class SessionManager extends EventEmitter {
     }
 
     return true;
+  }
+
+  cleanupWorkspaceSessions(workspaceId, { clearRecovery = false } = {}) {
+    const ws = String(workspaceId || '').trim();
+    if (!ws) return 0;
+
+    const sessionIds = this.getAllSessionEntries({ workspaceId: ws })
+      .map(([sessionId]) => sessionId);
+
+    sessionIds.forEach((sessionId) => {
+      this.closeSession(sessionId, {
+        clearRecovery,
+        workspaceId: ws
+      });
+    });
+
+    if (String(this.workspace?.id || '').trim() === ws) {
+      this.sessions.clear();
+      this.stopBranchRefresh();
+      this.cleanupGitWatchers();
+    }
+
+    this.workspaceSessionMaps.delete(ws);
+    logger.info('Cleaned workspace sessions', {
+      workspaceId: ws,
+      closed: sessionIds.length
+    });
+
+    return sessionIds.length;
   }
   
   restartSession(sessionId) {

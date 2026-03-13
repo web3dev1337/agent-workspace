@@ -34,7 +34,9 @@ server/index.js                    - Express server with Socket.IO
 server/sessionManager.js           - Terminal session lifecycle management
 ├─ Manages: PTY processes, session tracking, cleanup
 ├─ Key methods: createSession(), destroySession(), getActiveSessions()
+├─ Windows PTY policy: `buildPtyOptions()` forces ConPTY for orchestrator-launched terminals to reduce stray console-window behavior on Windows
 ├─ Cleanup hardening: closing sessions sends process-tree SIGTERM and a grace-timed SIGKILL fallback by PTY pid to reduce orphaned agent processes
+├─ Workspace cleanup: `cleanupWorkspaceSessions(workspaceId)` tears down active or stashed sessions for a specific workspace before delete/archive flows
 ├─ Stale-agent cleanup: when status detection sees an explicit shell/no-agent prompt, recovery `lastAgent` markers are cleared to keep sidebar status accurate (`no-agent` vs `busy/waiting`)
 ├─ Status model: periodic status re-evaluation prevents stale "busy" lights after output quiets down
 └─ Uses: node-pty for terminal emulation
@@ -94,7 +96,8 @@ server/projectTypeService.js       - Project taxonomy loader/validator for categ
 server/workspaceManager.js          - Workspace lifecycle management
 ├─ Manages: Workspace creation, switching, mixed-repo support
 ├─ Features: Dynamic terminal creation, worktree integration
-└─ Storage: JSON-based workspace persistence
+├─ Deleted workspace archive: deleting a workspace moves its JSON into `~/.orchestrator/deleted-workspaces/` instead of permanently unlinking it
+└─ Storage: JSON-based workspace persistence with dashboard-driven restore via the deleted-workspace archive
 
 server/workspaceSchemas.js          - Workspace configuration validation
 ├─ Schemas: JSON schema definitions for workspace types
@@ -193,6 +196,7 @@ client/projects-board.js           - Projects kanban board modal (Archive/Maybe 
 client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
 ├─ Features: Browser-like tabs for multiple workspaces
 ├─ Manages: Tab creation, switching, state preservation
+├─ Workspace deletion sync: `removeWorkspaceTabs(workspaceId)` prunes tabs when a workspace is deleted from the dashboard
 ├─ XTerm lifecycle: Proper hide/show with fit() handling
 ├─ Notifications: Badge counts for inactive tabs
 └─ Keyboard shortcuts: Alt+←/→, Alt+W, Alt+N, Alt+Shift+N, Alt+1-9
