@@ -2,6 +2,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const winston = require('winston');
 const path = require('path');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10MB
@@ -40,9 +41,11 @@ class GitUpdateService {
     const argv = Array.isArray(args) ? args.map(String) : [];
     if (!argv.length) throw new Error('execGit: args required');
     const { stdout, stderr } = await execFileAsync('git', argv, {
-      cwd: this.projectRoot,
-      timeout: timeoutMs,
-      windowsHide: true,
+      ...getHiddenProcessOptions({
+        cwd: this.projectRoot,
+        timeout: timeoutMs,
+        env: augmentProcessEnv(process.env)
+      }),
       maxBuffer: DEFAULT_MAX_BUFFER
     });
     return { stdout: String(stdout || ''), stderr: String(stderr || '') };

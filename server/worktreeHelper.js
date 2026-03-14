@@ -2,9 +2,7 @@ const { spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
 const winston = require('winston');
-
-const IS_WIN = process.platform === 'win32';
-const CREATE_NO_WINDOW = 0x08000000;
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -272,10 +270,11 @@ class WorktreeHelper {
     return new Promise((resolve, reject) => {
       const [cmd, ...args] = command.split(' ');
       const child = spawn(cmd, args, {
-        cwd,
-        stdio: 'pipe',
-        windowsHide: true,
-        ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
+        ...getHiddenProcessOptions({
+          cwd,
+          stdio: 'pipe',
+          env: augmentProcessEnv(process.env)
+        })
       });
 
       let stdout = '';

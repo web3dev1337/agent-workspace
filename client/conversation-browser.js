@@ -9,6 +9,9 @@
  * - Add worktree from conversation
  */
 
+const normalizeBrowserPath = (value) => String(value || '').replace(/\\/g, '/');
+const splitBrowserPathSegments = (value) => normalizeBrowserPath(value).split('/').filter(Boolean);
+
 class ConversationBrowser {
   constructor(orchestrator) {
     this.orchestrator = orchestrator;
@@ -321,10 +324,11 @@ class ConversationBrowser {
   parseProjectPath(path) {
     if (!path) return null;
 
-    const githubIdx = path.indexOf('GitHub/');
+    const normalizedPath = normalizeBrowserPath(path);
+    const githubIdx = normalizedPath.indexOf('GitHub/');
     if (githubIdx < 0) return null;
 
-    const afterGitHub = path.slice(githubIdx + 7);
+    const afterGitHub = normalizedPath.slice(githubIdx + 7);
     const parts = afterGitHub.split('/').filter(p => p);
 
     if (parts.length === 0) return null;
@@ -657,7 +661,7 @@ class ConversationBrowser {
     const worktree = pathInfo.worktree;
 
     // Use actual GitHub repo if available, fallback to parsed path
-    const repoName = conv.gitRepo || pathInfo.project || fullPath.split('/').slice(-2).join('/') || 'Unknown';
+    const repoName = conv.gitRepo || pathInfo.project || splitBrowserPathSegments(fullPath).slice(-2).join('/') || 'Unknown';
     const repoUrl = conv.gitRepoUrl;
 
     // Clean messages - remove system messages and commands
@@ -924,9 +928,10 @@ class ConversationBrowser {
     };
 
     const matchesCwd = (session) => {
-      const sessionCwd = session?.worktreePath || session?.config?.cwd || session?.cwd || '';
+      const sessionCwd = normalizeBrowserPath(session?.worktreePath || session?.config?.cwd || session?.cwd || '');
+      const targetCwd = normalizeBrowserPath(cwd);
       if (!sessionCwd) return false;
-      return cwd === sessionCwd || cwd.startsWith(sessionCwd + '/');
+      return targetCwd === sessionCwd || targetCwd.startsWith(`${sessionCwd}/`);
     };
 
     // Find a matching agent terminal (worktree session)
@@ -947,8 +952,9 @@ class ConversationBrowser {
 
     // No matching session - need to add this as a new worktree
     const pathInfo = this.parseProjectPath(cwd);
-    const worktreeId = pathInfo?.worktree || cwd.split('/').pop() || 'resumed';
-    const repoName = pathInfo?.project || cwd.split('/').slice(-2, -1)[0] || 'unknown';
+    const cwdSegments = splitBrowserPathSegments(cwd);
+    const worktreeId = pathInfo?.worktree || cwdSegments[cwdSegments.length - 1] || 'resumed';
+    const repoName = pathInfo?.project || cwdSegments[cwdSegments.length - 2] || 'unknown';
 
     console.log('Adding new worktree for conversation:', { worktreeId, cwd, repoName });
 

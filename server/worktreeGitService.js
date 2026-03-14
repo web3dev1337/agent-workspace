@@ -2,6 +2,7 @@ const { execFile } = require('child_process');
 const util = require('util');
 const winston = require('winston');
 const { TTLCache } = require('./utils/ttlCache');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const execFileAsync = util.promisify(execFile);
 
@@ -9,7 +10,8 @@ const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10MB
 
 async function execFileSafe(command, args, options = {}) {
   return execFileAsync(command, args, {
-    ...options,
+    ...getHiddenProcessOptions(options),
+    env: augmentProcessEnv(options.env || process.env),
     maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER
   });
 }

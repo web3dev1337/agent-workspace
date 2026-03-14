@@ -21,6 +21,9 @@ const normalizeSettingsSectionId = (value, fallback = '') => String(value || '')
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '')
   || fallback;
+const normalizeClientPath = (value) => String(value || '').replace(/\\/g, '/').trim();
+const splitClientPathSegments = (value) => normalizeClientPath(value).split('/').filter(Boolean);
+const formatClientPathTail = (value, count = 2) => splitClientPathSegments(value).slice(-count).join('/');
 
 // Enhanced Agent Workspace with sidebar and flexible viewing
 class ClaudeOrchestrator {
@@ -11550,7 +11553,7 @@ class ClaudeOrchestrator {
     };
 
     // Extract worktree ID from path (e.g., "work4" from ".../zoo-game/work4")
-    const pathParts = target.split('/').filter(Boolean);
+    const pathParts = splitClientPathSegments(target);
     const worktreeId = pathParts[pathParts.length - 1] || '';
     // Also get repo name for better matching (e.g., "zoo-game" from ".../zoo-game/work4")
     const repoName = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : '';
@@ -11834,7 +11837,7 @@ class ClaudeOrchestrator {
 
 		      const header = (() => {
 		        const branch = gitDetected ? escapeHtml(summary?.branch || '?') : '?';
-		        const shortPath = escapeHtml(p.split('/').slice(-2).join('/'));
+		        const shortPath = escapeHtml(formatClientPathTail(p));
 
 		        if (reviewConsole) {
 		          // Single-row unified header for Review Console
@@ -12291,7 +12294,7 @@ class ClaudeOrchestrator {
 
 		          const repoName = sess?.repositoryName || this.extractRepositoryName(sid2) || '';
 		          const wt = sess?.worktreeId || String(sid2).split('-')[0] || '';
-		          const label = repoName ? `${repoName}/${wt}` : wt || cwd2.replace(/\\/g, '/').split('/').slice(-2).join('/');
+		          const label = repoName ? `${repoName}/${wt}` : wt || formatClientPathTail(cwd2);
 		          candidates.push({ path: cwd2, label });
 		        }
 
@@ -13350,7 +13353,7 @@ class ClaudeOrchestrator {
 		              const branch = String(session?.branch || '').trim();
 		              if (!remote || !branch) continue;
 		              if (branch !== headRef) continue;
-		              if (!(remote === repoNorm || remote.endsWith(`/${repoNorm.split('/').slice(-2).join('/')}`) || repoNorm.endsWith(remote))) continue;
+		              if (!(remote === repoNorm || remote.endsWith(`/${formatClientPathTail(repoNorm)}`) || repoNorm.endsWith(remote))) continue;
 		              matchingSessionIds.push(String(sid));
 		            }
 		          }
@@ -30805,7 +30808,7 @@ class ClaudeOrchestrator {
       listEl.innerHTML = data.ports.map(p => {
         const context = p.project?.project
           ? `${p.project.project}${p.project.worktree ? ' • ' + p.project.worktree : ''}`
-          : (p.cwd ? p.cwd.split('/').slice(-2).join('/') : '');
+          : formatClientPathTail(p.cwd);
 
         return `
           <div class="port-sidebar-item ${p.type || ''}"
@@ -32273,16 +32276,17 @@ class ClaudeOrchestrator {
     const cwd = conv.cwd || '';
     if (!cwd) return 'Unknown';
 
-    const parts = cwd.split('/').filter(Boolean);
+    const parts = splitClientPathSegments(cwd);
     if (!parts.length) return 'Unknown';
     return parts.slice(-2).join('/');
   }
 
   extractWorktreeLabel(cwd) {
     if (!cwd) return '';
-    const nestedMatch = cwd.match(/(?:^|\/)(work\d+)(?:\/|$)/i);
+    const normalizedCwd = normalizeClientPath(cwd);
+    const nestedMatch = normalizedCwd.match(/(?:^|\/)(work\d+)(?:\/|$)/i);
     if (nestedMatch) return nestedMatch[1];
-    const siblingMatch = cwd.match(/-work(\d+)(?:\/|$)/i);
+    const siblingMatch = normalizedCwd.match(/-work(\d+)(?:\/|$)/i);
     if (siblingMatch) return `work${siblingMatch[1]}`;
     return '';
   }
@@ -32615,7 +32619,7 @@ class ClaudeOrchestrator {
     if (this.isWorktreeReserved(repoPathNorm, worktreeId)) return true;
 
 	    // Extract repo name from path for session matching
-	    const repoName = (repoNameOverride || repoPathNorm.split('/').pop() || '').toLowerCase();
+	    const repoName = (repoNameOverride || splitClientPathSegments(repoPathNorm).pop() || '').toLowerCase();
 
     // Check if any session is using this worktree.
     // Session IDs follow patterns like: "work1-claude", "work1-server",
@@ -32672,7 +32676,7 @@ class ClaudeOrchestrator {
 
     const normalizePath = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').trim();
     const repoPathNorm = normalizePath(repoPath);
-    const targetRepoName = (repoNameOverride || repoPathNorm.split('/').pop() || '').toLowerCase();
+    const targetRepoName = (repoNameOverride || splitClientPathSegments(repoPathNorm).pop() || '').toLowerCase();
     const sessionIds = [];
 
     for (const [sessionId, session] of this.sessions) {
@@ -32949,7 +32953,7 @@ class ClaudeOrchestrator {
     const repo = repos.find(r => String(r?.path || '').trim() === path) || {
       path,
       type: repoType,
-      name: repoName || path.split('/').filter(Boolean).slice(-1)[0] || 'repo',
+      name: repoName || splitClientPathSegments(path).slice(-1)[0] || 'repo',
       worktreeDirs: []
     };
 

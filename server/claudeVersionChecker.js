@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const winston = require('winston');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -16,17 +17,16 @@ const logger = winston.createLogger({
 
 const REQUIRED_VERSION = '1.0.24';
 const REQUIRED_VERSION_NUMBER = 1 * 10000 + 0 * 100 + 24;
-const IS_WIN = process.platform === 'win32';
-const CREATE_NO_WINDOW = 0x08000000;
 
 class ClaudeVersionChecker {
   static async checkVersion() {
     return new Promise((resolve) => {
       const child = spawn('claude', ['--version'], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 5000,
-        windowsHide: true,
-        ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
+        ...getHiddenProcessOptions({
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: 5000,
+          env: augmentProcessEnv(process.env)
+        })
       });
 
       let stdout = '';

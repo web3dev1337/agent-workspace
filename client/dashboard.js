@@ -1,4 +1,6 @@
 // Dashboard component for workspace management
+const normalizeDashboardPath = (value) => String(value || '').replace(/\\/g, '/');
+const formatDashboardPathTail = (value, count = 2) => normalizeDashboardPath(value).split('/').filter(Boolean).slice(-count).join('/');
 
 class Dashboard {
   constructor(orchestrator) {
@@ -4274,7 +4276,7 @@ class Dashboard {
       gridEl.innerHTML = data.ports.map(p => {
         const context = p.project?.project
           ? `${p.project.project}${p.project.worktree ? ' • ' + p.project.worktree : ''}`
-          : (p.cwd ? p.cwd.split('/').slice(-2).join('/') : '');
+          : formatDashboardPathTail(p.cwd);
 
         return `
           <div class="port-dashboard-card ${p.type || ''}"
@@ -4418,7 +4420,7 @@ class Dashboard {
                   <label for="recover-${i}" class="recovery-session-info">
                     <div class="recovery-session-id">${s.sessionId}</div>
                     <div class="recovery-session-details">
-                      ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${s.lastCwd.split('/').slice(-2).join('/')}</span>` : ''}
+                      ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${formatDashboardPathTail(s.lastCwd)}</span>` : ''}
                       ${s.lastAgent ? `<span class="recovery-session-agent">${s.lastAgent}</span>` : ''}
                       ${s.lastConversationId ? `<span>💬 ${s.lastConversationId.slice(0, 8)}...</span>` : ''}
                     </div>
@@ -4485,7 +4487,7 @@ class Dashboard {
                 <label for="recover-${i}" class="recovery-session-info">
                   <div class="recovery-session-id">${s.sessionId}</div>
                   <div class="recovery-session-details">
-                    ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${s.lastCwd.split('/').slice(-2).join('/')}</span>` : ''}
+                    ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${formatDashboardPathTail(s.lastCwd)}</span>` : ''}
                     ${s.lastAgent ? `<span class="recovery-session-agent">${s.lastAgent}</span>` : ''}
                     ${s.lastConversationId ? `<span>💬 ${s.lastConversationId.slice(0, 8)}...</span>` : ''}
                   </div>

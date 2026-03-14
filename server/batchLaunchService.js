@@ -1,4 +1,5 @@
 const winston = require('winston');
+const path = require('path');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -69,7 +70,7 @@ class BatchLaunchService {
     if (!mapping || !mapping.localPath) throw new Error(`No board mapping for ${providerName}:${boardId}. Configure it in Settings > Tasks.`);
 
     const repoPath = this._resolveRepoPath(mapping.localPath);
-    const repoName = repoPath.split('/').filter(Boolean).pop();
+    const repoName = path.basename(String(repoPath || '').replace(/[\\/]+$/, ''));
     const repoType = mapping.repositoryType || 'hytopia-game';
     const defaultTier = tierOverride || mapping.defaultStartTier || 3;
     const startingWorktreeNumber = this._getNextWorktreeNumber({

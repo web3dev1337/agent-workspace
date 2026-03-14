@@ -15,6 +15,7 @@ const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 class WhisperService {
   constructor() {
@@ -196,7 +197,9 @@ class WhisperService {
         args.push('--gpu');
       }
 
-      const proc = spawn(this.whisperCppPath, args);
+      const proc = spawn(this.whisperCppPath, args, getHiddenProcessOptions({
+        env: augmentProcessEnv(process.env)
+      }));
       let stdout = '';
       let stderr = '';
 
@@ -257,7 +260,9 @@ class WhisperService {
         '--language', 'en',
         '--output_format', 'txt',
         '--output_dir', tmpDir,
-      ]);
+      ], getHiddenProcessOptions({
+        env: augmentProcessEnv(process.env)
+      }));
 
       let stderr = '';
       proc.stderr.on('data', (data) => { stderr += data; });
@@ -296,7 +301,9 @@ print(" ".join([s.text for s in segments]).strip())
 `;
 
       const pythonCmd = this.pythonCommandCandidates().find((c) => this.commandExists(c)) || (process.platform === 'win32' ? 'python' : 'python3');
-      const proc = spawn(pythonCmd, ['-c', script]);
+      const proc = spawn(pythonCmd, ['-c', script], getHiddenProcessOptions({
+        env: augmentProcessEnv(process.env)
+      }));
       let stdout = '';
       let stderr = '';
 

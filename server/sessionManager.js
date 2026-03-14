@@ -22,6 +22,7 @@ const {
   buildShellCommand,
   resolveCwd
 } = require('./utils/shellCommand');
+const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -49,9 +50,9 @@ function getDefaultShell() {
 // Helper function to build shell args for executing commands
 function buildShellArgs(commands) {
   if (process.platform === 'win32') {
-    // PowerShell: join commands with ; and use -NoExit -Command to keep shell open
+    // PowerShell: keep the shell open inside the PTY, but hide any external window.
     const joined = Array.isArray(commands) ? commands.join('; ') : commands.replace(/&&/g, ';');
-    return ['-NoExit', '-Command', joined];
+    return buildPowerShellArgs(joined, { keepOpen: true });
   } else {
     // Bash: join commands with && and keep the terminal open by exec'ing into an interactive shell.
     const joined = Array.isArray(commands) ? commands.join(' && ') : commands;
@@ -774,10 +775,12 @@ class SessionManager extends EventEmitter {
         }
       }
 
+      const effectiveEnv = augmentProcessEnv(env);
+
       const ptyProcess = pty.spawn(
         config.command,
         config.args,
-        this.buildPtyOptions(config, env)
+        this.buildPtyOptions(config, effectiveEnv)
       );
 
       const initialCwd = config.cwd || process.cwd();

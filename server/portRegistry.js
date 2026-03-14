@@ -618,7 +618,7 @@ class PortRegistry {
       for (const [key, assignedPort] of this.assignments) {
         if (assignedPort === port) {
           const [repoPath, worktreeId] = this.parseKey(key);
-          const repoName = repoPath.split('/').pop() || repoPath;
+          const repoName = path.basename(String(repoPath || '').replace(/[\\/]+$/, '')) || repoPath;
           return {
             name: `${repoName} (${worktreeId})`,
             type: 'game-server',

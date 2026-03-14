@@ -7,6 +7,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 // Ensure log directory exists early (some services create file transports at require-time).
 try {
@@ -4415,10 +4416,14 @@ app.post('/api/startup/install-windows', async (req, res) => {
   try {
     const result = await new Promise((resolve, reject) => {
       const ps = spawn('powershell.exe', [
+        '-NoProfile',
         '-ExecutionPolicy', 'Bypass',
         '-File', winPath,
         '-DesktopShortcut'
-      ], { timeout: 30000 });
+      ], getHiddenProcessOptions({
+        timeout: 30000,
+        env: augmentProcessEnv(process.env)
+      }));
 
       let stdout = '';
       let stderr = '';

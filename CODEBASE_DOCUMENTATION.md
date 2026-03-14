@@ -61,6 +61,11 @@ server/claudeVersionChecker.js     - Claude Code version detection
 tests/unit/claudeVersionChecker.test.js - Coverage for update-banner version fallback messaging
 tests/unit/claudeVersionChecker.spawnOptions.test.js - Verifies Windows-hidden spawn flags for startup Claude version checks
 tests/unit/worktreeHelper.spawnOptions.test.js - Verifies Windows-hidden spawn flags for auto-created worktree git commands
+server/utils/processUtils.js       - Shared spawn/env hardening helpers
+├─ Windows packaging guardrails: applies `windowsHide`/`CREATE_NO_WINDOW`, augments GUI-app PATH with Git/node/npm/common CLI locations, and builds hidden PowerShell argument lists
+└─ Cross-platform behavior: non-Windows platforms pass through unchanged so Linux/macOS launch behavior stays stable
+server/utils/pathUtils.js          - Shared slash-normalization helpers for repo/worktree labels
+└─ Used by server-side workspace/conversation flows to keep Windows backslash paths compatible with Linux-style UI labels
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)

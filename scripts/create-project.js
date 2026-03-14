@@ -4,6 +4,21 @@ const fsp = fs.promises;
 const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
+
+const IS_WIN = process.platform === 'win32';
+const CREATE_NO_WINDOW = 0x08000000;
+
+function getSpawnOptions(options = {}) {
+  return {
+    ...options,
+    ...(IS_WIN
+      ? {
+          windowsHide: options.windowsHide ?? true,
+          creationFlags: options.creationFlags ?? CREATE_NO_WINDOW
+        }
+      : {})
+  };
+}
 const { ProjectTypeService } = require('../server/projectTypeService');
 const { WorktreeHelper } = require('../server/worktreeHelper');
 
@@ -142,8 +157,10 @@ async function copyTemplateTree(srcDir, destDir, vars = {}) {
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
-      cwd: options.cwd || process.cwd(),
-      stdio: options.stdio || ['ignore', 'pipe', 'pipe']
+      ...getSpawnOptions({
+        cwd: options.cwd || process.cwd(),
+        stdio: options.stdio || ['ignore', 'pipe', 'pipe']
+      })
     });
 
     let stdout = '';
@@ -173,9 +190,11 @@ function runCommand(command, args, options = {}) {
 function runShellCommand(command, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, {
-      cwd: options.cwd || process.cwd(),
-      stdio: options.stdio || ['ignore', 'pipe', 'pipe'],
-      shell: options.shell || true
+      ...getSpawnOptions({
+        cwd: options.cwd || process.cwd(),
+        stdio: options.stdio || ['ignore', 'pipe', 'pipe'],
+        shell: options.shell || true
+      })
     });
 
     let stdout = '';

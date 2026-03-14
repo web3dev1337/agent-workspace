@@ -2,9 +2,9 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const IS_WIN = process.platform === 'win32';
-const CREATE_NO_WINDOW = 0x08000000;
 
 function execQuiet(command, args, options = {}) {
   const timeout = Number(options.timeout) || 2500;
@@ -20,9 +20,10 @@ function execQuiet(command, args, options = {}) {
       spawnArgs = ['/d', '/c', cmdStr, ...argsArr];
     }
     const child = spawn(spawnCmd, spawnArgs, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-      ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
+      ...getHiddenProcessOptions({
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: augmentProcessEnv(process.env)
+      })
     });
     let stdout = '';
     let stderr = '';
