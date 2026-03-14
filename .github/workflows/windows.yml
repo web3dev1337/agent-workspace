@@ -2,6 +2,15 @@ name: windows
 
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile (release or fast)'
+        required: false
+        default: 'fast'
+        type: choice
+        options:
+          - fast
+          - release
   push:
     branches:
       - main
@@ -78,8 +87,20 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Determine build profile
+        id: build_profile
+        shell: pwsh
+        run: |
+          $profile = "${{ github.event.inputs.profile }}"
+          if (-not $profile -or $profile -eq '') { $profile = 'release' }
+          "value=$profile" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $script = if ($profile -eq 'fast') { 'tauri:build:fast' } else { 'tauri:build' }
+          "script=$script" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $targetDir = if ($profile -eq 'fast') { 'fast' } else { 'release' }
+          "target_dir=$targetDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Build Windows installer (Tauri)
-        run: npm run tauri:build
+        run: npm run ${{ steps.build_profile.outputs.script }}
 
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
@@ -87,13 +108,13 @@ jobs:
           name: tauri-windows-bundle
           if-no-files-found: error
           path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/msi/*.msi
+            src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/nsis/*.exe
 
       - name: Create GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/msi/*.msi
+            src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/nsis/*.exe
