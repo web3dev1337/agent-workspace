@@ -14,8 +14,8 @@ class Dashboard {
     this._projectLaunchInFlight = false;
   }
 
-		  async show() {
-	    console.log('Showing dashboard...');
+  async show() {
+    console.log('Showing dashboard...');
 
     // Initialize Quick Links if available
     if (window.QuickLinks && !this.quickLinks) {
@@ -34,9 +34,9 @@ class Dashboard {
       }).catch(() => {});
     }
 
-	    await this.refreshWorkspaceCollections({ refresh: true, render: true });
-	    this.isVisible = true;
-		  }
+    await this.refreshWorkspaceCollections({ refresh: true, render: true });
+    this.isVisible = true;
+  }
 
   async refreshWorkspaceCollections({ refresh = true, render = false } = {}) {
     const workspacesPromise = new Promise((resolve) => {
@@ -3518,9 +3518,9 @@ class Dashboard {
         </div>
 
         <div class="workspace-card-footer bento-card-footer">
-	          <button class="${isActive ? 'btn-secondary workspace-open-btn workspace-open-btn-active' : 'btn-primary workspace-open-btn workspace-open-btn-inactive'} bento-btn-primary">
-	            ${isActive ? '↩ Return to Workspace' : 'Open Workspace'}
-	          </button>
+          <button class="${isActive ? 'btn-secondary workspace-open-btn workspace-open-btn-active' : 'btn-primary workspace-open-btn workspace-open-btn-inactive'} bento-btn-primary">
+            ${isActive ? '↩ Return to Workspace' : 'Open Workspace'}
+          </button>
           <div class="bento-action-group">
             <button class="btn-icon workspace-rename-btn" title="Rename workspace">
               ✏️
@@ -3531,8 +3531,8 @@ class Dashboard {
           </div>
         </div>
       </div>
-	    `;
-	  }
+    `;
+  }
 
   generateDeletedWorkspaceCard(workspace) {
     const deletedAtLabel = this.formatTimeAgo(workspace?.deletedAt);
@@ -3767,11 +3767,11 @@ class Dashboard {
         : 'No stale terminals found';
       this.orchestrator?.showToast?.(msg, 'success');
 
-	      await this.refreshWorkspaceCollections({ refresh: true, render: this.isVisible });
-	    } catch (err) {
-	      this.orchestrator?.showToast?.(`Cleanup failed: ${String(err?.message || err)}`, 'error');
-	    }
-	  }
+      await this.refreshWorkspaceCollections({ refresh: true, render: this.isVisible });
+    } catch (err) {
+      this.orchestrator?.showToast?.(`Cleanup failed: ${String(err?.message || err)}`, 'error');
+    }
+  }
 
   showCreateProjectWizard() {
     if (typeof this.orchestrator?.openGreenfieldWizard === 'function') {
@@ -3987,12 +3987,12 @@ class Dashboard {
         throw new Error(error || 'Failed to create empty workspace');
       }
 
-	      const workspace = await response.json();
-	      this.workspaces.push(workspace);
-	      this.orchestrator.upsertAvailableWorkspace?.(workspace);
+      const workspace = await response.json();
+      this.workspaces.push(workspace);
+      this.orchestrator.upsertAvailableWorkspace?.(workspace);
 
-	      // Switch to new workspace
-	      this.openWorkspace(workspaceId);
+      // Switch to new workspace
+      this.openWorkspace(workspaceId);
 
       this.orchestrator.showTemporaryMessage(`Empty workspace "${name}" created`, 'success');
     } catch (error) {

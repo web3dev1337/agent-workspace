@@ -1635,40 +1635,40 @@ class ClaudeOrchestrator {
             if (this.workspaceSwitcher) {
               this.workspaceSwitcher.updateCurrentWorkspace();
             }
-		          } else {
-		            // Create new tab for this workspace
-		            const tabId = this.tabManager.createTab(nextWorkspace, sessions);
-		            console.log(`Created new tab ${tabId} for workspace ${nextWorkspace.name}`);
+          } else {
+            // Create new tab for this workspace
+            const tabId = this.tabManager.createTab(nextWorkspace, sessions);
+            console.log(`Created new tab ${tabId} for workspace ${nextWorkspace.name}`);
 
-		            // Set current workspace BEFORE switching tabs so WorkspaceTabManager doesn't
-		            // re-request a backend workspace switch (we're already in 'workspace-changed').
-		            this.currentWorkspace = nextWorkspace;
-		            this.isDashboardMode = false;
+            // Set current workspace BEFORE switching tabs so WorkspaceTabManager doesn't
+            // re-request a backend workspace switch (we're already in 'workspace-changed').
+            this.currentWorkspace = nextWorkspace;
+            this.isDashboardMode = false;
 
-	            // CRITICAL: Set currentTabId FIRST before anything else
-	            // Terminals need this to register to the correct tab
-	            this.currentTabId = tabId;
+            // CRITICAL: Set currentTabId FIRST before anything else
+            // Terminals need this to register to the correct tab
+            this.currentTabId = tabId;
 
-		            // Switch to the new tab so it becomes active
-		            await this.tabManager.switchTab(tabId, { suppressUiRestore: true });
-		            this.tabManager.pruneDuplicateWorkspaceTabs(nextWorkspace.id, tabId);
+            // Switch to the new tab so it becomes active
+            await this.tabManager.switchTab(tabId, { suppressUiRestore: true });
+            this.tabManager.pruneDuplicateWorkspaceTabs(nextWorkspace.id, tabId);
 
-		            // Pre-fetch worktree-specific configs for all terminals
-		            await this.prefetchWorktreeConfigs(nextWorkspace, sessions);
+            // Pre-fetch worktree-specific configs for all terminals
+            await this.prefetchWorktreeConfigs(nextWorkspace, sessions);
 
-	            // Rebuild with new workspace sessions
-	            // Terminals will now register to the correct tab via currentTabId
-	            this.handleInitialSessions(sessions);
+            // Rebuild with new workspace sessions
+            // Terminals will now register to the correct tab via currentTabId
+            this.handleInitialSessions(sessions);
 
             // Update workspace switcher
             if (this.workspaceSwitcher) {
               this.workspaceSwitcher.updateCurrentWorkspace();
             }
           }
-	        } else {
-	          // Original behavior (no tabs) - for backwards compatibility
-	          this.currentWorkspace = nextWorkspace;
-	          this.isDashboardMode = false;
+        } else {
+          // Original behavior (no tabs) - for backwards compatibility
+          this.currentWorkspace = nextWorkspace;
+          this.isDashboardMode = false;
 
           // Hide dashboard if showing
           if (this.dashboard) {
@@ -1684,10 +1684,10 @@ class ClaudeOrchestrator {
           // Clear ALL existing state completely
           this.sessions.clear();
           this.visibleTerminals.clear();
-	          this.worktreeConfigs.clear();
+          this.worktreeConfigs.clear();
 
-	          // Pre-fetch worktree-specific configs for all terminals
-	          await this.prefetchWorktreeConfigs(nextWorkspace, sessions);
+          // Pre-fetch worktree-specific configs for all terminals
+          await this.prefetchWorktreeConfigs(nextWorkspace, sessions);
           this.sessionActivity.clear();
           this.serverStatuses.clear();
           this.serverPorts.clear();
@@ -30955,32 +30955,32 @@ class ClaudeOrchestrator {
       this.quickWorktreeStartTier = (tierFilter >= 1 && tierFilter <= 4) ? String(tierFilter) : '2';
       localStorage.setItem('quick-worktree-start-tier', this.quickWorktreeStartTier);
     }
-	    if (!this.quickWorktreeFavorites) {
-	      try {
-	        const stored = JSON.parse(localStorage.getItem('quick-worktree-favorites') || '[]');
-	        this.quickWorktreeFavorites = new Set(Array.isArray(stored) ? stored : []);
-	      } catch (e) {
-	        this.quickWorktreeFavorites = new Set();
-	      }
-	    }
-	    const activeWorkspaceName = String(this.currentWorkspace?.name || '').trim();
-	    const quickWorkContext = activeWorkspaceName
-	      ? `Adding worktrees to <strong>${this.escapeHtml(activeWorkspaceName)}</strong>`
-	      : 'Adding worktrees to the active workspace';
+    if (!this.quickWorktreeFavorites) {
+      try {
+        const stored = JSON.parse(localStorage.getItem('quick-worktree-favorites') || '[]');
+        this.quickWorktreeFavorites = new Set(Array.isArray(stored) ? stored : []);
+      } catch (e) {
+        this.quickWorktreeFavorites = new Set();
+      }
+    }
+    const activeWorkspaceName = String(this.currentWorkspace?.name || '').trim();
+    const quickWorkContext = activeWorkspaceName
+      ? `Adding worktrees to <strong>${this.escapeHtml(activeWorkspaceName)}</strong>`
+      : 'Adding worktrees to the active workspace';
 
-	    const modal = document.createElement('div');
-	    modal.id = 'quick-worktree-modal';
-	    modal.className = 'modal';
-	    modal.innerHTML = `
-	      <div class="modal-content quick-worktree-modal">
-	        <div class="modal-header">
-	          <div class="quick-worktree-title">
-	            <div>
-	              <h3>Quick Work</h3>
-	              <div class="quick-worktree-context">${quickWorkContext}</div>
-	            </div>
-	            <details class="quick-worktree-help">
-	              <summary class="quick-worktree-help-btn" title="How Quick Work works" aria-label="How Quick Work works">?</summary>
+    const modal = document.createElement('div');
+    modal.id = 'quick-worktree-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content quick-worktree-modal">
+        <div class="modal-header">
+          <div class="quick-worktree-title">
+            <div>
+              <h3>Quick Work</h3>
+              <div class="quick-worktree-context">${quickWorkContext}</div>
+            </div>
+            <details class="quick-worktree-help">
+              <summary class="quick-worktree-help-btn" title="How Quick Work works" aria-label="How Quick Work works">?</summary>
               <div class="quick-worktree-help-popover">
                 <div><strong>Use</strong> starts a free worktree.</div>
                 <div><strong>Create</strong> makes the next numbered worktree. Managed worktrees start at <code>work9</code> by default.</div>
