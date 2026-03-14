@@ -7,6 +7,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 // Ensure log directory exists early (some services create file transports at require-time).
 try {
@@ -893,13 +894,33 @@ io.on('connection', (socket) => {
   socket.on('switch-workspace', async ({ workspaceId }) => {
     try {
       const previous = workspaceManager.getActiveWorkspace?.() || null;
+      const requestedWorkspaceId = String(workspaceId || '').trim();
       activityFeed.track('workspace.switch.requested', {
         fromWorkspaceId: previous?.id || null,
-        toWorkspaceId: String(workspaceId || '').trim() || null,
+        toWorkspaceId: requestedWorkspaceId || null,
         socketId: socket.id
       });
 
       logger.info('Workspace switch requested', { workspaceId });
+
+      if (requestedWorkspaceId && previous?.id === requestedWorkspaceId && sessionManager.workspace?.id === requestedWorkspaceId) {
+        const backlog = sessionManager.getUndeliveredOutputAndMarkDelivered();
+        socket.emit('workspace-changed', {
+          workspace: previous,
+          sessions: sessionManager.getSessionStates()
+        });
+        if (backlog && typeof backlog === 'object') {
+          for (const [sessionId, data] of Object.entries(backlog)) {
+            if (!data) continue;
+            socket.emit('terminal-output', {
+              sessionId,
+              data,
+              workspaceId: previous?.id || null
+            });
+          }
+        }
+        return;
+      }
 
       const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
 
@@ -1432,6 +1453,8 @@ app.post('/api/workspaces', async (req, res) => {
     logger.info('Creating workspace via API', { name: workspaceData.name });
 
     const workspace = await workspaceManager.createWorkspace(workspaceData);
+    const workspaces = await workspaceManager.listWorkspacesEnriched();
+    io.emit('workspaces-list', workspaces);
     res.json(workspace);
   } catch (error) {
     logger.error('Failed to create workspace', { error: error.message, stack: error.stack });
@@ -3551,25 +3574,56 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
   }
 });
 
+app.get('/api/workspaces/deleted', async (req, res) => {
+  try {
+    const deletedWorkspaces = await workspaceManager.listDeletedWorkspaces();
+    res.json(deletedWorkspaces);
+  } catch (error) {
+    logger.error('Failed to list deleted workspaces', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+});
+
+app.post('/api/workspaces/deleted/:deletedId/restore', async (req, res) => {
+  try {
+    const deletedId = req.params.deletedId;
+    const workspace = await workspaceManager.restoreWorkspace(deletedId);
+    const workspaces = await workspaceManager.listWorkspacesEnriched();
+    io.emit('workspaces-list', workspaces);
+    res.json({ ok: true, workspace });
+  } catch (error) {
+    logger.error('Failed to restore workspace', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message, stack: error.stack });
+  }
+});
+
 // Delete workspace
 app.delete('/api/workspaces/:id', async (req, res) => {
   try {
     const workspaceId = req.params.id;
     logger.info('Deleting workspace', { workspaceId });
 
-    // Stop all sessions for this workspace first
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (workspace && workspaceManager.activeWorkspace?.id === workspaceId) {
-      // Clean up sessions if this is the active workspace
-      sessionManager.cleanupAllSessions();
+    const closedSessions = sessionManager.cleanupWorkspaceSessions(workspaceId, { clearRecovery: true });
+    if (workspaceManager.activeWorkspace?.id === workspaceId) {
       sessionManager.setWorkspace(null);
       workspaceManager.activeWorkspace = null;
     }
 
     // Delete the workspace
-    await workspaceManager.deleteWorkspace(workspaceId);
+    const deletedWorkspaceEntry = await workspaceManager.deleteWorkspace(workspaceId);
+    const workspaces = await workspaceManager.listWorkspacesEnriched();
+    io.emit('workspaces-list', workspaces);
 
-    res.json({ success: true });
+    res.json({
+      success: true,
+      closedSessions,
+      deletedWorkspace: {
+        ...(deletedWorkspaceEntry?.workspace || {}),
+        deletedId: deletedWorkspaceEntry?.deletedId || null,
+        deletedAt: deletedWorkspaceEntry?.deletedAt || null,
+        restoreAvailable: true
+      }
+    });
   } catch (error) {
     logger.error('Failed to delete workspace', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message, stack: error.stack });
@@ -4398,10 +4452,14 @@ app.post('/api/startup/install-windows', async (req, res) => {
   try {
     const result = await new Promise((resolve, reject) => {
       const ps = spawn('powershell.exe', [
+        '-NoProfile',
         '-ExecutionPolicy', 'Bypass',
         '-File', winPath,
         '-DesktopShortcut'
-      ], { timeout: 30000 });
+      ], getHiddenProcessOptions({
+        timeout: 30000,
+        env: augmentProcessEnv(process.env)
+      }));
 
       let stdout = '';
       let stderr = '';

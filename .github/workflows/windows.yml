@@ -52,6 +52,13 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Resolve bundled Node version
+        id: bundled_node_version
+        shell: pwsh
+        run: |
+          $nodeVersion = node -p "process.version"
+          "value=$nodeVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -59,6 +66,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
+
+      - name: Cache packaged backend production deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/resources/backend/node_modules
+            src-tauri/resources/backend/.prod-install-stamp.json
+          key: ${{ runner.os }}-tauri-backend-prod-${{ steps.bundled_node_version.outputs.value }}-${{ hashFiles('.nvmrc', 'package.json', 'package-lock.json', 'scripts/tauri/prepare-backend-resources.js') }}
 
       - name: Install
         run: npm ci

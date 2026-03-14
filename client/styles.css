@@ -3825,6 +3825,12 @@ header {
   gap: var(--space-lg);
 }
 
+.quick-worktree-context {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
 .quick-worktree-help {
   position: relative;
 }
@@ -15028,6 +15034,10 @@ body.dependency-onboarding-active #dependency-setup-modal {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(0,0,0,0.15);
   border-color: var(--accent-primary);
+}
+
+.deleted-workspace-card {
+  border-style: dashed;
 }
 
 .bento-workspace-icon {

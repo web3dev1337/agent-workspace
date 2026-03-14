@@ -4,8 +4,15 @@ const os = require('os');
 const { spawn, exec } = require('child_process');
 const util = require('util');
 const winston = require('winston');
+const { augmentProcessEnv, buildPowerShellArgs, getHiddenProcessOptions } = require('./utils/processUtils');
 
-const execAsync = util.promisify(exec);
+const execAsyncBase = util.promisify(exec);
+async function execAsync(command, options = {}) {
+  return execAsyncBase(command, {
+    ...getHiddenProcessOptions(options),
+    env: augmentProcessEnv(options.env || process.env)
+  });
+}
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -67,16 +74,18 @@ class ProductLauncherService {
 
     const shell = getDefaultShell();
     const shellArgs = process.platform === 'win32'
-      ? ['-Command', product.startCommand]
+      ? buildPowerShellArgs(product.startCommand)
       : ['-lc', product.startCommand];
 
     const child = spawn(shell, shellArgs, {
-      cwd: masterPath,
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: '0'
-      },
-      stdio: ['ignore', fd, fd]
+      ...getHiddenProcessOptions({
+        cwd: masterPath,
+        env: augmentProcessEnv({
+          ...process.env,
+          GIT_TERMINAL_PROMPT: '0'
+        }),
+        stdio: ['ignore', fd, fd]
+      })
     });
 
     // Parent can close its reference; child keeps it
@@ -167,4 +176,3 @@ class ProductLauncherService {
 }
 
 module.exports = { ProductLauncherService };
-

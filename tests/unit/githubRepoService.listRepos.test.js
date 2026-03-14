@@ -6,9 +6,18 @@ const { execFile } = require('child_process');
 const { GitHubRepoService } = require('../../server/githubRepoService');
 
 describe('GitHubRepoService listRepos', () => {
+  const originalPlatform = process.platform;
+
   beforeEach(() => {
     execFile.mockReset();
     GitHubRepoService.instance = null;
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: originalPlatform
+    });
   });
 
   it('lists repos via gh and normalizes output', async () => {
@@ -49,5 +58,31 @@ describe('GitHubRepoService listRepos', () => {
 
     const svc = GitHubRepoService.getInstance();
     await expect(svc.listRepos({ limit: 10, force: true })).rejects.toThrow('Failed to list GitHub repos');
+  });
+
+  it('hides gh repo list on Windows', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    });
+
+    execFile.mockImplementation((cmd, args, opts, cb) => {
+      cb(null, JSON.stringify([
+        { nameWithOwner: 'foo/bar', name: 'bar', owner: { login: 'foo' }, isPrivate: false, isFork: false, visibility: 'PUBLIC' }
+      ]), '');
+    });
+
+    const svc = GitHubRepoService.getInstance();
+    await svc.listRepos({ force: true });
+
+    expect(execFile).toHaveBeenCalledWith(
+      'gh',
+      expect.arrayContaining(['repo', 'list']),
+      expect.objectContaining({
+        windowsHide: true,
+        creationFlags: 0x08000000
+      }),
+      expect.any(Function)
+    );
   });
 });

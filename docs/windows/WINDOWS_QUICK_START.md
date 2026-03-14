@@ -62,6 +62,7 @@ npm run tauri:build
 
 Notes:
 - `npm run tauri:build` runs `scripts/tauri/prepare-backend-resources.js --install-prod` and by default bundles the current Node runtime into the app resources.
+- Repeated local builds reuse `src-tauri/resources/backend/node_modules` when the bundled Node runtime and `package-lock.json` are unchanged, so warm installer rebuilds avoid another backend `npm ci`.
 - To skip bundling Node, set:
   - `ORCHESTRATOR_SKIP_BUNDLE_NODE=1`
 
@@ -71,7 +72,7 @@ Artifacts:
 
 CI option (recommended for repeatable release builds):
 - Run the GitHub Actions workflow `windows` (workflow_dispatch) or push a tag like `v1.2.3`.
-- It runs Windows unit tests and produces installer artifacts via `npm run tauri:build` (and on tag pushes it publishes a GitHub Release with the installers attached).
+- It runs Windows unit tests, restores the cached packaged backend prod deps for warm builds, and produces installer artifacts via `npm run tauri:build` (and on tag pushes it publishes a GitHub Release with the installers attached).
 
 Desktop auto-updater (optional, packaged app):
 - Set `ORCHESTRATOR_UPDATER_ENABLED=1`

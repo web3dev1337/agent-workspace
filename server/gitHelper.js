@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const winston = require('winston');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const execFileAsync = util.promisify(execFile);
 
@@ -11,8 +12,8 @@ const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10MB
 
 async function execFileSafe(command, args, options = {}) {
   return execFileAsync(command, args, {
-    ...options,
-    windowsHide: true,
+    ...getHiddenProcessOptions(options),
+    env: augmentProcessEnv(options.env || process.env),
     maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER
   });
 }

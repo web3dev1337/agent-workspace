@@ -3,6 +3,7 @@ const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
 const winston = require('winston');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -182,10 +183,11 @@ class DiffViewerService {
       }
       const fd = fs.openSync(logPath, 'a');
       const child = spawn(command, args, {
-        cwd,
-        env: process.env,
-        stdio: ['ignore', fd, fd],
-        windowsHide: true
+        ...getHiddenProcessOptions({
+          cwd,
+          env: augmentProcessEnv(process.env),
+          stdio: ['ignore', fd, fd]
+        })
       });
 
       child.on('error', (error) => {
@@ -249,7 +251,7 @@ class DiffViewerService {
     const fd = fs.openSync(logPath, 'a');
 
     const env = {
-      ...process.env,
+      ...augmentProcessEnv(process.env),
       DIFF_VIEWER_PORT: String(this.port)
     };
 
@@ -260,21 +262,23 @@ class DiffViewerService {
       logger.info('Starting diff viewer via start-diff-viewer.sh', { port: this.port, scriptPath });
       const shell = getDefaultShell();
       child = spawn(shell, [scriptPath], {
-        cwd: this.diffViewerRoot,
-        env,
-        detached: true,
-        stdio: ['ignore', fd, fd],
-        windowsHide: true
+        ...getHiddenProcessOptions({
+          cwd: this.diffViewerRoot,
+          env,
+          detached: true,
+          stdio: ['ignore', fd, fd]
+        })
       });
     } else {
       const entry = path.join(this.diffViewerRoot, 'server', 'index.js');
       logger.info('Starting diff viewer via node server/index.js', { port: this.port, entry });
       child = spawn(process.execPath, [entry], {
-        cwd: this.diffViewerRoot,
-        env,
-        detached: true,
-        stdio: ['ignore', fd, fd],
-        windowsHide: true
+        ...getHiddenProcessOptions({
+          cwd: this.diffViewerRoot,
+          env,
+          detached: true,
+          stdio: ['ignore', fd, fd]
+        })
       });
     }
 

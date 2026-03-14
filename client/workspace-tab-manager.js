@@ -758,6 +758,36 @@ class WorkspaceTabManager {
     console.log(`Tab ${tabId} closed`);
   }
 
+  removeWorkspaceTabs(workspaceId, { activateFallback = true } = {}) {
+    const targetWorkspaceId = String(workspaceId || '').trim();
+    if (!targetWorkspaceId) return 0;
+
+    const tabsToRemove = Array.from(this.tabs.values())
+      .filter((tab) => String(tab?.workspaceId || '').trim() === targetWorkspaceId);
+
+    if (!tabsToRemove.length) return 0;
+
+    const removedActiveTab = tabsToRemove.some((tab) => tab.id === this.activeTabId);
+    tabsToRemove.forEach((tab) => {
+      this.discardTabUI(tab);
+    });
+
+    if (removedActiveTab) {
+      const fallbackTab = Array.from(this.tabs.values())[0] || null;
+      if (fallbackTab && activateFallback) {
+        this.switchTab(fallbackTab.id).catch?.((error) => {
+          console.error('Failed to activate fallback tab after workspace removal:', error);
+        });
+      } else {
+        this.activeTabId = null;
+        this.orchestrator.currentTabId = null;
+        this.orchestrator.currentWorkspace = fallbackTab?.workspace || null;
+      }
+    }
+
+    return tabsToRemove.length;
+  }
+
   /**
    * Show workspace wizard for new tab
    */

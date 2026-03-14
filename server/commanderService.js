@@ -10,6 +10,7 @@ const pty = require('node-pty');
 const path = require('path');
 const os = require('os');
 const winston = require('winston');
+const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
 
 const HOME_DIR = process.env.HOME || os.homedir();
 
@@ -62,23 +63,37 @@ class CommanderService {
     try {
       // Detect shell based on platform
       const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
-      const shellArgs = process.platform === 'win32' ? ['-NoExit'] : [];
+      const shellArgs = process.platform === 'win32'
+        ? buildPowerShellArgs(null, { keepOpen: true, hideWindow: false })
+        : [];
 
-      // Spawn Claude Code terminal
-      const ptyProcess = pty.spawn(shell, shellArgs, {
+      const env = process.platform === 'win32'
+        ? augmentProcessEnv({
+            ...process.env,
+            HOME: HOME_DIR,
+            TERM: 'xterm-color'
+          })
+        : {
+            ...process.env,
+            PATH: `${HOME_DIR}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+            HOME: HOME_DIR,
+            TERM: 'xterm-color'
+          };
+
+      const ptyOptions = {
         name: 'xterm-color',
         cols: 120,
         rows: 40,
         cwd: COMMANDER_CWD,
-        env: process.platform === 'win32'
-          ? { ...process.env }
-          : {
-              ...process.env,
-              PATH: `${HOME_DIR}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
-              HOME: HOME_DIR,
-              TERM: 'xterm-color'
-            }
-      });
+        env
+      };
+
+      if (process.platform === 'win32') {
+        ptyOptions.useConpty = true;
+      }
+
+      // Spawn Claude Code terminal
+      const ptyProcess = pty.spawn(shell, shellArgs, ptyOptions);
 
       this.session = {
         id: 'commander',

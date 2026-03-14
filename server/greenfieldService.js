@@ -5,8 +5,15 @@ const os = require('os');
 const { exec, spawn } = require('child_process');
 const util = require('util');
 const winston = require('winston');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
-const execAsync = util.promisify(exec);
+const execAsyncBase = util.promisify(exec);
+async function execAsync(command, options = {}) {
+  return execAsyncBase(command, {
+    ...getHiddenProcessOptions(options),
+    env: augmentProcessEnv(options.env || process.env)
+  });
+}
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',

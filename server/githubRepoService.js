@@ -1,9 +1,14 @@
 const https = require('https');
 const { execFile } = require('child_process');
 const winston = require('winston');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const execFileAsync = (command, args, options) => new Promise((resolve, reject) => {
-  execFile(command, args, options, (error, stdout, stderr) => {
+  const nextOptions = {
+    ...getHiddenProcessOptions(options),
+    env: augmentProcessEnv(options?.env || process.env)
+  };
+  execFile(command, args, nextOptions, (error, stdout, stderr) => {
     if (error) {
       reject(error);
       return;

@@ -3,9 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const IS_WIN = process.platform === 'win32';
-const CREATE_NO_WINDOW = 0x08000000;
 
 function execQuiet(command, args, options = {}) {
   const timeout = Number(options.timeout) || 3000;
@@ -20,9 +20,10 @@ function execQuiet(command, args, options = {}) {
       spawnArgs = ['/d', '/c', cmdStr, ...argsArr];
     }
     const child = spawn(spawnCmd, spawnArgs, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-      ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
+      ...getHiddenProcessOptions({
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: augmentProcessEnv(process.env)
+      })
     });
     let stdout = '';
     let stderr = '';
@@ -385,12 +386,11 @@ function launchPowerShellCommand(action) {
     const child = spawn(
       'powershell.exe',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', String(action.command || '')],
-      {
+      getHiddenProcessOptions({
         detached: false,
-        windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
-        ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
-      }
+        env: augmentProcessEnv(process.env)
+      })
     );
     run.pid = Number.isFinite(child?.pid) ? child.pid : null;
     run.updatedAt = new Date().toISOString();

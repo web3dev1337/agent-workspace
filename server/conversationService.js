@@ -16,6 +16,7 @@ const { exec } = require('child_process');
 const util = require('util');
 const os = require('os');
 const winston = require('winston');
+const { splitPathSegments } = require('./utils/pathUtils');
 
 const execAsync = util.promisify(exec);
 
@@ -919,7 +920,7 @@ class ConversationService {
       // Match folder paths
       if (conv.cwd && conv.cwd.toLowerCase().includes(q)) {
         // Extract folder name from path
-        const parts = conv.cwd.split('/');
+        const parts = splitPathSegments(conv.cwd);
         const folder = parts[parts.length - 1] || parts[parts.length - 2];
         if (folder && folder.toLowerCase().includes(q)) {
           suggestions.add({ type: 'folder', value: folder, fullPath: conv.cwd });

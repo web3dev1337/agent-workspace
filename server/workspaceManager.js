@@ -28,6 +28,7 @@ class WorkspaceManager {
     this.workspaceHealth = new Map();
     this.configPath = path.join(os.homedir(), '.orchestrator');
     this.workspacesPath = path.join(this.configPath, 'workspaces');
+    this.deletedWorkspacesPath = path.join(this.configPath, 'deleted-workspaces');
     this.templatesPath = path.join(this.configPath, 'templates');
     this.sessionStatesPath = path.join(this.configPath, 'session-states');
 
@@ -79,6 +80,7 @@ class WorkspaceManager {
     const dirs = [
       this.configPath,
       this.workspacesPath,
+      this.deletedWorkspacesPath,
       path.join(this.templatesPath, 'workspaces'),
       path.join(this.templatesPath, 'launch-settings'),
       this.sessionStatesPath
@@ -896,6 +898,75 @@ class WorkspaceManager {
     return this.listWorkspaces(requestingUser);
   }
 
+  getWorkspaceFilePath(workspaceId) {
+    return path.join(this.workspacesPath, `${workspaceId}.json`);
+  }
+
+  getDeletedWorkspaceEntryPath(deletedId) {
+    return path.join(this.deletedWorkspacesPath, `${deletedId}.json`);
+  }
+
+  async readDeletedWorkspaceEntry(entryName) {
+    const deletedId = String(entryName || '').trim().replace(/\.json$/i, '');
+    if (!deletedId) {
+      throw new Error('deletedId is required');
+    }
+
+    const filePath = this.getDeletedWorkspaceEntryPath(deletedId);
+    const raw = await fs.readFile(filePath, 'utf8');
+    const payload = JSON.parse(raw);
+    const workspace = payload?.workspace && typeof payload.workspace === 'object'
+      ? payload.workspace
+      : payload;
+
+    if (!workspace || typeof workspace !== 'object' || !workspace.id) {
+      throw new Error(`Invalid deleted workspace entry: ${deletedId}`);
+    }
+
+    return {
+      deletedId,
+      deletedAt: String(payload?.deletedAt || '').trim() || null,
+      filePath,
+      workspace
+    };
+  }
+
+  async listDeletedWorkspaces() {
+    const files = await fs.readdir(this.deletedWorkspacesPath).catch(() => []);
+    const deletedEntries = [];
+
+    for (const file of files.filter((name) => name.endsWith('.json'))) {
+      try {
+        const filePath = path.join(this.deletedWorkspacesPath, file);
+        const stats = await fs.stat(filePath).catch(() => null);
+        const entry = await this.readDeletedWorkspaceEntry(file);
+        deletedEntries.push({
+          ...entry,
+          deletedAt: entry.deletedAt || (stats?.mtime ? new Date(stats.mtime).toISOString() : null),
+          restoreAvailable: !this.workspaces.has(entry.workspace.id)
+        });
+      } catch (error) {
+        logger.warn('Failed to read deleted workspace entry', {
+          file,
+          error: error.message
+        });
+      }
+    }
+
+    deletedEntries.sort((a, b) => {
+      const aTime = a.deletedAt ? new Date(a.deletedAt).getTime() : 0;
+      const bTime = b.deletedAt ? new Date(b.deletedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return deletedEntries.map(({ workspace, deletedId, deletedAt, restoreAvailable }) => ({
+      ...workspace,
+      deletedId,
+      deletedAt,
+      restoreAvailable
+    }));
+  }
+
   async createWorkspace(workspaceData) {
     logger.info(`Creating new workspace: ${workspaceData.name}`);
 
@@ -1096,16 +1167,73 @@ class WorkspaceManager {
 
     // Allow deleting active workspace (cleanup handled by caller)
 
-    // Delete from disk
-    const filePath = path.join(this.workspacesPath, `${workspaceId}.json`);
-    await fs.unlink(filePath);
+    const workspace = this.workspaces.get(workspaceId);
+    const filePath = this.getWorkspaceFilePath(workspaceId);
+    const deletedAt = new Date().toISOString();
+    const deletedId = `${this.normalizeWorkspaceId(workspaceId) || 'workspace'}-${Date.now()}`;
+    const deletedEntryPath = this.getDeletedWorkspaceEntryPath(deletedId);
+
+    await fs.writeFile(deletedEntryPath, JSON.stringify({
+      deletedId,
+      deletedAt,
+      workspace
+    }, null, 2));
+
+    await fs.unlink(filePath).catch((error) => {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    });
 
     // Remove from memory
     this.workspaces.delete(workspaceId);
+    this.workspaceHealth.delete(workspaceId);
+    if (this.activeWorkspace?.id === workspaceId) {
+      this.activeWorkspace = null;
+    }
 
-    logger.info(`Deleted workspace: ${workspaceId}`);
+    logger.info(`Deleted workspace: ${workspaceId}`, { deletedId });
 
-    return true;
+    return {
+      deletedId,
+      deletedAt,
+      workspace
+    };
+  }
+
+  async restoreWorkspace(deletedId) {
+    const entry = await this.readDeletedWorkspaceEntry(deletedId);
+    const workspaceId = String(entry?.workspace?.id || '').trim();
+
+    if (!workspaceId) {
+      throw new Error(`Deleted workspace entry is missing an id: ${deletedId}`);
+    }
+
+    if (this.workspaces.has(workspaceId)) {
+      throw new Error(`Workspace already exists: ${workspaceId}`);
+    }
+
+    const normalize = this.normalizeWorkspacePaths(entry.workspace);
+    const sanitized = this.sanitizeWorkspaceTerminals(normalize.workspace);
+    const restoredWorkspace = sanitized.workspace;
+    const validation = validateWorkspace(restoredWorkspace);
+    if (!validation.valid) {
+      throw new Error(`Invalid workspace config: ${validation.errors.join(', ')}`);
+    }
+
+    await this.enrichWorkspaceRepositoryTypes(restoredWorkspace);
+    await fs.writeFile(this.getWorkspaceFilePath(workspaceId), JSON.stringify(restoredWorkspace, null, 2));
+    await fs.unlink(entry.filePath).catch(() => {});
+
+    this.workspaces.set(workspaceId, restoredWorkspace);
+    this.workspaceHealth.delete(workspaceId);
+
+    logger.info('Restored deleted workspace', {
+      workspaceId,
+      deletedId
+    });
+
+    return restoredWorkspace;
   }
 
   getWorkspace(workspaceId) {

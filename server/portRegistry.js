@@ -1,11 +1,27 @@
 const winston = require('winston');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const util = require('util');
 const os = require('os');
 const net = require('net');
 const fs = require('fs').promises;
 const path = require('path');
+const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 const execAsync = util.promisify(exec);
+const execFileAsync = (command, args = [], options = {}) => new Promise((resolve, reject) => {
+  const nextOptions = {
+    ...getHiddenProcessOptions(options),
+    env: augmentProcessEnv(options?.env || process.env)
+  };
+  execFile(command, args, nextOptions, (error, stdout, stderr) => {
+    if (error) {
+      error.stdout = stdout;
+      error.stderr = stderr;
+      reject(error);
+      return;
+    }
+    resolve({ stdout, stderr });
+  });
+});
 
 // Custom port labels file
 const PORT_LABELS_FILE = path.join(process.env.HOME || os.homedir(), '.orchestrator', 'port-labels.json');
@@ -508,7 +524,10 @@ class PortRegistry {
 
   async scanAllPortsWindows(customLabels = {}) {
     try {
-      const { stdout } = await execAsync('netstat -ano -p tcp', { timeout: 8000, maxBuffer: 10 * 1024 * 1024 });
+      const { stdout } = await execFileAsync('netstat', ['-ano', '-p', 'tcp'], {
+        timeout: 8000,
+        maxBuffer: 10 * 1024 * 1024
+      });
       const lines = String(stdout || '').split('\n');
 
       const portToPid = new Map();
@@ -563,7 +582,10 @@ class PortRegistry {
   async getWindowsProcessNameMap() {
     const map = new Map();
     try {
-      const { stdout } = await execAsync('tasklist /FO CSV /NH', { timeout: 8000, maxBuffer: 10 * 1024 * 1024 });
+      const { stdout } = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], {
+        timeout: 8000,
+        maxBuffer: 10 * 1024 * 1024
+      });
       const lines = String(stdout || '').split(/\r?\n/).filter(Boolean);
       for (const line of lines) {
         const m = line.match(/^"([^"]*)","([^"]*)",/);
@@ -618,7 +640,7 @@ class PortRegistry {
       for (const [key, assignedPort] of this.assignments) {
         if (assignedPort === port) {
           const [repoPath, worktreeId] = this.parseKey(key);
-          const repoName = repoPath.split('/').pop() || repoPath;
+          const repoName = path.basename(String(repoPath || '').replace(/[\\/]+$/, '')) || repoPath;
           return {
             name: `${repoName} (${worktreeId})`,
             type: 'game-server',

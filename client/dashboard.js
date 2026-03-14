@@ -1,9 +1,12 @@
 // Dashboard component for workspace management
+const normalizeDashboardPath = (value) => String(value || '').replace(/\\/g, '/');
+const formatDashboardPathTail = (value, count = 2) => normalizeDashboardPath(value).split('/').filter(Boolean).slice(-count).join('/');
 
 class Dashboard {
   constructor(orchestrator) {
     this.orchestrator = orchestrator;
     this.workspaces = [];
+    this.deletedWorkspaces = [];
     this.config = {};
     this.isVisible = false;
     this.quickLinks = null;
@@ -11,8 +14,8 @@ class Dashboard {
     this._projectLaunchInFlight = false;
   }
 
-	  async show() {
-    console.log('Showing dashboard...');
+		  async show() {
+	    console.log('Showing dashboard...');
 
     // Initialize Quick Links if available
     if (window.QuickLinks && !this.quickLinks) {
@@ -31,27 +34,50 @@ class Dashboard {
       }).catch(() => {});
     }
 
-    // Request workspaces from server (with refresh to reload from disk)
-    this.orchestrator.socket.emit('list-workspaces', { refresh: true });
+	    await this.refreshWorkspaceCollections({ refresh: true, render: true });
+	    this.isVisible = true;
+		  }
 
-	    // Wait for workspace data
-	    this.orchestrator.socket.once('workspaces-list', (workspaces) => {
-	      console.log('Received workspaces:', workspaces);
-	      this.workspaces = workspaces;
-	      // Also update orchestrator's cached list
-	      this.orchestrator.availableWorkspaces = workspaces;
-	      try {
-	        const withHealth = Array.isArray(workspaces) ? workspaces : [];
-	        const noisy = withHealth.filter((w) => (w?.health && (w.health.removedTerminals?.length || w.health.dedupedTerminalIds?.length)));
-	        if (noisy.length) {
-	          const count = noisy.reduce((sum, w) => sum + Number(w.health?.removedTerminals?.length || 0), 0);
-	          this.orchestrator.showToast?.(`Cleaned ${count} stale terminal entries from workspace configs`, 'info');
-	        }
-	      } catch {}
-	      this.render();
-	      this.isVisible = true;
-	    });
-	  }
+  async refreshWorkspaceCollections({ refresh = true, render = false } = {}) {
+    const workspacesPromise = new Promise((resolve) => {
+      this.orchestrator.socket.once('workspaces-list', (workspaces) => {
+        resolve(Array.isArray(workspaces) ? workspaces : []);
+      });
+      this.orchestrator.socket.emit('list-workspaces', { refresh });
+    });
+
+    const deletedWorkspacesPromise = fetch('/api/workspaces/deleted')
+      .then((response) => response.ok ? response.json() : [])
+      .catch(() => []);
+
+    const [workspaces, deletedWorkspaces] = await Promise.all([
+      workspacesPromise,
+      deletedWorkspacesPromise
+    ]);
+
+    console.log('Received workspaces:', workspaces);
+    this.workspaces = workspaces;
+    this.deletedWorkspaces = Array.isArray(deletedWorkspaces) ? deletedWorkspaces : [];
+    this.orchestrator.availableWorkspaces = workspaces;
+
+    try {
+      const withHealth = Array.isArray(workspaces) ? workspaces : [];
+      const noisy = withHealth.filter((w) => (w?.health && (w.health.removedTerminals?.length || w.health.dedupedTerminalIds?.length)));
+      if (noisy.length) {
+        const count = noisy.reduce((sum, w) => sum + Number(w.health?.removedTerminals?.length || 0), 0);
+        this.orchestrator.showToast?.(`Cleaned ${count} stale terminal entries from workspace configs`, 'info');
+      }
+    } catch {}
+
+    if (render) {
+      this.render();
+    }
+
+    return {
+      workspaces: this.workspaces,
+      deletedWorkspaces: this.deletedWorkspaces
+    };
+  }
 
   hide() {
     const dashboard = document.getElementById('dashboard-container');
@@ -114,6 +140,13 @@ class Dashboard {
     };
     const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
     const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
+    const deletedWorkspaces = (Array.isArray(this.deletedWorkspaces) ? this.deletedWorkspaces : [])
+      .slice()
+      .sort((a, b) => {
+        const aTime = a?.deletedAt ? new Date(a.deletedAt).getTime() : 0;
+        const bTime = b?.deletedAt ? new Date(b.deletedAt).getTime() : 0;
+        return bTime - aTime;
+      });
     const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
     const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
     const showProcessBanner = visibility.processBanner !== false;
@@ -306,6 +339,15 @@ class Dashboard {
       </div>
     ` : '';
 
+    const deletedSection = (visibility.workspacesDeleted !== false && deletedWorkspaces.length > 0) ? `
+      <div class="dashboard-bento-section">
+        <h2 class="dashboard-section-title">Recently Deleted</h2>
+        <div class="workspace-grid bento-workspace-grid">
+          ${deletedWorkspaces.map((workspace) => this.generateDeletedWorkspaceCard(workspace)).join('')}
+        </div>
+      </div>
+    ` : '';
+
     return `
       <div class="dashboard-wrapper">
         <div class="dashboard-topbar">
@@ -328,6 +370,7 @@ class Dashboard {
             ${processSection}
             ${activeSection}
             ${allSection}
+            ${deletedSection}
           </div>
           <div class="dashboard-content-right">
             ${quickLinksSection}
@@ -3475,9 +3518,9 @@ class Dashboard {
         </div>
 
         <div class="workspace-card-footer bento-card-footer">
-          <button class="${isActive ? 'btn-secondary workspace-open-btn workspace-open-btn-active' : 'btn-primary workspace-open-btn workspace-open-btn-inactive'} bento-btn-primary">
-            ${isActive ? '↩ Return to Workspace' : '+ Add Workspace'}
-          </button>
+	          <button class="${isActive ? 'btn-secondary workspace-open-btn workspace-open-btn-active' : 'btn-primary workspace-open-btn workspace-open-btn-inactive'} bento-btn-primary">
+	            ${isActive ? '↩ Return to Workspace' : 'Open Workspace'}
+	          </button>
           <div class="bento-action-group">
             <button class="btn-icon workspace-rename-btn" title="Rename workspace">
               ✏️
@@ -3486,6 +3529,38 @@ class Dashboard {
               🗑️
             </button>
           </div>
+        </div>
+      </div>
+	    `;
+	  }
+
+  generateDeletedWorkspaceCard(workspace) {
+    const deletedAtLabel = this.formatTimeAgo(workspace?.deletedAt);
+    const restoreDisabled = workspace?.restoreAvailable === false;
+    const restoreTitle = restoreDisabled
+      ? 'Restore unavailable because a workspace with this id already exists'
+      : 'Restore workspace';
+
+    return `
+      <div class="workspace-card bento-workspace-card deleted-workspace-card" data-deleted-workspace-id="${workspace.deletedId}">
+        <div class="workspace-card-header">
+          <span class="workspace-icon bento-workspace-icon">${workspace.icon || '🧱'}</span>
+          <div class="workspace-info">
+            <h3>${workspace.name}</h3>
+            <p class="workspace-type">Recently deleted</p>
+          </div>
+        </div>
+
+        <div class="workspace-card-body">
+          <div class="workspace-meta">
+            <p class="last-used">${deletedAtLabel ? `Deleted ${deletedAtLabel}` : 'Deleted recently'}</p>
+          </div>
+        </div>
+
+        <div class="workspace-card-footer bento-card-footer">
+          <button class="btn-secondary workspace-restore-btn bento-btn-primary" type="button" title="${restoreTitle}" ${restoreDisabled ? 'disabled' : ''}>
+            Restore Workspace
+          </button>
         </div>
       </div>
     `;
@@ -3621,6 +3696,16 @@ class Dashboard {
       });
     });
 
+    document.querySelectorAll('.workspace-restore-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const card = e.target.closest('.deleted-workspace-card');
+        const deletedWorkspaceId = card?.dataset?.deletedWorkspaceId;
+        if (!deletedWorkspaceId || btn.disabled) return;
+        await this.restoreWorkspace(deletedWorkspaceId);
+      });
+    });
+
     document.querySelectorAll('.workspace-rename-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -3682,17 +3767,11 @@ class Dashboard {
         : 'No stale terminals found';
       this.orchestrator?.showToast?.(msg, 'success');
 
-      // Refresh workspace list (from disk) so cards update.
-      this.orchestrator.socket.emit('list-workspaces', { refresh: true });
-      this.orchestrator.socket.once('workspaces-list', (workspaces) => {
-        this.workspaces = workspaces;
-        this.orchestrator.availableWorkspaces = workspaces;
-        this.render();
-      });
-    } catch (err) {
-      this.orchestrator?.showToast?.(`Cleanup failed: ${String(err?.message || err)}`, 'error');
-    }
-  }
+	      await this.refreshWorkspaceCollections({ refresh: true, render: this.isVisible });
+	    } catch (err) {
+	      this.orchestrator?.showToast?.(`Cleanup failed: ${String(err?.message || err)}`, 'error');
+	    }
+	  }
 
   showCreateProjectWizard() {
     if (typeof this.orchestrator?.openGreenfieldWizard === 'function') {
@@ -3908,11 +3987,12 @@ class Dashboard {
         throw new Error(error || 'Failed to create empty workspace');
       }
 
-      const workspace = await response.json();
-      this.workspaces.push(workspace);
+	      const workspace = await response.json();
+	      this.workspaces.push(workspace);
+	      this.orchestrator.upsertAvailableWorkspace?.(workspace);
 
-      // Switch to new workspace
-      this.openWorkspace(workspaceId);
+	      // Switch to new workspace
+	      this.openWorkspace(workspaceId);
 
       this.orchestrator.showTemporaryMessage(`Empty workspace "${name}" created`, 'success');
     } catch (error) {
@@ -4103,9 +4183,10 @@ class Dashboard {
       `Workspace: ${workspace.name}\n` +
       `Type: ${workspace.type}\n\n` +
       `This will:\n` +
-      `✅ Delete the workspace configuration\n` +
+      `✅ Move the workspace configuration to Recently Deleted\n` +
       `✅ Keep all git worktrees and code intact\n` +
       `✅ Stop any running sessions\n\n` +
+      `You can restore it later from the dashboard.\n\n` +
       `Are you sure?`
     );
 
@@ -4121,25 +4202,58 @@ class Dashboard {
         method: 'DELETE'
       });
 
-      if (response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload?.success) {
         console.log(`Deleted workspace: ${workspaceId}`);
 
         // Remove from local array
         this.workspaces = this.workspaces.filter(ws => ws.id !== workspaceId);
+        this.deletedWorkspaces = Array.isArray(this.deletedWorkspaces)
+          ? this.deletedWorkspaces
+          : [];
 
-        // Refresh dashboard
-        this.show();
+        if (payload?.deletedWorkspace) {
+          this.deletedWorkspaces = [
+            payload.deletedWorkspace,
+            ...this.deletedWorkspaces.filter((entry) => String(entry?.deletedId || '').trim() !== String(payload.deletedWorkspace?.deletedId || '').trim())
+          ];
+        }
+
+        this.orchestrator.removeAvailableWorkspace?.(workspaceId);
+        this.orchestrator.tabManager?.removeWorkspaceTabs?.(workspaceId, { activateFallback: true });
+
+        await this.refreshWorkspaceCollections({ refresh: true, render: this.isVisible });
 
         // Show success message
-        window.orchestrator?.showTemporaryMessage(`Workspace deleted successfully`, 'success');
+        window.orchestrator?.showTemporaryMessage(`Workspace moved to Recently Deleted`, 'success');
       } else {
-        const error = await response.text();
+        const error = String(payload?.error || 'Failed to delete workspace');
         console.error('Delete failed:', error);
         window.orchestrator?.showTemporaryMessage(`Failed to delete workspace: ${error}`, 'error');
       }
     } catch (error) {
       console.error('Error deleting workspace:', error);
       window.orchestrator?.showTemporaryMessage(`Error: ${error.message}`, 'error');
+    }
+  }
+
+  async restoreWorkspace(deletedWorkspaceId) {
+    try {
+      const response = await fetch(`/api/workspaces/deleted/${encodeURIComponent(deletedWorkspaceId)}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok || !payload?.workspace) {
+        throw new Error(String(payload?.error || `Failed to restore workspace (${response.status})`));
+      }
+
+      this.orchestrator.upsertAvailableWorkspace?.(payload.workspace);
+      await this.refreshWorkspaceCollections({ refresh: true, render: this.isVisible });
+      this.orchestrator?.showToast?.(`Restored workspace "${payload.workspace.name}"`, 'success');
+    } catch (error) {
+      this.orchestrator?.showToast?.(`Restore failed: ${String(error?.message || error)}`, 'error');
     }
   }
 
@@ -4162,7 +4276,7 @@ class Dashboard {
       gridEl.innerHTML = data.ports.map(p => {
         const context = p.project?.project
           ? `${p.project.project}${p.project.worktree ? ' • ' + p.project.worktree : ''}`
-          : (p.cwd ? p.cwd.split('/').slice(-2).join('/') : '');
+          : formatDashboardPathTail(p.cwd);
 
         return `
           <div class="port-dashboard-card ${p.type || ''}"
@@ -4306,7 +4420,7 @@ class Dashboard {
                   <label for="recover-${i}" class="recovery-session-info">
                     <div class="recovery-session-id">${s.sessionId}</div>
                     <div class="recovery-session-details">
-                      ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${s.lastCwd.split('/').slice(-2).join('/')}</span>` : ''}
+                      ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${formatDashboardPathTail(s.lastCwd)}</span>` : ''}
                       ${s.lastAgent ? `<span class="recovery-session-agent">${s.lastAgent}</span>` : ''}
                       ${s.lastConversationId ? `<span>💬 ${s.lastConversationId.slice(0, 8)}...</span>` : ''}
                     </div>
@@ -4373,7 +4487,7 @@ class Dashboard {
                 <label for="recover-${i}" class="recovery-session-info">
                   <div class="recovery-session-id">${s.sessionId}</div>
                   <div class="recovery-session-details">
-                    ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${s.lastCwd.split('/').slice(-2).join('/')}</span>` : ''}
+                    ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${formatDashboardPathTail(s.lastCwd)}</span>` : ''}
                     ${s.lastAgent ? `<span class="recovery-session-agent">${s.lastAgent}</span>` : ''}
                     ${s.lastConversationId ? `<span>💬 ${s.lastConversationId.slice(0, 8)}...</span>` : ''}
                   </div>

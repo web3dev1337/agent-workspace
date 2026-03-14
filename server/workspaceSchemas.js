@@ -1,4 +1,5 @@
 // Enhanced workspace schemas supporting mixed-repo workspaces
+const path = require('path');
 
 const WORKSPACE_TYPES = {
   'single-repo': {
@@ -148,7 +149,7 @@ function convertSingleToMixed(singleWorkspace) {
   const terminalPairs = singleWorkspace.terminals?.pairs || 1;
 
   // Extract repository name from path (e.g., "/path/to/HyFire2" -> "HyFire2")
-  const repositoryName = singleWorkspace.repository.path.split('/').pop() || singleWorkspace.id;
+  const repositoryName = path.basename(String(singleWorkspace.repository.path || '').replace(/[\\/]+$/, '')) || singleWorkspace.id;
 
   for (let i = 1; i <= terminalPairs; i++) {
     const worktreeName = singleWorkspace.worktrees?.namingPattern?.replace('{n}', i) || `work${i}`;

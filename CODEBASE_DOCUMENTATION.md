@@ -16,6 +16,7 @@ SERVICES:   server/statusDetector.js, gitHelper.js   - Core services
 FRONTEND:   client/app.js, client/terminal.js        - Web client
 NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
+PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resources + reusable packaged prod deps
 DIFF:       diff-viewer/                             - Advanced diff viewer component
 SITE:       site/                                    - Standalone showcase site for future GitHub Pages publishing
 PLANS:      PLANS/                                   - Date-stamped planning + implementation notes
@@ -34,7 +35,11 @@ server/index.js                    - Express server with Socket.IO
 server/sessionManager.js           - Terminal session lifecycle management
 ├─ Manages: PTY processes, session tracking, cleanup
 ├─ Key methods: createSession(), destroySession(), getActiveSessions()
+├─ Windows PTY policy: `buildPtyOptions()` forces ConPTY for orchestrator-launched terminals to reduce stray console-window behavior on Windows
+├─ Windows shell policy: PTY shells keep `PowerShell`/`cmd` inside ConPTY without requesting `-WindowStyle Hidden`, avoiding transparent ghost-console windows in packaged GUI builds
 ├─ Cleanup hardening: closing sessions sends process-tree SIGTERM and a grace-timed SIGKILL fallback by PTY pid to reduce orphaned agent processes
+├─ Workspace cleanup: `cleanupWorkspaceSessions(workspaceId)` tears down active or stashed sessions for a specific workspace before delete/archive flows
+├─ Workspace switch guard: switching to the already-active workspace short-circuits and reuses the current session map instead of re-initializing PTYs
 ├─ Stale-agent cleanup: when status detection sees an explicit shell/no-agent prompt, recovery `lastAgent` markers are cleared to keep sidebar status accurate (`no-agent` vs `busy/waiting`)
 ├─ Status model: periodic status re-evaluation prevents stale "busy" lights after output quiets down
 └─ Uses: node-pty for terminal emulation
@@ -58,6 +63,11 @@ server/claudeVersionChecker.js     - Claude Code version detection
 tests/unit/claudeVersionChecker.test.js - Coverage for update-banner version fallback messaging
 tests/unit/claudeVersionChecker.spawnOptions.test.js - Verifies Windows-hidden spawn flags for startup Claude version checks
 tests/unit/worktreeHelper.spawnOptions.test.js - Verifies Windows-hidden spawn flags for auto-created worktree git commands
+server/utils/processUtils.js       - Shared spawn/env hardening helpers
+├─ Windows packaging guardrails: applies `windowsHide`/`CREATE_NO_WINDOW`, augments GUI-app PATH with Git/node/npm/common CLI locations, and builds hidden PowerShell argument lists
+└─ Cross-platform behavior: non-Windows platforms pass through unchanged so Linux/macOS launch behavior stays stable
+server/utils/pathUtils.js          - Shared slash-normalization helpers for repo/worktree labels
+└─ Used by server-side workspace/conversation flows to keep Windows backslash paths compatible with Linux-style UI labels
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
@@ -87,6 +97,13 @@ server/auditExportService.js       - Redacted audit export across activity + sch
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
 server/projectTypeService.js       - Project taxonomy loader/validator for category→framework→template metadata (`config/project-types.json`)
+server/portRegistry.js             - Port assignment + live service scanner (`/api/ports/scan`)
+├─ Windows scan path: uses hidden `netstat`/`tasklist` probes so packaged Tauri builds do not flash console windows when Ports/Dashboard panels refresh
+└─ UI metadata: labels orchestrator-assigned ports, known dev servers, and custom user labels
+scripts/tauri/prepare-backend-resources.js - Tauri backend packager
+├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
+├─ Prod-deps reuse: repeated `--install-prod` runs skip `npm ci` when package-lock + bundled Node stamp still match
+└─ CI cache: Windows release workflow restores `src-tauri/resources/backend/node_modules` so warm installer builds avoid re-installing backend prod deps
 ```
 
 ### Multi-Workspace System (Core Feature)
@@ -94,7 +111,8 @@ server/projectTypeService.js       - Project taxonomy loader/validator for categ
 server/workspaceManager.js          - Workspace lifecycle management
 ├─ Manages: Workspace creation, switching, mixed-repo support
 ├─ Features: Dynamic terminal creation, worktree integration
-└─ Storage: JSON-based workspace persistence
+├─ Deleted workspace archive: deleting a workspace moves its JSON into `~/.orchestrator/deleted-workspaces/` instead of permanently unlinking it
+└─ Storage: JSON-based workspace persistence with dashboard-driven restore via the deleted-workspace archive
 
 server/workspaceSchemas.js          - Workspace configuration validation
 ├─ Schemas: JSON schema definitions for workspace types
@@ -193,6 +211,7 @@ client/projects-board.js           - Projects kanban board modal (Archive/Maybe 
 client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
 ├─ Features: Browser-like tabs for multiple workspaces
 ├─ Manages: Tab creation, switching, state preservation
+├─ Workspace deletion sync: `removeWorkspaceTabs(workspaceId)` prunes tabs when a workspace is deleted from the dashboard
 ├─ XTerm lifecycle: Proper hide/show with fit() handling
 ├─ Notifications: Badge counts for inactive tabs
 └─ Keyboard shortcuts: Alt+←/→, Alt+W, Alt+N, Alt+Shift+N, Alt+1-9

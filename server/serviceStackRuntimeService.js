@@ -1,8 +1,10 @@
 const http = require('http');
 const https = require('https');
 const net = require('net');
+const os = require('os');
 const { getWorkspaceServiceManifest } = require('./workspaceServiceStackService');
 const { getShellKind, buildShellCommand } = require('./utils/shellCommand');
+const { buildPowerShellArgs } = require('./utils/processUtils');
 
 class ServiceStackRuntimeService {
   constructor({
@@ -103,6 +105,9 @@ class ServiceStackRuntimeService {
       const terminalPath = String(terminal?.worktreePath || terminal?.repository?.path || '').trim();
       if (terminalPath) return terminalPath;
     }
+    if (process.env.ORCHESTRATOR_DATA_DIR) {
+      return process.env.HOME || os.homedir() || process.cwd();
+    }
     return process.cwd();
   }
 
@@ -136,7 +141,7 @@ class ServiceStackRuntimeService {
 
     const command = shellKind === 'powershell' ? 'powershell.exe' : 'bash';
     const args = shellKind === 'powershell'
-      ? ['-Command', serviceCommand]
+      ? buildPowerShellArgs(serviceCommand)
       : ['-lc', serviceCommand];
 
     this.sessionManager.createSession(sessionId, {

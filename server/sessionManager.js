@@ -22,6 +22,7 @@ const {
   buildShellCommand,
   resolveCwd
 } = require('./utils/shellCommand');
+const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -49,9 +50,10 @@ function getDefaultShell() {
 // Helper function to build shell args for executing commands
 function buildShellArgs(commands) {
   if (process.platform === 'win32') {
-    // PowerShell: join commands with ; and use -NoExit -Command to keep shell open
+    // PowerShell inside ConPTY should not request its own hidden window style,
+    // otherwise packaged GUI launches can surface transparent ghost consoles.
     const joined = Array.isArray(commands) ? commands.join('; ') : commands.replace(/&&/g, ';');
-    return ['-NoExit', '-Command', joined];
+    return buildPowerShellArgs(joined, { keepOpen: true, hideWindow: false });
   } else {
     // Bash: join commands with && and keep the terminal open by exec'ing into an interactive shell.
     const joined = Array.isArray(commands) ? commands.join(' && ') : commands;
@@ -128,6 +130,22 @@ class SessionManager extends EventEmitter {
       };
     }
   }
+
+  buildPtyOptions(config, env) {
+    const options = {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 24,
+      cwd: config.cwd,
+      env
+    };
+
+    if (process.platform === 'win32') {
+      options.useConpty = true;
+    }
+
+    return options;
+  }
   
   setStatusDetector(detector) {
     this.statusDetector = detector;
@@ -167,6 +185,15 @@ class SessionManager extends EventEmitter {
     }
 
     const previousWorkspaceId = this.workspace?.id || null;
+    if (previousWorkspaceId === workspace.id) {
+      this.setWorkspace(workspace);
+      this.workspaceSessionMaps.set(workspace.id, this.sessions);
+      return {
+        sessions: this.getSessionStates(),
+        backlog: this.getUndeliveredOutputAndMarkDelivered()
+      };
+    }
+
     if (previousWorkspaceId && previousWorkspaceId !== workspace.id) {
       this.workspaceSessionMaps.set(previousWorkspaceId, this.sessions);
     }
@@ -758,13 +785,13 @@ class SessionManager extends EventEmitter {
         }
       }
 
-      const ptyProcess = pty.spawn(config.command, config.args, {
-        name: 'xterm-color',
-        cols: 80,
-        rows: 24,
-        cwd: config.cwd,
-        env
-      });
+      const effectiveEnv = augmentProcessEnv(env);
+
+      const ptyProcess = pty.spawn(
+        config.command,
+        config.args,
+        this.buildPtyOptions(config, effectiveEnv)
+      );
 
       const initialCwd = config.cwd || process.cwd();
       
@@ -2732,6 +2759,35 @@ class SessionManager extends EventEmitter {
     }
 
     return true;
+  }
+
+  cleanupWorkspaceSessions(workspaceId, { clearRecovery = false } = {}) {
+    const ws = String(workspaceId || '').trim();
+    if (!ws) return 0;
+
+    const sessionIds = this.getAllSessionEntries({ workspaceId: ws })
+      .map(([sessionId]) => sessionId);
+
+    sessionIds.forEach((sessionId) => {
+      this.closeSession(sessionId, {
+        clearRecovery,
+        workspaceId: ws
+      });
+    });
+
+    if (String(this.workspace?.id || '').trim() === ws) {
+      this.sessions.clear();
+      this.stopBranchRefresh();
+      this.cleanupGitWatchers();
+    }
+
+    this.workspaceSessionMaps.delete(ws);
+    logger.info('Cleaned workspace sessions', {
+      workspaceId: ws,
+      closed: sessionIds.length
+    });
+
+    return sessionIds.length;
   }
   
   restartSession(sessionId) {
