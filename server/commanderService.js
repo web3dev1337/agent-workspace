@@ -63,7 +63,9 @@ class CommanderService {
     try {
       // Detect shell based on platform
       const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
-      const shellArgs = process.platform === 'win32' ? buildPowerShellArgs(null, { keepOpen: true }) : [];
+      const shellArgs = process.platform === 'win32'
+        ? buildPowerShellArgs(null, { keepOpen: true, hideWindow: false })
+        : [];
 
       const env = process.platform === 'win32'
         ? augmentProcessEnv({

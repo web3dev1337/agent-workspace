@@ -50,9 +50,10 @@ function getDefaultShell() {
 // Helper function to build shell args for executing commands
 function buildShellArgs(commands) {
   if (process.platform === 'win32') {
-    // PowerShell: keep the shell open inside the PTY, but hide any external window.
+    // PowerShell inside ConPTY should not request its own hidden window style,
+    // otherwise packaged GUI launches can surface transparent ghost consoles.
     const joined = Array.isArray(commands) ? commands.join('; ') : commands.replace(/&&/g, ';');
-    return buildPowerShellArgs(joined, { keepOpen: true });
+    return buildPowerShellArgs(joined, { keepOpen: true, hideWindow: false });
   } else {
     // Bash: join commands with && and keep the terminal open by exec'ing into an interactive shell.
     const joined = Array.isArray(commands) ? commands.join(' && ') : commands;
@@ -184,6 +185,15 @@ class SessionManager extends EventEmitter {
     }
 
     const previousWorkspaceId = this.workspace?.id || null;
+    if (previousWorkspaceId === workspace.id) {
+      this.setWorkspace(workspace);
+      this.workspaceSessionMaps.set(workspace.id, this.sessions);
+      return {
+        sessions: this.getSessionStates(),
+        backlog: this.getUndeliveredOutputAndMarkDelivered()
+      };
+    }
+
     if (previousWorkspaceId && previousWorkspaceId !== workspace.id) {
       this.workspaceSessionMaps.set(previousWorkspaceId, this.sessions);
     }

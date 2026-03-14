@@ -36,8 +36,10 @@ server/sessionManager.js           - Terminal session lifecycle management
 ├─ Manages: PTY processes, session tracking, cleanup
 ├─ Key methods: createSession(), destroySession(), getActiveSessions()
 ├─ Windows PTY policy: `buildPtyOptions()` forces ConPTY for orchestrator-launched terminals to reduce stray console-window behavior on Windows
+├─ Windows shell policy: PTY shells keep `PowerShell`/`cmd` inside ConPTY without requesting `-WindowStyle Hidden`, avoiding transparent ghost-console windows in packaged GUI builds
 ├─ Cleanup hardening: closing sessions sends process-tree SIGTERM and a grace-timed SIGKILL fallback by PTY pid to reduce orphaned agent processes
 ├─ Workspace cleanup: `cleanupWorkspaceSessions(workspaceId)` tears down active or stashed sessions for a specific workspace before delete/archive flows
+├─ Workspace switch guard: switching to the already-active workspace short-circuits and reuses the current session map instead of re-initializing PTYs
 ├─ Stale-agent cleanup: when status detection sees an explicit shell/no-agent prompt, recovery `lastAgent` markers are cleared to keep sidebar status accurate (`no-agent` vs `busy/waiting`)
 ├─ Status model: periodic status re-evaluation prevents stale "busy" lights after output quiets down
 └─ Uses: node-pty for terminal emulation

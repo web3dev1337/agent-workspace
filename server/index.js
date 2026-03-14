@@ -894,13 +894,33 @@ io.on('connection', (socket) => {
   socket.on('switch-workspace', async ({ workspaceId }) => {
     try {
       const previous = workspaceManager.getActiveWorkspace?.() || null;
+      const requestedWorkspaceId = String(workspaceId || '').trim();
       activityFeed.track('workspace.switch.requested', {
         fromWorkspaceId: previous?.id || null,
-        toWorkspaceId: String(workspaceId || '').trim() || null,
+        toWorkspaceId: requestedWorkspaceId || null,
         socketId: socket.id
       });
 
       logger.info('Workspace switch requested', { workspaceId });
+
+      if (requestedWorkspaceId && previous?.id === requestedWorkspaceId && sessionManager.workspace?.id === requestedWorkspaceId) {
+        const backlog = sessionManager.getUndeliveredOutputAndMarkDelivered();
+        socket.emit('workspace-changed', {
+          workspace: previous,
+          sessions: sessionManager.getSessionStates()
+        });
+        if (backlog && typeof backlog === 'object') {
+          for (const [sessionId, data] of Object.entries(backlog)) {
+            if (!data) continue;
+            socket.emit('terminal-output', {
+              sessionId,
+              data,
+              workspaceId: previous?.id || null
+            });
+          }
+        }
+        return;
+      }
 
       const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
 
