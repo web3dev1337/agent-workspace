@@ -302,7 +302,9 @@ src-tauri/src/lib.rs               - Tauri application library
 ### Configuration Files
 ```
 src-tauri/tauri.conf.json          - Tauri app configuration
-src-tauri/Cargo.toml               - Rust dependencies
+src-tauri/Cargo.toml               - Rust dependencies + build profiles (release, fast)
+├─ profile.release: lto=true, codegen-units=1, opt-level="s" — smallest binary, slow compile (CI/distribution)
+└─ profile.fast: lto=false, codegen-units=256, incremental — ~3-5x faster compile (local dev/testing)
 config.json                        - Shared application configuration
 package.json                       - Node.js dependencies and scripts
 
@@ -437,6 +439,8 @@ ENABLE_FILE_WATCHING=true
 npm run dev              - Start development server
 npm run dev:client       - Start client dev server
 npm run tauri:dev        - Start native app development
+npm run tauri:build      - Release build (slow, optimized — for distribution)
+npm run tauri:build:fast - Fast build (~3-5x faster — for local testing)
 npm run dev:all          - Start all services concurrently
 
 # Diff viewer specific

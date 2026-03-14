@@ -597,12 +597,22 @@ const worktreeConfig = await workspaceManager.getCascadedConfigForWorktree(
 npm run dev
 npm run tauri:dev
 
+# Tauri desktop builds
+npm run tauri:build           # Release build (slow, optimized, small binary — for distribution)
+npm run tauri:build:fast      # Fast build (3-5x faster — for local testing/iteration)
+# To build only one installer format (faster): append -- --bundles nsis  (or msi)
+# Example: npm run tauri:build:fast -- --bundles nsis
+
 # Testing
 node --check server/index.js
 
 # Workspace migration (if needed)
 node scripts/migrate-to-workspaces.js
 ```
+
+### Tauri Build Profiles
+- **`release`** (default `tauri:build`): `lto=true`, `codegen-units=1`, `opt-level="s"` — smallest binary, slowest compile. Use for distribution/CI.
+- **`fast`** (`tauri:build:fast`): `lto=false`, `codegen-units=256`, `incremental=true` — ~3-5x faster compile. Use for local dev/testing.
 
 ## Performance Considerations
 - Native app provides 10-20x faster startup vs browser
