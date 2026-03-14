@@ -94,13 +94,13 @@ jobs:
           $profile = "${{ github.event.inputs.profile }}"
           if (-not $profile -or $profile -eq '') { $profile = 'release' }
           "value=$profile" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          $script = if ($profile -eq 'fast') { 'tauri:build:fast' } else { 'tauri:build' }
-          "script=$script" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           $targetDir = if ($profile -eq 'fast') { 'fast' } else { 'release' }
           "target_dir=$targetDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Build Windows installer (Tauri)
-        run: npm run ${{ steps.build_profile.outputs.script }}
+        run: |
+          node scripts/tauri/prepare-backend-resources.js --install-prod
+          npx tauri build -- --profile ${{ steps.build_profile.outputs.value }}
 
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4

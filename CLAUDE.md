@@ -599,9 +599,9 @@ npm run tauri:dev
 
 # Tauri desktop builds
 npm run tauri:build           # Release build (slow, optimized, small binary — for distribution)
-npm run tauri:build:fast      # Fast build (3-5x faster — for local testing/iteration)
-# To build only one installer format (faster): append -- --bundles nsis  (or msi)
-# Example: npm run tauri:build:fast -- --bundles nsis
+npm run tauri:build:fast      # Fast build (~3-5x faster — for local testing/iteration)
+# Single installer format only (even faster):
+#   node scripts/tauri/prepare-backend-resources.js --install-prod && tauri build -b nsis -- --profile fast
 
 # Testing
 node --check server/index.js
