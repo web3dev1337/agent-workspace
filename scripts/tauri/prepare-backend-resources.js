@@ -51,8 +51,10 @@ function runNpm(args, opts) {
     run(process.execPath, [npmExecPath, ...args], opts);
     return;
   }
-  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  run(npmCmd, args, opts);
+  // On Windows, .cmd files require shell:true for spawnSync (EINVAL otherwise).
+  const isWin = process.platform === 'win32';
+  const npmCmd = isWin ? 'npm.cmd' : 'npm';
+  run(npmCmd, args, { ...(isWin ? { shell: true } : {}), ...opts });
 }
 
 function readJson(filePath) {
