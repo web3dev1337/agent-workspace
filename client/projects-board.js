@@ -78,6 +78,7 @@ class ProjectsBoardUI {
     modal.innerHTML = `
       <div class="modal-content">
         <div class="modal-header">
+          <button type="button" class="btn-secondary" id="projects-board-back" aria-label="Back" title="Back to dashboard" style="margin-right: 8px; padding: 4px 10px; font-size: 0.85rem;">← Back</button>
           <h3>Projects Board</h3>
           <button type="button" class="close-btn" id="projects-board-close" aria-label="Close">✕</button>
         </div>
@@ -97,6 +98,11 @@ class ProjectsBoardUI {
     document.body.appendChild(modal);
 
     modal.querySelector('#projects-board-close')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.hide();
+    });
+
+    modal.querySelector('#projects-board-back')?.addEventListener('click', (e) => {
       e.preventDefault();
       this.hide();
     });
