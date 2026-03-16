@@ -1865,6 +1865,14 @@ class ClaudeOrchestrator {
           return;
         }
 
+        const openProjectsBtn = e.target.closest('[data-sidebar-open-projects]');
+        if (openProjectsBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          document.querySelector('[data-ui-visibility="header.projects"]')?.click();
+          return;
+        }
+
         const shortcutBtn = e.target.closest('[data-sidebar-project-shortcut]');
         if (shortcutBtn) {
           e.preventDefault();
@@ -1924,9 +1932,15 @@ class ClaudeOrchestrator {
 	          const worktreeId = item.dataset.worktreeId;
 	          console.log(`Tab clicked: ${worktreeId}, Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}`);
 
-          // Ctrl+Click or Cmd+Click = solo mode (show only this worktree)
+          // Ctrl+Click or Cmd+Click = solo mode toggle (show only this worktree, or show all if already solo'd)
 	          if (e.ctrlKey || e.metaKey) {
-	            this.showOnlyWorktree(worktreeId);
+	            if (this._soloWorktreeId === worktreeId) {
+	              this._soloWorktreeId = null;
+	              this.showAllTerminals();
+	            } else {
+	              this._soloWorktreeId = worktreeId;
+	              this.showOnlyWorktree(worktreeId);
+	            }
 	          } else {
 	            // Normal click = toggle visibility
 	            this.toggleWorktreeVisibility(worktreeId);
@@ -4409,8 +4423,16 @@ class ClaudeOrchestrator {
       }
     }
 
+    // Sort worktrees by repository name, then worktree ID
+    const sortedWorktrees = [...worktrees.entries()].sort((a, b) => {
+      const repoA = (a[1].repositoryName || '').toLowerCase();
+      const repoB = (b[1].repositoryName || '').toLowerCase();
+      if (repoA !== repoB) return repoA.localeCompare(repoB);
+      return (a[1].worktreeId || '').localeCompare(b[1].worktreeId || '');
+    });
+
     // Create sidebar items
-    for (const [worktreeId, worktree] of worktrees) {
+    for (const [worktreeId, worktree] of sortedWorktrees) {
       // Check if worktree is active (has any session marked as active)
       const isActive = this.isWorktreeActive(worktreeId);
 
@@ -4428,7 +4450,7 @@ class ClaudeOrchestrator {
       // Only show visibility state, not activity state (activity filtering is handled separately)
       item.className = `worktree-item ${!isVisible ? 'hidden-terminal' : ''}`;
       item.dataset.worktreeId = worktree.id;
-      item.title = 'Click to toggle • Ctrl+Click to show only this worktree';
+      item.title = 'Click to toggle • Ctrl+Click to solo/unsolo this worktree';
 
       const rawBranch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
       const branchMeta = this.formatBranchLabel(rawBranch, { context: 'sidebar' });
@@ -4694,6 +4716,7 @@ class ClaudeOrchestrator {
             <span class="sidebar-project-shortcuts-count">${total}</span>
             <span class="sidebar-project-shortcuts-chevron">▾</span>
           </button>
+          <button type="button" class="sidebar-project-shortcuts-open" data-sidebar-open-projects="true" title="Open Projects view">↗</button>
           <div class="sidebar-project-shortcuts-body">
             ${renderGroup('Ship Next', shipNext)}
             ${renderGroup('Active', active)}
