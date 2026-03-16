@@ -96,9 +96,6 @@ class CommanderPanel {
           <option value="continue">Continue</option>
           <option value="resume">Resume</option>
         </select>
-        <button id="commander-sessions" class="commander-btn hidden" title="View sessions" data-ui-visibility="commander.sessions">
-          Sessions
-        </button>
         <button id="commander-advice" class="commander-btn" title="Show workflow advice" data-ui-visibility="commander.advice">
           Advice
         </button>
@@ -286,8 +283,6 @@ class CommanderPanel {
       }
     });
 
-    // Sessions button
-    document.getElementById('commander-sessions')?.addEventListener('click', () => this.showSessions());
     document.getElementById('commander-advice')?.addEventListener('click', () => this.toggleAdvice());
     document.getElementById('commander-advice-close')?.addEventListener('click', () => this.hideAdvice());
     document.getElementById('commander-advice-refresh')?.addEventListener('click', () => this.fetchAdvice({ force: true }));
