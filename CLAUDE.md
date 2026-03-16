@@ -597,12 +597,38 @@ const worktreeConfig = await workspaceManager.getCascadedConfigForWorktree(
 npm run dev
 npm run tauri:dev
 
+# Tauri desktop builds
+npm run tauri:build           # Release build (slow, optimized, small binary — for distribution)
+npm run tauri:build:fast      # Fast build (~3-5x faster — for local testing/iteration)
+# Single installer format only (even faster):
+#   node scripts/tauri/prepare-backend-resources.js --install-prod && tauri build -b nsis -- --profile fast
+
 # Testing
 node --check server/index.js
 
 # Workspace migration (if needed)
 node scripts/migrate-to-workspaces.js
 ```
+
+### Tauri Build Profiles
+- **`release`** (default `tauri:build`): `lto=true`, `codegen-units=1`, `opt-level="s"` — smallest binary, slowest compile. Use for distribution/CI.
+- **`fast`** (`tauri:build:fast`): `lto=false`, `codegen-units=256`, `incremental=true` — ~3-5x faster compile. Use for local dev/testing.
+
+### Local Tauri Build Prerequisites
+```bash
+# 1. Rust (no sudo)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source "$HOME/.cargo/env"
+
+# 2. System libs (Ubuntu 24.04+ / WSL)
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libayatana-appindicator3-dev
+# Ubuntu 22.04: use libwebkit2gtk-4.0-dev instead of 4.1
+
+# 3. Build
+npm run tauri:build:fast
+# WSL: AppImage fails (no FUSE) — use deb-only instead:
+#   npx tauri build -b deb -- --profile fast
+```
+First build ~43s, rebuilds ~2-3s (incremental). Needs ~3-5 GB disk.
 
 ## Performance Considerations
 - Native app provides 10-20x faster startup vs browser

@@ -302,7 +302,9 @@ src-tauri/src/lib.rs               - Tauri application library
 ### Configuration Files
 ```
 src-tauri/tauri.conf.json          - Tauri app configuration
-src-tauri/Cargo.toml               - Rust dependencies
+src-tauri/Cargo.toml               - Rust dependencies + build profiles (release, fast)
+├─ profile.release: lto=true, codegen-units=1, opt-level="s" — smallest binary, slow compile (CI/distribution)
+└─ profile.fast: lto=false, codegen-units=256, incremental — ~3-5x faster compile (local dev/testing)
 config.json                        - Shared application configuration
 package.json                       - Node.js dependencies and scripts
 
@@ -432,11 +434,44 @@ ENABLE_FILE_WATCHING=true
 
 ## Development Workflow
 
+### Local Tauri Build Prerequisites
+
+**1. Rust toolchain** (no sudo needed):
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+```
+
+**2. System libraries** (Ubuntu/WSL — needs sudo):
+```bash
+# Ubuntu 24.04+
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+# Ubuntu 22.04 and earlier
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+```
+
+**3. Node.js dependencies** (already handled by `npm install`):
+```bash
+npm install   # installs Tauri CLI as devDependency
+```
+
+**3a. WSL extra** (AppImage bundling fails in WSL due to missing FUSE — use `-b deb` to skip it):
+```bash
+sudo apt-get install -y libayatana-appindicator3-dev
+npx tauri build -b deb -- --profile fast   # skip AppImage, build .deb only
+```
+
+**Disk space**: First build downloads ~250 MB of Rust crates and needs ~3-5 GB for compilation artifacts.
+**First build**: ~43s (compiles all 550+ crates). **Rebuilds**: ~2-3s (incremental).
+
 ### Project Scripts
 ```
 npm run dev              - Start development server
 npm run dev:client       - Start client dev server
 npm run tauri:dev        - Start native app development
+npm run tauri:build      - Release build (slow, optimized — for distribution)
+npm run tauri:build:fast - Fast build (~3-5x faster — for local testing)
 npm run dev:all          - Start all services concurrently
 
 # Diff viewer specific
