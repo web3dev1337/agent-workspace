@@ -1484,7 +1484,7 @@ class ClaudeOrchestrator {
       });
 
       this.socket.on('claude-update-required', (updateInfo) => {
-        console.log('Claude update info (banner disabled):', updateInfo);
+        this.showClaudeUpdateRequired(updateInfo);
       });
 
       this.socket.on('user-settings-updated', (settings) => {
@@ -1869,7 +1869,7 @@ class ClaudeOrchestrator {
         if (openProjectsBtn) {
           e.preventDefault();
           e.stopPropagation();
-          document.querySelector('[data-ui-visibility="header.projects"]')?.click();
+          document.querySelector('[data-ui-visibility="header.projectsBoard"]')?.click();
           return;
         }
 
@@ -31304,11 +31304,11 @@ class ClaudeOrchestrator {
   }
 
   applyQuickRepoSearchFilter(modal, term) {
-    modal.querySelectorAll('.quick-repo-row').forEach(row => {
+    modal.querySelectorAll('.quick-repo-row, .quick-repo-remote').forEach(row => {
       const name = row.dataset.repoName || '';
       const path = row.dataset.repoPath || '';
       const matches = name.includes(term) || path.includes(term);
-      row.style.display = matches ? 'flex' : 'none';
+      row.style.display = matches ? '' : 'none';
     });
 
     // Hide empty groups/subgroups after filtering
@@ -31322,6 +31322,17 @@ class ClaudeOrchestrator {
       const anyVisible = Array.from(cat.querySelectorAll('.quick-repo-row'))
         .some(row => row.style.display !== 'none');
       cat.style.display = anyVisible ? '' : 'none';
+    });
+
+    // Hide remote repos section divider when all remote repos are filtered out
+    modal.querySelectorAll('.quick-repo-section-divider').forEach(divider => {
+      let next = divider.nextElementSibling;
+      let anyVisible = false;
+      while (next && next.classList.contains('quick-repo-remote')) {
+        if (next.style.display !== 'none') anyVisible = true;
+        next = next.nextElementSibling;
+      }
+      divider.style.display = anyVisible ? '' : 'none';
     });
   }
 
