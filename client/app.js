@@ -22312,12 +22312,61 @@ class ClaudeOrchestrator {
     const showConfigHint = (providerLabel = 'Trello') => {
       cardsEl.innerHTML = `
         <div class="tasks-config-hint">
-          <div class="tasks-config-title">${providerLabel} not configured</div>
+          <div class="tasks-config-title">Connect ${providerLabel}</div>
           <div class="tasks-config-text">
-            Set <code>TRELLO_API_KEY</code> and <code>TRELLO_TOKEN</code> in your environment (or create <code>~/.trello-credentials</code> with <code>API_KEY=...</code> and <code>TOKEN=...</code>).
+            <p>Enter your Trello API key and token to get started. Your credentials are saved locally and never sent to our servers.</p>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+              Get your API key at <a href="https://trello.com/power-ups/admin" target="_blank" rel="noopener">trello.com/power-ups/admin</a>,
+              then generate a token from the key page.
+            </p>
+          </div>
+          <div class="tasks-config-form" style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px; max-width: 450px;">
+            <input type="text" id="tasks-trello-key" class="search-input" placeholder="API Key" autocomplete="off" spellcheck="false" />
+            <input type="text" id="tasks-trello-token" class="search-input" placeholder="Token" autocomplete="off" spellcheck="false" />
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="btn-primary" id="tasks-trello-save" type="button">Connect</button>
+              <span id="tasks-trello-status" style="font-size: 0.8rem;"></span>
+            </div>
           </div>
         </div>
       `;
+
+      const saveBtn = cardsEl.querySelector('#tasks-trello-save');
+      const statusEl = cardsEl.querySelector('#tasks-trello-status');
+      saveBtn?.addEventListener('click', async () => {
+        const apiKey = cardsEl.querySelector('#tasks-trello-key')?.value?.trim();
+        const token = cardsEl.querySelector('#tasks-trello-token')?.value?.trim();
+        if (!apiKey || !token) {
+          statusEl.textContent = 'Both fields are required.';
+          statusEl.style.color = 'var(--warning-color, #d29922)';
+          return;
+        }
+        saveBtn.disabled = true;
+        statusEl.textContent = 'Connecting...';
+        statusEl.style.color = 'var(--text-muted)';
+        try {
+          const res = await fetch('${serverUrl}/api/tasks/trello/credentials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey, token })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            statusEl.textContent = 'Connected! Loading boards...';
+            statusEl.style.color = 'var(--success-color, #3fb950)';
+            setTimeout(() => refreshAll({ force: true }), 500);
+          } else {
+            statusEl.textContent = data?.error || 'Failed to connect. Check your credentials.';
+            statusEl.style.color = 'var(--danger-color, #f85149)';
+            saveBtn.disabled = false;
+          }
+        } catch (err) {
+          statusEl.textContent = 'Connection error. Is the server running?';
+          statusEl.style.color = 'var(--danger-color, #f85149)';
+          saveBtn.disabled = false;
+        }
+      });
+
       renderDetail(null);
     };
 
