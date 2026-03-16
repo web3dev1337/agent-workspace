@@ -697,7 +697,7 @@ fn main() {
 
                         #[cfg(target_os = "windows")]
                         {
-                            cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
+                            cmd.creation_flags(CREATE_NO_WINDOW);
                         }
 
                         match cmd.spawn() {
