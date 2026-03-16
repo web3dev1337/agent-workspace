@@ -188,9 +188,10 @@ class ConfigDiscoveryService {
       const entries = await fs.readdir(frameworkPath);
 
       // Board game detection - check if this is a direct board game project
-      // Board games typically have a master/ subdirectory (worktree structure)
-      if (entries.includes('master')) {
-        const masterPath = path.join(frameworkPath, 'master');
+      // Board games typically have a master/ or main/ subdirectory (worktree structure)
+      const primaryDir = entries.includes('master') ? 'master' : entries.includes('main') ? 'main' : null;
+      if (primaryDir) {
+        const masterPath = path.join(frameworkPath, primaryDir);
         try {
           const masterStat = await fs.stat(masterPath);
           if (masterStat.isDirectory()) {
@@ -314,9 +315,11 @@ class ConfigDiscoveryService {
     // Try multiple locations for config file:
     // 1. gamePath/.orchestrator-config.json (flat structure)
     // 2. gamePath/master/.orchestrator-config.json (worktree structure)
+    // 3. gamePath/main/.orchestrator-config.json (worktree structure, main branch)
     const configPaths = [
       path.join(gamePath, '.orchestrator-config.json'),
-      path.join(gamePath, 'master', '.orchestrator-config.json')
+      path.join(gamePath, 'master', '.orchestrator-config.json'),
+      path.join(gamePath, 'main', '.orchestrator-config.json')
     ];
 
     let config = null;
