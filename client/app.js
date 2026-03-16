@@ -4131,7 +4131,7 @@ class ClaudeOrchestrator {
     const tierValue = tier ? String(tier) : '';
     return `
       <select class="tier-dropdown" data-session-id="${sessionId}" aria-label="Tier" title="Tier" onchange="window.orchestrator.setTierForSession('${sessionId}', this.value)">
-        <option value="" ${tierValue === '' ? 'selected' : ''}>T</option>
+        <option value="" ${tierValue === '' ? 'selected' : ''}>Tier</option>
         <option value="1" ${tierValue === '1' ? 'selected' : ''}>T1</option>
         <option value="2" ${tierValue === '2' ? 'selected' : ''}>T2</option>
         <option value="3" ${tierValue === '3' ? 'selected' : ''}>T3</option>
@@ -31015,10 +31015,10 @@ class ClaudeOrchestrator {
               <div class="quick-worktree-context">${quickWorkContext}</div>
             </div>
             <details class="quick-worktree-help">
-              <summary class="quick-worktree-help-btn" title="How Quick Work works" aria-label="How Quick Work works">?</summary>
+              <summary class="quick-worktree-help-btn" title="What do the buttons do?" aria-label="What do the buttons do?">?</summary>
               <div class="quick-worktree-help-popover">
-                <div><strong>Use</strong> starts a free worktree.</div>
-                <div><strong>Create</strong> makes the next numbered worktree. Managed worktrees start at <code>work9</code> by default.</div>
+                <div><strong>Use</strong> picks the next available worktree.</div>
+                <div><strong>Create</strong> creates a new numbered worktree. <strong>Choose...</strong> lets you pick which one.</div>
               </div>
             </details>
             <div class="quick-worktree-tabs" style="display: none;">
