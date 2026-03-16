@@ -895,6 +895,62 @@ a.btn-glow {
 
 .line.hidden { display: none; }
 
+/* How It Works */
+.how-it-works {
+  padding: 6vh max(5vw, 2rem);
+  text-align: center;
+}
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  max-width: 1100px;
+  margin: 3rem auto 0;
+}
+
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: left;
+  backdrop-filter: blur(20px);
+  transition: border-color 0.3s ease, transform 0.3s ease;
+}
+
+.step-card:hover {
+  border-color: var(--cyan);
+  transform: translateY(-4px);
+}
+
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--cyan), var(--blue-deep));
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.step-card h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 0.75rem;
+}
+
+.step-card p {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.65);
+}
+
 /* Install Section */
 .install-section {
   padding: 3vh max(5vw, 2rem) 4vh;
