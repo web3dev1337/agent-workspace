@@ -368,7 +368,7 @@ body {
 
 @media (min-width: 769px) {
   .sidebar {
-    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     will-change: width;
   }
 
@@ -605,6 +605,28 @@ body {
   background: var(--bg-secondary);
 }
 
+.sidebar-project-shortcuts-open {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  position: absolute;
+  right: 12px;
+  top: 8px;
+}
+
+.sidebar-project-shortcuts-open:hover {
+  color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.sidebar-project-shortcuts-section {
+  position: relative;
+}
+
 .sidebar-project-shortcuts-header:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
@@ -657,7 +679,7 @@ body {
 
 .sidebar-project-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
   gap: 6px;
 }
 
