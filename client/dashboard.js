@@ -4273,11 +4273,14 @@ class Dashboard {
         return;
       }
 
-      gridEl.innerHTML = data.ports.map(p => {
+      const knownTypes = new Set(['orchestrator', 'client', 'vite', 'react', 'node', 'game-server', 'flask', 'python', 'rails', 'diff-viewer']);
+      const appPorts = data.ports.filter(p => knownTypes.has(p.type) || p.project?.project);
+      const systemPorts = data.ports.filter(p => !knownTypes.has(p.type) && !p.project?.project);
+
+      const renderCard = (p) => {
         const context = p.project?.project
           ? `${p.project.project}${p.project.worktree ? ' • ' + p.project.worktree : ''}`
           : formatDashboardPathTail(p.cwd);
-
         return `
           <div class="port-dashboard-card ${p.type || ''}"
                onclick="window.open('${p.url}', '_blank')"
@@ -4290,7 +4293,18 @@ class Dashboard {
             <div class="port-card-port">:${p.port}</div>
           </div>
         `;
-      }).join('');
+      };
+
+      let html = '';
+      if (appPorts.length) {
+        html += `<div class="ports-group-label">Your Services</div>`;
+        html += appPorts.map(renderCard).join('');
+      }
+      if (systemPorts.length) {
+        html += `<div class="ports-group-label ports-group-system">Other Ports</div>`;
+        html += systemPorts.map(renderCard).join('');
+      }
+      gridEl.innerHTML = html;
 
     } catch (error) {
       console.error('Failed to load dashboard ports:', error);
