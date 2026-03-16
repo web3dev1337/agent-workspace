@@ -2880,14 +2880,14 @@ class ClaudeOrchestrator {
       this.updateSidebarToggleIcon();
 	      clearTimeout(resizeTimeout);
 	      resizeTimeout = setTimeout(() => {
-	        // Refit all visible terminals
-	        this.activeView.forEach(sessionId => {
+	        // Refit all terminals (not just activeView — covers newly started sessions)
+	        for (const sessionId of this.terminalManager.terminals.keys()) {
           this.terminalManager.fitTerminal(sessionId);
           const term = this.terminalManager.terminals.get(sessionId);
           if (term) {
             term.refresh(0, term.rows - 1);
           }
-        });
+        }
         this.updateControlsCollapse();
 	      }, 250);
 	    });
