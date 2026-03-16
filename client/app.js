@@ -31359,7 +31359,32 @@ class ClaudeOrchestrator {
         })
         .sort((a, b) => b.lastModifiedMs - a.lastModifiedMs);
 
-      if (!this.quickWorktreeReposRaw.length) {
+      // Also fetch remote GitHub repos to show uncloned ones
+      try {
+        const ghResponse = await fetch(`${serverUrl}/api/github/repos`);
+        if (ghResponse.ok) {
+          const ghRepos = await ghResponse.json();
+          const localNames = new Set(this.quickWorktreeReposRaw.map(r => (r.name || '').toLowerCase()));
+          const uncloned = (Array.isArray(ghRepos) ? ghRepos : [])
+            .filter(r => r.name && !localNames.has(r.name.toLowerCase()))
+            .map(r => ({
+              name: r.name,
+              path: r.nameWithOwner,
+              type: 'github-remote',
+              isRemote: true,
+              visibility: r.visibility || (r.isPrivate ? 'private' : 'public'),
+              nameWithOwner: r.nameWithOwner,
+              worktrees: [],
+              lastModifiedMs: 0
+            }));
+          this.quickWorktreeRemoteRepos = uncloned;
+        }
+      } catch (ghErr) {
+        // GitHub CLI not available — silently skip remote repos
+        this.quickWorktreeRemoteRepos = [];
+      }
+
+      if (!this.quickWorktreeReposRaw.length && !(this.quickWorktreeRemoteRepos || []).length) {
         listEl.innerHTML = '<div class="quick-empty">No repos found</div>';
         return;
       }
@@ -31417,7 +31442,30 @@ class ClaudeOrchestrator {
       return (b.lastModifiedMs || 0) - (a.lastModifiedMs || 0);
     });
 
-    listEl.innerHTML = this.renderQuickRepoList(sorted);
+    let html = this.renderQuickRepoList(sorted);
+
+    // Append remote GitHub repos not yet cloned
+    const remoteRepos = Array.isArray(this.quickWorktreeRemoteRepos) ? this.quickWorktreeRemoteRepos : [];
+    if (remoteRepos.length > 0) {
+      const searchTerm = (this.quickWorktreeSearchTerm || '').toLowerCase();
+      const matchingRemote = searchTerm
+        ? remoteRepos.filter(r => r.name.toLowerCase().includes(searchTerm))
+        : remoteRepos;
+      if (matchingRemote.length > 0) {
+        html += `<div class="quick-repo-section-divider">GitHub — Not Cloned (${matchingRemote.length})</div>`;
+        html += matchingRemote.map(r => `
+          <div class="quick-repo-card quick-repo-remote" data-repo-name="${this.escapeHtml(r.name)}">
+            <div class="quick-repo-header">
+              <span class="quick-repo-name">${this.escapeHtml(r.name)}</span>
+              <span class="quick-repo-remote-badge">${r.visibility === 'private' ? '🔒' : '🌐'}</span>
+            </div>
+            <div class="quick-repo-remote-owner">${this.escapeHtml(r.nameWithOwner || '')}</div>
+          </div>
+        `).join('');
+      }
+    }
+
+    listEl.innerHTML = html;
 
     // Re-apply search filter (if any)
     if (modal && this.quickWorktreeSearchTerm) {
