@@ -30987,7 +30987,7 @@ class ClaudeOrchestrator {
     }
     if (!this.quickWorktreeStartTier) {
       const tierFilter = Number(this.tierFilter);
-      this.quickWorktreeStartTier = (tierFilter >= 1 && tierFilter <= 4) ? String(tierFilter) : '2';
+      this.quickWorktreeStartTier = (tierFilter >= 1 && tierFilter <= 4) ? String(tierFilter) : '';
       localStorage.setItem('quick-worktree-start-tier', this.quickWorktreeStartTier);
     }
     if (!this.quickWorktreeFavorites) {
