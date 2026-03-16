@@ -28,7 +28,10 @@ const logger = winston.createLogger({
 
 // Commander runs from the orchestrator's own directory so it picks up CLAUDE.md
 // Override with COMMANDER_CWD env var if needed
-const COMMANDER_CWD = process.env.COMMANDER_CWD || path.resolve(__dirname, '..');
+// In packaged mode (__dirname is inside resources/backend/server), fall back to user's home
+const defaultCwd = path.resolve(__dirname, '..');
+const isPackaged = defaultCwd.includes('resources') && defaultCwd.includes('backend');
+const COMMANDER_CWD = process.env.COMMANDER_CWD || (isPackaged ? (process.env.HOME || process.env.USERPROFILE || defaultCwd) : defaultCwd);
 
 class CommanderService {
   constructor(options = {}) {
