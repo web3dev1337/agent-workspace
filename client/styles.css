@@ -11257,7 +11257,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
    ============================================ */
 
 .ports-modal .ports-content {
-  max-width: 1100px;
+  max-width: 90vw;
   width: 96vw;
   max-height: 92vh;
   display: flex;
@@ -11292,6 +11292,26 @@ body.dependency-onboarding-active #dependency-setup-modal {
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: var(--space-md);
   align-content: start;
+}
+
+.ports-group-label {
+  grid-column: 1 / -1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-primary);
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-top: var(--space-sm);
+}
+
+.ports-group-label:first-child {
+  margin-top: 0;
+}
+
+.ports-group-system {
+  color: var(--text-muted);
 }
 
 .port-item {
@@ -15116,8 +15136,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .ports-dashboard-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--space-sm);
   flex: 1;
   overflow-y: auto;

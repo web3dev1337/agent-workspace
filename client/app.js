@@ -30677,7 +30677,11 @@ class ClaudeOrchestrator {
         </div>
         <div class="ports-list">
           ${portsData.ports.length === 0 ? '<div class="no-ports">No services detected</div>' :
-            portsData.ports.map(p => `
+            (() => {
+              const knownTypes = new Set(['orchestrator', 'client', 'vite', 'react', 'node', 'game-server', 'flask', 'python', 'rails', 'diff-viewer']);
+              const appPorts = portsData.ports.filter(p => knownTypes.has(p.type) || p.project?.project);
+              const systemPorts = portsData.ports.filter(p => !knownTypes.has(p.type) && !p.project?.project);
+              const renderPort = (p) => `
               <div class="port-item ${p.type}" data-port="${p.port}">
                 <div class="port-card-header">
                   <div class="port-main">
@@ -30703,8 +30707,16 @@ class ClaudeOrchestrator {
                   </div>
                 </div>
                 <div class="port-process" title="${p.cwd || ''}">${p.processName || ''} • PID ${p.pid || '?'}</div>
-              </div>
-            `).join('')}
+              </div>`;
+              let html = '';
+              if (appPorts.length) {
+                html += '<div class="ports-group-label">Your Services</div>' + appPorts.map(renderPort).join('');
+              }
+              if (systemPorts.length) {
+                html += '<div class="ports-group-label ports-group-system">Other Ports</div>' + systemPorts.map(renderPort).join('');
+              }
+              return html;
+            })()}
         </div>
         <div class="ports-footer">
           <button class="btn-secondary" onclick="window.orchestrator.showPortsPanel()">
