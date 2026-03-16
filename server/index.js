@@ -2834,9 +2834,13 @@ async function ensureWorkspaceMixedWorktree({
     error.statusCode = 400;
     throw error;
   }
-  const masterPath = path.join(repoPath, 'master');
+  // Support both master/ and main/ directory conventions
+  let masterPath = path.join(repoPath, 'master');
   if (!fs.existsSync(masterPath)) {
-    const error = new Error(`Repository root is missing master directory: ${masterPath}`);
+    masterPath = path.join(repoPath, 'main');
+  }
+  if (!fs.existsSync(masterPath)) {
+    const error = new Error(`Repository root is missing master/main directory: ${repoPath}. Clone your repo into a master/ or main/ subdirectory first.`);
     error.statusCode = 400;
     throw error;
   }
@@ -2920,6 +2924,7 @@ async function ensureWorkspaceMixedWorktree({
         || normalized.includes('master directory not found')
         || normalized.includes('neither master nor main branch found')
         || normalized.includes('repository root is missing master directory')
+        || normalized.includes('repository root is missing master/main directory')
         || normalized.includes('already exists')
         || normalized.includes('already checked out')
         || normalized.includes('invalid workspace config')

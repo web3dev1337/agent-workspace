@@ -20,6 +20,22 @@ const logger = winston.createLogger({
 class WorktreeHelper {
   constructor() {}
 
+  /**
+   * Detect the primary directory for a repo — supports both 'master' and 'main' naming.
+   * Returns the first existing directory path, or falls back to 'master'.
+   */
+  async resolvePrimaryDir(repoPath) {
+    for (const dir of ['master', 'main']) {
+      const candidate = path.join(repoPath, dir);
+      try {
+        await fs.access(candidate);
+        return candidate;
+      } catch { /* continue */ }
+    }
+    // Fall back to 'master' (will fail later with a clear error)
+    return path.join(repoPath, 'master');
+  }
+
   async resolvePreferredBaseBranch(masterPath, preferredBranch = 'master') {
     const preferred = String(preferredBranch || '').trim() || 'master';
     const candidates = preferred === 'master'
@@ -45,7 +61,7 @@ class WorktreeHelper {
     const total = Math.max(0, Number(count) || 0);
     if (total === 0) return [];
 
-    const masterPath = path.join(root, 'master');
+    const masterPath = await this.resolvePrimaryDir(root);
     await fs.access(masterPath);
 
     const resolvedBaseBranch = await this.resolvePreferredBaseBranch(masterPath, baseBranch);
@@ -67,7 +83,7 @@ class WorktreeHelper {
     const { repository, worktrees: worktreeConfig } = workspace;
     const worktreeName = worktreeConfig.namingPattern.replace('{n}', worktreeId.replace('work', ''));
     const worktreePath = path.join(repository.path, worktreeName);
-    const masterPath = path.join(repository.path, 'master');
+    const masterPath = await this.resolvePrimaryDir(repository.path);
 
     try {
       // Check if worktree already exists
@@ -83,7 +99,7 @@ class WorktreeHelper {
       try {
         await fs.access(masterPath);
       } catch (error) {
-        throw new Error(`Master directory not found: ${masterPath}. Cannot create worktree.`);
+        throw new Error(`Repository root is missing master/main directory: ${masterPath}. Create the primary worktree first (git clone into master/ or main/).`);
       }
 
       // Auto-detect the actual default branch
@@ -145,7 +161,7 @@ class WorktreeHelper {
     const { repository, worktrees: worktreeConfig } = workspace;
     const worktreeName = worktreeConfig.namingPattern.replace('{n}', worktreeId.replace('work', ''));
     const worktreePath = path.join(repository.path, worktreeName);
-    const masterPath = path.join(repository.path, 'master');
+    const masterPath = await this.resolvePrimaryDir(repository.path);
 
     try {
       // Check if worktree exists
@@ -175,7 +191,7 @@ class WorktreeHelper {
 
   async listWorktrees(workspace) {
     const { repository } = workspace;
-    const masterPath = path.join(repository.path, 'master');
+    const masterPath = await this.resolvePrimaryDir(repository.path);
 
     try {
       const command = 'git worktree list';
