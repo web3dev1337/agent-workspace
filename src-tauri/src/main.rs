@@ -228,6 +228,20 @@ fn bundled_resource_roots(app: &tauri::AppHandle) -> Vec<std::path::PathBuf> {
     bundled_resource_roots_from_paths(resource_dir, exe_dir)
 }
 
+/// Strip the `\\?\` extended-length prefix that Tauri's resource_dir() adds
+/// on Windows. Node.js cannot resolve modules when __dirname starts with this
+/// prefix, so we must remove it before passing paths to Node.
+fn strip_unc_prefix(p: std::path::PathBuf) -> std::path::PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        let s = p.to_string_lossy();
+        if let Some(stripped) = s.strip_prefix("\\\\?\\") {
+            return std::path::PathBuf::from(stripped);
+        }
+    }
+    p
+}
+
 fn resolve_node_command(app: &tauri::AppHandle) -> std::ffi::OsString {
     for root in bundled_resource_roots(app) {
         let candidates = if cfg!(target_os = "windows") {
@@ -248,7 +262,7 @@ fn resolve_node_command(app: &tauri::AppHandle) -> std::ffi::OsString {
 
         for candidate in candidates {
             if candidate.exists() {
-                return candidate.into_os_string();
+                return strip_unc_prefix(candidate).into_os_string();
             }
         }
     }
@@ -271,7 +285,7 @@ fn resolve_server_entry(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
         ];
         for candidate in candidates {
             if candidate.exists() {
-                return Some(candidate);
+                return Some(strip_unc_prefix(candidate));
             }
         }
     }
