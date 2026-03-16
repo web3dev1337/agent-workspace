@@ -126,6 +126,9 @@ class Dashboard {
       this.loadDashboardPorts();
     }
 
+    // Load GitHub status
+    this.loadGitHubStatus();
+
     // Load process status/telemetry/advice summaries
     if (visibility.processSection !== false) {
       this.loadDashboardProcessSummary();
@@ -374,6 +377,12 @@ class Dashboard {
           </div>
           <div class="dashboard-content-right">
             ${quickLinksSection}
+            <div class="dashboard-bento-card" id="github-status-card" style="display:none">
+              <div class="dashboard-bento-header">
+                🐙 <span class="dashboard-bento-title">GitHub</span>
+              </div>
+              <div id="github-status-content" style="padding: 8px 12px; font-size: 0.85rem;"></div>
+            </div>
             ${runningServicesSection}
           </div>
         </div>
@@ -4309,6 +4318,44 @@ class Dashboard {
     } catch (error) {
       console.error('Failed to load dashboard ports:', error);
       gridEl.innerHTML = '<div class="ports-empty">Failed to load services</div>';
+    }
+  }
+
+  async loadGitHubStatus() {
+    const card = document.getElementById('github-status-card');
+    const content = document.getElementById('github-status-content');
+    if (!card || !content) return;
+
+    try {
+      const serverUrl = window.location.origin;
+      const res = await fetch(`${serverUrl}/api/github/status`);
+      const data = await res.json();
+
+      card.style.display = '';
+
+      if (data.authenticated) {
+        content.innerHTML = `
+          <div style="color: var(--success-color, #3fb950);">Connected</div>
+          <div style="color: var(--text-muted); margin-top: 2px;">Signed in as <strong>${data.user || 'unknown'}</strong></div>
+        `;
+      } else if (!data.ghInstalled) {
+        content.innerHTML = `
+          <div style="color: var(--warning-color, #d29922);">GitHub CLI not installed</div>
+          <div style="color: var(--text-muted); margin-top: 2px;">
+            Install <a href="https://cli.github.com" target="_blank" rel="noopener">GitHub CLI</a> to enable repo discovery and PR features.
+          </div>
+        `;
+      } else {
+        content.innerHTML = `
+          <div style="color: var(--warning-color, #d29922);">Not authenticated</div>
+          <div style="color: var(--text-muted); margin-top: 2px;">
+            Run <code>gh auth login</code> in a terminal to connect your GitHub account.
+          </div>
+        `;
+      }
+    } catch {
+      // Silently skip if API unavailable
+      card.style.display = 'none';
     }
   }
 

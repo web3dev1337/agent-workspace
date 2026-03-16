@@ -5236,6 +5236,26 @@ app.post('/api/worktree-conflicts', async (req, res) => {
 // GitHub API
 // ============================================
 
+app.get('/api/github/status', async (req, res) => {
+  try {
+    const { execFile } = require('child_process');
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+    const ghCmd = process.platform === 'win32' ? 'gh.exe' : 'gh';
+    const { stdout } = await execFileAsync(ghCmd, ['auth', 'status', '--hostname', 'github.com'], {
+      timeout: 5000,
+      ...getHiddenProcessOptions({ env: augmentProcessEnv(process.env) })
+    });
+    const userMatch = stdout.match(/Logged in to github\.com.*account\s+(\S+)/i)
+      || stdout.match(/account:\s*(\S+)/i);
+    res.json({ authenticated: true, user: userMatch?.[1] || null, ghInstalled: true });
+  } catch (error) {
+    const message = String(error?.message || error?.stderr || '');
+    const notInstalled = message.includes('ENOENT') || message.includes('not found');
+    res.json({ authenticated: false, user: null, ghInstalled: !notInstalled, error: notInstalled ? 'GitHub CLI not installed' : 'Not authenticated' });
+  }
+});
+
 app.get('/api/github/repos', async (req, res) => {
   try {
     const owner = typeof req.query.owner === 'string' ? req.query.owner.trim() : '';
