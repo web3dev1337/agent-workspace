@@ -341,7 +341,7 @@ class ProjectsBoardUI {
         <div class="projects-board-card ${isLive ? 'is-live' : ''}" draggable="true" data-project-key="${key}" data-project-type="${type}" title="${path}">
           <div class="projects-board-card-top">
             <div class="projects-board-card-title">${icon} ${name}</div>
-            <button type="button" class="projects-board-card-live ${isLive ? 'is-on' : ''}" data-no-drag="true" data-live-toggle="${key}" aria-label="Toggle live tag" aria-pressed="${isLive ? 'true' : 'false'}">★</button>
+            <button type="button" class="projects-board-card-live ${isLive ? 'is-on' : ''}" data-no-drag="true" data-live-toggle="${key}" aria-label="Toggle shipped" title="Shipped" aria-pressed="${isLive ? 'true' : 'false'}">★</button>
           </div>
           <div class="projects-board-card-subtitle">${escapeHtml(subtitle)}</div>
         </div>

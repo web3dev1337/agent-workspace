@@ -1484,7 +1484,7 @@ class ClaudeOrchestrator {
       });
 
       this.socket.on('claude-update-required', (updateInfo) => {
-        this.showClaudeUpdateRequired(updateInfo);
+        console.log('Claude update info (banner disabled):', updateInfo);
       });
 
       this.socket.on('user-settings-updated', (settings) => {
