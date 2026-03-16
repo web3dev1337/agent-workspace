@@ -341,9 +341,12 @@ class TerminalManager {
       // Add id/name to xterm textarea for accessibility/linting
       this.setTerminalInputAttributes(sessionId, terminalElement);
 
-      // Fit terminal after opening
+      // Fit terminal after opening — multiple passes to handle renderer init timing
       requestAnimationFrame(() => {
         this.fitTerminal(sessionId);
+        // Delayed refit catches cases where xterm renderer hasn't measured char dimensions yet
+        setTimeout(() => this.fitTerminal(sessionId), 300);
+        setTimeout(() => this.fitTerminal(sessionId), 1000);
       });
     });
     
