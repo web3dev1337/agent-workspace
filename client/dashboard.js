@@ -332,7 +332,7 @@ class Dashboard {
 
     const allSection = (visibility.workspacesAll !== false) ? `
       <div class="dashboard-bento-section">
-        <h2 class="dashboard-section-title">All Workspaces</h2>
+        <h2 class="dashboard-section-title">Inactive Workspaces</h2>
         <div class="workspace-grid bento-workspace-grid">
           ${inactiveWorkspaces.map(ws => this.generateWorkspaceCard(ws, false)).join('')}
         </div>
@@ -733,7 +733,7 @@ class Dashboard {
 	                  <span class="dashboard-project-tile-name">${escapeHtml(name)}</span>
 	                  <span class="dashboard-project-tile-subtitle">${escapeHtml(subtitle)}</span>
 	                </span>
-	                ${isLive ? `<span class="dashboard-project-tile-live" title="Live">★</span>` : ''}
+	                ${isLive ? `<span class="dashboard-project-tile-live" title="Shipped">★</span>` : ''}
 	              </button>
 	            `;
 	          };
