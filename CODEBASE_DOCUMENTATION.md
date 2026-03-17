@@ -432,6 +432,7 @@ PORT=3001
 LOG_LEVEL=info
 NODE_ENV=development
 ENABLE_FILE_WATCHING=true
+WORKSPACE_SCAN_MAX_DEPTH=6        # optional, clamp 1-12 for /api/workspaces/scan-repos depth
 ```
 
 ## Development Workflow

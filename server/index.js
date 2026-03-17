@@ -1992,6 +1992,10 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
     logger.info('Starting repository scan...');
     const fs = require('fs').promises;
     const path = require('path');
+    const scanDepthRaw = Number.parseInt(String(process.env.WORKSPACE_SCAN_MAX_DEPTH || '').trim(), 10);
+    const scanMaxDepth = Number.isFinite(scanDepthRaw)
+      ? Math.min(Math.max(scanDepthRaw, 1), 12)
+      : 6;
 
     const projects = [];
     const projectIndexByKey = new Map();
@@ -1999,7 +2003,7 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
     const gitHubPath = path.join(require('os').homedir(), 'GitHub');
 
     // Deep scan function
-    async function scanDirectory(dirPath, depth = 0, maxDepth = 4) {
+    async function scanDirectory(dirPath, depth = 0, maxDepth = scanMaxDepth) {
       if (depth > maxDepth) return;
 
       try {
@@ -2279,7 +2283,7 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
       return a.name.localeCompare(b.name);
     });
 
-    logger.info(`Found ${projects.length} projects across ${new Set(projects.map(p => p.category)).size} categories`);
+    logger.info(`Found ${projects.length} projects across ${new Set(projects.map(p => p.category)).size} categories`, { scanMaxDepth });
     res.json(projects);
   } catch (error) {
     logger.error('Failed to scan repositories', { error: error.message, stack: error.stack });
