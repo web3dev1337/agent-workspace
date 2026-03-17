@@ -83,7 +83,7 @@
         <div class="glass-panel main-ui">
           <div class="panel-header">
             <div class="traffic-lights"><i></i><i></i><i></i></div>
-            <div class="address-bar">agent-workspace://local</div>
+            <div class="address-bar">workspace://local/orchestrator</div>
           </div>
           <div class="panel-body">
             <img src="assets/orchestrator-ui.png" alt="Agent Workspace UI" class="ui-img">
@@ -142,27 +142,6 @@
             </div>
             <span class="card-name text-cyan">Any CLI Agent</span>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="how-it-works reveal" id="how-it-works">
-      <h2 class="section-title">How it works</h2>
-      <div class="steps-grid">
-        <div class="step-card">
-          <div class="step-number">1</div>
-          <h3>Add your repos</h3>
-          <p>Point Agent Workspace at your GitHub folder. It auto-detects your projects, branches, and worktrees. Supports any repo structure &mdash; monorepos, multi-repo setups, or solo projects.</p>
-        </div>
-        <div class="step-card">
-          <div class="step-number">2</div>
-          <h3>Launch agents</h3>
-          <p>Start Claude, Codex, or any CLI agent in any worktree with one click. Each agent gets its own terminal with full shell access. Run as many as your plan allows &mdash; in parallel.</p>
-        </div>
-        <div class="step-card">
-          <div class="step-number">3</div>
-          <h3>Review &amp; ship</h3>
-          <p>When agents finish, review their PRs with the built-in diff viewer. Merge or re-prompt &mdash; without leaving the workspace. The tier system lets you prioritize what to review first.</p>
         </div>
       </div>
     </section>
@@ -242,15 +221,15 @@
       <div class="bento-item span-2 reveal">
         <div class="bento-inner">
           <h3 class="bento-title">Bring Your Own Plan</h3>
-          <p class="bento-desc">Already paying for Claude Max or Codex? Use those same plans here &mdash; Agent Workspace just wraps your CLI tools. No extra subscription, no API key middleman. Log in once, run everywhere.</p>
+          <p class="bento-desc">Works with your Claude Max subscription, Codex plan, or your own API keys. Use your existing CLI logins &mdash; your credentials never leave your machine.</p>
           <img src="assets/mockup-byop.svg" alt="API keys stored locally" class="bento-mockup">
         </div>
       </div>
 
       <div class="bento-item reveal" style="--delay: 0.1s">
         <div class="bento-inner glass-dark">
-          <h3 class="bento-title text-cyan">100% Local</h3>
-          <p class="bento-desc">Everything runs on your machine. No cloud relay, no usage tracking, no phone-home analytics. Your code stays on your hardware. Period.</p>
+          <h3 class="bento-title text-cyan">Runs Locally</h3>
+          <p class="bento-desc">Runs on your own hardware. Access through the desktop app or the browser. Zero external telemetry, zero data collection.</p>
           <div class="bento-icon">🔒</div>
         </div>
       </div>
@@ -258,16 +237,16 @@
       <!-- Row 2: Native Terminals + Workspaces + Diff Viewer -->
       <div class="bento-item reveal" style="--delay: 0.15s">
         <div class="bento-inner glass-dark">
-          <h3 class="bento-title text-blue-deep">Real Terminals</h3>
-          <p class="bento-desc">Each agent runs in a real PTY session &mdash; not a sandboxed wrapper. Your CLI tools behave exactly like they do in your own terminal. When Claude Code or Codex updates, nothing breaks.</p>
+          <h3 class="bento-title text-blue-deep">Native Terminals</h3>
+          <p class="bento-desc">Uses real terminal sessions under the hood &mdash; not a wrapper, not an emulator. CLI tools run exactly as they would in your own shell. Low chance of breakage across versions.</p>
           <div class="bento-icon">⚡</div>
         </div>
       </div>
 
       <div class="bento-item reveal" style="--delay: 0.2s">
         <div class="bento-inner glass-dark">
-          <h3 class="bento-title">Workspaces &amp; Worktrees</h3>
-          <p class="bento-desc">Group your repos into workspaces. Each repo gets multiple git worktrees so agents can work on different branches simultaneously without stepping on each other.</p>
+          <h3 class="bento-title">Workspaces & Worktrees</h3>
+          <p class="bento-desc">Group git repositories into workspaces. Each workspace supports multiple worktrees running side by side &mdash; different branches, different repos, same view.</p>
           <div class="folder-stack">
             <div class="folder"></div><div class="folder"></div><div class="folder"></div>
           </div>
@@ -276,8 +255,8 @@
 
       <div class="bento-item reveal" style="--delay: 0.25s">
         <div class="bento-inner glass-dark">
-          <h3 class="bento-title text-cyan">Built-in Code Review</h3>
-          <p class="bento-desc">See every PR your agents create with file tree, side-by-side diff, and commit history. Merge or send back with feedback &mdash; all without leaving the workspace.</p>
+          <h3 class="bento-title text-cyan">Built-in Diff Viewer</h3>
+          <p class="bento-desc">Quick access to pull requests with a full inbuilt code review tool. Review diffs without leaving your workspace.</p>
           <img src="assets/mockup-diffviewer.svg" alt="Diff viewer" class="bento-mockup">
         </div>
       </div>
@@ -286,7 +265,7 @@
       <div class="bento-item span-2 reveal" style="--delay: 0.1s">
         <div class="bento-inner">
           <h3 class="bento-title">Commander</h3>
-          <p class="bento-desc">A dedicated AI terminal that can see and control all your other agents. Tell Commander to "launch 5 Codexes on my Trello backlog" and it will create worktrees, start agents, send prompts, and track progress &mdash; all automatically.</p>
+          <p class="bento-desc">A top-level AI (usually Claude, but configurable) that controls the interface. It can send commands to any terminal, launch agents, pull tasks from your task board &mdash; hands-free automation from a single prompt.</p>
           <img src="assets/mockup-commander.svg" alt="Commander launching agents" class="bento-mockup">
         </div>
       </div>
@@ -294,7 +273,7 @@
       <div class="bento-item reveal" style="--delay: 0.2s">
         <div class="bento-inner glass-dark">
           <h3 class="bento-title text-blue-deep">Task Integration</h3>
-          <p class="bento-desc">Connect your Trello board and launch agents directly from task cards. Cards become prompts &mdash; agents work the ticket, create PRs, and you review. GitHub Issues and Linear coming soon.</p>
+          <p class="bento-desc">Pull tasks from Trello and/or use local task records. GitHub Issues and Linear coming soon.</p>
           <div class="bento-icon">✅</div>
         </div>
       </div>
@@ -303,15 +282,15 @@
       <div class="bento-item reveal" style="--delay: 0.15s">
         <div class="bento-inner glass-dark">
           <h3 class="bento-title">Tier System</h3>
-          <p class="bento-desc">Tag agents by priority so you know what needs attention. T1 Focus &mdash; you're actively watching. T2 Review &mdash; ready for your eyes. T3 Background &mdash; batch-prompted, check later. T4 Overnight &mdash; let it cook. Filter the view to see only what matters right now.</p>
+          <p class="bento-desc">Organize sessions by priority. T1 Focus for active deep work, T2 Backup runs alongside or when T1 is blocked, T3 Background for batch prompt and batch review, T4 Overnight for long-running autonomous tasks. Hide and show as needed.</p>
           <img src="assets/mockup-tiers.svg" alt="Tier system T1-T4" class="bento-mockup">
         </div>
       </div>
 
       <div class="bento-item span-2 reveal" style="--delay: 0.2s">
         <div class="bento-inner">
-          <h3 class="bento-title">Built by Daily Use</h3>
-          <p class="bento-desc">This isn't a demo project. Agent Workspace has been used every day since July 2025 to ship real production code across multiple games, tools, and websites &mdash; including building itself. 9 months of daily refinement.</p>
+          <h3 class="bento-title">Shipped With <span class="text-cyan">Agent Workspace</span></h3>
+          <p class="bento-desc">Built in July 2025 and used every day since. Refined over 8 months of daily use &mdash; 100% of our code has been shipped using <span class="text-cyan">Agent Workspace</span>.</p>
           <div class="visual-placeholder network-anim">
             <div class="dot d1"></div><div class="dot d2"></div><div class="dot d3"></div>
             <svg class="lines"><path d="M20,50 Q50,20 80,50 T140,50" /></svg>
