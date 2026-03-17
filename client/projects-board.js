@@ -146,11 +146,6 @@ class ProjectsBoardUI {
 
     const columnsEl = modal.querySelector('#projects-board-columns');
     if (columnsEl) {
-      columnsEl.addEventListener('dragstart', (e) => this.onDragStart(e));
-      columnsEl.addEventListener('dragend', (e) => this.onDragEnd(e));
-      columnsEl.addEventListener('dragover', (e) => this.onDragOver(e));
-      columnsEl.addEventListener('dragleave', (e) => this.onDragLeave(e));
-      columnsEl.addEventListener('drop', (e) => this.onDrop(e));
       columnsEl.addEventListener('click', (e) => this.onClick(e));
     }
   }
@@ -372,7 +367,24 @@ class ProjectsBoardUI {
       `;
     }).join('');
 
+    this.bindDragHandlers(columnsEl);
     this.applyWrapExpandColumns();
+  }
+
+  bindDragHandlers(columnsEl) {
+    if (!columnsEl) return;
+
+    columnsEl.querySelectorAll('.projects-board-card').forEach((card) => {
+      card.addEventListener('dragstart', (e) => this.onDragStart(e));
+      card.addEventListener('dragend', (e) => this.onDragEnd(e));
+    });
+
+    columnsEl.querySelectorAll('.projects-board-column').forEach((target) => {
+      target.addEventListener('dragenter', (e) => this.onDragEnter(e));
+      target.addEventListener('dragover', (e) => this.onDragOver(e));
+      target.addEventListener('dragleave', (e) => this.onDragLeave(e));
+      target.addEventListener('drop', (e) => this.onDrop(e));
+    });
   }
 
   ensureWrapExpandHandler() {
@@ -508,6 +520,14 @@ class ProjectsBoardUI {
   }
 
   getColumnFromDragEvent(event) {
+    const currentTarget = event.currentTarget;
+    if (currentTarget?.classList?.contains?.('projects-board-column')) {
+      return currentTarget;
+    }
+
+    const currentTargetColumn = currentTarget?.closest?.('.projects-board-column');
+    if (currentTargetColumn) return currentTargetColumn;
+
     const direct = event.target?.closest?.('.projects-board-column');
     if (direct) return direct;
 
@@ -634,7 +654,17 @@ class ProjectsBoardUI {
     card.classList.add('dragging');
     try {
       event.dataTransfer?.setData?.('text/plain', key);
+      event.dataTransfer?.setData?.('text', key);
       event.dataTransfer.effectAllowed = 'move';
+    } catch {}
+  }
+
+  onDragEnter(event) {
+    const col = this.getColumnFromDragEvent(event);
+    if (!col || !this.dragProjectKey) return;
+    event.preventDefault();
+    try {
+      event.dataTransfer.dropEffect = 'move';
     } catch {}
   }
 
@@ -690,7 +720,7 @@ class ProjectsBoardUI {
   }
 
   onDragLeave(event) {
-    const col = event.target?.closest?.('.projects-board-column');
+    const col = this.getColumnFromDragEvent(event);
     if (!col) return;
     const related = event.relatedTarget && col.contains(event.relatedTarget);
     if (related) return;
