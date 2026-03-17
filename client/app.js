@@ -4755,15 +4755,23 @@ class ClaudeOrchestrator {
 
       container.innerHTML = `
         <div class="sidebar-project-shortcuts-section ${collapsed ? 'is-collapsed' : ''}">
-          <button type="button"
-                  class="sidebar-project-shortcuts-header"
-                  data-sidebar-project-shortcuts-toggle="true"
-                  aria-expanded="${collapsed ? 'false' : 'true'}">
-            <span class="sidebar-project-shortcuts-title">Projects</span>
-            <span class="sidebar-project-shortcuts-count">${total}</span>
-            <span class="sidebar-project-shortcuts-chevron">▾</span>
-          </button>
-          <button type="button" class="sidebar-project-shortcuts-open" data-sidebar-open-projects="true" title="Open Projects view">↗</button>
+          <div class="sidebar-project-shortcuts-header-row">
+            <button type="button"
+                    class="sidebar-project-shortcuts-header"
+                    data-sidebar-project-shortcuts-toggle="true"
+                    aria-expanded="${collapsed ? 'false' : 'true'}">
+              <span class="sidebar-project-shortcuts-title">Projects</span>
+            </button>
+            <button type="button" class="sidebar-project-shortcuts-open" data-sidebar-open-projects="true" title="Open Projects view">↗</button>
+            <span class="sidebar-project-shortcuts-spacer" aria-hidden="true"></span>
+            <button type="button"
+                    class="sidebar-project-shortcuts-chevron-btn"
+                    data-sidebar-project-shortcuts-toggle="true"
+                    aria-expanded="${collapsed ? 'false' : 'true'}"
+                    title="${collapsed ? 'Expand projects' : 'Collapse projects'}">
+              <span class="sidebar-project-shortcuts-chevron">▾</span>
+            </button>
+          </div>
           <div class="sidebar-project-shortcuts-body">
             ${renderGroup('Ship Next', shipNext)}
             ${renderGroup('Active', active)}
