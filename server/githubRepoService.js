@@ -1,3 +1,6 @@
+const fs = require('fs').promises;
+const os = require('os');
+const path = require('path');
 const https = require('https');
 const { execFile } = require('child_process');
 const winston = require('winston');
@@ -10,6 +13,8 @@ const execFileAsync = (command, args, options) => new Promise((resolve, reject) 
   };
   execFile(command, args, nextOptions, (error, stdout, stderr) => {
     if (error) {
+      error.stdout = stdout;
+      error.stderr = stderr;
       reject(error);
       return;
     }
@@ -63,6 +68,127 @@ function normalizeVisibility(value) {
   return null;
 }
 
+function uniqueCommandCandidates(candidates = []) {
+  const seen = new Set();
+  const out = [];
+  for (const candidate of candidates) {
+    const command = String(candidate || '').trim();
+    if (!command) continue;
+    const key = command.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(command);
+  }
+  return out;
+}
+
+function getGitHubCliCandidates(env = process.env, platform = process.platform) {
+  return uniqueCommandCandidates([
+    platform === 'win32' ? 'gh.exe' : 'gh',
+    'gh',
+    platform === 'win32' ? path.join(env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'gh.exe') : '',
+    platform === 'win32' ? path.join(env.ProgramFiles || '', 'GitHub CLI', 'gh.exe') : '',
+    platform === 'win32' ? path.join(env['ProgramFiles(x86)'] || '', 'GitHub CLI', 'gh.exe') : '',
+    platform === 'win32' ? path.join(env.LOCALAPPDATA || '', 'Programs', 'GitHub CLI', 'gh.exe') : ''
+  ]);
+}
+
+function parseGitHubAuthOutput(stdout = '', stderr = '') {
+  const combined = `${String(stdout || '')}\n${String(stderr || '')}`.trim();
+  if (!combined) {
+    return {
+      authenticated: null,
+      user: null,
+      output: ''
+    };
+  }
+
+  const userMatch = combined.match(/Logged in to github\.com(?:[^\n]*?)account\s+([^\s(]+)/i)
+    || combined.match(/account:\s*([^\s(]+)/i)
+    || combined.match(/user:\s*([^\s(]+)/i);
+  const user = userMatch?.[1] || null;
+
+  if (/Logged in to github\.com/i.test(combined) || /Active account:\s*true/i.test(combined)) {
+    return {
+      authenticated: true,
+      user,
+      output: combined
+    };
+  }
+
+  if (
+    /not logged into any github hosts/i.test(combined)
+    || /authentication failed/i.test(combined)
+    || /token in .* is no longer valid/i.test(combined)
+    || /not logged in/i.test(combined)
+  ) {
+    return {
+      authenticated: false,
+      user: null,
+      output: combined
+    };
+  }
+
+  return {
+    authenticated: null,
+    user,
+    output: combined
+  };
+}
+
+function getGitHubHostsFileCandidates(env = process.env, platform = process.platform) {
+  const homeDir = String(env.HOME || env.USERPROFILE || os.homedir() || '').trim();
+  const xdgConfigHome = String(env.XDG_CONFIG_HOME || '').trim();
+  const appData = String(env.APPDATA || '').trim();
+
+  return uniqueCommandCandidates([
+    xdgConfigHome ? path.join(xdgConfigHome, 'gh', 'hosts.yml') : '',
+    platform === 'win32' && appData ? path.join(appData, 'GitHub CLI', 'hosts.yml') : '',
+    homeDir ? path.join(homeDir, '.config', 'gh', 'hosts.yml') : ''
+  ]);
+}
+
+function parseGitHubHostsFile(contents, hostname = 'github.com') {
+  const text = String(contents || '');
+  if (!text.trim()) return null;
+
+  const lines = text.split(/\r?\n/);
+  const block = [];
+  let inHostBlock = false;
+
+  for (const line of lines) {
+    const isTopLevel = /^[^\s].*:\s*$/.test(line);
+    if (isTopLevel) {
+      if (line.trim() === `${hostname}:`) {
+        inHostBlock = true;
+        continue;
+      }
+      if (inHostBlock) break;
+    }
+    if (inHostBlock) block.push(line);
+  }
+
+  if (!block.length) return null;
+
+  const blockText = block.join('\n');
+  const userMatch = blockText.match(/^\s+user:\s*"?([^"\n#]+?)"?\s*$/m);
+  const tokenMatch = blockText.match(/^\s+(?:oauth_token|token):\s*"?([^"\n#]+?)"?\s*$/m);
+  const user = userMatch?.[1]?.trim() || null;
+  const hasToken = !!tokenMatch?.[1]?.trim();
+
+  if (!user && !hasToken) {
+    return {
+      authenticated: null,
+      user: null
+    };
+  }
+
+  return {
+    authenticated: true,
+    user
+  };
+}
+
 class GitHubRepoService {
   constructor() {
     this.cache = new Map(); // key => { value, timestamp }
@@ -71,6 +197,8 @@ class GitHubRepoService {
 
     this.listCache = new Map(); // key => { value, timestamp }
     this.listCacheTtlMs = 5 * 60 * 1000; // 5m
+    this.ghCommandCache = null;
+    this.ghCommandCacheTtlMs = 5 * 60 * 1000;
   }
 
   static getInstance() {
@@ -110,6 +238,107 @@ class GitHubRepoService {
     return value;
   }
 
+  async resolveGhCommand({ force = false, env = process.env, platform = process.platform } = {}) {
+    if (!force && this.ghCommandCache && (Date.now() - this.ghCommandCache.timestamp) <= this.ghCommandCacheTtlMs) {
+      return this.ghCommandCache.command;
+    }
+
+    const candidates = getGitHubCliCandidates(env, platform);
+    for (const candidate of candidates) {
+      try {
+        await execFileAsync(candidate, ['--version'], { timeout: this.timeoutMs, env });
+        this.ghCommandCache = { command: candidate, timestamp: Date.now() };
+        return candidate;
+      } catch (error) {
+        logger.debug('GitHub CLI candidate unavailable', { candidate, error: error.message });
+      }
+    }
+
+    this.ghCommandCache = { command: null, timestamp: Date.now() };
+    return null;
+  }
+
+  async getAuthStatus({ force = false, env = process.env, platform = process.platform } = {}) {
+    const ghCommand = await this.resolveGhCommand({ force, env, platform });
+    if (!ghCommand) {
+      return {
+        authenticated: false,
+        user: null,
+        ghInstalled: false,
+        error: 'GitHub CLI not installed'
+      };
+    }
+
+    let authProbe = null;
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        ghCommand,
+        ['auth', 'status', '--hostname', 'github.com'],
+        { timeout: Math.max(this.timeoutMs, 5000), env }
+      );
+      authProbe = parseGitHubAuthOutput(stdout, stderr);
+      if (authProbe.authenticated === true) {
+        return {
+          authenticated: true,
+          user: authProbe.user,
+          ghInstalled: true
+        };
+      }
+    } catch (error) {
+      authProbe = parseGitHubAuthOutput(error?.stdout, error?.stderr || error?.message);
+      if (authProbe.authenticated !== null) {
+        return {
+          authenticated: authProbe.authenticated,
+          user: authProbe.user,
+          ghInstalled: true,
+          error: authProbe.authenticated ? null : 'Not authenticated'
+        };
+      }
+      logger.debug('gh auth status probe was inconclusive', { command: ghCommand, error: error.message });
+    }
+
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        ghCommand,
+        ['api', 'user', '--jq', '.login'],
+        { timeout: this.timeoutMs, env }
+      );
+      const login = String(stdout || stderr || '').trim();
+      if (login) {
+        return {
+          authenticated: true,
+          user: login,
+          ghInstalled: true
+        };
+      }
+    } catch (error) {
+      logger.debug('gh api user probe failed', { command: ghCommand, error: error.message });
+    }
+
+    const hostsFiles = getGitHubHostsFileCandidates(env, platform);
+    for (const hostsPath of hostsFiles) {
+      try {
+        const parsed = parseGitHubHostsFile(await fs.readFile(hostsPath, 'utf8'));
+        if (parsed?.authenticated === true) {
+          return {
+            authenticated: true,
+            user: parsed.user,
+            ghInstalled: true
+          };
+        }
+      } catch {
+        // ignore missing or unreadable auth files
+      }
+    }
+
+    return {
+      authenticated: false,
+      user: null,
+      ghInstalled: true,
+      error: authProbe?.authenticated === false ? 'Not authenticated' : 'GitHub auth status unavailable'
+    };
+  }
+
   async listRepos({ owner = null, limit = 200, force = false } = {}) {
     const safeOwner = owner ? String(owner).trim() : '';
     const limitRaw = Number(limit);
@@ -131,7 +360,11 @@ class GitHubRepoService {
     );
 
     try {
-      const { stdout } = await execFileAsync('gh', args, { timeout: Math.max(15000, this.timeoutMs) });
+      const ghCommand = await this.resolveGhCommand();
+      if (!ghCommand) {
+        throw new Error('GitHub CLI not installed');
+      }
+      const { stdout } = await execFileAsync(ghCommand, args, { timeout: Math.max(15000, this.timeoutMs) });
       const parsed = JSON.parse(stdout || '[]');
       const repos = Array.isArray(parsed) ? parsed : [];
       const normalized = repos.map((r) => {
@@ -170,8 +403,12 @@ class GitHubRepoService {
   async fetchVisibility(owner, repo) {
     // Prefer gh CLI (works for private repos when user is authenticated).
     try {
+      const ghCommand = await this.resolveGhCommand();
+      if (!ghCommand) {
+        throw new Error('GitHub CLI not installed');
+      }
       const { stdout } = await execFileAsync(
-        'gh',
+        ghCommand,
         ['repo', 'view', `${owner}/${repo}`, '--json', 'visibility', '--jq', '.visibility'],
         { timeout: this.timeoutMs }
       );
@@ -232,5 +469,8 @@ class GitHubRepoService {
 module.exports = {
   GitHubRepoService,
   parseGitHubOwnerRepo,
-  normalizeVisibility
+  normalizeVisibility,
+  parseGitHubAuthOutput,
+  parseGitHubHostsFile,
+  getGitHubCliCandidates
 };

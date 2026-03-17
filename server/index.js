@@ -5238,21 +5238,11 @@ app.post('/api/worktree-conflicts', async (req, res) => {
 
 app.get('/api/github/status', async (req, res) => {
   try {
-    const { execFile } = require('child_process');
-    const { promisify } = require('util');
-    const execFileAsync = promisify(execFile);
-    const ghCmd = process.platform === 'win32' ? 'gh.exe' : 'gh';
-    const { stdout } = await execFileAsync(ghCmd, ['auth', 'status', '--hostname', 'github.com'], {
-      timeout: 5000,
-      ...getHiddenProcessOptions({ env: augmentProcessEnv(process.env) })
-    });
-    const userMatch = stdout.match(/Logged in to github\.com.*account\s+(\S+)/i)
-      || stdout.match(/account:\s*(\S+)/i);
-    res.json({ authenticated: true, user: userMatch?.[1] || null, ghInstalled: true });
+    const status = await GitHubRepoService.getInstance().getAuthStatus();
+    res.json(status);
   } catch (error) {
-    const message = String(error?.message || error?.stderr || '');
-    const notInstalled = message.includes('ENOENT') || message.includes('not found');
-    res.json({ authenticated: false, user: null, ghInstalled: !notInstalled, error: notInstalled ? 'GitHub CLI not installed' : 'Not authenticated' });
+    logger.error('Failed to read GitHub auth status', { error: error.message, stack: error.stack });
+    res.json({ authenticated: false, user: null, ghInstalled: false, error: 'GitHub status unavailable' });
   }
 });
 
