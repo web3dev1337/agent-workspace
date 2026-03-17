@@ -30966,6 +30966,10 @@ class ClaudeOrchestrator {
             <button class="filter-btn" data-filter="hytopia">Hytopia Games</button>
             <button class="filter-btn" data-filter="monogame">MonoGame</button>
           </div>
+          <label class="quick-checkbox" title="Show projects in the Backlog column">
+            <input type="checkbox" id="worktree-modal-show-backlog-projects">
+            Show backlog
+          </label>
           <label class="quick-checkbox" title="Show projects in the Archive column">
             <input type="checkbox" id="worktree-modal-show-archived-projects">
             Show archive
@@ -31005,6 +31009,8 @@ class ClaudeOrchestrator {
     }
 
     const menuVisibilityPrefs = this.getProjectsBoardMenuVisibilityPrefs();
+    const showBacklogEl = modal.querySelector('#worktree-modal-show-backlog-projects');
+    if (showBacklogEl) showBacklogEl.checked = menuVisibilityPrefs.showBacklog !== false;
     const showArchivedEl = modal.querySelector('#worktree-modal-show-archived-projects');
     if (showArchivedEl) showArchivedEl.checked = !!menuVisibilityPrefs.showArchived;
     const showDoneEl = modal.querySelector('#worktree-modal-show-done-projects');
@@ -31012,12 +31018,14 @@ class ClaudeOrchestrator {
 
     const onVisibilityChange = () => {
       const next = {
+        showBacklog: !!modal.querySelector('#worktree-modal-show-backlog-projects')?.checked,
         showArchived: !!modal.querySelector('#worktree-modal-show-archived-projects')?.checked,
         showDone: !!modal.querySelector('#worktree-modal-show-done-projects')?.checked
       };
       this.setProjectsBoardMenuVisibilityPrefs(next);
       this.showAdvancedAddWorktreeModal(this.addWorktreeModalReposRaw);
     };
+    showBacklogEl?.addEventListener('change', onVisibilityChange);
     showArchivedEl?.addEventListener('change', onVisibilityChange);
     showDoneEl?.addEventListener('change', onVisibilityChange);
 
@@ -31162,6 +31170,10 @@ class ClaudeOrchestrator {
                 </label>
               </div>
               <div class="quick-control-group">
+                <label class="quick-checkbox" title="Show projects in the Backlog column">
+                  <input type="checkbox" id="quick-show-backlog-projects">
+                  Show backlog
+                </label>
                 <label class="quick-checkbox" title="Show projects in the Archive column">
                   <input type="checkbox" id="quick-show-archived-projects">
                   Show archive
@@ -31224,6 +31236,10 @@ class ClaudeOrchestrator {
     }
 
     const menuVisibilityPrefs = this.getProjectsBoardMenuVisibilityPrefs();
+    const showBacklogEl = modal.querySelector('#quick-show-backlog-projects');
+    if (showBacklogEl) {
+      showBacklogEl.checked = menuVisibilityPrefs.showBacklog !== false;
+    }
     const showArchivedEl = modal.querySelector('#quick-show-archived-projects');
     if (showArchivedEl) {
       showArchivedEl.checked = !!menuVisibilityPrefs.showArchived;
@@ -31285,8 +31301,9 @@ class ClaudeOrchestrator {
         return;
       }
 
-      if (e.target && (e.target.id === 'quick-show-archived-projects' || e.target.id === 'quick-show-done-projects')) {
+      if (e.target && (e.target.id === 'quick-show-backlog-projects' || e.target.id === 'quick-show-archived-projects' || e.target.id === 'quick-show-done-projects')) {
         const next = {
+          showBacklog: !!modal.querySelector('#quick-show-backlog-projects')?.checked,
           showArchived: !!modal.querySelector('#quick-show-archived-projects')?.checked,
           showDone: !!modal.querySelector('#quick-show-done-projects')?.checked
         };
@@ -33345,26 +33362,36 @@ class ClaudeOrchestrator {
 
   getProjectsBoardMenuVisibilityPrefs() {
     const fromServer = this.userSettings?.global?.ui?.projects?.board?.menus;
+    const serverShowBacklog = typeof fromServer?.showBacklog === 'boolean' ? fromServer.showBacklog : null;
     const serverShowArchived = typeof fromServer?.showArchived === 'boolean' ? fromServer.showArchived : null;
     const serverShowDone = typeof fromServer?.showDone === 'boolean' ? fromServer.showDone : null;
 
-    const fromLocalStorage = (key) => {
-      try { return localStorage.getItem(key) === 'true'; } catch { return false; }
+    const fromLocalStorage = (key, defaultValue = false) => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw === null) return defaultValue;
+        return raw === 'true';
+      } catch {
+        return defaultValue;
+      }
     };
 
     return {
-      showArchived: serverShowArchived === null ? fromLocalStorage('projects-board-menus-show-archived') : serverShowArchived,
-      showDone: serverShowDone === null ? fromLocalStorage('projects-board-menus-show-done') : serverShowDone
+      showBacklog: serverShowBacklog === null ? fromLocalStorage('projects-board-menus-show-backlog', true) : serverShowBacklog,
+      showArchived: serverShowArchived === null ? fromLocalStorage('projects-board-menus-show-archived', false) : serverShowArchived,
+      showDone: serverShowDone === null ? fromLocalStorage('projects-board-menus-show-done', false) : serverShowDone
     };
   }
 
   async setProjectsBoardMenuVisibilityPrefs(next) {
     const desired = next && typeof next === 'object' ? next : {};
     const prefs = {
+      showBacklog: desired.showBacklog !== false,
       showArchived: !!desired.showArchived,
       showDone: !!desired.showDone
     };
 
+    try { localStorage.setItem('projects-board-menus-show-backlog', prefs.showBacklog ? 'true' : 'false'); } catch {}
     try { localStorage.setItem('projects-board-menus-show-archived', prefs.showArchived ? 'true' : 'false'); } catch {}
     try { localStorage.setItem('projects-board-menus-show-done', prefs.showDone ? 'true' : 'false'); } catch {}
 
@@ -33435,6 +33462,7 @@ class ClaudeOrchestrator {
 
     return rows.filter((repo) => {
       const col = this.getProjectsBoardColumnForRepo(repo, board);
+      if (!prefs.showBacklog && col === 'backlog') return false;
       if (!prefs.showArchived && col === 'archived') return false;
       if (!prefs.showDone && col === 'done') return false;
       return true;
