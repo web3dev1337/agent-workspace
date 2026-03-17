@@ -502,7 +502,10 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: conic-gradient(from 180deg at 50% 50%, #52d3ff 0deg, #4b92ff 180deg, #52d3ff 360deg);
+  background-image: url("assets/agent-workspace-logo.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   flex-shrink: 0;
   margin-right: 8px;
   animation: sidebar-logo-spin 4s linear infinite paused;
@@ -14782,7 +14785,10 @@ body.dependency-onboarding-active #dependency-setup-modal {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: conic-gradient(from 180deg at 50% 50%, #52d3ff 0deg, #4b92ff 180deg, #52d3ff 360deg);
+  background-image: url("assets/agent-workspace-logo.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   flex-shrink: 0;
   box-shadow: 0 0 20px rgba(82, 211, 255, 0.7);
   animation: dashboard-title-orb-spin 4s linear infinite;
