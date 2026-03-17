@@ -4288,8 +4288,8 @@ class Dashboard {
 
       const renderCard = (p) => {
         const context = p.project?.project
-          ? `${p.project.project}${p.project.worktree ? ' • ' + p.project.worktree : ''}`
-          : formatDashboardPathTail(p.cwd);
+          ? `${p.project.project}${p.project.worktree ? '/' + p.project.worktree : ''}`
+          : formatDashboardPathTail(p.cwd, 1);
         return `
           <div class="port-dashboard-card ${p.type || ''}"
                onclick="window.open('${p.url}', '_blank')"
