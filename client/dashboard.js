@@ -316,10 +316,10 @@ class Dashboard {
     const runningServicesSection = (visibility.runningServices !== false) ? `
       <div class="dashboard-bento-card ports-dashboard-section">
         <div class="dashboard-bento-header">
-          📈 <span class="dashboard-bento-title">Running Services</span>
+          📈 <span class="dashboard-bento-title">Ports Running on Your Computer</span>
         </div>
         <div class="ports-dashboard-grid" id="ports-dashboard-grid">
-          <div class="ports-loading">Loading services...</div>
+          <div class="ports-loading">Loading ports...</div>
         </div>
       </div>
     ` : '';
@@ -4278,7 +4278,7 @@ class Dashboard {
       const data = await response.json();
 
       if (!data.ports || data.ports.length === 0) {
-        gridEl.innerHTML = '<div class="ports-empty">No services currently running</div>';
+        gridEl.innerHTML = '<div class="ports-empty">No ports detected</div>';
         return;
       }
 
@@ -4306,7 +4306,7 @@ class Dashboard {
 
       let html = '';
       if (appPorts.length) {
-        html += `<div class="ports-group-label">Your Services</div>`;
+        html += `<div class="ports-group-label">Ports Related to Agent Workspace</div>`;
         html += appPorts.map(renderCard).join('');
       }
       if (systemPorts.length) {
@@ -4317,7 +4317,7 @@ class Dashboard {
 
     } catch (error) {
       console.error('Failed to load dashboard ports:', error);
-      gridEl.innerHTML = '<div class="ports-empty">Failed to load services</div>';
+      gridEl.innerHTML = '<div class="ports-empty">Failed to load ports</div>';
     }
   }
 
