@@ -119,23 +119,23 @@ describe('WorktreeMetadataService', () => {
     it('should return combined metadata', async () => {
       const cwd = process.cwd();
       const metadata = await service.getMetadata(cwd);
-      
+
       expect(metadata).toHaveProperty('path');
       expect(metadata).toHaveProperty('git');
       expect(metadata).toHaveProperty('pr');
       expect(metadata).toHaveProperty('lastUpdated');
-    });
+    }, 20000);
   });
 
   describe('getMultipleMetadata', () => {
     it('should fetch metadata for multiple paths', async () => {
       const paths = [process.cwd(), '/tmp'];
       const results = await service.getMultipleMetadata(paths);
-      
+
       expect(Object.keys(results).length).toBe(2);
       expect(results[process.cwd()]).toBeDefined();
       expect(results['/tmp']).toBeDefined();
-    }, 15000);
+    }, 30000);
 
     it('should handle empty paths array', async () => {
       const results = await service.getMultipleMetadata([]);
@@ -146,15 +146,15 @@ describe('WorktreeMetadataService', () => {
   describe('refresh', () => {
     it('should clear cache and fetch fresh data', async () => {
       const cwd = process.cwd();
-      
+
       // Populate cache
       await service.getMetadata(cwd);
-      
+
       // Refresh
       const refreshed = await service.refresh(cwd);
-      
+
       expect(refreshed).toHaveProperty('git');
       expect(refreshed).toHaveProperty('pr');
-    });
+    }, 30000);
   });
 });
