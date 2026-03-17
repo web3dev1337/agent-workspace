@@ -218,28 +218,30 @@
 
                             <details>
                                 <summary><strong>Workspace</strong></summary>
-                                <div class="setting-description">A saved configuration that groups worktrees/terminals for a project
-                                    (or many repos in a mixed workspace). Opening a workspace starts its sessions.</div>
+                                <div class="setting-description">A saved configuration that groups worktrees/terminals from one or
+                                    more projects [GitHub repos]. Opening a workspace starts its sessions.</div>
                             </details>
 
                             <details>
                                 <summary><strong>Worktree</strong></summary>
-                                <div class="setting-description">A git worktree folder (e.g. <code>work6</code>) on disk. One
-                                    worktree usually has an <em>Agent</em> terminal and (optionally) a paired <em>Server</em>
-                                    terminal.</div>
+                                <div class="setting-description">A git worktree linked to a specific GitHub repo/project. One
+                                    worktree has an <em>Agent</em> terminal and a paired <em>Server</em> terminal; those terminals
+                                    may be hidden in the current view, but they still belong to that worktree.</div>
                             </details>
 
                             <details>
                                 <summary><strong>Terminal / Session</strong></summary>
-                                <div class="setting-description">A running process (PTY) owned by Agent Workspace. It can be
-                                    recovered after restart unless you explicitly close it.</div>
+                                <div class="setting-description">A running terminal in Agent Workspace where you can use a CLI
+                                    agent such as Claude Code, Codex, or OpenCode.</div>
                             </details>
 
                             <details>
                                 <summary><strong>Agent vs Server</strong></summary>
-                                <div class="setting-description"><strong>Agent</strong> runs Claude/Codex work.
-                                    <strong>Server</strong> runs your dev server (game/app). They’re paired per worktree and should
-                                    generally live/die together.</div>
+                                <div class="setting-description"><strong>Agent</strong> is the terminal where you run a CLI
+                                    agent such as Claude Code, Codex, OpenCode, or another tool, with extra controls at the
+                                    top. <strong>Server</strong> is the paired terminal for your dev server, game/app, or any
+                                    other CLI commands you need. They can be shown or hidden independently, but they still
+                                    belong to the same worktree and generally live/die together.</div>
                             </details>
 
                         </div>
