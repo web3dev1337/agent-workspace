@@ -589,49 +589,60 @@ body {
   padding: 6px 8px;
 }
 
-.sidebar-project-shortcuts-header {
-  width: 100%;
+.sidebar-project-shortcuts-header-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   padding: 8px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-tertiary);
+}
+
+.sidebar-project-shortcuts-header-row:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-secondary);
+}
+
+.sidebar-project-shortcuts-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
   cursor: pointer;
   text-align: left;
   color: var(--text-primary);
 }
 
-.sidebar-project-shortcuts-header:hover {
-  border-color: var(--accent-primary);
-  background: var(--bg-secondary);
-}
-
-.sidebar-project-shortcuts-open {
+.sidebar-project-shortcuts-open,
+.sidebar-project-shortcuts-chevron-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   padding: 2px 4px;
   border-radius: var(--radius-sm);
-  position: absolute;
-  right: 12px;
-  top: 8px;
 }
 
-.sidebar-project-shortcuts-open:hover {
+.sidebar-project-shortcuts-open:hover,
+.sidebar-project-shortcuts-chevron-btn:hover {
   color: var(--accent-primary);
   background: var(--bg-hover);
 }
 
-.sidebar-project-shortcuts-section {
-  position: relative;
+.sidebar-project-shortcuts-spacer {
+  flex: 1;
 }
 
-.sidebar-project-shortcuts-header:focus-visible {
+.sidebar-project-shortcuts-header:focus-visible,
+.sidebar-project-shortcuts-open:focus-visible,
+.sidebar-project-shortcuts-chevron-btn:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
@@ -639,16 +650,6 @@ body {
 .sidebar-project-shortcuts-title {
   font-weight: 700;
   font-size: 0.86rem;
-}
-
-.sidebar-project-shortcuts-count {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  padding: 2px 8px;
-  background: var(--bg-secondary);
 }
 
 .sidebar-project-shortcuts-chevron {
