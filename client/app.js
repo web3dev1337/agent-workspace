@@ -30788,7 +30788,7 @@ class ClaudeOrchestrator {
               </div>`;
               let html = '';
               if (appPorts.length) {
-                html += '<div class="ports-group-label">Your Services</div>' + appPorts.map(renderPort).join('');
+                html += '<div class="ports-group-label">Ports Related to Agent Workspace</div>' + appPorts.map(renderPort).join('');
               }
               if (systemPorts.length) {
                 html += '<div class="ports-group-label ports-group-system">Other Ports</div>' + systemPorts.map(renderPort).join('');
