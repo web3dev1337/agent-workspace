@@ -11695,6 +11695,32 @@ body.dependency-onboarding-active #dependency-setup-modal {
   padding-bottom: var(--space-sm);
 }
 
+.tasks-modal .modal-header.tasks-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.tasks-modal .tasks-header h2 {
+  justify-self: center;
+  text-align: center;
+}
+
+.tasks-modal .tasks-header-side {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.tasks-modal .tasks-header-right {
+  justify-content: flex-end;
+}
+
+.tasks-modal .tasks-back-btn {
+  padding: 8px 12px;
+  text-align: left;
+}
+
 .tasks-modal .tasks-close-btn {
   width: 44px;
   height: 44px;

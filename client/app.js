@@ -19319,9 +19319,14 @@ class ClaudeOrchestrator {
     modal.classList.add(`tasks-theme-${resolvedTasksTheme}`);
     modal.innerHTML = `
       <div class="modal-content tasks-content" dir="ltr">
-        <div class="modal-header">
+        <div class="modal-header tasks-header">
+          <div class="tasks-header-side tasks-header-left">
+            <button class="btn-secondary tasks-back-btn" id="tasks-back-btn" aria-label="Back" title="Back">← Back</button>
+          </div>
           <h2>✅ Tasks</h2>
-          <button class="close-btn tasks-close-btn" id="tasks-close-btn" aria-label="Close Tasks" title="Close (Esc)">×</button>
+          <div class="tasks-header-side tasks-header-right">
+            <button class="close-btn tasks-close-btn" id="tasks-close-btn" aria-label="Close Tasks" title="Close (Esc)">×</button>
+          </div>
         </div>
 
 		        <div class="tasks-toolbar">
@@ -19422,6 +19427,7 @@ class ClaudeOrchestrator {
 
     // Centralized close behavior (cleans up resize/keydown handlers).
     this.tasksPanelModalEl = modal;
+    modal.querySelector('#tasks-back-btn')?.addEventListener('click', () => this.closeTasksPanel());
     modal.querySelector('#tasks-close-btn')?.addEventListener('click', () => this.closeTasksPanel());
     modal.addEventListener('click', (e) => {
       if (e.target === modal) this.closeTasksPanel();
@@ -30741,14 +30747,14 @@ class ClaudeOrchestrator {
     modal.innerHTML = `
       <div class="modal-content ports-content">
         <div class="ports-header">
-          <h2>🔌 Running Services</h2>
+          <h2>🔌 Ports Running on Your Computer</h2>
           <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
         </div>
         <div class="ports-info">
-          ${portsData.count} service${portsData.count !== 1 ? 's' : ''} running • Click name to edit label • Use 📋 to copy
+          ${portsData.count} port${portsData.count !== 1 ? 's' : ''} detected • Click name to edit label • Use 📋 to copy
         </div>
         <div class="ports-list">
-          ${portsData.ports.length === 0 ? '<div class="no-ports">No services detected</div>' :
+          ${portsData.ports.length === 0 ? '<div class="no-ports">No ports detected</div>' :
             (() => {
               const knownTypes = new Set(['orchestrator', 'client', 'vite', 'react', 'node', 'game-server', 'flask', 'python', 'rails', 'diff-viewer']);
               const appPorts = portsData.ports.filter(p => knownTypes.has(p.type) || p.project?.project);

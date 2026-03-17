@@ -77,10 +77,14 @@ class ProjectsBoardUI {
     modal.className = 'modal hidden projects-board-modal';
     modal.innerHTML = `
       <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="btn-secondary" id="projects-board-back" aria-label="Back" title="Back to dashboard" style="margin-right: 8px; padding: 4px 10px; font-size: 0.85rem;">← Back</button>
+        <div class="modal-header projects-board-header">
+          <div class="projects-board-header-side projects-board-header-left">
+            <button type="button" class="btn-secondary projects-board-back-btn" id="projects-board-back" aria-label="Back" title="Back to dashboard">← Back</button>
+          </div>
           <h3>Projects Board</h3>
-          <button type="button" class="close-btn" id="projects-board-close" aria-label="Close">✕</button>
+          <div class="projects-board-header-side projects-board-header-right">
+            <button type="button" class="close-btn" id="projects-board-close" aria-label="Close">✕</button>
+          </div>
         </div>
         <div class="projects-board-toolbar">
           <input id="projects-board-filter" class="search-input" type="search" placeholder="Filter projects…" autocomplete="off" />

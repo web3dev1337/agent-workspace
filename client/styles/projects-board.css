@@ -20,6 +20,34 @@
   padding: 16px;
 }
 
+.projects-board-modal .projects-board-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.projects-board-modal .projects-board-header h3 {
+  justify-self: center;
+  text-align: center;
+}
+
+.projects-board-modal .projects-board-header-side {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.projects-board-modal .projects-board-header-right {
+  justify-content: flex-end;
+}
+
+.projects-board-modal .projects-board-back-btn {
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
 .projects-board-toolbar {
   display: flex;
   align-items: center;
