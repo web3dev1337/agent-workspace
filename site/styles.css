@@ -1050,6 +1050,15 @@ a.btn-glow {
   font-size: 0.9rem;
 }
 
+.install-legal-note {
+  max-width: 42rem;
+  line-height: 1.6;
+}
+
+.install-legal-note a {
+  color: var(--cyan);
+}
+
 .install-note a, .section-desc a {
   text-decoration: none;
 }
@@ -1099,6 +1108,93 @@ a.btn-glow {
 
 .copyright a:hover {
   color: #fff;
+}
+
+body.legal-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(0, 212, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(8, 13, 26, 0.98), rgba(4, 8, 18, 1));
+}
+
+.legal-main {
+  padding: 56px 24px 24px;
+}
+
+.legal-shell {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.legal-back:hover {
+  color: var(--cyan);
+}
+
+.legal-card {
+  background: rgba(7, 12, 24, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.28);
+  border-radius: 28px;
+  padding: 32px;
+  backdrop-filter: blur(14px);
+}
+
+.legal-card h1 {
+  margin: 0 0 8px;
+}
+
+.legal-kicker,
+.legal-updated {
+  color: var(--text-muted);
+}
+
+.legal-kicker {
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.8rem;
+}
+
+.legal-updated {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+.legal-section + .legal-section {
+  margin-top: 28px;
+}
+
+.legal-section h2 {
+  margin-bottom: 10px;
+}
+
+.legal-section p,
+.legal-section li {
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.legal-section ul {
+  margin: 12px 0 0 20px;
+}
+
+.legal-section a {
+  color: var(--cyan);
+}
+
+.legal-emphasis {
+  color: var(--text-primary) !important;
+  font-weight: 600;
 }
 
 /* Animations Trigger Classes */
@@ -1170,5 +1266,14 @@ a.btn-glow {
     10% { opacity: 1; }
     90% { opacity: 1; }
     100% { top: 100%; left: 50%; transform: translate(-50%, 0); opacity: 0; }
+  }
+
+  .legal-main {
+    padding: 28px 16px 16px;
+  }
+
+  .legal-card {
+    padding: 22px;
+    border-radius: 22px;
   }
 }

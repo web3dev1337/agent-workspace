@@ -104,6 +104,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
 
 See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
 
+## Legal
+
+- [Terms of Use](docs/legal/TERMS_OF_USE.md)
+- [Privacy Policy](docs/legal/PRIVACY_POLICY.md)
+- [Windows Installer Terms](docs/legal/WINDOWS_INSTALLER_EULA.txt)
+
 ## License
 
 [MIT](LICENSE)

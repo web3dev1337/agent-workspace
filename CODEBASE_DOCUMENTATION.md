@@ -302,6 +302,7 @@ src-tauri/src/lib.rs               - Tauri application library
 ### Configuration Files
 ```
 src-tauri/tauri.conf.json          - Tauri app configuration
+├─ Bundle metadata: packaged app name/version, bundle targets, icons, and Windows installer license/EULA file path
 src-tauri/Cargo.toml               - Rust dependencies + build profiles (release, fast)
 ├─ profile.release: lto=true, codegen-units=1, opt-level="s" — smallest binary, slow compile (CI/distribution)
 └─ profile.fast: lto=false, codegen-units=256, incremental — ~3-5x faster compile (local dev/testing)
@@ -335,10 +336,20 @@ scripts/preview-site.js            - Tiny local preview server for the standalon
 ```
 site/                              - Concise product/showcase site kept separate from internal docs for future GitHub Pages deployment
 ├─ index.html                      - Single-page product overview and quick-start narrative
+├─ terms.html                      - Public Terms of Use page linked from footer + install/download flows
+├─ privacy.html                    - Public Privacy Policy page linked from footer + install/download flows
 ├─ styles.css                      - Showcase visual system, layout, and motion
 ├─ script.js                       - Small reveal-on-scroll enhancement
 ├─ assets/                         - Favicon, provider logos, generated Open Graph preview, and real UI screenshot
 └─ README.md                       - Local preview and future publishing notes
+```
+
+### Legal Documents
+```
+docs/legal/                        - Product-specific legal docs used by the website, README, and Windows installer
+├─ TERMS_OF_USE.md                 - Product-facing terms covering desktop app, downloads, website, AI use, and liability posture
+├─ PRIVACY_POLICY.md               - Local-first/privacy disclosures describing on-device storage and optional third-party integrations
+└─ WINDOWS_INSTALLER_EULA.txt      - Plain-text Windows installer agreement referenced by `src-tauri/tauri.conf.json`
 ```
 
 ## Advanced Diff Viewer Component

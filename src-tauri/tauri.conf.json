@@ -31,7 +31,7 @@
     "active": true,
     "targets": "all",
     "license": "MIT",
-    "licenseFile": "../LICENSE",
+    "licenseFile": "../docs/legal/WINDOWS_INSTALLER_EULA.txt",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

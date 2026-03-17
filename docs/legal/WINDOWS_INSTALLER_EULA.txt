@@ -1,0 +1,74 @@
+Agent Workspace Installer Terms
+Effective date: March 17, 2026
+
+IMPORTANT: PLEASE READ THIS AGREEMENT CAREFULLY.
+
+By installing, copying, or using Agent Workspace, you agree to these Installer Terms, the Agent Workspace Terms of Use, and the Agent Workspace Privacy Policy. If you do not agree, do not install or use the software.
+
+Public terms:
+- Terms of Use: https://agent-workspace.ai/terms.html
+- Privacy Policy: https://agent-workspace.ai/privacy.html
+
+1. What this software is
+
+Agent Workspace is local-first developer tooling that helps you launch, manage, and automate terminal-based agents, workspaces, repositories, worktrees, local services, and optional third-party integrations. It can run commands, write files, move data between tools, and invoke external providers that you configure.
+
+2. Open-source notice
+
+Agent Workspace includes open-source software. The repository source code is made available under the MIT License and may include third-party components under their own licenses. Nothing in this installer agreement limits any rights you may have under the applicable open-source licenses for those components. In the event of a conflict, the applicable open-source license controls for that component.
+
+3. License to use the packaged app
+
+Subject to your compliance with these terms and applicable law, Neural Pixel grants you a personal, non-exclusive, revocable license to install and use the packaged Agent Workspace application and related release materials.
+
+4. Your responsibilities
+
+You are responsible for:
+- the commands, prompts, scripts, automations, and actions you run through Agent Workspace;
+- reviewing AI-generated output before relying on it or shipping it;
+- securing your machine, repositories, credentials, tokens, and API keys;
+- complying with the terms of any third-party provider you connect, including GitHub, Trello, Discord, Anthropic, OpenAI, Google, or other agent or cloud services;
+- ensuring your use is lawful and authorized for the machines, repositories, and data you access.
+
+5. Prohibited use
+
+You may not use Agent Workspace:
+- to access systems, repositories, or data without authorization;
+- to violate law, intellectual-property rights, privacy rights, export controls, sanctions, or workplace obligations;
+- in life-critical, safety-critical, medical, nuclear, emergency-response, aviation, weapons, or similar high-risk scenarios where failure could cause death, injury, or major property or environmental damage;
+- to deploy or rely on AI output as a substitute for professional legal, medical, accounting, security, or other regulated advice.
+
+6. Third-party services
+
+Agent Workspace may use or connect to third-party tools and services that are not controlled by Neural Pixel. Those services have separate terms, privacy policies, uptime, and security practices. Neural Pixel is not responsible for third-party services or their actions.
+
+7. Privacy and local data
+
+Agent Workspace is designed to run on your hardware and does not rely on publisher-hosted telemetry or publisher-hosted user accounts. It may still store local settings, logs, telemetry, workspace data, project metadata, onboarding state, and optional integration credentials on your device, and it may transmit data to third-party services when you enable or use those integrations. See the Privacy Policy for details.
+
+8. No warranty
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, INCLUDING ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, SECURITY, QUIET ENJOYMENT, OR THAT THE SOFTWARE WILL BE ERROR-FREE OR UNINTERRUPTED.
+
+9. Limitation of liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, NEURAL PIXEL AND ITS LICENSORS, CONTRIBUTORS, AND SUPPLIERS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF DATA, PROFITS, REVENUE, GOODWILL, BUSINESS OPPORTUNITY, OR SYSTEM AVAILABILITY, ARISING OUT OF OR RELATED TO THE SOFTWARE OR YOUR USE OF IT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE TOTAL LIABILITY OF NEURAL PIXEL AND ITS LICENSORS, CONTRIBUTORS, AND SUPPLIERS FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THE SOFTWARE WILL NOT EXCEED THE GREATER OF (A) THE AMOUNT YOU PAID FOR THE SOFTWARE, OR (B) U.S. $50.
+
+10. Your indemnity
+
+To the maximum extent permitted by law, you will defend, indemnify, and hold harmless Neural Pixel and its licensors, contributors, and suppliers from claims, losses, liabilities, damages, judgments, and costs arising from your misuse of Agent Workspace, your violation of law, your violation of these terms, or your unauthorized access to systems, repositories, or data.
+
+11. Updates and changes
+
+Neural Pixel may release updates, patches, or changes to the software, documentation, installer terms, Terms of Use, or Privacy Policy. Your continued use after an update becomes effective means you accept the updated terms to the extent permitted by law.
+
+12. Contact
+
+Questions:
+- GitHub repository: https://github.com/web3dev1337/claude-orchestrator
+- Security reports: https://github.com/web3dev1337/claude-orchestrator/security/advisories/new
+- X: https://x.com/AIOnlyDeveloper
+
+If you do not agree to these terms, select "I do not agree" or cancel the installation.
