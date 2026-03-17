@@ -17,8 +17,14 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function copyDir(src, dest) {
+function removeIfExists(targetPath) {
+  if (!targetPath || !fs.existsSync(targetPath)) return;
+  fs.rmSync(targetPath, { recursive: true, force: true });
+}
+
+function replaceDir(src, dest) {
   if (!fs.existsSync(src)) throw new Error(`Missing source: ${src}`);
+  removeIfExists(dest);
   fs.cpSync(src, dest, { recursive: true, force: true });
 }
 
@@ -31,6 +37,112 @@ function copyFile(src, dest) {
 function hashFile(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null;
   return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function statSignature(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  const stat = fs.statSync(filePath);
+  return {
+    size: stat.size,
+    mtimeMs: Math.trunc(stat.mtimeMs)
+  };
+}
+
+function collectDirSnapshot(rootDir) {
+  if (!rootDir || !fs.existsSync(rootDir)) return null;
+
+  const entries = [];
+  const stack = [''];
+
+  while (stack.length > 0) {
+    const relativeDir = stack.pop();
+    const absoluteDir = relativeDir ? path.join(rootDir, relativeDir) : rootDir;
+    const children = fs.readdirSync(absoluteDir, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+    for (const child of children) {
+      const childRelative = relativeDir ? path.posix.join(relativeDir, child.name) : child.name;
+      const childAbsolute = path.join(rootDir, childRelative);
+
+      if (child.isDirectory()) {
+        stack.push(childRelative);
+        continue;
+      }
+
+      if (!child.isFile()) {
+        continue;
+      }
+
+      entries.push({
+        path: childRelative,
+        ...statSignature(childAbsolute)
+      });
+    }
+  }
+
+  entries.sort((left, right) => left.path.localeCompare(right.path));
+  return entries;
+}
+
+function buildResourceSyncStamp({
+  srcServer,
+  srcClient,
+  srcScripts,
+  srcLinuxScripts,
+  srcTemplates,
+  srcConfigDir,
+  srcWindowsScripts,
+  srcPkg,
+  srcLock,
+  srcConfig,
+  srcUserDefaults,
+  srcLicensePublicKey,
+  srcUpdaterPublicKey,
+  bundledNodePath
+}) {
+  return {
+    schemaVersion: 1,
+    platform: process.platform,
+    arch: process.arch,
+    files: {
+      packageJson: statSignature(srcPkg),
+      packageLock: statSignature(srcLock),
+      configJson: statSignature(srcConfig),
+      userSettingsDefaultJson: statSignature(srcUserDefaults),
+      createProjectScript: statSignature(path.join(srcScripts, 'create-project.js')),
+      licensePublicKey: statSignature(srcLicensePublicKey),
+      updaterPublicKey: statSignature(srcUpdaterPublicKey),
+      bundledNode: bundledNodePath ? {
+        path: bundledNodePath,
+        hash: hashFile(bundledNodePath)
+      } : null
+    },
+    directories: {
+      server: collectDirSnapshot(srcServer),
+      client: collectDirSnapshot(srcClient),
+      scriptsLinux: collectDirSnapshot(srcLinuxScripts),
+      scriptsWindows: collectDirSnapshot(srcWindowsScripts),
+      templates: collectDirSnapshot(srcTemplates),
+      config: collectDirSnapshot(srcConfigDir)
+    }
+  };
+}
+
+function canReuseResourceSync({ stampPath, expectedStamp, requiredPaths }) {
+  if (!fs.existsSync(stampPath)) {
+    return false;
+  }
+
+  const actualStamp = readJson(stampPath);
+  if (!actualStamp || typeof actualStamp !== 'object') {
+    return false;
+  }
+
+  if (JSON.stringify(actualStamp) !== JSON.stringify(expectedStamp)) {
+    return false;
+  }
+
+  return requiredPaths.every((entryPath) => fs.existsSync(entryPath));
 }
 
 function run(cmd, args, opts) {
@@ -145,41 +257,105 @@ function main() {
   const bundledNodePath = normalizeBundledNodePath(bundledNodePathRaw);
   const nodeModulesPath = path.join(outDir, 'node_modules');
   const prodInstallStampPath = path.join(outDir, '.prod-install-stamp.json');
+  const resourceSyncStampPath = path.join(outDir, '.resource-sync-stamp.json');
 
   if (clean && fs.existsSync(outDir)) {
     fs.rmSync(outDir, { recursive: true, force: true });
   }
 
-  ensureDir(outDir);
-  copyDir(srcServer, path.join(outDir, 'server'));
-  copyDir(srcClient, path.join(outDir, 'client'));
-  copyFile(
-    path.join(srcScripts, 'create-project.js'),
-    path.join(outDir, 'scripts', 'create-project.js')
-  );
-  if (fs.existsSync(srcLinuxScripts)) copyDir(srcLinuxScripts, path.join(outDir, 'scripts', 'linux'));
-  if (fs.existsSync(srcTemplates)) copyDir(srcTemplates, path.join(outDir, 'templates'));
-  if (fs.existsSync(srcConfigDir)) copyDir(srcConfigDir, path.join(outDir, 'config'));
-  if (fs.existsSync(srcWindowsScripts)) copyDir(srcWindowsScripts, path.join(outDir, 'scripts', 'windows'));
-  copyFile(srcPkg, path.join(outDir, 'package.json'));
-  if (fs.existsSync(srcLock)) copyFile(srcLock, path.join(outDir, 'package-lock.json'));
-  if (fs.existsSync(srcConfig)) copyFile(srcConfig, path.join(outDir, 'config.json'));
-  if (fs.existsSync(srcUserDefaults)) copyFile(srcUserDefaults, path.join(outDir, 'user-settings.default.json'));
-  if (srcLicensePublicKey && fs.existsSync(srcLicensePublicKey)) {
-    copyFile(srcLicensePublicKey, path.join(outDir, 'license-public-key.pem'));
-  }
-  if (srcUpdaterPublicKey && fs.existsSync(srcUpdaterPublicKey)) {
-    copyFile(srcUpdaterPublicKey, path.join(outDir, 'updater.pubkey'));
-  }
-  if (bundledNodePath) {
-    if (fs.existsSync(bundledNodePath)) {
+  const expectedResourceSyncStamp = buildResourceSyncStamp({
+    srcServer,
+    srcClient,
+    srcScripts,
+    srcLinuxScripts,
+    srcTemplates,
+    srcConfigDir,
+    srcWindowsScripts,
+    srcPkg,
+    srcLock,
+    srcConfig,
+    srcUserDefaults,
+    srcLicensePublicKey,
+    srcUpdaterPublicKey,
+    bundledNodePath
+  });
+
+  const requiredResourcePaths = [
+    path.join(outDir, 'server', 'index.js'),
+    path.join(outDir, 'client'),
+    path.join(outDir, 'scripts', 'create-project.js'),
+    path.join(outDir, 'package.json')
+  ];
+
+  if (canReuseResourceSync({
+    stampPath: resourceSyncStampPath,
+    expectedStamp: expectedResourceSyncStamp,
+    requiredPaths: requiredResourcePaths
+  })) {
+    console.log('[tauri] Reusing cached backend resource sync');
+  } else {
+    ensureDir(outDir);
+    replaceDir(srcServer, path.join(outDir, 'server'));
+    replaceDir(srcClient, path.join(outDir, 'client'));
+    removeIfExists(path.join(outDir, 'scripts'));
+    copyFile(
+      path.join(srcScripts, 'create-project.js'),
+      path.join(outDir, 'scripts', 'create-project.js')
+    );
+    if (fs.existsSync(srcLinuxScripts)) {
+      replaceDir(srcLinuxScripts, path.join(outDir, 'scripts', 'linux'));
+    }
+    if (fs.existsSync(srcTemplates)) {
+      replaceDir(srcTemplates, path.join(outDir, 'templates'));
+    } else {
+      removeIfExists(path.join(outDir, 'templates'));
+    }
+    if (fs.existsSync(srcConfigDir)) {
+      replaceDir(srcConfigDir, path.join(outDir, 'config'));
+    } else {
+      removeIfExists(path.join(outDir, 'config'));
+    }
+    if (fs.existsSync(srcWindowsScripts)) {
+      replaceDir(srcWindowsScripts, path.join(outDir, 'scripts', 'windows'));
+    }
+    copyFile(srcPkg, path.join(outDir, 'package.json'));
+    if (fs.existsSync(srcLock)) {
+      copyFile(srcLock, path.join(outDir, 'package-lock.json'));
+    } else {
+      removeIfExists(path.join(outDir, 'package-lock.json'));
+    }
+    if (fs.existsSync(srcConfig)) {
+      copyFile(srcConfig, path.join(outDir, 'config.json'));
+    } else {
+      removeIfExists(path.join(outDir, 'config.json'));
+    }
+    if (fs.existsSync(srcUserDefaults)) {
+      copyFile(srcUserDefaults, path.join(outDir, 'user-settings.default.json'));
+    } else {
+      removeIfExists(path.join(outDir, 'user-settings.default.json'));
+    }
+    if (srcLicensePublicKey && fs.existsSync(srcLicensePublicKey)) {
+      copyFile(srcLicensePublicKey, path.join(outDir, 'license-public-key.pem'));
+    } else {
+      removeIfExists(path.join(outDir, 'license-public-key.pem'));
+    }
+    if (srcUpdaterPublicKey && fs.existsSync(srcUpdaterPublicKey)) {
+      copyFile(srcUpdaterPublicKey, path.join(outDir, 'updater.pubkey'));
+    } else {
+      removeIfExists(path.join(outDir, 'updater.pubkey'));
+    }
+    if (bundledNodePath && fs.existsSync(bundledNodePath)) {
       const isExe = bundledNodePath.toLowerCase().endsWith('.exe');
       const nodeFilename = isExe ? 'node.exe' : 'node';
       copyFile(bundledNodePath, path.join(outDir, 'node', nodeFilename));
       console.log('[tauri] Bundled Node runtime:', bundledNodePath);
     } else {
-      console.warn('[tauri] NOTE: ORCHESTRATOR_BUNDLED_NODE_PATH not found:', bundledNodePath);
+      removeIfExists(path.join(outDir, 'node'));
+      if (bundledNodePath) {
+        console.warn('[tauri] NOTE: ORCHESTRATOR_BUNDLED_NODE_PATH not found:', bundledNodePath);
+      }
     }
+    writeJson(resourceSyncStampPath, expectedResourceSyncStamp);
   }
 
   if (installProd) {

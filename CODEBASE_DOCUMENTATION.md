@@ -103,11 +103,13 @@ server/portRegistry.js             - Port assignment + live service scanner (`/a
 └─ UI metadata: labels orchestrator-assigned ports, known dev servers, and custom user labels
 scripts/tauri/prepare-backend-resources.js - Tauri backend packager
 ├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
+├─ Resource-sync reuse: repeated runs skip recopying server/client/templates/config payloads when the source-tree stamp still matches
 ├─ Prod-deps reuse: repeated `--install-prod` runs skip `npm ci` when package-lock + bundled Node stamp still match
 └─ CI cache: Windows release workflow restores `src-tauri/resources/backend/node_modules` so warm installer builds avoid re-installing backend prod deps
 scripts/tauri/run-tauri-build.js    - Shared local/CI Tauri build launcher
 ├─ Profiles: dispatches `release` vs `fast` builds from one script instead of duplicating shell commands
 ├─ Windows fast-cache pinning: local non-CI `fast` builds use a stable `%LOCALAPPDATA%\\AgentWorkspaceBuildCache\\tauri-target` root so repo renames/worktree moves do not discard Cargo incremental state
+├─ Local installer trim: local non-CI Windows `fast` builds default to `nsis` instead of building both Windows installer formats
 └─ Overrides: respects explicit `CARGO_TARGET_DIR` / `ORCHESTRATOR_TAURI_TARGET_DIR` when callers want a custom target root
 ```
 

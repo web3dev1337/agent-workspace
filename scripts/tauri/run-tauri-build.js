@@ -8,6 +8,7 @@ const { spawnSync } = require('child_process');
 function parseArgs(argv) {
   const args = argv.slice(2);
   let profile = 'release';
+  let bundles = null;
   let dryRun = false;
 
   for (let i = 0; i < args.length; i += 1) {
@@ -17,12 +18,17 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (arg === '--bundles' && args[i + 1]) {
+      bundles = args[i + 1];
+      i += 1;
+      continue;
+    }
     if (arg === '--dry-run') {
       dryRun = true;
     }
   }
 
-  return { profile, dryRun };
+  return { profile, bundles, dryRun };
 }
 
 function resolveRepoRoot() {
@@ -63,6 +69,47 @@ function resolveCargoTargetDir({ profile, env = process.env, platform = process.
   return { targetDir: null, reason: 'repo-default' };
 }
 
+function parseBundleList(value) {
+  return String(value || '')
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function resolveBundleTargets({
+  profile,
+  explicitBundles,
+  env = process.env,
+  platform = process.platform
+}) {
+  if (explicitBundles) {
+    return {
+      bundleTargets: parseBundleList(explicitBundles),
+      reason: 'arg:--bundles'
+    };
+  }
+
+  const envBundles = env.ORCHESTRATOR_TAURI_BUNDLES || env.TAURI_BUNDLES;
+  if (envBundles) {
+    return {
+      bundleTargets: parseBundleList(envBundles),
+      reason: 'env:ORCHESTRATOR_TAURI_BUNDLES'
+    };
+  }
+
+  if (platform === 'win32' && profile === 'fast' && !env.CI) {
+    return {
+      bundleTargets: ['nsis'],
+      reason: 'local-windows-fast-installer'
+    };
+  }
+
+  return {
+    bundleTargets: null,
+    reason: 'repo-default'
+  };
+}
+
 function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, { stdio: 'inherit', ...opts });
   if (result.error) {
@@ -74,10 +121,14 @@ function run(cmd, args, opts = {}) {
 }
 
 function main() {
-  const { profile, dryRun } = parseArgs(process.argv);
+  const { profile, bundles, dryRun } = parseArgs(process.argv);
   const repoRoot = resolveRepoRoot();
   const tauriCliPath = require.resolve('@tauri-apps/cli/tauri.js');
   const { targetDir, reason } = resolveCargoTargetDir({ profile });
+  const { bundleTargets, reason: bundleReason } = resolveBundleTargets({
+    profile,
+    explicitBundles: bundles
+  });
 
   const env = { ...process.env };
   if (targetDir) {
@@ -86,6 +137,12 @@ function main() {
     console.log(`[tauri] Using cargo target dir (${reason}): ${targetDir}`);
   } else {
     console.log(`[tauri] Using repo-local cargo target dir (${reason})`);
+  }
+
+  if (bundleTargets && bundleTargets.length > 0) {
+    console.log(`[tauri] Limiting bundle targets (${bundleReason}): ${bundleTargets.join(', ')}`);
+  } else {
+    console.log(`[tauri] Using bundle targets from tauri.conf.json (${bundleReason})`);
   }
 
   if (dryRun) {
@@ -97,7 +154,13 @@ function main() {
     env
   });
 
-  run(process.execPath, [tauriCliPath, 'build', '--', '--profile', profile], {
+  const tauriArgs = [tauriCliPath, 'build'];
+  if (bundleTargets && bundleTargets.length > 0) {
+    tauriArgs.push('--bundles', bundleTargets.join(','));
+  }
+  tauriArgs.push('--', '--profile', profile);
+
+  run(process.execPath, tauriArgs, {
     cwd: repoRoot,
     env
   });
@@ -110,5 +173,7 @@ if (require.main === module) {
 module.exports = {
   defaultLocalWindowsFastTargetDir,
   parseArgs,
+  parseBundleList,
+  resolveBundleTargets,
   resolveCargoTargetDir
 };

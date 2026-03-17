@@ -3,13 +3,16 @@ const path = require('path');
 const {
   defaultLocalWindowsFastTargetDir,
   parseArgs,
+  parseBundleList,
+  resolveBundleTargets,
   resolveCargoTargetDir
 } = require('../../scripts/tauri/run-tauri-build');
 
 describe('run-tauri-build', () => {
   test('parses explicit profile and dry-run flag', () => {
-    expect(parseArgs(['node', 'run-tauri-build.js', '--profile', 'fast', '--dry-run'])).toEqual({
+    expect(parseArgs(['node', 'run-tauri-build.js', '--profile', 'fast', '--bundles', 'nsis,msi', '--dry-run'])).toEqual({
       profile: 'fast',
+      bundles: 'nsis,msi',
       dryRun: true
     });
   });
@@ -49,5 +52,32 @@ describe('run-tauri-build', () => {
     expect(defaultLocalWindowsFastTargetDir({
       LOCALAPPDATA: 'C:\\Users\\Administrator\\AppData\\Local'
     })).toBe('C:\\Users\\Administrator\\AppData\\Local\\AgentWorkspaceBuildCache\\tauri-target');
+  });
+
+  test('splits bundle lists on commas and whitespace', () => {
+    expect(parseBundleList('nsis, msi updater')).toEqual(['nsis', 'msi', 'updater']);
+  });
+
+  test('uses nsis-only bundles for local Windows fast builds', () => {
+    expect(resolveBundleTargets({
+      profile: 'fast',
+      env: { LOCALAPPDATA: 'C:\\Users\\Administrator\\AppData\\Local' },
+      platform: 'win32'
+    })).toEqual({
+      bundleTargets: ['nsis'],
+      reason: 'local-windows-fast-installer'
+    });
+  });
+
+  test('respects explicit bundle overrides', () => {
+    expect(resolveBundleTargets({
+      profile: 'fast',
+      explicitBundles: 'msi',
+      env: {},
+      platform: 'win32'
+    })).toEqual({
+      bundleTargets: ['msi'],
+      reason: 'arg:--bundles'
+    });
   });
 });
