@@ -17,6 +17,7 @@ FRONTEND:   client/app.js, client/terminal.js        - Web client
 NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
 PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resources + reusable packaged prod deps
+            scripts/tauri/run-tauri-build.js          - Centralized Tauri build entrypoint (local Windows fast-cache pinning + profile dispatch)
 DIFF:       diff-viewer/                             - Advanced diff viewer component
 SITE:       site/                                    - Standalone showcase site for future GitHub Pages publishing
 PLANS:      PLANS/                                   - Date-stamped planning + implementation notes
@@ -104,6 +105,10 @@ scripts/tauri/prepare-backend-resources.js - Tauri backend packager
 ├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
 ├─ Prod-deps reuse: repeated `--install-prod` runs skip `npm ci` when package-lock + bundled Node stamp still match
 └─ CI cache: Windows release workflow restores `src-tauri/resources/backend/node_modules` so warm installer builds avoid re-installing backend prod deps
+scripts/tauri/run-tauri-build.js    - Shared local/CI Tauri build launcher
+├─ Profiles: dispatches `release` vs `fast` builds from one script instead of duplicating shell commands
+├─ Windows fast-cache pinning: local non-CI `fast` builds use a stable `%LOCALAPPDATA%\\AgentWorkspaceBuildCache\\tauri-target` root so repo renames/worktree moves do not discard Cargo incremental state
+└─ Overrides: respects explicit `CARGO_TARGET_DIR` / `ORCHESTRATOR_TAURI_TARGET_DIR` when callers want a custom target root
 ```
 
 ### Multi-Workspace System (Core Feature)
