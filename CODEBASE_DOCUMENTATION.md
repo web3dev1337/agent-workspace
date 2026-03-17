@@ -184,6 +184,8 @@ client/app.js                      - Main client application
 ├─ Status UI: visual state mapping for `busy`, `waiting`, `ready-new`, and `no-agent`
 └─ Dependencies: Socket.IO client, terminal emulation
 
+client/assets/agent-workspace-logo.png - Shared circular brand mark used by the app favicon, sidebar/dashboard title logo, and as the source for bundled desktop icons
+
 client/terminal.js                 - Terminal component implementation
 client/terminal-manager.js         - Terminal lifecycle management
 client/file-watcher-adapter.js     - File watching integration
