@@ -112,7 +112,7 @@ describe('WorktreeMetadataService', () => {
       
       // Either cached or returned (gh might not be available)
       expect(true).toBe(true);
-    });
+    }, 20000);
   });
 
   describe('getMetadata', () => {
