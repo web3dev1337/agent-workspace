@@ -160,11 +160,20 @@ class ClaudeOrchestrator {
     return !!el.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
   }
 
-  isAgentSession(sessionId) {
+  isAgentSession(sessionId, session = null) {
     const sid = String(sessionId || '').trim();
     if (!sid) return false;
-    const type = String(this.sessions.get(sid)?.type || '').trim().toLowerCase();
+    const row = session || this.sessions.get(sid) || null;
+    const type = String(row?.type || '').trim().toLowerCase();
     return type === 'claude' || type === 'codex' || /-(claude|codex)$/.test(sid);
+  }
+
+  isServerSession(sessionId, session = null) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return false;
+    const row = session || this.sessions.get(sid) || null;
+    const type = String(row?.type || '').trim().toLowerCase();
+    return type === 'server' || /-server$/.test(sid);
   }
 
   isMainlineBranch(branch) {
@@ -3644,9 +3653,11 @@ class ClaudeOrchestrator {
     return `pr:${owner}/${repo}#${prNum}`;
   }
 
-  getTierForSession(sessionId) {
-    const session = this.sessions.get(sessionId);
-    const prUrl = this.githubLinks.get(sessionId)?.pr || null;
+  getDirectTierForSession(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return null;
+    const session = this.sessions.get(sid);
+    const prUrl = this.githubLinks.get(sid)?.pr || null;
     const prTaskId = prUrl ? this.getPRTaskIdFromUrl(prUrl) : null;
     if (prTaskId) {
       const record = this.taskRecords.get(prTaskId);
@@ -3661,11 +3672,47 @@ class ClaudeOrchestrator {
       if (tier >= 1 && tier <= 4) return tier;
     }
 
-    const record = this.taskRecords.get(`session:${sessionId}`);
+    const record = this.taskRecords.get(`session:${sid}`);
     const tier = Number(record?.tier);
     if (tier >= 1 && tier <= 4) return tier;
 
     return null;
+  }
+
+  getTierForSession(sessionId, { includeWorktreeFallback = true } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return null;
+
+    const directTier = this.getDirectTierForSession(sid);
+    if (directTier !== null || !includeWorktreeFallback) return directTier;
+
+    const session = this.sessions.get(sid);
+    const worktreeKey = this.getSessionWorktreeKey(sid, session);
+    if (!worktreeKey) return null;
+
+    let agentTier = null;
+    let serverTier = null;
+    let fallbackTier = null;
+
+    for (const [candidateId, candidateSession] of this.sessions) {
+      if (candidateId === sid) continue;
+      if (this.getSessionWorktreeKey(candidateId, candidateSession) !== worktreeKey) continue;
+
+      const tier = this.getDirectTierForSession(candidateId);
+      if (!(tier >= 1 && tier <= 4)) continue;
+
+      if (this.isAgentSession(candidateId, candidateSession)) {
+        if (agentTier === null) agentTier = tier;
+      } else if (this.isServerSession(candidateId, candidateSession)) {
+        if (serverTier === null) serverTier = tier;
+      } else if (fallbackTier === null) {
+        fallbackTier = tier;
+      }
+    }
+
+    if (agentTier !== null) return agentTier;
+    if (serverTier !== null) return serverTier;
+    return fallbackTier;
   }
 
 	  matchesViewMode(sessionId) {
@@ -5331,6 +5378,8 @@ class ClaudeOrchestrator {
     };
 
     const activeGroupKeys = new Set();
+    let hasAnyVisibleAgent = false;
+    let hasAnyVisibleServer = false;
 
     groups.forEach((group) => {
       const container = ensurePairContainer(group.key);
@@ -5342,6 +5391,8 @@ class ClaudeOrchestrator {
       });
 
       let visibleCount = 0;
+      let groupHasVisibleAgent = false;
+      let groupHasVisibleServer = false;
 
       ordered.forEach((sessionId) => {
         const session = this.sessions.get(sessionId);
@@ -5395,6 +5446,8 @@ class ClaudeOrchestrator {
             container.appendChild(wrapper);
           }
           visibleCount += 1;
+          if (this.isAgentSession(sessionId, session)) groupHasVisibleAgent = true;
+          else if (this.isServerSession(sessionId, session)) groupHasVisibleServer = true;
         } else if (wrapper && !docked) {
           // Remove hidden wrappers from the grid so collapsed worktrees do not leave
           // behind stale grid items or layout artifacts in secondary workspace tabs.
@@ -5408,6 +5461,8 @@ class ClaudeOrchestrator {
       if (visibleCount) {
         container.style.display = '';
         activeGroupKeys.add(group.key);
+        if (groupHasVisibleAgent) hasAnyVisibleAgent = true;
+        if (groupHasVisibleServer) hasAnyVisibleServer = true;
       } else {
         container.remove();
       }
@@ -5419,17 +5474,37 @@ class ClaudeOrchestrator {
       if (key && !groupMap.has(key)) container.remove();
     });
 
-    // Compute grid layout: pairs stack top-to-bottom (single column) for small
-    // counts; add a second column only when rows would become too thin.
+    // Keep pair orientation (agent left, server right) and reflow differently for
+    // pair mode vs single-kind mode.
     const visibleCount = activeGroupKeys.size;
     grid.setAttribute('data-visible-count', visibleCount);
 
+    const hasBothKindsVisible = hasAnyVisibleAgent && hasAnyVisibleServer;
+    const isMobile = this.isMobileLayout();
     let cols = 1;
-    let rows = visibleCount;
-    if (visibleCount > 6) {
-      cols = 2;
-      rows = Math.ceil(visibleCount / 2);
+    let rows = Math.max(visibleCount, 1);
+
+    if (visibleCount > 0) {
+      if (isMobile) {
+        cols = 1;
+        rows = visibleCount;
+      } else if (hasBothKindsVisible) {
+        if (visibleCount <= 3) {
+          cols = 1;
+          rows = visibleCount;
+        } else {
+          cols = 2;
+          rows = Math.ceil(visibleCount / 2);
+        }
+      } else if (visibleCount <= 3) {
+        cols = visibleCount;
+        rows = 1;
+      } else {
+        cols = 2;
+        rows = Math.ceil(visibleCount / 2);
+      }
     }
+
     grid.style.setProperty('--grid-cols', cols);
     grid.style.setProperty('--grid-rows', rows);
 
