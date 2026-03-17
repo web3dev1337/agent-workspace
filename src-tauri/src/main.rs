@@ -601,9 +601,9 @@ fn main() {
         .setup(|app| {
             println!("Agent Workspace starting...");
 
-            if let Some(window) = app.get_webview_window("main") {
-                if let Some(icon) = app.default_window_icon().cloned() {
-                    let _ = window.set_icon(icon);
+            if let Some(icon) = app.default_window_icon().cloned() {
+                for window in app.webview_windows().values() {
+                    let _ = window.set_icon(icon.clone());
                 }
             }
 
