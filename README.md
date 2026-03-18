@@ -67,7 +67,10 @@ Agent Workspace wraps your preferred terminal tools and runs them side by side w
 - Codex CLI
 - Gemini CLI
 - OpenCode
+- Grok CLI
 - Any CLI agent that runs in a terminal
+
+Compatibility rule: if it can be launched from a terminal command in your worktree, Agent Workspace can run it.
 
 **Works with:** Claude Max, Codex plans, or your own API keys.
 
