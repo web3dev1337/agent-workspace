@@ -31372,7 +31372,8 @@ class ClaudeOrchestrator {
     if (existing) existing.remove();
     this.quickWorktreeConversationsLoaded = false;
     this.quickWorktreeConversationLimit = this.quickWorktreeConversationLimit || 100;
-    this.quickWorktreeSearchTerm = this.quickWorktreeSearchTerm || '';
+    // Opening Add Worktree should start from an unfiltered list.
+    this.quickWorktreeSearchTerm = '';
     this.quickWorktreeSortMode = localStorage.getItem('quick-worktree-sort') || 'edited';
     this.quickWorktreeRecencyFilter = localStorage.getItem('quick-worktree-recency') || 'all';
     this.quickWorktreeFavoritesOnly = localStorage.getItem('quick-worktree-favorites-only') === 'true';
@@ -31563,6 +31564,10 @@ class ClaudeOrchestrator {
     const tabButtons = modal.querySelectorAll('.quick-tab-btn');
     const convMoreBtn = modal.querySelector('.quick-conv-more-btn');
     const convHistoryBtn = modal.querySelector('.quick-conv-history-btn');
+
+    if (searchInput) {
+      searchInput.value = this.quickWorktreeSearchTerm;
+    }
 
     // Initialize quick work controls (sort/recency)
     modal.querySelectorAll('input[name="quick-sort"]').forEach(input => {
