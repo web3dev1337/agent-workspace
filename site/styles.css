@@ -264,7 +264,7 @@ body {
 .action-row {
   display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: 1rem;
 }
 
 .btn-glow {
@@ -272,9 +272,9 @@ body {
   background: #fff;
   color: #000;
   border: none;
-  padding: 1rem 2.5rem;
+  padding: 0.85rem 1.75rem;
   border-radius: 100px;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.3s ease;
@@ -310,9 +310,9 @@ body {
   background: transparent;
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.25);
-  padding: 1rem 2.5rem;
+  padding: 0.85rem 1.75rem;
   border-radius: 100px;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   text-decoration: none;
@@ -324,6 +324,16 @@ body {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-2px);
+}
+
+.btn-sponsor {
+  border-color: rgba(219, 97, 162, 0.4);
+  color: #db61a2;
+}
+
+.btn-sponsor:hover {
+  background: rgba(219, 97, 162, 0.1);
+  border-color: rgba(219, 97, 162, 0.7);
 }
 
 a.btn-glow {
