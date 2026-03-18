@@ -193,6 +193,7 @@ client/app.js                      - Main client application
 ├─ Projects + Chats data source: prefers server-aggregated repository projects from `GET /api/thread-projects` with client fallback aggregation
 ├─ Quick Work cache: local scan + GitHub repo lists use a configurable cache window (`ui.worktrees.repoCatalogCacheMinutes`, default 1440) with manual Refresh button support
 ├─ Quick Work GitHub import: “GitHub — Not Cloned” rows can clone directly or open a placement modal (category/framework/parent folders) before auto-starting `work1`
+├─ Quick Work onboarding: first-run hint card + “Folder map” modal explain category→folder mapping (`game -> games`, `website -> websites`, etc.) for fresh installs
 ├─ Status UI: visual state mapping for `busy`, `waiting`, `ready-new`, and `no-agent`
 └─ Dependencies: Socket.IO client, terminal emulation
 

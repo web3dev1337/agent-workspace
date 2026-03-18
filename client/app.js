@@ -31198,6 +31198,9 @@ class ClaudeOrchestrator {
           <button class="btn-secondary quick-refresh-btn" id="quick-worktree-refresh" title="Refresh local + GitHub repo lists now">
             Refresh
           </button>
+          <button class="btn-secondary quick-folder-map-btn" id="quick-worktree-folder-map" title="Show how category dropdown values map to folders">
+            Folder map
+          </button>
           <span class="quick-cache-status" id="quick-worktree-cache-status" title="Repo list cache status"></span>
           <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees" style="display:none">
             <input type="checkbox" id="worktree-modal-keep-open">
@@ -31323,6 +31326,7 @@ class ClaudeOrchestrator {
     const searchInput = modal.querySelector('#quick-worktree-search');
     const advancedBtn = modal.querySelector('.quick-advanced-btn');
     const refreshBtn = modal.querySelector('#quick-worktree-refresh');
+    const folderMapBtn = modal.querySelector('#quick-worktree-folder-map');
     const tabButtons = modal.querySelectorAll('.quick-tab-btn');
     const convMoreBtn = modal.querySelector('.quick-conv-more-btn');
     const convHistoryBtn = modal.querySelector('.quick-conv-history-btn');
@@ -31444,6 +31448,12 @@ class ClaudeOrchestrator {
       });
     }
 
+    if (folderMapBtn) {
+      folderMapBtn.addEventListener('click', () => {
+        this.showQuickRemoteFolderMapModal();
+      });
+    }
+
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         tabButtons.forEach(b => b.classList.remove('active'));
@@ -31523,13 +31533,17 @@ class ClaudeOrchestrator {
 
     // Hide remote repos section divider when all remote repos are filtered out
     modal.querySelectorAll('.quick-repo-section-divider').forEach(divider => {
-      let next = divider.nextElementSibling;
+      const onboardingCard = divider.nextElementSibling?.classList?.contains('quick-remote-onboarding-card')
+        ? divider.nextElementSibling
+        : null;
+      let next = onboardingCard ? onboardingCard.nextElementSibling : divider.nextElementSibling;
       let anyVisible = false;
       while (next && next.classList.contains('quick-repo-remote')) {
         if (next.style.display !== 'none') anyVisible = true;
         next = next.nextElementSibling;
       }
       divider.style.display = anyVisible ? '' : 'none';
+      if (onboardingCard) onboardingCard.style.display = anyVisible ? '' : 'none';
     });
   }
 
@@ -31708,6 +31722,9 @@ class ClaudeOrchestrator {
         : remoteRepos;
       if (matchingRemote.length > 0) {
         html += `<div class="quick-repo-section-divider">GitHub — Not Cloned (${matchingRemote.length})</div>`;
+        if (!this.isQuickRemoteOnboardingDismissed()) {
+          html += this.renderQuickRemoteOnboardingCard();
+        }
         html += matchingRemote.map((repo) => this.renderQuickRemoteRepoRow(repo)).join('');
       }
     }
@@ -31825,6 +31842,23 @@ class ClaudeOrchestrator {
           return;
         }
         this.showQuickRemoteCloneModal(remoteRepo);
+        return;
+      }
+
+      const openFolderMapBtn = event.target.closest('.quick-remote-open-folder-map-btn');
+      if (openFolderMapBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.showQuickRemoteFolderMapModal();
+        return;
+      }
+
+      const dismissRemoteOnboardingBtn = event.target.closest('.quick-remote-dismiss-onboarding-btn');
+      if (dismissRemoteOnboardingBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.setQuickRemoteOnboardingDismissed(true);
+        this.renderQuickWorktreeRepoList();
         return;
       }
 
@@ -31982,6 +32016,7 @@ class ClaudeOrchestrator {
               <select id="quick-remote-framework"></select>
             </label>
           </div>
+          <div id="quick-remote-category-help" class="quick-remote-clone-category-help"></div>
 
           <label class="quick-remote-clone-label">
             <span>Parent folders inside category (optional)</span>
@@ -32013,6 +32048,7 @@ class ClaudeOrchestrator {
     const parentSuggestionsEl = modal.querySelector('#quick-remote-parent-suggestions');
     const createFoldersEl = modal.querySelector('#quick-remote-create-folders');
     const finalPathEl = modal.querySelector('#quick-remote-final-path-value');
+    const categoryHelpEl = modal.querySelector('#quick-remote-category-help');
     const confirmBtn = modal.querySelector('#quick-remote-clone-confirm');
 
     const state = {
@@ -32027,8 +32063,10 @@ class ClaudeOrchestrator {
     const populateCategorySelect = () => {
       categorySelect.innerHTML = categories.map((category) => {
         const id = String(category?.id || '').trim();
+        const folder = String(category?.basePath || '').trim().replace(/^\/+|\/+$/g, '') || '(custom)';
+        const label = `${category?.name || id} (${folder})`;
         const selected = id === state.categoryId ? 'selected' : '';
-        return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(category?.name || id)}</option>`;
+        return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(label)}</option>`;
       }).join('');
     };
 
@@ -32079,6 +32117,12 @@ class ClaudeOrchestrator {
         frameworkId: state.frameworkId,
         parentPath: sanitizedParentPath
       });
+
+      const categoryFolder = String(withParent?.category?.basePath || '').trim().replace(/^\/+|\/+$/g, '') || '(custom)';
+      const gitHubRoot = normalizeClientPath(this.projectTypeTaxonomy?.gitHubRoot || '~/GitHub') || '~/GitHub';
+      if (categoryHelpEl) {
+        categoryHelpEl.innerHTML = `Category controls the top-level folder under <code>${this.escapeHtml(gitHubRoot)}</code>. Current category folder: <code>${this.escapeHtml(categoryFolder)}</code>.`;
+      }
 
       renderParentSuggestions(withParent.parentSuggestions);
       finalPathEl.textContent = `${withParent.finalPath}/master (worktree: work1)`;
@@ -32707,6 +32751,127 @@ class ClaudeOrchestrator {
     return segments.join('/');
   }
 
+  isQuickRemoteOnboardingDismissed() {
+    try {
+      return localStorage.getItem('quick-remote-onboarding-dismissed') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  setQuickRemoteOnboardingDismissed(dismissed) {
+    const next = !!dismissed;
+    try {
+      localStorage.setItem('quick-remote-onboarding-dismissed', next ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+  }
+
+  getQuickRemoteCategoryFolderRows() {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    return categories.map((category) => {
+      const id = String(category?.id || '').trim();
+      const name = String(category?.name || id).trim() || id;
+      const baseRelative = String(category?.basePath || '').trim().replace(/^\/+|\/+$/g, '');
+      const baseAbsolute = this.getQuickRemoteCategoryBasePath(category);
+      return {
+        id,
+        name,
+        baseRelative,
+        baseAbsolute,
+        frameworkIds: Array.isArray(category?.frameworkIds) ? category.frameworkIds : []
+      };
+    });
+  }
+
+  renderQuickRemoteOnboardingCard() {
+    const rows = this.getQuickRemoteCategoryFolderRows();
+    const topRows = rows.slice(0, 5);
+    const compactMap = topRows.map((row) => {
+      const folder = row.baseRelative || row.baseAbsolute || '(custom)';
+      return `<span class="quick-remote-map-chip"><strong>${this.escapeHtml(row.name)}</strong> → ${this.escapeHtml(folder)}</span>`;
+    }).join('');
+
+    return `
+      <div class="quick-remote-onboarding-card">
+        <button class="quick-remote-dismiss-onboarding-btn" title="Hide this hint" aria-label="Hide this hint" type="button">✕</button>
+        <div class="quick-remote-onboarding-title">First time setup: where do repos go?</div>
+        <div class="quick-remote-onboarding-text">Choose <strong>location</strong> for a repo, pick a <strong>category</strong>, and Orchestrator clones to <code>&lt;category-folder&gt;/&lt;optional-parent&gt;/&lt;repo&gt;/master</code> then starts <code>work1</code>.</div>
+        <div class="quick-remote-map-row">${compactMap}</div>
+        <div class="quick-remote-onboarding-actions">
+          <button class="btn-secondary quick-remote-open-folder-map-btn" type="button">Open full folder map</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async showQuickRemoteFolderMapModal() {
+    await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+    const rows = this.getQuickRemoteCategoryFolderRows();
+    if (!rows.length) {
+      this.showToast('Project taxonomy is not available yet', 'warning');
+      return;
+    }
+
+    const existing = document.getElementById('quick-remote-folder-map-modal');
+    if (existing) existing.remove();
+
+    const gitHubRoot = normalizeClientPath(this.projectTypeTaxonomy?.gitHubRoot || '~/GitHub') || '~/GitHub';
+    const modal = document.createElement('div');
+    modal.id = 'quick-remote-folder-map-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content quick-remote-folder-map-modal-content">
+        <div class="modal-header">
+          <h3>Category Folder Map</h3>
+          <button class="close-btn" data-action="close">✕</button>
+        </div>
+        <div class="modal-body quick-remote-folder-map-body">
+          <div class="quick-remote-folder-map-help">Category choices in “Choose location…” map to folders under this GitHub root:</div>
+          <div class="quick-remote-folder-map-root"><code>${this.escapeHtml(gitHubRoot)}</code></div>
+          <div class="quick-remote-folder-map-table-wrap">
+            <table class="quick-remote-folder-map-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Folder</th>
+                  <th>Example final clone path</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map((row) => {
+                  const folder = row.baseRelative || normalizeClientPath(row.baseAbsolute) || '(custom)';
+                  const sample = `${gitHubRoot}/${folder}/your-repo/master`.replace(/\/+/g, '/');
+                  return `
+                    <tr>
+                      <td>${this.escapeHtml(row.name)}</td>
+                      <td><code>${this.escapeHtml(folder)}</code></td>
+                      <td><code>${this.escapeHtml(sample)}</code></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="quick-remote-folder-map-help">Change mappings in <code>config/project-types.json</code> (category <code>basePath</code> values), then restart Orchestrator.</div>
+        </div>
+        <div class="modal-footer quick-remote-folder-map-footer">
+          <button class="btn-primary" data-action="close">Close</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (event) => {
+      const close = event.target.closest('[data-action="close"]');
+      if (close) {
+        event.preventDefault();
+        modal.remove();
+      }
+    });
+  }
+
   getQuickRemoteRepoBySlug(slug) {
     const key = String(slug || '').trim().toLowerCase();
     if (!key) return null;
@@ -32932,7 +33097,7 @@ class ClaudeOrchestrator {
           <button class="btn-primary quick-remote-clone-btn"
                   data-repo-slug="${this.escapeHtml(slug)}"
                   title="Clone into the suggested folder and start work1">
-            Clone + Start work1
+            Clone suggested path
           </button>
           <button class="btn-secondary quick-remote-configure-btn"
                   data-repo-slug="${this.escapeHtml(slug)}"
