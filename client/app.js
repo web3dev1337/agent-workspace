@@ -9745,10 +9745,11 @@ class ClaudeOrchestrator {
 	  setupDependencySetupWizard() {
 	    const modal = document.getElementById('dependency-setup-modal');
 	    const openBtn = document.getElementById('dependency-setup-open');
+	    const titleEl = document.getElementById('dependency-setup-title');
 	    const summaryEl = document.getElementById('dependency-setup-summary');
 	    const listEl = document.getElementById('dependency-setup-list');
 	    const closeBtn = document.getElementById('dependency-setup-close');
-	    if (!modal || !summaryEl || !listEl) return;
+	    if (!modal || !titleEl || !summaryEl || !listEl) return;
 	    const body = document.body;
 	    const isWindowsHost = (() => {
 	      try {
@@ -9759,20 +9760,57 @@ class ClaudeOrchestrator {
 	        return false;
 	      }
 	    })();
+	    const supportsDependencyOnboarding = isWindowsHost;
+	    const legalAcceptedKey = 'orchestrator-legal-accepted-v1';
+	    const readLegalAccepted = () => {
+	      try {
+	        return localStorage.getItem(legalAcceptedKey) === 'true';
+	      } catch {
+	        return false;
+	      }
+	    };
+	    const persistLegalAccepted = (value) => {
+	      try {
+	        if (value) localStorage.setItem(legalAcceptedKey, 'true');
+	        else localStorage.removeItem(legalAcceptedKey);
+	      } catch {
+	        // ignore
+	      }
+	    };
+	    const exitApplication = async () => {
+	      try {
+	        const tauriWindow = window.__TAURI__?.window;
+	        if (tauriWindow && typeof tauriWindow.getCurrent === 'function') {
+	          const currentWindow = tauriWindow.getCurrent();
+	          if (currentWindow && typeof currentWindow.close === 'function') {
+	            await currentWindow.close();
+	            return;
+	          }
+	        }
+	      } catch {
+	        // ignore and fall back
+	      }
+	      try {
+	        window.close();
+	      } catch {
+	        // ignore
+	      }
+	      try {
+	        window.location.replace('about:blank');
+	      } catch {
+	        // ignore
+	      }
+	    };
 
 	    const setBootstrapPending = (pending) => {
 	      if (pending) {
-	        if (!isWindowsHost) return;
+	        if (!supportsDependencyOnboarding) return;
 	        body?.classList?.add?.('dependency-onboarding-booting');
 	        body?.classList?.remove?.('dependency-onboarding-active');
 	        return;
 	      }
 	      body?.classList?.remove?.('dependency-onboarding-booting');
 	    };
-	    if (!isWindowsHost) {
-	      setBootstrapPending(false);
-	      return;
-	    }
 
 	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v3';
 	    const completedKey = 'orchestrator-dependency-onboarding-completed-v2';
@@ -9934,6 +9972,7 @@ class ClaudeOrchestrator {
 	      currentStep: 0,
 	      hydratedPersistedStep: false,
 	      showWelcome: true,
+	      legalAccepted: readLegalAccepted(),
 	      skippedActionIds: new Set(),
 	      actionRuns: new Map(),
 	      actionRunPollers: new Map(),
@@ -9959,6 +9998,13 @@ class ClaudeOrchestrator {
 	      const next = value === true;
 	      if (readCompleted() === next) return;
 	      void savePersistedSetupState({ completed: next });
+	    };
+
+	    const writeLegalAccepted = (value) => {
+	      const next = value === true;
+	      if (state.legalAccepted === next) return;
+	      state.legalAccepted = next;
+	      persistLegalAccepted(next);
 	    };
 
 	    const readSavedStep = () => Math.max(0, Number(getPersistedSetupState().currentStep) || 0);
@@ -10177,7 +10223,7 @@ class ClaudeOrchestrator {
 	    };
 
 	    const isOnboardingLocked = () => {
-	      if (!isWindowsHost) return false;
+	      if (!supportsDependencyOnboarding) return false;
 	      if (readCompleted()) return false;
 	      if (!Array.isArray(state.actions) || state.actions.length === 0) return false;
 	      const toolsMap = toToolMap(state.diagnostics);
@@ -10185,8 +10231,10 @@ class ClaudeOrchestrator {
 	      return !req?.coreReady;
 	    };
 
+	    const isLegalGatePending = () => state.legalAccepted !== true;
+
 	    const applyOnboardingLockUI = () => {
-	      const locked = isOnboardingLocked();
+	      const locked = isLegalGatePending() || isOnboardingLocked();
 	      if (closeBtn) {
 	        closeBtn.disabled = locked;
 	        closeBtn.style.visibility = locked ? 'hidden' : '';
@@ -10239,6 +10287,41 @@ class ClaudeOrchestrator {
 	    };
 
 	    const render = () => {
+	      if (isLegalGatePending()) {
+	        titleEl.textContent = 'Review Terms Before Continuing';
+	        summaryEl.textContent = 'Agent Workspace can execute commands, modify files, and optionally communicate with third-party services you enable.';
+	        listEl.innerHTML = `
+	          <div class="onboarding-legal-card">
+	            <span class="onboarding-legal-kicker">First-run acknowledgement</span>
+	            <h3 class="onboarding-welcome-title">Review the product terms before using Agent Workspace.</h3>
+	            <p class="onboarding-welcome-copy">
+	              This app can run commands, read and write files, interact with repositories, and send data to optional third-party services you choose to use.
+	            </p>
+	            <ul class="onboarding-legal-list">
+	              <li>No publisher-hosted telemetry by default.</li>
+	              <li>Optional GitHub, Trello, Discord, voice, and AI features communicate with services you enable.</li>
+	              <li>You are responsible for reviewing commands, outputs, automations, and connected credentials.</li>
+	              <li>The software is provided "as is," subject to rights that cannot be excluded under applicable law.</li>
+	            </ul>
+	            <div class="onboarding-legal-links">
+	              <a class="onboarding-btn-secondary" href="https://agent-workspace.ai/terms.html" target="_blank" rel="noopener">Terms of Use</a>
+	              <a class="onboarding-btn-secondary" href="https://agent-workspace.ai/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+	            </div>
+	            <div class="onboarding-nav-row onboarding-welcome-actions">
+	              <button class="onboarding-btn-secondary" type="button" data-setup-exit-legal="true">Exit</button>
+	              <button class="onboarding-btn-primary" type="button" data-setup-accept-legal="true">I Agree</button>
+	            </div>
+	          </div>`;
+	        return { req: null, steps: [], current: null, legalPending: true };
+	      }
+
+	      titleEl.textContent = 'Agent Workspace Setup';
+	      if (!supportsDependencyOnboarding) {
+	        summaryEl.textContent = 'Legal acknowledgement complete.';
+	        listEl.innerHTML = '<div class="dependency-setup-empty">Setup guidance is only required on Windows hosts.</div>';
+	        return { req: null, steps: [], current: null };
+	      }
+
 	      const toolsMap = toToolMap(state.diagnostics);
 	      const req = getRequirementState(toolsMap);
 	      const steps = getResolvedSteps();
@@ -10519,7 +10602,7 @@ class ClaudeOrchestrator {
 	        openModal();
 	        return false;
 	      }
-	      if (!force && !readCompleted()) {
+	      if (!force && supportsDependencyOnboarding && !readCompleted()) {
 	        writeDismissed(true);
 	      }
 	      modal.classList.add('hidden');
@@ -10528,7 +10611,7 @@ class ClaudeOrchestrator {
 	      return true;
 	    };
 	    const openModal = ({ showWelcome = null, allowDuringStartup = false } = {}) => {
-	      if (readCompleted()) {
+	      if (supportsDependencyOnboarding && readCompleted() && !isLegalGatePending()) {
 	        closeModal({ force: true });
 	        return false;
 	      }
@@ -10540,12 +10623,12 @@ class ClaudeOrchestrator {
 	      state.startupPending = false;
 	      setBootstrapPending(false);
 	      body?.classList?.add?.('dependency-onboarding-active');
-	      if (typeof showWelcome === 'boolean') {
+	      if (supportsDependencyOnboarding && typeof showWelcome === 'boolean') {
 	        state.showWelcome = showWelcome;
-	      } else if (wasHidden) {
+	      } else if (supportsDependencyOnboarding && wasHidden) {
 	        state.showWelcome = true;
 	      }
-	      if (state.diagnostics && Array.isArray(state.actions) && state.actions.length > 0) {
+	      if (isLegalGatePending() || (state.diagnostics && Array.isArray(state.actions) && state.actions.length > 0)) {
 	        render();
 	      }
 	      applyOnboardingLockUI();
@@ -10563,6 +10646,17 @@ class ClaudeOrchestrator {
 	    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 
 	    const loadAndRender = async ({ open = false, forceAutoShow = false, bootstrap = false, explicitOpen = false } = {}) => {
+	      if (isLegalGatePending()) {
+	        render();
+	        openModal({ allowDuringStartup: true });
+	        return true;
+	      }
+	      if (!supportsDependencyOnboarding) {
+	        state.startupPending = false;
+	        setBootstrapPending(false);
+	        closeModal({ force: true });
+	        return true;
+	      }
 	      if (state.loading) return false;
 	      setLoading(true);
 	      try {
@@ -10612,7 +10706,7 @@ class ClaudeOrchestrator {
 	          state.startupPending = false;
 	          closeModal({ force: true });
 	        }
-	        const shouldAutoShow = isWindowsHost && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
+	        const shouldAutoShow = supportsDependencyOnboarding && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
 	        const shouldKeepVisible = !hasCompletedOnboarding && open && !modal.classList.contains('hidden');
 	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
 	          openModal({ allowDuringStartup: bootstrap || explicitOpen });
@@ -10850,6 +10944,16 @@ class ClaudeOrchestrator {
 	    const runBootstrapLoad = async () => {
 	      state.startupPending = true;
 	      setBootstrapPending(true);
+	      if (isLegalGatePending()) {
+	        render();
+	        openModal({ allowDuringStartup: true });
+	        return;
+	      }
+	      if (!supportsDependencyOnboarding) {
+	        state.startupPending = false;
+	        setBootstrapPending(false);
+	        return;
+	      }
 	      const delaysMs = [0, 240, 420, 700, 1050, 1450, 1900];
 	      for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
 	        if (attempt > 0) {
@@ -11064,6 +11168,25 @@ class ClaudeOrchestrator {
 	    };
 
 	    listEl.addEventListener('click', async (event) => {
+	      const acceptLegalBtn = event.target.closest('[data-setup-accept-legal]');
+	      if (acceptLegalBtn) {
+	        writeLegalAccepted(true);
+	        this.showToast('Terms acknowledged.', 'success');
+	        if (!supportsDependencyOnboarding) {
+	          closeModal({ force: true });
+	          return;
+	        }
+	        state.showWelcome = true;
+	        await loadAndRender({ open: true, forceAutoShow: true, explicitOpen: true });
+	        return;
+	      }
+
+	      const exitLegalBtn = event.target.closest('[data-setup-exit-legal]');
+	      if (exitLegalBtn) {
+	        await exitApplication();
+	        return;
+	      }
+
 	      const runBtn = event.target.closest('[data-setup-run]');
 	      if (runBtn) {
 	        await runSetupAction(runBtn.getAttribute('data-setup-run'), runBtn);

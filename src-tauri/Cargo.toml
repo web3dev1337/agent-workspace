@@ -3,7 +3,7 @@ name = "claude-orchestrator"
 version = "0.1.5-2"
 description = "A Tauri App for Agent Workspace"
 authors = ["you"]
-license = ""
+license = "MIT"
 repository = ""
 edition = "2021"
 
