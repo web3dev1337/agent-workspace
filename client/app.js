@@ -31540,6 +31540,7 @@ class ClaudeOrchestrator {
               <button class="btn-secondary" id="quick-remote-repo-add">Clone</button>
               <button class="btn-secondary" id="quick-remote-repo-configure">Choose location…</button>
             </div>
+            <div class="quick-remote-input-hint">New access? Hit Refresh or paste a URL to clone immediately.</div>
             <div id="quick-repo-list" class="quick-repo-list">
               <div class="loading">Loading repos...</div>
             </div>

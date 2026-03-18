@@ -3957,6 +3957,12 @@ header {
   min-height: 34px;
 }
 
+.quick-remote-input-hint {
+  margin: 0 0 var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 .quick-repo-controls {
   display: flex;
   flex-wrap: wrap;
