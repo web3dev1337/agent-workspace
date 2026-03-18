@@ -112,6 +112,16 @@ The script waits up to 60 seconds for WSL. If that's not enough:
 - Increase the `timeout` value in the startup script
 - Or just refresh the browser after a few seconds
 
+## Repo Utilities
+
+Repo-maintenance helpers live in purpose-specific folders so the project root stays clean:
+
+- `scripts/debug/` - manual one-off debug helpers for config/cascade inspection
+- `scripts/local/` - local-machine setup helpers for legacy/non-portable workflows
+- `scripts/mobile/` - mobile/LAN launch helpers
+- `scripts/windows/allow-firewall.ps1` - add a Windows firewall rule for the app port
+- `scripts/windows/allow-node-firewall.ps1` - allow the current Node.js executable through Windows firewall
+
 ## Markdown Remaining Scanner
 
 `scripts/scan-markdown-remaining.js` scans markdown files for unchecked tasks, TODO/FIXME markers, and “remaining” sections.

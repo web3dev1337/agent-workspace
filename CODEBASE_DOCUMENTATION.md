@@ -114,6 +114,15 @@ scripts/tauri/run-tauri-build.js    - Shared local/CI Tauri build launcher
 ├─ Windows fast-cache pinning: local non-CI `fast` builds use a stable `%LOCALAPPDATA%\\AgentWorkspaceBuildCache\\tauri-target` root so repo renames/worktree moves do not discard Cargo incremental state
 ├─ Local installer trim: local non-CI Windows `fast` builds default to `nsis` instead of building both Windows installer formats
 └─ Overrides: respects explicit `CARGO_TARGET_DIR` / `ORCHESTRATOR_TAURI_TARGET_DIR` when callers want a custom target root
+scripts/debug/                      - Manual debug helpers kept out of the repo root
+├─ `test-button-merge.js` verifies config merge behavior against `WorkspaceManager`
+└─ `test-cascade-debug.js` prints cascaded config layers for manual inspection
+scripts/local/                      - Local-machine setup helpers for non-portable workflows
+├─ `check-environment.sh` checks CLI/dependency availability for older local setups
+└─ `setup-claude-hooks.sh` writes local Claude hook config for legacy `HyFire2-workN` layouts
+scripts/mobile/start-mobile.sh      - LAN/mobile launch helper with auth token output and safe port-in-use guard
+scripts/windows/allow-firewall.ps1  - Adds a Windows firewall rule for the default app port
+scripts/windows/allow-node-firewall.ps1 - Adds a Windows firewall rule for the current Node executable
 ```
 
 ### Multi-Workspace System (Core Feature)
