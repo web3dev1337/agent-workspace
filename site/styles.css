@@ -636,6 +636,23 @@ a.btn-glow {
   max-width: 110ch;
 }
 
+.tier-meaning-list {
+  margin: 0.85rem 0 0;
+  padding-left: 1.15rem;
+  color: #dbe5f6;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.tier-meaning-list li {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.tier-meaning-list strong {
+  color: #9fc3ff;
+}
+
 .feature-visual,
 .feature-shot {
   width: 100%;
