@@ -62,14 +62,14 @@ github.com
   });
 
   describe('parseGitHubHostsFile', () => {
-    it('extracts authenticated user from github.com block', () => {
+    it('extracts stored auth hints from github.com block', () => {
       expect(parseGitHubHostsFile(`
 github.com:
     user: octocat
     oauth_token: gho_test
     git_protocol: https
 `)).toEqual({
-        authenticated: true,
+        hasStoredAuth: true,
         user: 'octocat'
       });
     });

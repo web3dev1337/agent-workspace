@@ -178,13 +178,13 @@ function parseGitHubHostsFile(contents, hostname = 'github.com') {
 
   if (!user && !hasToken) {
     return {
-      authenticated: null,
+      hasStoredAuth: false,
       user: null
     };
   }
 
   return {
-    authenticated: true,
+    hasStoredAuth: true,
     user
   };
 }
@@ -319,11 +319,12 @@ class GitHubRepoService {
     for (const hostsPath of hostsFiles) {
       try {
         const parsed = parseGitHubHostsFile(await fs.readFile(hostsPath, 'utf8'));
-        if (parsed?.authenticated === true) {
+        if (parsed?.hasStoredAuth) {
           return {
-            authenticated: true,
+            authenticated: false,
             user: parsed.user,
-            ghInstalled: true
+            ghInstalled: true,
+            error: 'GitHub auth status unavailable'
           };
         }
       } catch {

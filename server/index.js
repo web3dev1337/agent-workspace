@@ -5242,7 +5242,7 @@ app.get('/api/github/status', async (req, res) => {
     res.json(status);
   } catch (error) {
     logger.error('Failed to read GitHub auth status', { error: error.message, stack: error.stack });
-    res.json({ authenticated: false, user: null, ghInstalled: false, error: 'GitHub status unavailable' });
+    res.json({ authenticated: false, user: null, ghInstalled: true, error: 'GitHub status unavailable' });
   }
 });
 

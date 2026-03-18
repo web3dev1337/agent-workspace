@@ -162,7 +162,7 @@ describe('GitHubRepoService listRepos', () => {
     });
   });
 
-  it('falls back to hosts.yml when auth probes are inconclusive', async () => {
+  it('uses hosts.yml only as a non-authenticated hint when live probes are inconclusive', async () => {
     const os = require('os');
     const fs = require('fs');
     const path = require('path');
@@ -200,9 +200,10 @@ describe('GitHubRepoService listRepos', () => {
     const status = await svc.getAuthStatus({ force: true });
 
     expect(status).toEqual({
-      authenticated: true,
+      authenticated: false,
       user: 'cache-user',
-      ghInstalled: true
+      ghInstalled: true,
+      error: 'GitHub auth status unavailable'
     });
   });
 
