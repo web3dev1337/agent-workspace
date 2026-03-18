@@ -60,6 +60,18 @@ chmod +x install-startup.sh start-orchestrator.sh
 
 Coming soon. For now, use Login Items in System Preferences.
 
+## Remote Windows VM Control
+
+Use the `vmctl` bridge when you need to talk to the Windows VM through the `vmwin` SSH alias:
+
+```bash
+node scripts/vm/vmctl.js info
+node scripts/vm/vmctl.js exec --command "Write-Output hello"
+node scripts/vm/vmctl.js shell
+```
+
+See [`scripts/vm/README.md`](./vm/README.md) for the full command list and environment overrides.
+
 ## Manual Setup
 
 If the installers don't work for your setup:

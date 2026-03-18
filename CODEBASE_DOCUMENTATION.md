@@ -99,6 +99,10 @@ server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopb
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
 server/projectTypeService.js       - Project taxonomy loader/validator for category→framework→template metadata (`config/project-types.json`)
 server/portRegistry.js             - Port assignment + live service scanner (`/api/ports/scan`)
+scripts/vm/vmctl.js               - SSH/PowerShell bridge for the `vmwin` Windows VM (status, exec, interactive shell)
+├─ Encoded-command transport: wraps remote PowerShell with `-EncodedCommand` to keep quoting stable across nested shells
+├─ Status probe: returns host/user/PowerShell/tool inventory as JSON or a concise summary
+└─ Environment overrides: `VMCTL_*` env vars tune host alias, timeouts, and remote executable selection
 ├─ Windows scan path: uses hidden `netstat`/`tasklist` probes so packaged Tauri builds do not flash console windows when Ports/Dashboard panels refresh
 └─ UI metadata: labels orchestrator-assigned ports, known dev servers, and custom user labels
 scripts/tauri/prepare-backend-resources.js - Tauri backend packager
