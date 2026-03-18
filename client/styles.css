@@ -2095,30 +2095,6 @@ header {
   text-align: center;
 }
 
-/* Connection Status */
-.connection-status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-tertiary);
-}
-
-.status-dot.connected {
-  background: var(--accent-success);
-}
-
-.status-dot.disconnected {
-  background: var(--accent-danger);
-}
-
 /* Modals */
 .modal {
   position: fixed;
