@@ -5289,7 +5289,8 @@ header {
 /* Ensure terminal body is positioned correctly */
 .terminal-body {
   position: relative;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Settings Panel */

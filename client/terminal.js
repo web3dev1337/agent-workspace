@@ -686,8 +686,9 @@ class TerminalManager {
 
     // Observe the element whose size actually changes with layout.
     // In practice, the `.terminal-body` resizes with grid/sidebar/tab changes.
+    const terminalBody = terminalElement.closest('.terminal-body');
     const wrapper = this.getWrapperElement(sessionId);
-    const observeTarget = wrapper || terminalElement.closest('.terminal-body') || terminalElement;
+    const observeTarget = terminalBody || wrapper || terminalElement;
 
     const resizeObserver = new ResizeObserver(() => {
       // Use requestAnimationFrame to ensure renderer is ready before fitting
