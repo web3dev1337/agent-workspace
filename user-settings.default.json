@@ -226,6 +226,7 @@
         "autoCreateMinNumber": 9,
         "autoCreateMaxNumber": 25,
         "considerOtherWorkspaces": true,
+        "repoCatalogCacheMinutes": 1440,
         "showDetailedChooserMetadata": false
       },
       "workflow": {
