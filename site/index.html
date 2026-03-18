@@ -251,24 +251,9 @@
           <h3 class="feature-title text-blue-deep">Native Terminal Grid + Worktree Sidebar</h3>
           <p class="feature-desc">Open multiple worktrees inside the same workspace, from one repository or several repositories. The left sidebar tracks worktree status while the main pane runs a 2x2 grid of agents like Claude, Codex, OpenCode, and Gemini CLI.</p>
         </div>
-        <div class="feature-visual terminal-grid-visual" aria-hidden="true">
-          <aside class="visual-sidebar">
-            <div class="visual-heading">Worktrees</div>
-            <div class="visual-tag">website/master</div>
-            <div class="visual-tag">website/work1</div>
-            <div class="visual-tag">api/work2</div>
-            <div class="visual-tag">infra/work3</div>
-            <div class="tier-filters-row">
-              <span>All</span><span>T1</span><span>T2</span><span>T3</span><span>T4</span>
-            </div>
-          </aside>
-          <div class="visual-grid">
-            <div class="visual-pane"><strong>Claude · work1</strong><span>claude --continue</span></div>
-            <div class="visual-pane"><strong>Codex · work2</strong><span>codex --dangerously-bypass-approvals-and-sandbox</span></div>
-            <div class="visual-pane"><strong>OpenCode · work3</strong><span>opencode chat</span></div>
-            <div class="visual-pane"><strong>Gemini CLI · work4</strong><span>gemini</span></div>
-          </div>
-        </div>
+        <figure class="feature-shot contain">
+          <img src="assets/workspace2-windows.png" alt="Workspace view with worktree sidebar and a 2x2 terminal agent grid">
+        </figure>
       </article>
 
       <article class="feature-card reveal" style="--delay: 0.1s">
@@ -307,16 +292,9 @@
           <h3 class="feature-title">Commander</h3>
           <p class="feature-desc">Use a top-level commander terminal to orchestrate the rest of your sessions: launch agents, fan out prompts, re-run commands, and coordinate review or merge flows from one control point.</p>
         </div>
-        <div class="feature-visual commander-visual" aria-hidden="true">
-          <div class="commander-line">$ launch website/work1 codex --task "review PR #842"</div>
-          <div class="commander-line">$ send website/work2 claude "apply review feedback"</div>
-          <div class="commander-log">
-            <span>website/work1 · Codex · running review</span>
-            <span>website/work2 · Claude · patching</span>
-            <span>website/work3 · Server · tests green</span>
-            <span>Commander · ready for next action</span>
-          </div>
-        </div>
+        <figure class="feature-shot contain">
+          <img src="assets/commander-windows.png" alt="Commander modal coordinating multiple workspaces and worktrees">
+        </figure>
       </article>
 
       <article class="feature-card reveal" style="--delay: 0.2s">
@@ -324,17 +302,9 @@
           <h3 class="feature-title">Tier System + Filters</h3>
           <p class="feature-desc">Tag worktrees by priority tier (T1-T4), filter to one tier or view all at once, and keep deep-focus work isolated from background automation without losing context.</p>
         </div>
-        <div class="feature-visual tiers-visual" aria-hidden="true">
-          <div class="tier-filters-row big">
-            <span class="active">All</span><span>T1</span><span>T2</span><span>T3</span><span>T4</span>
-          </div>
-          <div class="tier-list">
-            <div><em>T1</em> website/work1 · feature/homepage-polish</div>
-            <div><em>T2</em> api/work2 · fix/review-console-docking</div>
-            <div><em>T3</em> infra/work3 · chore/windows-ci-cleanup</div>
-            <div><em>T4</em> docs/work4 · docs/release-notes</div>
-          </div>
-        </div>
+        <figure class="feature-shot contain">
+          <img src="assets/tasks-windows.png" alt="Tasks board with tier filters and agent/provider controls">
+        </figure>
       </article>
 
       <article class="feature-card reveal" id="projects" style="--delay: 0.25s">
@@ -363,6 +333,7 @@
           <p class="feature-desc">Open multiple workspaces at once in browser-like tabs. Switch contexts without killing sessions, and keep each workspace state isolated while terminals continue running in the background.</p>
         </div>
         <div class="feature-visual tabs-visual" aria-hidden="true">
+          <img class="tab-strip-inline" src="assets/workspace-tabs-windows.png" alt="">
           <div class="tabs-row">
             <span class="tab-chip active">Website</span>
             <span class="tab-chip">API</span>

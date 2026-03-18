@@ -937,6 +937,19 @@ a.btn-glow {
   gap: 0.75rem;
 }
 
+.tab-strip-inline {
+  width: 100%;
+  max-width: 620px;
+  height: auto;
+  max-height: 64px;
+  object-fit: contain;
+  align-self: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(2, 6, 23, 0.76);
+  padding: 0.35rem;
+}
+
 .tabs-row {
   display: flex;
   flex-wrap: wrap;
