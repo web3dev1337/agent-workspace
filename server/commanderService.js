@@ -32,16 +32,19 @@ const logger = winston.createLogger({
 const defaultCwd = path.resolve(__dirname, '..');
 const isPackaged = defaultCwd.includes('resources') && defaultCwd.includes('backend');
 const COMMANDER_CWD = process.env.COMMANDER_CWD || (isPackaged ? (process.env.HOME || process.env.USERPROFILE || defaultCwd) : defaultCwd);
+const TRUST_PROMPT_BUFFER_CHARS = 6000;
+const TRUST_PROMPT_MAX_WAIT_MS = 15000;
 
 class CommanderService {
   constructor(options = {}) {
     this.io = options.io;
     this.sessionManager = options.sessionManager;
     this.session = null;
-    this.outputBuffer = [];
-    this.maxBufferLines = 500;
+    this.outputBuffer = '';
+    this.maxBufferChars = 200000;
     this.isReady = false;
     this.claudeStarted = false; // Track if Claude has been auto-started
+    this.claudeLaunchState = null;
   }
 
   static getInstance(options) {
@@ -117,6 +120,7 @@ class CommanderService {
 
         // Keep buffer manageable
         this.addToOutputBuffer(data);
+        this.handleClaudeLaunchOutput(data);
 
         // Emit to Commander panel
         if (this.io) {
@@ -147,6 +151,7 @@ class CommanderService {
         this.session = null;
         this.isReady = false;
         this.claudeStarted = false; // Reset for next start
+        this.resetClaudeLaunchState();
         if (this.io) {
           this.io.emit('commander-exit', { exitCode });
         }
@@ -192,7 +197,8 @@ class CommanderService {
     }
 
     logger.info('Starting Claude in Commander', { mode, yolo, cmd, platform: process.platform });
-    const success = this.sendInput(cmd + '\n');
+    this.beginClaudeLaunch({ expectTrustPrompt: yolo });
+    const success = this.sendInput(cmd + '\n', { bypassLaunchQueue: true });
     logger.info('Sent claude command', { success, cmd });
 
     // Always provide a stable, self-updating control surface pointer so Commander
@@ -258,16 +264,23 @@ class CommanderService {
   /**
    * Send input to the Commander terminal
    */
-  sendInput(input) {
+  sendInput(input, options = {}) {
     if (!this.session || !this.session.pty) {
       logger.warn('Cannot send input - Commander not running');
       return false;
     }
 
+    const text = String(input ?? '');
+
+    if (this.shouldQueueLaunchInput(options)) {
+      this.claudeLaunchState.queuedInputs.push(text);
+      return true;
+    }
+
     // On Windows, convert \n to \r\n for proper line endings
     const processedInput = process.platform === 'win32'
-      ? input.replace(/\n/g, '\r\n')
-      : input;
+      ? text.replace(/\n/g, '\r\n')
+      : text;
 
     this.session.pty.write(processedInput);
     return true;
@@ -282,6 +295,8 @@ class CommanderService {
       this.session.pty.kill();
       this.session = null;
       this.isReady = false;
+      this.claudeStarted = false;
+      this.resetClaudeLaunchState();
       return { success: true };
     }
     return { success: false, error: 'Not running' };
@@ -300,13 +315,9 @@ class CommanderService {
    * Add data to the output buffer (for history)
    */
   addToOutputBuffer(data) {
-    // Split into lines and add
-    const lines = data.split('\n');
-    this.outputBuffer.push(...lines);
-
-    // Trim buffer if too large
-    if (this.outputBuffer.length > this.maxBufferLines) {
-      this.outputBuffer = this.outputBuffer.slice(-this.maxBufferLines);
+    this.outputBuffer += String(data || '');
+    if (this.outputBuffer.length > this.maxBufferChars) {
+      this.outputBuffer = this.outputBuffer.slice(-this.maxBufferChars);
     }
   }
 
@@ -314,14 +325,18 @@ class CommanderService {
    * Get recent output from the Commander
    */
   getRecentOutput(lines = 50) {
-    return this.outputBuffer.slice(-lines).join('\n');
+    const limit = Number(lines);
+    if (!Number.isFinite(limit) || limit <= 0) {
+      return this.outputBuffer;
+    }
+    return this.outputBuffer.split('\n').slice(-limit).join('\n');
   }
 
   /**
    * Clear the output buffer
    */
   clearBuffer() {
-    this.outputBuffer = [];
+    this.outputBuffer = '';
     if (this.session) {
       this.session.buffer = '';
     }
@@ -336,7 +351,7 @@ class CommanderService {
       ready: this.isReady,
       status: this.session?.status || 'stopped',
       cwd: COMMANDER_CWD,
-      bufferLines: this.outputBuffer.length,
+      bufferLines: this.outputBuffer ? this.outputBuffer.split('\n').length : 0,
       lastActivity: this.session?.lastActivity || null
     };
   }
@@ -396,6 +411,109 @@ class CommanderService {
       });
     }
     return sessions;
+  }
+
+  stripControlSequences(text) {
+    return String(text || '')
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+      .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
+      .replace(/\x1b[()][A-Za-z0-9]/g, '');
+  }
+
+  beginClaudeLaunch({ expectTrustPrompt = false } = {}) {
+    this.resetClaudeLaunchState();
+    this.claudeLaunchState = {
+      startedAt: Date.now(),
+      expectTrustPrompt: !!expectTrustPrompt,
+      trustPromptAccepted: false,
+      ready: false,
+      queuedInputs: [],
+      recentOutput: '',
+      forceFlushTimer: setTimeout(() => {
+        this.flushQueuedLaunchInputs();
+      }, TRUST_PROMPT_MAX_WAIT_MS)
+    };
+  }
+
+  resetClaudeLaunchState() {
+    if (!this.claudeLaunchState) return;
+    if (this.claudeLaunchState.forceFlushTimer) {
+      clearTimeout(this.claudeLaunchState.forceFlushTimer);
+    }
+    if (this.claudeLaunchState.readyFlushTimer) {
+      clearTimeout(this.claudeLaunchState.readyFlushTimer);
+    }
+    this.claudeLaunchState = null;
+  }
+
+  shouldQueueLaunchInput(options = {}) {
+    if (options.bypassLaunchQueue) return false;
+    const launch = this.claudeLaunchState;
+    if (!launch) return false;
+    if (launch.ready) return false;
+    if (!this.claudeStarted) return false;
+    return true;
+  }
+
+  handleClaudeLaunchOutput(data) {
+    const launch = this.claudeLaunchState;
+    if (!launch || launch.ready) return;
+
+    const normalized = this.stripControlSequences(data).toLowerCase();
+    if (normalized) {
+      launch.recentOutput = `${launch.recentOutput}${normalized}`.slice(-TRUST_PROMPT_BUFFER_CHARS);
+    }
+
+    if (launch.expectTrustPrompt
+      && !launch.trustPromptAccepted
+      && this.matchesClaudeTrustPrompt(launch.recentOutput)
+    ) {
+      launch.trustPromptAccepted = true;
+      this.writeRawInput('1\r');
+      launch.readyFlushTimer = setTimeout(() => {
+        this.flushQueuedLaunchInputs();
+      }, 1200);
+      return;
+    }
+
+    if ((!launch.expectTrustPrompt || launch.trustPromptAccepted) && this.matchesClaudeReadyPrompt(launch.recentOutput)) {
+      this.flushQueuedLaunchInputs();
+    }
+  }
+
+  matchesClaudeTrustPrompt(text) {
+    const normalized = String(text || '');
+    return normalized.includes('quick safety check')
+      && normalized.includes('trust this folder')
+      && normalized.includes('yes, i trust this folder');
+  }
+
+  matchesClaudeReadyPrompt(text) {
+    const normalized = String(text || '');
+    return normalized.includes('welcome to claude code')
+      && normalized.includes('? for shortcuts');
+  }
+
+  flushQueuedLaunchInputs() {
+    const launch = this.claudeLaunchState;
+    if (!launch || launch.ready) return;
+
+    launch.ready = true;
+    const queued = Array.isArray(launch.queuedInputs) ? launch.queuedInputs.splice(0) : [];
+    this.resetClaudeLaunchState();
+
+    for (const chunk of queued) {
+      this.sendInput(chunk, { bypassLaunchQueue: true });
+    }
+  }
+
+  writeRawInput(input) {
+    if (!this.session?.pty) return false;
+    const payload = process.platform === 'win32'
+      ? String(input || '').replace(/\n/g, '\r\n')
+      : String(input || '');
+    this.session.pty.write(payload);
+    return true;
   }
 }
 
