@@ -124,6 +124,8 @@ class ClaudeOrchestrator {
     // Worktree launches that should not auto-start or auto-show terminals when sessions arrive.
     this.pendingBackgroundWorktrees = new Set(); // worktreeId
     this.scannedReposCache = { value: null, fetchedAt: 0 };
+    this.quickWorktreeRemoteRepos = [];
+    this.quickWorktreeRemoteRepoBySlug = new Map();
     this.projectsBoardCache = { value: null, fetchedAt: 0 };
     this.worktreeModalKeepOpen = this.loadWorktreeModalKeepOpenPreference();
     this.sidebarProjectShortcutsRenderTimer = null;
@@ -31093,6 +31095,10 @@ class ClaudeOrchestrator {
         </div>
         <div class="quick-worktree-toolbar">
           <input type="text" id="quick-worktree-search" placeholder="Search repos..." class="search-input">
+          <button class="btn-secondary quick-refresh-btn" id="quick-worktree-refresh" title="Refresh local + GitHub repo lists now">
+            Refresh
+          </button>
+          <span class="quick-cache-status" id="quick-worktree-cache-status" title="Repo list cache status"></span>
           <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees" style="display:none">
             <input type="checkbox" id="worktree-modal-keep-open">
             Keep open
@@ -31216,6 +31222,7 @@ class ClaudeOrchestrator {
 
     const searchInput = modal.querySelector('#quick-worktree-search');
     const advancedBtn = modal.querySelector('.quick-advanced-btn');
+    const refreshBtn = modal.querySelector('#quick-worktree-refresh');
     const tabButtons = modal.querySelectorAll('.quick-tab-btn');
     const convMoreBtn = modal.querySelector('.quick-conv-more-btn');
     const convHistoryBtn = modal.querySelector('.quick-conv-history-btn');
@@ -31320,6 +31327,23 @@ class ClaudeOrchestrator {
       });
     }
 
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', async () => {
+        const prevText = refreshBtn.textContent;
+        try {
+          refreshBtn.disabled = true;
+          refreshBtn.textContent = 'Refreshing…';
+          await this.loadQuickWorktreeRepos({ force: true });
+        } catch (error) {
+          console.error('Failed to refresh quick worktree repos:', error);
+          this.showToast(String(error?.message || error), 'error');
+        } finally {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = prevText;
+        }
+      });
+    }
+
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         tabButtons.forEach(b => b.classList.remove('active'));
@@ -31372,7 +31396,8 @@ class ClaudeOrchestrator {
       });
     }
 
-    this.loadQuickWorktreeRepos();
+    this.refreshQuickWorktreeCacheStatus();
+    this.loadQuickWorktreeRepos({ force: false });
   }
 
   applyQuickRepoSearchFilter(modal, term) {
@@ -31408,11 +31433,42 @@ class ClaudeOrchestrator {
     });
   }
 
+  refreshQuickWorktreeCacheStatus() {
+    const statusEl = document.getElementById('quick-worktree-cache-status');
+    if (!statusEl) return;
+
+    const scanFetchedAt = Number(this.scannedReposCache?.fetchedAt || 0);
+    const ghFetchedAt = Number(this.githubReposCache?.fetchedAt || 0);
+    const lastFetchedAt = Math.max(scanFetchedAt, ghFetchedAt);
+    if (!lastFetchedAt) {
+      statusEl.textContent = 'Cache empty';
+      statusEl.title = 'Repo list cache is empty';
+      return;
+    }
+
+    const now = Date.now();
+    const ageMs = Math.max(0, now - lastFetchedAt);
+    const ttlMs = this.getWorktreeRepoCatalogCacheTtlMs();
+
+    const ageLabel = (() => {
+      const ageMinutes = Math.floor(ageMs / 60_000);
+      if (ageMinutes < 1) return 'just now';
+      if (ageMinutes < 60) return `${ageMinutes}m ago`;
+      const hours = Math.floor(ageMinutes / 60);
+      const minutes = ageMinutes % 60;
+      if (hours < 24) return `${hours}h ${minutes}m ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    })();
+
+    statusEl.textContent = `Cached ${ageLabel}`;
+    statusEl.title = `Repo cache TTL: ${Math.round(ttlMs / 60_000)} minutes. Last refresh: ${new Date(lastFetchedAt).toLocaleString()}`;
+  }
+
   async showAddWorktreeModalAdvanced() {
     try {
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
-      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
-      const allRepos = await response.json();
+      const cacheTtlMs = this.getWorktreeRepoCatalogCacheTtlMs();
+      const allRepos = await this.getScannedRepos({ force: false, cacheTtlMs });
       await this.getProjectsBoard({ force: false }).catch(() => {});
       this.showAdvancedAddWorktreeModal(allRepos);
     } catch (error) {
@@ -31421,15 +31477,15 @@ class ClaudeOrchestrator {
     }
   }
 
-  async loadQuickWorktreeRepos() {
+  async loadQuickWorktreeRepos({ force = false } = {}) {
     const listEl = document.getElementById('quick-repo-list');
     if (!listEl) return;
 
     try {
       await this.getProjectsBoard({ force: false }).catch(() => {});
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
-      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
-      const repos = await response.json();
+      await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+      const cacheTtlMs = this.getWorktreeRepoCatalogCacheTtlMs();
+      const repos = await this.getScannedRepos({ force, cacheTtlMs });
 
       this.quickWorktreeReposRaw = repos
         .map(repo => {
@@ -31444,35 +31500,46 @@ class ClaudeOrchestrator {
 
       // Also fetch remote GitHub repos to show uncloned ones
       try {
-        const ghResponse = await fetch(`${serverUrl}/api/github/repos`);
-        if (ghResponse.ok) {
-          const ghRepos = await ghResponse.json();
-          const localNames = new Set(this.quickWorktreeReposRaw.map(r => (r.name || '').toLowerCase()));
-          const uncloned = (Array.isArray(ghRepos) ? ghRepos : [])
-            .filter(r => r.name && !localNames.has(r.name.toLowerCase()))
-            .map(r => ({
-              name: r.name,
-              path: r.nameWithOwner,
-              type: 'github-remote',
-              isRemote: true,
-              visibility: r.visibility || (r.isPrivate ? 'private' : 'public'),
-              nameWithOwner: r.nameWithOwner,
-              worktrees: [],
-              lastModifiedMs: 0
-            }));
-          this.quickWorktreeRemoteRepos = uncloned;
-        }
+        const ghRepos = await this.getGitHubRepos({ force, limit: 800, cacheTtlMs });
+        const localNames = new Set(this.quickWorktreeReposRaw.map((repo) => String(repo?.name || '').trim().toLowerCase()));
+        const uncloned = (Array.isArray(ghRepos) ? ghRepos : [])
+          .filter((repo) => {
+            const name = String(repo?.name || '').trim().toLowerCase();
+            if (!name) return false;
+            return !localNames.has(name);
+          })
+          .map((repo) => ({
+            name: String(repo?.name || '').trim(),
+            path: String(repo?.nameWithOwner || '').trim(),
+            type: 'github-remote',
+            isRemote: true,
+            visibility: repo?.visibility || (repo?.isPrivate ? 'private' : 'public'),
+            nameWithOwner: String(repo?.nameWithOwner || '').trim(),
+            owner: String(repo?.owner || '').trim(),
+            worktrees: [],
+            lastModifiedMs: 0
+          }))
+          .filter((repo) => !!repo.nameWithOwner)
+          .sort((a, b) => a.nameWithOwner.localeCompare(b.nameWithOwner));
+
+        this.quickWorktreeRemoteRepos = uncloned;
+        this.quickWorktreeRemoteRepoBySlug = new Map(
+          uncloned.map((repo) => [String(repo.nameWithOwner || '').toLowerCase(), repo])
+        );
       } catch (ghErr) {
         // GitHub CLI not available — silently skip remote repos
         this.quickWorktreeRemoteRepos = [];
+        this.quickWorktreeRemoteRepoBySlug = new Map();
       }
 
       if (!this.quickWorktreeReposRaw.length && !(this.quickWorktreeRemoteRepos || []).length) {
         listEl.innerHTML = '<div class="quick-empty">No repos found</div>';
+        this.refreshQuickWorktreeCacheStatus();
         return;
       }
 
       this.renderQuickWorktreeRepoList();
+      this.refreshQuickWorktreeCacheStatus();
 
       // Apply any existing search term
       const modal = document.getElementById('quick-worktree-modal');
@@ -31482,6 +31549,7 @@ class ClaudeOrchestrator {
     } catch (error) {
       console.error('Failed to load repositories:', error);
       listEl.innerHTML = '<div class="quick-empty">Failed to load repos</div>';
+      this.refreshQuickWorktreeCacheStatus();
     }
   }
 
@@ -31532,19 +31600,15 @@ class ClaudeOrchestrator {
     if (remoteRepos.length > 0) {
       const searchTerm = (this.quickWorktreeSearchTerm || '').toLowerCase();
       const matchingRemote = searchTerm
-        ? remoteRepos.filter(r => r.name.toLowerCase().includes(searchTerm))
+        ? remoteRepos.filter((repo) => {
+          const name = String(repo?.name || '').toLowerCase();
+          const slug = String(repo?.nameWithOwner || '').toLowerCase();
+          return name.includes(searchTerm) || slug.includes(searchTerm);
+        })
         : remoteRepos;
       if (matchingRemote.length > 0) {
         html += `<div class="quick-repo-section-divider">GitHub — Not Cloned (${matchingRemote.length})</div>`;
-        html += matchingRemote.map(r => `
-          <div class="quick-repo-card quick-repo-remote" data-repo-name="${this.escapeHtml(r.name)}">
-            <div class="quick-repo-header">
-              <span class="quick-repo-name">${this.escapeHtml(r.name)}</span>
-              <span class="quick-repo-remote-badge">${r.visibility === 'private' ? '🔒' : '🌐'}</span>
-            </div>
-            <div class="quick-repo-remote-owner">${this.escapeHtml(r.nameWithOwner || '')}</div>
-          </div>
-        `).join('');
+        html += matchingRemote.map((repo) => this.renderQuickRemoteRepoRow(repo)).join('');
       }
     }
 
@@ -31617,6 +31681,53 @@ class ClaudeOrchestrator {
         return;
       }
 
+      const remoteCloneBtn = event.target.closest('.quick-remote-clone-btn');
+      if (remoteCloneBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const slug = String(remoteCloneBtn.dataset.repoSlug || '').trim();
+        const remoteRepo = this.getQuickRemoteRepoBySlug(slug);
+        if (!remoteRepo) {
+          this.showToast('Could not find selected GitHub repo', 'error');
+          return;
+        }
+
+        (async () => {
+          const prevText = remoteCloneBtn.textContent;
+          try {
+            remoteCloneBtn.disabled = true;
+            remoteCloneBtn.classList.add('is-starting');
+            remoteCloneBtn.textContent = 'Cloning…';
+            await this.cloneQuickRemoteRepoAndStartWorktree({
+              remoteRepo,
+              keepOpen: this.getWorktreeModalKeepOpen()
+            });
+          } catch (err) {
+            console.error('Quick clone remote repo failed:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            remoteCloneBtn.disabled = false;
+            remoteCloneBtn.classList.remove('is-starting');
+            remoteCloneBtn.textContent = prevText;
+          }
+        })();
+        return;
+      }
+
+      const remoteConfigBtn = event.target.closest('.quick-remote-configure-btn');
+      if (remoteConfigBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const slug = String(remoteConfigBtn.dataset.repoSlug || '').trim();
+        const remoteRepo = this.getQuickRemoteRepoBySlug(slug);
+        if (!remoteRepo) {
+          this.showToast('Could not find selected GitHub repo', 'error');
+          return;
+        }
+        this.showQuickRemoteCloneModal(remoteRepo);
+        return;
+      }
+
       const menuBtn = event.target.closest('.quick-choose-btn, .quick-start-menu-btn');
       if (menuBtn) {
         event.preventDefault();
@@ -31661,6 +31772,283 @@ class ClaudeOrchestrator {
         }
       })();
     };
+  }
+
+  async cloneQuickRemoteRepoAndStartWorktree({
+    remoteRepo,
+    categoryId,
+    frameworkId,
+    parentPath,
+    worktreeId = 'work1',
+    createFolders = true,
+    keepOpen = false
+  } = {}) {
+    const repo = remoteRepo && typeof remoteRepo === 'object' ? remoteRepo : null;
+    if (!repo?.nameWithOwner || !repo?.name) {
+      throw new Error('Invalid GitHub repo selection');
+    }
+    if (!this.currentWorkspace?.id) {
+      throw new Error('No active workspace selected');
+    }
+
+    await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+    const defaults = this.buildQuickRemoteCloneDefaults(repo, {
+      categoryId,
+      frameworkId,
+      parentPath
+    });
+
+    const payload = {
+      workspaceId: this.currentWorkspace.id,
+      repo: repo.nameWithOwner,
+      categoryId: defaults.categoryId,
+      frameworkId: defaults.frameworkId || '',
+      parentPath: this.sanitizeQuickRemoteParentPath(defaults.parentPath || ''),
+      repositoryType: defaults.repositoryType,
+      worktreeId: String(worktreeId || 'work1'),
+      startTier: (() => {
+        const startTier = Number(this.quickWorktreeStartTier);
+        return (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+      })(),
+      createFolders: createFolders !== false
+    };
+
+    const response = await fetch('/api/github/clone-and-add-worktree', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok === false) {
+      const message = String(data?.error || `Clone failed (HTTP ${response.status})`);
+      throw new Error(message);
+    }
+
+    const cloned = data?.repo?.alreadyCloned === false;
+    const cloneMessage = cloned ? 'Cloned and started' : 'Started from existing clone';
+    this.showToast(`${cloneMessage}: ${repo.nameWithOwner} (${data?.worktree?.id || 'work1'})`, 'success');
+
+    // Refresh repo caches so the repo moves from "Not Cloned" into regular scanned repos.
+    this.scannedReposCache = { value: null, fetchedAt: 0 };
+    await this.loadQuickWorktreeRepos();
+
+    if (!keepOpen) {
+      document.getElementById('quick-worktree-modal')?.remove();
+    }
+
+    return data;
+  }
+
+  async showQuickRemoteCloneModal(remoteRepo) {
+    const repo = remoteRepo && typeof remoteRepo === 'object' ? remoteRepo : null;
+    if (!repo?.nameWithOwner || !repo?.name) {
+      this.showToast('Invalid GitHub repo selection', 'error');
+      return;
+    }
+    await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const frameworksAll = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+    if (!categories.length) {
+      this.showToast('Project taxonomy unavailable (cannot configure folder placement)', 'error');
+      return;
+    }
+
+    const defaults = this.buildQuickRemoteCloneDefaults(repo);
+    const existing = document.getElementById('quick-remote-clone-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'quick-remote-clone-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content quick-remote-clone-modal-content">
+        <div class="modal-header">
+          <h3>Clone GitHub Repo</h3>
+          <button class="close-btn" data-action="close">✕</button>
+        </div>
+        <div class="modal-body quick-remote-clone-body">
+          <div class="quick-remote-clone-repo">${this.escapeHtml(repo.nameWithOwner)}</div>
+          <div class="quick-remote-clone-help">This creates <code>&lt;repo&gt;/master</code>, then starts <code>work1</code> in this workspace.</div>
+
+          <div class="quick-remote-clone-grid">
+            <label class="quick-remote-clone-label">
+              <span>Category</span>
+              <select id="quick-remote-category"></select>
+            </label>
+            <label class="quick-remote-clone-label">
+              <span>Framework</span>
+              <select id="quick-remote-framework"></select>
+            </label>
+          </div>
+
+          <label class="quick-remote-clone-label">
+            <span>Parent folders inside category (optional)</span>
+            <input id="quick-remote-parent-path" type="text" class="search-input" placeholder="e.g. hytopia/games">
+          </label>
+          <div id="quick-remote-parent-suggestions" class="quick-remote-parent-suggestions"></div>
+
+          <label class="quick-checkbox" title="Create missing folders on disk">
+            <input type="checkbox" id="quick-remote-create-folders" checked>
+            Auto-create missing folders
+          </label>
+
+          <div class="quick-remote-final-path">
+            <div class="quick-remote-final-path-label">Final path</div>
+            <div id="quick-remote-final-path-value" class="quick-remote-final-path-value"></div>
+          </div>
+        </div>
+        <div class="modal-footer quick-remote-clone-footer">
+          <button class="btn-secondary" data-action="close">Cancel</button>
+          <button class="btn-primary" id="quick-remote-clone-confirm">Clone + Start work1</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const categorySelect = modal.querySelector('#quick-remote-category');
+    const frameworkSelect = modal.querySelector('#quick-remote-framework');
+    const parentInput = modal.querySelector('#quick-remote-parent-path');
+    const parentSuggestionsEl = modal.querySelector('#quick-remote-parent-suggestions');
+    const createFoldersEl = modal.querySelector('#quick-remote-create-folders');
+    const finalPathEl = modal.querySelector('#quick-remote-final-path-value');
+    const confirmBtn = modal.querySelector('#quick-remote-clone-confirm');
+
+    const state = {
+      categoryId: defaults.categoryId,
+      frameworkId: defaults.frameworkId,
+      parentPath: defaults.parentPath,
+      parentPathManuallyEdited: false
+    };
+
+    const getFrameworkRows = (categoryId) => frameworksAll.filter((framework) => String(framework?.categoryId || '').trim() === String(categoryId || '').trim());
+
+    const populateCategorySelect = () => {
+      categorySelect.innerHTML = categories.map((category) => {
+        const id = String(category?.id || '').trim();
+        const selected = id === state.categoryId ? 'selected' : '';
+        return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(category?.name || id)}</option>`;
+      }).join('');
+    };
+
+    const populateFrameworkSelect = () => {
+      const rows = getFrameworkRows(state.categoryId);
+      const hasCurrent = rows.some((framework) => String(framework?.id || '').trim() === state.frameworkId);
+      if (!hasCurrent) {
+        state.frameworkId = rows[0]?.id ? String(rows[0].id) : '';
+      }
+      frameworkSelect.innerHTML = [
+        '<option value="">(none)</option>',
+        ...rows.map((framework) => {
+          const id = String(framework?.id || '').trim();
+          const selected = id === state.frameworkId ? 'selected' : '';
+          return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(framework?.name || id)}</option>`;
+        })
+      ].join('');
+    };
+
+    const renderParentSuggestions = (suggestions) => {
+      const rows = Array.isArray(suggestions) ? suggestions.filter(Boolean) : [];
+      if (!rows.length) {
+        parentSuggestionsEl.innerHTML = '<span class="quick-remote-parent-empty">No existing parent folders detected for this category yet.</span>';
+        return;
+      }
+      parentSuggestionsEl.innerHTML = rows.slice(0, 10).map((suggestion) => `
+        <button class="quick-remote-parent-chip" data-parent-path="${this.escapeHtml(suggestion)}" type="button">
+          ${this.escapeHtml(suggestion)}
+        </button>
+      `).join('');
+    };
+
+    const refreshState = ({ preserveManualPath = true } = {}) => {
+      const defaultsForSelection = this.buildQuickRemoteCloneDefaults(repo, {
+        categoryId: state.categoryId,
+        frameworkId: state.frameworkId
+      });
+      if (!preserveManualPath || !state.parentPathManuallyEdited) {
+        state.parentPath = defaultsForSelection.parentPath;
+      }
+
+      const sanitizedParentPath = this.sanitizeQuickRemoteParentPath(state.parentPath);
+      state.parentPath = sanitizedParentPath;
+      parentInput.value = sanitizedParentPath;
+
+      const withParent = this.buildQuickRemoteCloneDefaults(repo, {
+        categoryId: state.categoryId,
+        frameworkId: state.frameworkId,
+        parentPath: sanitizedParentPath
+      });
+
+      renderParentSuggestions(withParent.parentSuggestions);
+      finalPathEl.textContent = `${withParent.finalPath}/master (worktree: work1)`;
+    };
+
+    populateCategorySelect();
+    populateFrameworkSelect();
+    refreshState({ preserveManualPath: false });
+
+    modal.addEventListener('click', async (event) => {
+      const closeBtn = event.target.closest('[data-action=\"close\"]');
+      if (closeBtn) {
+        event.preventDefault();
+        modal.remove();
+        return;
+      }
+
+      const parentChip = event.target.closest('.quick-remote-parent-chip');
+      if (parentChip) {
+        event.preventDefault();
+        state.parentPath = this.sanitizeQuickRemoteParentPath(parentChip.dataset.parentPath || '');
+        state.parentPathManuallyEdited = true;
+        refreshState({ preserveManualPath: true });
+        return;
+      }
+
+      if (event.target !== confirmBtn) return;
+      event.preventDefault();
+
+      const previousText = confirmBtn.textContent;
+      try {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Cloning…';
+        await this.cloneQuickRemoteRepoAndStartWorktree({
+          remoteRepo: repo,
+          categoryId: state.categoryId,
+          frameworkId: state.frameworkId,
+          parentPath: state.parentPath,
+          createFolders: !!createFoldersEl.checked,
+          worktreeId: 'work1',
+          keepOpen: this.getWorktreeModalKeepOpen()
+        });
+        modal.remove();
+      } catch (error) {
+        console.error('Clone + add worktree failed:', error);
+        this.showToast(String(error?.message || error), 'error');
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = previousText;
+      }
+    });
+
+    categorySelect.addEventListener('change', () => {
+      state.categoryId = String(categorySelect.value || '').trim();
+      state.parentPathManuallyEdited = false;
+      populateFrameworkSelect();
+      refreshState({ preserveManualPath: false });
+    });
+
+    frameworkSelect.addEventListener('change', () => {
+      state.frameworkId = String(frameworkSelect.value || '').trim();
+      state.parentPathManuallyEdited = false;
+      refreshState({ preserveManualPath: false });
+    });
+
+    parentInput.addEventListener('input', () => {
+      state.parentPath = String(parentInput.value || '');
+      state.parentPathManuallyEdited = true;
+      refreshState({ preserveManualPath: true });
+    });
   }
 
   toggleQuickWorktreeFavorite(repoPath) {
@@ -32206,6 +32594,255 @@ class ClaudeOrchestrator {
     }).join('');
 
     return favoritesHtml + groupedHtml;
+  }
+
+  sanitizeQuickRemoteParentPath(value) {
+    const segments = String(value || '')
+      .replace(/\\/g, '/')
+      .split('/')
+      .map((segment) => String(segment || '').trim())
+      .filter(Boolean)
+      .filter((segment) => segment !== '.' && segment !== '..')
+      .map((segment) => segment.replace(/[:*?"<>|]/g, ''));
+    return segments.join('/');
+  }
+
+  getQuickRemoteRepoBySlug(slug) {
+    const key = String(slug || '').trim().toLowerCase();
+    if (!key) return null;
+    return this.quickWorktreeRemoteRepoBySlug?.get(key) || null;
+  }
+
+  getQuickRemoteCategoryBasePath(category) {
+    const cat = category && typeof category === 'object' ? category : {};
+    const taxonomyRoot = normalizeClientPath(this.projectTypeTaxonomy?.gitHubRoot || '');
+    const resolved = normalizeClientPath(cat.basePathResolvedNormalized || cat.basePathResolved || '');
+    if (resolved) return resolved;
+
+    const basePath = normalizeClientPath(cat.basePath || '');
+    if (!basePath) return taxonomyRoot;
+    if (basePath.startsWith('/')) return basePath;
+    return taxonomyRoot ? normalizeClientPath(`${taxonomyRoot}/${basePath}`) : basePath;
+  }
+
+  getQuickRemoteCategoryRelativeBasePath(category) {
+    const cat = category && typeof category === 'object' ? category : {};
+    const basePath = normalizeClientPath(cat.basePath || '');
+    if (basePath && !basePath.startsWith('/')) return basePath;
+
+    const baseAbsolute = this.getQuickRemoteCategoryBasePath(cat);
+    const taxonomyRoot = normalizeClientPath(this.projectTypeTaxonomy?.gitHubRoot || '');
+    if (!baseAbsolute || !taxonomyRoot) return '';
+
+    const normalizedBase = this.normalizeWorktreePath(baseAbsolute);
+    const normalizedRoot = this.normalizeWorktreePath(taxonomyRoot);
+    if (!normalizedBase || !normalizedRoot) return '';
+    if (!normalizedBase.startsWith(`${normalizedRoot}/`) && normalizedBase !== normalizedRoot) return '';
+    return normalizedBase.slice(normalizedRoot.length).replace(/^\/+/, '');
+  }
+
+  detectQuickRemoteCategoryId(remoteRepo) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    if (!categories.length) return '';
+
+    const workspaceRepoPath = normalizeClientPath(this.currentWorkspace?.repository?.path || '');
+    const workspaceRepoPathNorm = this.normalizeWorktreePath(workspaceRepoPath);
+    if (workspaceRepoPathNorm) {
+      for (const category of categories) {
+        const basePath = this.getQuickRemoteCategoryBasePath(category);
+        const basePathNorm = this.normalizeWorktreePath(basePath);
+        if (!basePathNorm) continue;
+        if (workspaceRepoPathNorm === basePathNorm || workspaceRepoPathNorm.startsWith(`${basePathNorm}/`)) {
+          return String(category.id || '').trim();
+        }
+      }
+    }
+
+    const text = `${remoteRepo?.name || ''} ${remoteRepo?.nameWithOwner || ''}`.toLowerCase();
+    let bestCategoryId = '';
+    let bestScore = 0;
+
+    for (const category of categories) {
+      const keywords = Array.isArray(category?.keywords) ? category.keywords : [];
+      let score = 0;
+      for (const keywordRaw of keywords) {
+        const keyword = String(keywordRaw || '').trim().toLowerCase();
+        if (!keyword) continue;
+        if (text.includes(keyword)) score += 1;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestCategoryId = String(category?.id || '').trim();
+      }
+    }
+
+    return bestCategoryId || String(categories[0]?.id || '').trim();
+  }
+
+  resolveQuickRemoteFrameworkId(categoryId, remoteRepo) {
+    const frameworks = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+    const categoryFrameworks = frameworks.filter((framework) => String(framework?.categoryId || '').trim() === String(categoryId || '').trim());
+    if (!categoryFrameworks.length) return '';
+
+    const text = `${remoteRepo?.name || ''} ${remoteRepo?.nameWithOwner || ''}`.toLowerCase();
+    const byKeyword = categoryFrameworks.find((framework) => {
+      const id = String(framework?.id || '').trim().toLowerCase();
+      const name = String(framework?.name || '').trim().toLowerCase();
+      return (!!id && text.includes(id)) || (!!name && text.includes(name));
+    });
+    if (byKeyword?.id) return String(byKeyword.id).trim();
+
+    return String(categoryFrameworks[0]?.id || '').trim();
+  }
+
+  collectQuickRemoteParentPathSuggestions({ categoryId, frameworkId }) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const category = categories.find((row) => String(row?.id || '').trim() === String(categoryId || '').trim());
+    if (!category) return [];
+
+    const baseRelative = this.getQuickRemoteCategoryRelativeBasePath(category);
+    const baseSegments = baseRelative
+      ? baseRelative.split('/').map((segment) => segment.trim()).filter(Boolean)
+      : [];
+    const repoRows = Array.isArray(this.quickWorktreeReposRaw) ? this.quickWorktreeReposRaw : [];
+
+    const counters = new Map();
+    repoRows.forEach((repo) => {
+      const relative = normalizeClientPath(repo?.relativePath || '');
+      if (!relative) return;
+      const segments = relative.split('/').map((segment) => segment.trim()).filter(Boolean);
+      if (segments.length < baseSegments.length + 2) return;
+
+      const matchesBase = baseSegments.every((segment, index) => String(segments[index] || '').toLowerCase() === segment.toLowerCase());
+      if (!matchesBase) return;
+
+      const parentSegments = segments.slice(baseSegments.length, -1);
+      if (!parentSegments.length) return;
+      const parent = parentSegments.join('/');
+      counters.set(parent, (counters.get(parent) || 0) + 1);
+    });
+
+    const rows = Array.from(counters.entries()).map(([pathValue, count]) => ({ path: pathValue, count }));
+    rows.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.path.localeCompare(b.path);
+    });
+
+    const frameworkToken = String(frameworkId || '').trim().toLowerCase();
+    if (!frameworkToken) return rows.map((row) => row.path).slice(0, 20);
+
+    const preferred = rows.filter((row) => row.path.toLowerCase().includes(frameworkToken));
+    if (preferred.length) return preferred.map((row) => row.path).slice(0, 20);
+    return rows.map((row) => row.path).slice(0, 20);
+  }
+
+  guessQuickRemoteParentPath({ categoryId, frameworkId }) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const category = categories.find((row) => String(row?.id || '').trim() === String(categoryId || '').trim());
+    if (!category) return '';
+
+    const workspaceRepoPath = normalizeClientPath(this.currentWorkspace?.repository?.path || '');
+    const workspaceRepoPathNorm = this.normalizeWorktreePath(workspaceRepoPath);
+    const categoryBaseNorm = this.normalizeWorktreePath(this.getQuickRemoteCategoryBasePath(category));
+    if (workspaceRepoPathNorm && categoryBaseNorm && (workspaceRepoPathNorm === categoryBaseNorm || workspaceRepoPathNorm.startsWith(`${categoryBaseNorm}/`))) {
+      const rel = workspaceRepoPathNorm.slice(categoryBaseNorm.length).replace(/^\/+/, '');
+      const relSegments = rel.split('/').filter(Boolean);
+      if (relSegments.length > 1) {
+        return this.sanitizeQuickRemoteParentPath(relSegments.slice(0, -1).join('/'));
+      }
+    }
+
+    const suggestions = this.collectQuickRemoteParentPathSuggestions({ categoryId, frameworkId });
+    if (suggestions[0]) return this.sanitizeQuickRemoteParentPath(suggestions[0]);
+
+    const frameworkToken = String(frameworkId || '').trim().toLowerCase();
+    if (frameworkToken && frameworkToken !== 'generic' && frameworkToken !== 'web-generic') {
+      return this.sanitizeQuickRemoteParentPath(frameworkToken);
+    }
+
+    return '';
+  }
+
+  resolveQuickRemoteRepositoryType({ categoryId, frameworkId }) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const frameworks = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+    const templates = Array.isArray(this.projectTypeTaxonomy?.templates) ? this.projectTypeTaxonomy.templates : [];
+
+    const category = categories.find((row) => String(row?.id || '').trim() === String(categoryId || '').trim()) || null;
+    const framework = frameworks.find((row) => String(row?.id || '').trim() === String(frameworkId || '').trim()) || null;
+    if (framework?.defaultTemplateId) {
+      const template = templates.find((row) => String(row?.id || '').trim() === String(framework.defaultTemplateId || '').trim());
+      const fromTemplate = String(template?.defaultRepositoryType || '').trim();
+      if (fromTemplate) return fromTemplate;
+    }
+
+    const fromCategory = String(category?.defaultRepositoryType || '').trim();
+    if (fromCategory) return fromCategory;
+    return 'tool-project';
+  }
+
+  buildQuickRemoteCloneDefaults(remoteRepo, overrides = {}) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const fallbackCategoryId = this.detectQuickRemoteCategoryId(remoteRepo);
+    const categoryId = String(overrides?.categoryId || fallbackCategoryId || categories[0]?.id || '').trim();
+    const category = categories.find((row) => String(row?.id || '').trim() === categoryId) || categories[0] || null;
+    const selectedCategoryId = String(category?.id || '').trim();
+
+    const frameworkId = String(overrides?.frameworkId || this.resolveQuickRemoteFrameworkId(selectedCategoryId, remoteRepo)).trim();
+    const parentPath = this.sanitizeQuickRemoteParentPath(
+      overrides?.parentPath ?? this.guessQuickRemoteParentPath({ categoryId: selectedCategoryId, frameworkId })
+    );
+    const parentSuggestions = this.collectQuickRemoteParentPathSuggestions({ categoryId: selectedCategoryId, frameworkId });
+    const repositoryType = this.resolveQuickRemoteRepositoryType({ categoryId: selectedCategoryId, frameworkId });
+    const categoryBasePath = this.getQuickRemoteCategoryBasePath(category);
+    const finalPath = normalizeClientPath([categoryBasePath, parentPath, remoteRepo?.name || 'repo'].filter(Boolean).join('/'));
+
+    return {
+      categoryId: selectedCategoryId,
+      frameworkId,
+      parentPath,
+      parentSuggestions,
+      repositoryType,
+      category,
+      categoryBasePath,
+      finalPath
+    };
+  }
+
+  renderQuickRemoteRepoRow(remoteRepo) {
+    const repo = remoteRepo && typeof remoteRepo === 'object' ? remoteRepo : {};
+    const defaults = this.buildQuickRemoteCloneDefaults(repo);
+    const categoryLabel = defaults.category?.name ? ` • ${defaults.category.name}` : '';
+    const previewLabel = defaults.finalPath ? `Planned: ${defaults.finalPath}/master + work1` : 'Planned: choose folder placement';
+    const slug = String(repo.nameWithOwner || '').trim();
+
+    return `
+      <div class="quick-repo-row quick-repo-remote"
+           data-repo-name="${this.escapeHtml(String(repo.name || '').toLowerCase())}"
+           data-repo-path="${this.escapeHtml(String(repo.nameWithOwner || '').toLowerCase())}">
+        <div class="quick-repo-meta">
+          <span class="quick-repo-icon">🐙</span>
+          <div class="quick-repo-info">
+            <div class="quick-repo-name">${this.escapeHtml(repo.name || 'repo')}</div>
+            <div class="quick-repo-path">${this.escapeHtml(repo.nameWithOwner || '')}${categoryLabel}</div>
+            <div class="quick-summary-text">${this.escapeHtml(previewLabel)}</div>
+          </div>
+        </div>
+        <div class="quick-repo-actions">
+          <button class="btn-primary quick-remote-clone-btn"
+                  data-repo-slug="${this.escapeHtml(slug)}"
+                  title="Clone into the suggested folder and start work1">
+            Clone + Start work1
+          </button>
+          <button class="btn-secondary quick-remote-configure-btn"
+                  data-repo-slug="${this.escapeHtml(slug)}"
+                  title="Choose category, subfolders, and placement">
+            Choose location…
+          </button>
+          <span class="quick-repo-remote-badge">${repo.visibility === 'private' ? '🔒' : '🌐'}</span>
+        </div>
+      </div>
+    `;
   }
 
   getQuickWorktreeCreatePresets() {
@@ -33341,9 +33978,17 @@ class ClaudeOrchestrator {
     return m && typeof m === 'object' ? m : null;
   }
 
-  async getScannedRepos({ force = false } = {}) {
+  getWorktreeRepoCatalogCacheTtlMs() {
+    const raw = Number(this.userSettings?.global?.ui?.worktrees?.repoCatalogCacheMinutes);
+    const minutes = Number.isFinite(raw) ? raw : (24 * 60);
+    const safeMinutes = Math.min(Math.max(Math.round(minutes), 5), 7 * 24 * 60);
+    return safeMinutes * 60 * 1000;
+  }
+
+  async getScannedRepos({ force = false, cacheTtlMs = null } = {}) {
     const now = Date.now();
-    const ttlMs = 20_000;
+    const ttlRaw = Number(cacheTtlMs);
+    const ttlMs = Number.isFinite(ttlRaw) && ttlRaw >= 0 ? ttlRaw : 20_000;
     if (!force && this.scannedReposCache?.value && (now - (this.scannedReposCache.fetchedAt || 0) < ttlMs)) {
       return this.scannedReposCache.value;
     }
@@ -33469,9 +34114,10 @@ class ClaudeOrchestrator {
     });
   }
 
-  async getGitHubRepos({ force = false, limit = 500, owner = null } = {}) {
+  async getGitHubRepos({ force = false, limit = 500, owner = null, cacheTtlMs = null } = {}) {
     const now = Date.now();
-    const ttlMs = 60_000;
+    const ttlRaw = Number(cacheTtlMs);
+    const ttlMs = Number.isFinite(ttlRaw) && ttlRaw >= 0 ? ttlRaw : 60_000;
     const limitRaw = Number(limit);
     const safeLimit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.round(limitRaw), 1), 2000) : 500;
     const ownerKey = owner ? String(owner).trim() : '';

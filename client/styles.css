@@ -3940,6 +3940,15 @@ header {
   align-items: center;
 }
 
+.quick-refresh-btn {
+  min-height: 34px;
+}
+
+.quick-cache-status {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .quick-worktree-body {
   flex: 1;
   overflow-y: auto;
@@ -4097,32 +4106,12 @@ header {
 }
 
 .quick-repo-remote {
-  opacity: 0.7;
-  padding: 10px 12px;
-  border: 1px dashed var(--border-color);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-xs);
-}
-
-.quick-repo-remote .quick-repo-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.quick-repo-remote .quick-repo-name {
-  font-weight: 500;
-  font-size: 0.9rem;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--accent-primary) 7%, var(--bg-secondary) 93%);
 }
 
 .quick-repo-remote-badge {
   font-size: 0.75rem;
-}
-
-.quick-repo-remote-owner {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 2px;
 }
 
 .quick-repo-row {
@@ -4236,6 +4225,104 @@ header {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.quick-remote-clone-modal-content {
+  width: min(760px, 96vw);
+}
+
+.quick-remote-clone-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.quick-remote-clone-repo {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.quick-remote-clone-help {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.quick-remote-clone-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.quick-remote-clone-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.quick-remote-clone-label select,
+.quick-remote-clone-label input {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 8px 10px;
+}
+
+.quick-remote-parent-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-remote-parent-chip {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.quick-remote-parent-chip:hover {
+  border-color: var(--accent-primary);
+}
+
+.quick-remote-parent-empty {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.quick-remote-final-path {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  background: var(--bg-tertiary);
+}
+
+.quick-remote-final-path-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.quick-remote-final-path-value {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.quick-remote-clone-footer {
+  display: flex;
+  justify-content: flex-end;
   gap: var(--space-sm);
 }
 
@@ -4408,6 +4495,10 @@ header {
 
   .quick-worktree-intro {
     padding: 10px var(--space-sm);
+  }
+
+  .quick-remote-clone-grid {
+    grid-template-columns: 1fr;
   }
 
   .quick-worktree-help-popover {

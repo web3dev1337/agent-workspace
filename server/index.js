@@ -91,6 +91,7 @@ const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const { PrReviewAutomationService } = require('./prReviewAutomationService');
 const { GitHubRepoService } = require('./githubRepoService');
+const { GitHubCloneWorktreeService } = require('./githubCloneWorktreeService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
 const { sanitizeFilename, formatConversationAsMarkdown } = require('./conversationExportService');
 const { ActivityFeedService } = require('./activityFeedService');
@@ -336,6 +337,7 @@ const taskDependencyService = TaskDependencyService.getInstance({ taskRecordServ
 const processAdvisorService = ProcessAdvisorService.getInstance({ processStatusService, processTelemetryService, processTaskService, taskRecordService, taskDependencyService });
 const processReadinessService = ProcessReadinessService.getInstance();
 const githubRepoService = GitHubRepoService.getInstance();
+const githubCloneWorktreeService = GitHubCloneWorktreeService.getInstance({ logger, projectTypeService });
 const { ProcessPairingService } = require('./processPairingService');
 const processPairingService = ProcessPairingService.getInstance({ processTaskService, taskRecordService, worktreeConflictService, projectMetadataService });
 const testOrchestrationService = TestOrchestrationService.getInstance({ sessionManager, workspaceManager });
@@ -5272,6 +5274,48 @@ app.get('/api/github/repos', async (req, res) => {
   } catch (error) {
     logger.error('Failed to list GitHub repos', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to list GitHub repos' });
+  }
+});
+
+app.post('/api/github/clone-and-add-worktree', express.json(), async (req, res) => {
+  try {
+    const {
+      workspaceId,
+      repo,
+      categoryId,
+      frameworkId,
+      parentPath,
+      repositoryType,
+      worktreeId,
+      startTier,
+      createFolders
+    } = req.body || {};
+
+    const result = await githubCloneWorktreeService.cloneAndAddWorktree({
+      workspaceId: String(workspaceId || '').trim(),
+      repo: String(repo || '').trim(),
+      categoryId: String(categoryId || '').trim(),
+      frameworkId: String(frameworkId || '').trim(),
+      parentPath: String(parentPath || '').trim(),
+      repositoryType: String(repositoryType || '').trim(),
+      worktreeId: String(worktreeId || 'work1').trim(),
+      startTier,
+      createFolders: createFolders !== false,
+      ensureWorkspaceMixedWorktree
+    });
+
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode) || 500;
+    logger.error('Failed to clone GitHub repo and add worktree', {
+      error: error.message,
+      stack: error.stack,
+      statusCode
+    });
+    res.status(statusCode).json({
+      ok: false,
+      error: String(error?.message || 'Failed to clone GitHub repo and add worktree')
+    });
   }
 });
 
