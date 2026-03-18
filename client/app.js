@@ -18131,7 +18131,17 @@ class ClaudeOrchestrator {
             nameEl.textContent = nextNameValue;
             nameEl.title = nextNameValue;
           }
+          const nameInputEl = tabState.tabElement.querySelector('.tab-name-input');
+          if (nameInputEl) {
+            nameInputEl.value = nextNameValue;
+            nameInputEl.title = nextNameValue;
+          }
+          tabState.tabElement.classList.remove('editing');
+          tabState.tabElement.classList.remove('renaming');
         }
+        tabState.isRenaming = false;
+        tabState.renameSubmitting = false;
+        tabState.renameOriginalName = null;
       });
     }
 
