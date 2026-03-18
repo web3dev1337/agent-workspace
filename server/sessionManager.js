@@ -343,9 +343,6 @@ class SessionManager extends EventEmitter {
     if (!versionInfo.isCompatible) {
       const updateInfo = ClaudeVersionChecker.generateUpdateInstructions(versionInfo);
       logger.error('Claude CLI version incompatible', updateInfo);
-
-      // Emit update requirement to clients
-      this.io.emit('claude-update-required', updateInfo);
     }
 
     // Create all sessions in parallel for faster startup
