@@ -139,6 +139,7 @@ class ClaudeOrchestrator {
     this.reviewConsoleDockedTerminals = new Map(); // sessionId -> { wrapper, parent, nextSibling }
     this.reviewConsoleDockedWorktreePath = null;
     this.reviewConsoleHotkeysCleanup = null;
+    this.reviewConsoleVisibilityBypass = new Set();
     // When Review Console is opened from Queue, capture the current filtered PR list so you can
     // navigate Prev/Next without reopening the Queue overlay.
     this.reviewConsoleNav = null; // { source, createdAtMs, items: [{ id, kind, title, url, ... }], index }
@@ -3736,10 +3737,12 @@ class ClaudeOrchestrator {
     const session = this.sessions.get(sessionId);
     const visibleByWorktreeToggle = this.isSessionVisibleByWorktreeSelection(sessionId, session);
 
+	    const reviewConsoleBypass = !!this.reviewConsoleVisibilityBypass?.has?.(String(sessionId || '').trim());
+
 	    return visibleByWorktreeToggle
         && this.matchesViewMode(sessionId)
-        && this.matchesTierFilter(sessionId)
-        && this.matchesWorkflowMode(sessionId);
+	        && (reviewConsoleBypass || (this.matchesTierFilter(sessionId)
+	        && this.matchesWorkflowMode(sessionId)));
 	  }
 
 	  handleInitialSessions(sessionStates) {
@@ -7177,11 +7180,12 @@ class ClaudeOrchestrator {
             if (sessionId) {
               const session = this.sessions.get(sessionId);
               const p = String(session?.config?.cwd || session?.cwd || session?.worktreePath || '').trim();
+              const prUrlHint = String(this.githubLinks.get(sessionId)?.pr || '').trim();
               if (!p) {
                 this.showToast?.('No worktree path found for session', 'warning');
                 return;
               }
-              await this.openWorktreeInspectorForPath(p, { label: label || session?.worktreeId || sessionId, reviewConsole: true });
+              await this.openWorktreeInspectorForPath(p, { label: label || session?.worktreeId || sessionId, reviewConsole: true, sessionIdHint: sessionId, prUrlHint });
               return;
             }
 
@@ -11592,6 +11596,7 @@ class ClaudeOrchestrator {
     if (!modal) return;
     try { this.reviewConsoleHotkeysCleanup?.(); } catch {}
     this.reviewConsoleHotkeysCleanup = null;
+    this.reviewConsoleVisibilityBypass?.clear?.();
     this.restoreReviewConsoleDockedTerminals();
     modal.classList.remove('docked');
     modal.classList.remove('fullscreen');
@@ -11599,6 +11604,87 @@ class ClaudeOrchestrator {
     // Re-apply view mode filters so terminals hidden by Agent Only / Servers Only
     // don't leak back into the grid after being undocked.
     this.updateTerminalGrid();
+  }
+
+  setReviewConsoleVisibilityBypass(sessionIds = []) {
+    this.reviewConsoleVisibilityBypass = new Set(
+      (Array.isArray(sessionIds) ? sessionIds : [])
+        .map((sessionId) => String(sessionId || '').trim())
+        .filter(Boolean)
+    );
+  }
+
+  getReviewConsoleSessionIds(worktreePath, { sessionIdHint = '' } = {}) {
+    const norm = (value) => String(value || '').replace(/\\/g, '/').replace(/\/+$/, '');
+    const target = norm(worktreePath);
+
+    const overlaps = (a0, b0) => {
+      const a = norm(a0);
+      const b = norm(b0);
+      if (!a || !b) return false;
+      if (a === b) return true;
+      return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+    };
+
+    const hintedSessionId = String(sessionIdHint || '').trim();
+    const hintedSession = hintedSessionId ? (this.sessions.get(hintedSessionId) || null) : null;
+    const hintedWorktreeKey = hintedSessionId ? this.getSessionWorktreeKey(hintedSessionId, hintedSession) : '';
+
+    const pathParts = splitClientPathSegments(target);
+    const worktreeId = pathParts[pathParts.length - 1] || '';
+    const repoName = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : '';
+
+    const sessionIds = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (!sessionId || !session) continue;
+      if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+
+      if (hintedWorktreeKey && this.getSessionWorktreeKey(sessionId, session) === hintedWorktreeKey) {
+        sessionIds.push(String(sessionId));
+        continue;
+      }
+
+      const cwd = session?.config?.cwd || session?.cwd || '';
+      if (target && cwd && overlaps(cwd, target)) {
+        sessionIds.push(String(sessionId));
+        continue;
+      }
+
+      const sid = String(sessionId).toLowerCase();
+      const wid = worktreeId.toLowerCase();
+      if (wid && (sid.includes(`-${wid}-`) || sid.endsWith(`-${wid}`))) {
+        if (!repoName || sid.includes(repoName.toLowerCase())) {
+          sessionIds.push(String(sessionId));
+        }
+      }
+    }
+
+    const uniqueSessionIds = Array.from(new Set(sessionIds));
+    const baseId = (sid) => String(sid || '').replace(/-(claude|codex|server)$/, '');
+    const isServer = (sid) => {
+      const s = String(sid || '');
+      if (s.endsWith('-server')) return true;
+      const sess = this.sessions.get(s);
+      return String(sess?.type || '').toLowerCase() === 'server';
+    };
+    const rank = (sid) => {
+      const s = String(sid || '');
+      if (isServer(s)) return 2;
+      if (s.endsWith('-codex') || String(this.sessions.get(s)?.type || '').toLowerCase() === 'codex') return 1;
+      return 0;
+    };
+
+    uniqueSessionIds.sort((a, b) => {
+      const aBase = baseId(a);
+      const bBase = baseId(b);
+      if (aBase !== bBase) return aBase.localeCompare(bBase);
+      const ar = rank(a);
+      const br = rank(b);
+      if (ar !== br) return ar - br;
+      return String(a).localeCompare(String(b));
+    });
+
+    return uniqueSessionIds;
   }
 
   restoreReviewConsoleDockedTerminals() {
@@ -11652,87 +11738,28 @@ class ClaudeOrchestrator {
     }
   }
 
-  dockReviewConsoleTerminals(worktreePath, containerEl) {
+  dockReviewConsoleTerminals(worktreePath, containerEl, { sessionIdHint = '' } = {}) {
     const container = containerEl || null;
-    if (!container) return;
+    if (!container) return 0;
 
     const norm = (value) => String(value || '').replace(/\\/g, '/').replace(/\/+$/, '');
     const target = norm(worktreePath);
-    if (!target) return;
+    if (!target) return 0;
 
     // If we're already docked for this same worktree, avoid doing heavy DOM moves.
     if (this.reviewConsoleDockedWorktreePath === target && this.reviewConsoleDockedTerminals?.size) {
-      return;
+      return this.reviewConsoleDockedTerminals.size;
     }
 
     // Ensure we never strand wrappers from a previous console view.
     this.restoreReviewConsoleDockedTerminals();
     this.reviewConsoleDockedWorktreePath = target;
 
-    const overlaps = (a0, b0) => {
-      const a = norm(a0);
-      const b = norm(b0);
-      if (!a || !b) return false;
-      if (a === b) return true;
-      return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
-    };
-
-    // Extract worktree ID from path (e.g., "work4" from ".../zoo-game/work4")
-    const pathParts = splitClientPathSegments(target);
-    const worktreeId = pathParts[pathParts.length - 1] || '';
-    // Also get repo name for better matching (e.g., "zoo-game" from ".../zoo-game/work4")
-    const repoName = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : '';
-
-    const sessionIds = [];
-    for (const [sessionId, session] of this.sessions) {
-      if (!sessionId || !session) continue;
-      if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
-
-      // Try matching by cwd first
-      const cwd = session?.config?.cwd || session?.cwd || '';
-      if (cwd && overlaps(cwd, target)) {
-        sessionIds.push(String(sessionId));
-        continue;
-      }
-
-      // Fallback: match by worktree ID pattern in session ID (e.g., "zoo-game-work4-claude")
-      const sid = String(sessionId).toLowerCase();
-      const wid = worktreeId.toLowerCase();
-      if (wid && (sid.includes(`-${wid}-`) || sid.endsWith(`-${wid}`))) {
-        // Extra check: if we have repo name, make sure it matches too
-        if (!repoName || sid.includes(repoName.toLowerCase())) {
-          sessionIds.push(String(sessionId));
-        }
-      }
-    }
-
-    // Stable ordering: keep pairs adjacent, always put Agent left of Server.
-    const baseId = (sid) => String(sid || '').replace(/-(claude|codex|server)$/, '');
-    const isServer = (sid) => {
-      const s = String(sid || '');
-      if (s.endsWith('-server')) return true;
-      const sess = this.sessions.get(s);
-      return String(sess?.type || '').toLowerCase() === 'server';
-    };
-    const rank = (sid) => {
-      const s = String(sid || '');
-      if (isServer(s)) return 2;
-      if (s.endsWith('-codex') || String(this.sessions.get(s)?.type || '').toLowerCase() === 'codex') return 1;
-      return 0; // claude/other
-    };
-    sessionIds.sort((a, b) => {
-      const aBase = baseId(a);
-      const bBase = baseId(b);
-      if (aBase !== bBase) return aBase.localeCompare(bBase);
-      const ar = rank(a);
-      const br = rank(b);
-      if (ar !== br) return ar - br;
-      return String(a).localeCompare(String(b));
-    });
+    const sessionIds = this.getReviewConsoleSessionIds(target, { sessionIdHint });
 
     if (sessionIds.length === 0) {
-      container.innerHTML = `<div class="worktree-inspector-subtle">No terminals found for this worktree.</div>`;
-      return;
+      container.innerHTML = '';
+      return 0;
     }
 
     container.innerHTML = '';
@@ -11806,6 +11833,8 @@ class ClaudeOrchestrator {
         }
       }, 60);
     }
+
+	  return sessionIds.length;
 	  }
 
 	  resolveWorktreePathForSession(sessionId, sessionOverride = null) {
@@ -11850,10 +11879,10 @@ class ClaudeOrchestrator {
 		    try {
 		      const session = this.sessions.get(sid);
 		      const worktreePath = this.resolveWorktreePathForSession(sid, session) || null;
+		      const prUrlHint = String(this.githubLinks.get(sid)?.pr || '').trim();
 
 		      if (!worktreePath) {
-		        const links = this.githubLinks.get(sid) || {};
-		        const prUrl = String(links.pr || '').trim();
+		        const prUrl = prUrlHint;
 		        if (prUrl) {
 		          await this.openReviewConsoleForPRTask({ url: prUrl, title: `PR (${sid})` });
 		          return;
@@ -11863,14 +11892,14 @@ class ClaudeOrchestrator {
 		      }
 
 		      const label = session?.worktreeId ? `${session.worktreeId}` : sid;
-		      await this.openWorktreeInspectorForPath(worktreePath, { label, reviewConsole: !!reviewConsole });
+		      await this.openWorktreeInspectorForPath(worktreePath, { label, reviewConsole: !!reviewConsole, sessionIdHint: sid, prUrlHint });
 	    } catch (err) {
 	      console.error('openWorktreeInspector failed:', err);
 	      this.showToast?.(`Inspector failed: ${String(err?.message || err)}`, 'error');
 	    }
 	  }
 
-  async openWorktreeInspectorForPath(worktreePath, { label = '', task = null, reviewConsole = false } = {}) {
+  async openWorktreeInspectorForPath(worktreePath, { label = '', task = null, reviewConsole = false, sessionIdHint = '', prUrlHint = '' } = {}) {
     const p = String(worktreePath || '').trim();
     if (!p) {
       this.showToast('No worktree path provided', 'warning');
@@ -11880,6 +11909,12 @@ class ClaudeOrchestrator {
     this.restoreReviewConsoleDockedTerminals();
     try { this.reviewConsoleHotkeysCleanup?.(); } catch {}
     this.reviewConsoleHotkeysCleanup = null;
+
+    if (reviewConsole) {
+      this.setReviewConsoleVisibilityBypass(this.getReviewConsoleSessionIds(p, { sessionIdHint }));
+    } else {
+      this.reviewConsoleVisibilityBypass?.clear?.();
+    }
 
     const modal = this.ensureWorktreeInspectorModal();
     modal.classList.remove('hidden');
@@ -11936,10 +11971,15 @@ class ClaudeOrchestrator {
 		      const rcShowFiles = !reviewConsole || rcSections.files !== false;
 		      const rcShowCommits = !reviewConsole || rcSections.commits !== false;
 		      const rcShowDiff = reviewConsole && rcSections.diff !== false;
+		      const hintedPrUrl = String(prUrlHint || reviewTask?.url || '').trim();
 
-		      let prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : 'No PR';
+		      const hintedPrNumber = (() => {
+		        const match = hintedPrUrl.match(/\/pull\/(\d+)/i);
+		        return match ? Number.parseInt(match[1], 10) : null;
+		      })();
+		      let prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : (hintedPrNumber ? `PR #${hintedPrNumber}` : (hintedPrUrl ? 'PR' : 'No PR'));
 		      let prState = pr?.hasPR ? String(pr?.state || '').toLowerCase() : '';
-		      let prUrl = pr?.hasPR && pr?.url ? String(pr.url) : '';
+		      let prUrl = pr?.hasPR && pr?.url ? String(pr.url) : hintedPrUrl;
 		      const getDiffViewerPathForGitHubUrl = (githubUrl) => {
 		        const url = String(githubUrl || '').trim();
 		        if (!url) return '';
@@ -12563,17 +12603,18 @@ class ClaudeOrchestrator {
 		          if (currentFullscreen) modal.classList.add('fullscreen');
 		          else modal.classList.add('docked');
 
-		          if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', currentSections.terminals === false);
+		          let dockedTerminalCount = 0;
+		          if (currentSections.terminals !== false && terminalsContainerEl) {
+		            dockedTerminalCount = this.dockReviewConsoleTerminals(p, terminalsContainerEl, { sessionIdHint });
+		          } else {
+		            this.restoreReviewConsoleDockedTerminals();
+		          }
+
+		          if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', currentSections.terminals === false || dockedTerminalCount === 0);
 		          if (filesPanelEl) filesPanelEl.classList.toggle('hidden', currentSections.files === false);
 		          if (commitsPanelEl) commitsPanelEl.classList.toggle('hidden', currentSections.commits === false);
 		          if (diffPanelEl) diffPanelEl.classList.toggle('hidden', currentSections.diff === false);
 		          updateGrid();
-
-		          if (currentSections.terminals !== false && terminalsContainerEl) {
-		            this.dockReviewConsoleTerminals(p, terminalsContainerEl);
-		          } else {
-		            this.restoreReviewConsoleDockedTerminals();
-		          }
 
 		          bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
 		            const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
@@ -13200,6 +13241,11 @@ class ClaudeOrchestrator {
 
     const rc = this.getReviewConsoleConfig();
     const rcShowTerminals = rc?.sections?.terminals !== false;
+    const worktreeKey = sessionId ? (this.getSessionWorktreeKey(sessionId, session) || '') : '';
+    const reviewConsoleSessionIds = rcShowTerminals
+      ? this.getReviewConsoleSessionIds(worktreePath, { sessionIdHint: sessionId })
+      : [];
+    const prUrlHint = String(t.url || this.githubLinks.get(sessionId)?.pr || '').trim();
 
     const inferredWorktreeId = String(
       session?.worktreeId
@@ -13208,17 +13254,19 @@ class ClaudeOrchestrator {
       || this.extractWorktreeLabel(worktreePath)
       || ''
     ).trim();
+    const focusedWorktreeKey = worktreeKey || inferredWorktreeId;
 
-    if (rcShowTerminals && inferredWorktreeId) {
+    if (rcShowTerminals && focusedWorktreeKey) {
+      this.setReviewConsoleVisibilityBypass(reviewConsoleSessionIds);
       // Queue panel is a fullscreen overlay; if we want terminals visible, close Queue.
       if (document.getElementById('queue-panel')) {
         document.getElementById('queue-close-btn')?.click?.();
       }
-      this.showOnlyWorktree(inferredWorktreeId);
+      this.showOnlyWorktree(focusedWorktreeKey);
     }
 
     const label = inferredWorktreeId || String(t.id || '').trim() || worktreePath;
-    await this.openWorktreeInspectorForPath(worktreePath, { label, task: t, reviewConsole: true });
+    await this.openWorktreeInspectorForPath(worktreePath, { label, task: t, reviewConsole: true, sessionIdHint: sessionId, prUrlHint });
 
 	    if (rcShowTerminals) {
 	      const preferredSessionId = sessionId || (inferredWorktreeId ? `${inferredWorktreeId}-claude` : '');
@@ -13435,6 +13483,8 @@ class ClaudeOrchestrator {
 		        if (linkedPr === targetPrUrl) matchingSessionIds.push(String(sid));
 		      }
 
+		      this.setReviewConsoleVisibilityBypass(matchingSessionIds);
+
 		      // Fallback: if we don't have explicit GitHub link detection yet, try to link sessions by:
 		      // 1) the task's known worktreePath (Queue/process tasks often include it), or
 		      // 2) repo remote URL + head branch name.
@@ -13525,15 +13575,17 @@ class ClaudeOrchestrator {
 			        const sess = this.sessions.get(s);
 			        return String(sess?.type || '').toLowerCase() === 'server';
 			      };
-			      matchingSessionIds.sort((a, b) => {
-			        const aBase = baseId(a);
-			        const bBase = baseId(b);
-			        if (aBase !== bBase) return aBase.localeCompare(bBase);
-			        const aIsServer = isServer(a);
-			        const bIsServer = isServer(b);
-			        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
-			        return String(a).localeCompare(String(b));
-			      });
+		      matchingSessionIds.sort((a, b) => {
+		        const aBase = baseId(a);
+		        const bBase = baseId(b);
+		        if (aBase !== bBase) return aBase.localeCompare(bBase);
+		        const aIsServer = isServer(a);
+		        const bIsServer = isServer(b);
+		        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
+		        return String(a).localeCompare(String(b));
+		      });
+
+		      this.setReviewConsoleVisibilityBypass(matchingSessionIds);
 
 	      const statusLabel = (s) => {
 	        const v = String(s || '').trim().toLowerCase();
