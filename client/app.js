@@ -4362,9 +4362,27 @@ class ClaudeOrchestrator {
     const sid = String(sessionId || '').trim();
     const row = session || this.sessions.get(sid) || null;
     if (!sid && !row) return '';
-    const worktreeId = String(row?.worktreeId || sid.split('-')[0] || '').trim();
+    const worktreeId = this.getSessionWorktreeId(sid, row);
     const repositoryName = String(row?.repositoryName || this.extractRepositoryName(sid) || '').trim();
     return repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+  }
+
+  getSessionWorktreeId(sessionId, session = null) {
+    const sid = String(sessionId || '').trim();
+    const row = session || this.sessions.get(sid) || null;
+
+    const explicitWorktreeId = String(row?.worktreeId || row?.worktree || '').trim();
+    if (explicitWorktreeId) return explicitWorktreeId;
+
+    const match = sid.match(/(?:^|-)(work\d+)(?=-|$)/i);
+    if (match?.[1]) return match[1];
+
+    const parts = sid.split('-').filter(Boolean);
+    if (parts.length >= 2 && /^(claude|codex|server)$/i.test(parts[parts.length - 1])) {
+      return parts[parts.length - 2];
+    }
+
+    return parts[0] || sid;
   }
 
   getSidebarAgentIdForWorktree(worktreeKey) {
@@ -4445,7 +4463,7 @@ class ClaudeOrchestrator {
         continue; // Skip sessions from other workspaces
       }
 
-      const worktreeId = session.worktreeId || sessionId.split('-')[0];
+      const worktreeId = this.getSessionWorktreeId(sessionId, session);
 
       // Extract repository name from session ID for mixed-repo workspaces
       const repositoryName = this.extractRepositoryName(sessionId);
@@ -5046,7 +5064,7 @@ class ClaudeOrchestrator {
 
     // Fallback: compute the same key used in the sidebar and match against it.
     for (const [sessionId, session] of this.sessions) {
-      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
       const repositoryName = this.extractRepositoryName(sessionId);
       const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
@@ -5078,7 +5096,7 @@ class ClaudeOrchestrator {
 
     // Add only active worktree sessions to visible set
     for (const [sessionId, session] of this.sessions) {
-      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
       const repositoryName = this.extractRepositoryName(sessionId);
       const worktreeKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
@@ -5179,7 +5197,7 @@ class ClaudeOrchestrator {
         }
 
         // For mixed-repo workspaces, build the same key used in buildSidebar
-        const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+        const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
         const repositoryName = this.extractRepositoryName(sessionId);
         const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
@@ -5223,7 +5241,7 @@ class ClaudeOrchestrator {
         }
 
         // For mixed-repo workspaces, build the same key used in buildSidebar
-        const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+        const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
         const repositoryName = this.extractRepositoryName(sessionId);
         const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
@@ -5814,7 +5832,7 @@ class ClaudeOrchestrator {
       if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) continue;
       if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
 
-      const sessionWorktreeId = session.worktreeId || String(sessionId).split('-')[0];
+      const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
       const repositoryName = this.extractRepositoryName(sessionId);
       const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
       if (sessionKey === key || sessionWorktreeId === key) {
@@ -6658,7 +6676,7 @@ class ClaudeOrchestrator {
 
 		  getWorktreeRemoveButtonHTML(sessionId) {
 				    const session = this.sessions.get(sessionId);
-				    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
+				    const worktreeId = this.getSessionWorktreeId(sessionId, session);
 				    if (!worktreeId) return '';
 
 		    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
