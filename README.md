@@ -11,9 +11,9 @@ Run multiple CLI agents in parallel across different repos. Your hardware, your 
 
 ## Product Screenshots
 
-### Hero
+### Main Workspace View
 
-![Agent Workspace hero](site/assets/home-page-windows.png)
+![Agent Workspace main view](site/assets/home-page-windows.png)
 
 ### Multi-Workspace Tabs
 
