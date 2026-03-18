@@ -1,6 +1,6 @@
 # Agent Workspace Terms of Use
 
-Effective date: March 17, 2026
+Effective date: March 18, 2026
 
 These Terms of Use govern your access to and use of the Agent Workspace website, downloads, packaged desktop application, release artifacts, update feeds, documentation, and related materials that Neural Pixel makes available.
 
@@ -12,13 +12,13 @@ Agent Workspace is published under the Neural Pixel brand. In these Terms, "Neur
 
 Current public contact channels:
 
-- GitHub repository: https://github.com/web3dev1337/claude-orchestrator
-- Security advisories: https://github.com/web3dev1337/claude-orchestrator/security/advisories/new
-- X: https://x.com/AIOnlyDeveloper
+- GitHub repository: [web3dev1337/claude-orchestrator](https://github.com/web3dev1337/claude-orchestrator)
+- Security advisories: [Private security advisory intake](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new)
+- X: [@AIOnlyDeveloper](https://x.com/AIOnlyDeveloper)
 
 ## 2. What Agent Workspace is
 
-Agent Workspace is local-first developer tooling. It can orchestrate terminal-based agents, repositories, worktrees, local services, command execution, prompts, reviews, browser-like workspace tabs, dashboards, and optional integrations such as GitHub, Trello, Discord, and third-party AI providers.
+Agent Workspace is local-first developer tooling. It can orchestrate terminal-based agents, repositories, worktrees, local services, command execution, prompts, reviews, browser-like workspace tabs, dashboards, and optional service-backed features such as GitHub-linked repository and pull-request workflows, Trello task workflows, Discord queue-processing workflows, optional speech-recognition backends, and provider-backed AI helpers.
 
 Because Agent Workspace can launch commands, read and write files, and trigger actions through connected tools, it is powerful software that can materially affect your machine, repositories, services, secrets, and data.
 
@@ -90,9 +90,11 @@ You are solely responsible for:
 - using only trusted repositories, workspaces, and folders;
 - ensuring that your use is lawful and authorized.
 
-## 9. Third-party tools, models, and services
+## 9. Third-party tools and service-backed features
 
 Agent Workspace can work with third-party tools and services, including but not limited to GitHub, Trello, Discord, Anthropic, OpenAI, Google, local CLIs, and other agent providers.
+
+Examples of optional service-backed features in the current product include GitHub repository discovery and pull-request workflows, Trello board and card workflows, Discord queue processing, optional browser speech recognition, and provider-backed AI requests.
 
 Those third parties are independent from us. They have separate terms, privacy policies, availability, quotas, pricing, and security practices. We are not responsible for:
 
@@ -115,19 +117,21 @@ The Agent Workspace name, logos, website design, branding, and related trade dre
 
 These Terms do not grant you any right to use our trademarks, logos, or branding in a way that suggests endorsement, affiliation, sponsorship, or official status, except as otherwise permitted by law or by separate written permission.
 
-## 12. Privacy and local-first operation
+## 12. Local-first operation and privacy
 
-Agent Workspace is designed to run on your own hardware and does not require publisher-hosted user accounts or publisher-hosted usage telemetry.
+Agent Workspace is designed to run on your own hardware and does not require publisher-hosted user accounts or publisher-hosted telemetry by default.
 
-That said, the product still processes and stores data locally on your device, and it may transmit data to third-party services when you configure or use integrations. Our Privacy Policy explains this in more detail:
+That said, the product still processes and stores data locally on your device, and it can transmit data to third-party services when you configure or use optional features that depend on those services. Our Privacy Policy explains this in more detail:
 
-https://agent-workspace.ai/privacy.html
+[Agent Workspace Privacy Policy](https://agent-workspace.ai/privacy.html)
 
-## 13. Updates, releases, and availability
+## 13. Releases, verification, and availability
 
 We may change, patch, improve, suspend, or discontinue any part of Agent Workspace or its distribution channels at any time, with or without notice.
 
 We are not obligated to provide maintenance, support, updates, or any minimum service level. Features may change between source builds, local runs, preview builds, and tagged releases.
+
+Before running packaged releases, you should verify the release asset you downloaded against the published release information. That includes checking the published SHA-256 digest and, if a platform signature is present, checking that signature as well. If verification fails, do not run the file.
 
 ## 14. Feedback
 
@@ -137,7 +141,11 @@ If you submit suggestions, ideas, bug reports, feature requests, or other feedba
 
 TO THE MAXIMUM EXTENT PERMITTED BY LAW, AGENT WORKSPACE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, INCLUDING ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, SECURITY, RELIABILITY, QUIET ENJOYMENT, OR THAT THE SOFTWARE OR WEBSITE WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF HARMFUL COMPONENTS.
 
-## 16. Limitation of liability
+## 16. Non-excludable rights
+
+Nothing in these Terms excludes, restricts, or modifies any rights or remedies that cannot be excluded, restricted, or modified under applicable law.
+
+## 17. Limitation of liability
 
 TO THE MAXIMUM EXTENT PERMITTED BY LAW, NEURAL PIXEL AND ITS LICENSORS, CONTRIBUTORS, CONTRACTORS, AND SUPPLIERS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, BUSINESS, GOODWILL, DATA, SECRETS, REPOSITORIES, OR SYSTEM AVAILABILITY, ARISING OUT OF OR RELATING TO AGENT WORKSPACE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
@@ -148,7 +156,7 @@ TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE TOTAL AGGREGATE LIABILITY OF NEURAL 
 
 Some jurisdictions do not allow certain limitations, so parts of this section may not apply to you.
 
-## 17. Indemnification
+## 18. Indemnification
 
 To the maximum extent permitted by law, you will defend, indemnify, and hold harmless Neural Pixel and its licensors, contributors, contractors, and suppliers from claims, damages, losses, liabilities, judgments, penalties, and expenses, including reasonable attorneys' fees, arising out of or related to:
 
@@ -158,30 +166,30 @@ To the maximum extent permitted by law, you will defend, indemnify, and hold har
 - your unauthorized access to, or use of, systems, repositories, credentials, or data;
 - your content, prompts, automations, scripts, or workflows.
 
-## 18. Suspension and termination
+## 19. Suspension and termination
 
 We may suspend or terminate access to websites, downloads, update feeds, or other materials we control if we reasonably believe your use creates legal, security, abuse, or operational risk.
 
 You may stop using Agent Workspace at any time. Sections that by their nature should survive termination will survive, including sections concerning open-source licensing, disclaimers, limitations of liability, indemnity, feedback, and general legal interpretation.
 
-## 19. Export and sanctions compliance
+## 20. Export and sanctions compliance
 
 You may not use, export, re-export, transfer, or make Agent Workspace available in violation of applicable export control, sanctions, or trade laws.
 
-## 20. Changes to these Terms
+## 21. Changes to these Terms
 
 We may update these Terms from time to time. When we do, we will update the effective date above. If you continue to use Agent Workspace after updated Terms take effect, you agree to the updated Terms to the extent permitted by law.
 
-## 21. General
+## 22. General
 
 If any provision of these Terms is held unenforceable, the remaining provisions will remain in effect to the maximum extent permitted by law.
 
 Our failure to enforce a provision is not a waiver of that provision.
 
-## 22. Contact
+## 23. Contact
 
 Questions about these Terms can be directed through:
 
-- GitHub repository: https://github.com/web3dev1337/claude-orchestrator
-- Security advisories: https://github.com/web3dev1337/claude-orchestrator/security/advisories/new
-- X: https://x.com/AIOnlyDeveloper
+- GitHub repository: [web3dev1337/claude-orchestrator](https://github.com/web3dev1337/claude-orchestrator)
+- Security advisories: [Private security advisory intake](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new)
+- X: [@AIOnlyDeveloper](https://x.com/AIOnlyDeveloper)

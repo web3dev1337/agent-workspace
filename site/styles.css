@@ -1055,6 +1055,30 @@ a.btn-glow {
   line-height: 1.6;
 }
 
+.install-verify-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.install-verify-title {
+  margin: 0 0 0.75rem;
+  color: #f3f4f6;
+  font-weight: 600;
+}
+
+.install-verify-list {
+  margin: 0 0 1rem 1.25rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.install-verify-card .install-cmd:last-child {
+  margin-bottom: 0;
+}
+
 .install-legal-note a {
   color: var(--cyan);
 }
@@ -1178,6 +1202,12 @@ body.legal-page {
   margin-bottom: 10px;
 }
 
+.legal-section h3 {
+  margin-bottom: 10px;
+  color: #f3f4f6;
+}
+
+.legal-card > p:not(.legal-kicker):not(.legal-updated),
 .legal-section p,
 .legal-section li {
   color: var(--text-secondary);
@@ -1190,6 +1220,11 @@ body.legal-page {
 
 .legal-section a {
   color: var(--cyan);
+}
+
+.legal-card code {
+  font-family: var(--font-mono);
+  color: #dbeafe;
 }
 
 .legal-emphasis {

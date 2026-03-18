@@ -4,20 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agent Workspace | All Your Agents, One Workspace</title>
-  <meta name="description" content="Run multiple CLI agents in parallel across different repos with complete local control. Claude Max and Codex plan compatible. Zero telemetry.">
+  <meta name="description" content="Run multiple CLI agents in parallel across different repos with complete local control. Claude Max and Codex plan compatible. No publisher-hosted telemetry by default.">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://agent-workspace.ai">
   <meta property="og:title" content="Agent Workspace | All Your Agents, One Workspace">
-  <meta property="og:description" content="Run multiple CLI agents in parallel across different repos. Your hardware, your plans, your API keys. Zero telemetry.">
+  <meta property="og:description" content="Run multiple CLI agents in parallel across different repos. Your hardware, your plans, your API keys. No publisher-hosted telemetry by default.">
   <meta property="og:image" content="https://agent-workspace.ai/assets/og-card.png">
 
   <!-- Twitter / X -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="https://agent-workspace.ai">
   <meta name="twitter:title" content="Agent Workspace | All Your Agents, One Workspace">
-  <meta name="twitter:description" content="Run multiple CLI agents in parallel across different repos. Your hardware, your plans, your API keys. Zero telemetry.">
+  <meta name="twitter:description" content="Run multiple CLI agents in parallel across different repos. Your hardware, your plans, your API keys. No publisher-hosted telemetry by default.">
   <meta name="twitter:image" content="https://agent-workspace.ai/assets/og-card.png">
 
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -60,7 +60,7 @@
           <span class="gradient-text multi-color">One Workspace.</span>
         </h1>
         <p class="hero-lead">
-          All your projects in one workspace. Run multiple CLI agents in parallel across different repos. Runs on your hardware, accessed through the desktop app or the browser. No external telemetry.
+          All your projects in one workspace. Run multiple CLI agents in parallel across different repos. Runs on your hardware, accessed through the desktop app or the browser. No publisher-hosted telemetry by default.
         </p>
         <div class="action-row">
           <a class="btn-glow" href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank">
@@ -174,6 +174,22 @@
             <code>npm start</code>
             <button class="copy-btn" data-copy="npm start">Copy</button>
           </div>
+          <div class="install-verify-card">
+            <p class="install-verify-title">Verify the Windows installer before running it.</p>
+            <ul class="install-verify-list">
+              <li>Compare the SHA-256 digest shown on the GitHub release.</li>
+              <li>If a signature is present, verify it before launching.</li>
+              <li>If verification fails, do not run the file.</li>
+            </ul>
+            <div class="install-cmd">
+              <code>Get-FileHash .\downloaded-file.exe -Algorithm SHA256</code>
+              <button class="copy-btn" data-copy="Get-FileHash .\\downloaded-file.exe -Algorithm SHA256">Copy</button>
+            </div>
+            <div class="install-cmd">
+              <code>Get-AuthenticodeSignature .\downloaded-file.exe</code>
+              <button class="copy-btn" data-copy="Get-AuthenticodeSignature .\\downloaded-file.exe">Copy</button>
+            </div>
+          </div>
         </div>
 
         <div class="install-panel" id="tab-mac-mid">
@@ -233,7 +249,7 @@
       <div class="bento-item reveal" style="--delay: 0.1s">
         <div class="bento-inner glass-dark">
           <h3 class="bento-title text-cyan">Runs Locally</h3>
-          <p class="bento-desc">Runs on your own hardware. Access through the desktop app or the browser. Zero external telemetry, zero data collection.</p>
+          <p class="bento-desc">Runs on your own hardware. No publisher-hosted telemetry by default. Optional GitHub, Trello, Discord, voice, and AI features only talk to services you enable.</p>
           <div class="bento-icon">🔒</div>
         </div>
       </div>
@@ -330,6 +346,22 @@
           <div class="install-cmd">
             <code>npm start</code>
             <button class="copy-btn" data-copy="npm start">Copy</button>
+          </div>
+          <div class="install-verify-card">
+            <p class="install-verify-title">Verify the Windows installer before running it.</p>
+            <ul class="install-verify-list">
+              <li>Compare the SHA-256 digest shown on the GitHub release.</li>
+              <li>If a signature is present, verify it before launching.</li>
+              <li>If verification fails, do not run the file.</li>
+            </ul>
+            <div class="install-cmd">
+              <code>Get-FileHash .\downloaded-file.exe -Algorithm SHA256</code>
+              <button class="copy-btn" data-copy="Get-FileHash .\\downloaded-file.exe -Algorithm SHA256">Copy</button>
+            </div>
+            <div class="install-cmd">
+              <code>Get-AuthenticodeSignature .\downloaded-file.exe</code>
+              <button class="copy-btn" data-copy="Get-AuthenticodeSignature .\\downloaded-file.exe">Copy</button>
+            </div>
           </div>
         </div>
 

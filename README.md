@@ -7,7 +7,7 @@
 
 All your Agents. One Workspace.
 
-Run multiple CLI agents in parallel across different repos. Your hardware, your plans, your API keys. Zero telemetry.
+Run multiple CLI agents in parallel across different repos. Your hardware, your plans, your API keys. No publisher-hosted telemetry by default.
 
 > The repo is named `claude-orchestrator` for historical reasons. The product is **Agent Workspace**.
 
@@ -33,7 +33,7 @@ Agent Workspace wraps your preferred terminal tools and runs them side by side w
 - **Built-in Diff Viewer** — Review pull requests with a full code review tool without leaving your workspace.
 - **Task Integration** — Pull tasks from Trello and/or use local task records. GitHub Issues and Linear coming soon.
 - **Browser-like Tabs** — Multiple workspaces open simultaneously, each with its own terminals and state.
-- **Runs Locally** — Runs on your hardware. Access through the desktop app or the browser. Zero external telemetry.
+- **Runs Locally** — Runs on your hardware. Access through the desktop app or the browser. No publisher-hosted telemetry by default.
 - **Windows Desktop App** — Native Tauri app with bundled Node.js. Mac app coming soon.
 
 ## Install
@@ -41,6 +41,13 @@ Agent Workspace wraps your preferred terminal tools and runs them side by side w
 ### Windows
 
 [Download the latest release](https://github.com/web3dev1337/claude-orchestrator/releases/latest) — the app bundles everything, no dev tools needed.
+
+Before running the installer, verify the published SHA-256 digest on the GitHub release. If a code-signing signature is present, verify that too. If verification fails, do not run the file.
+
+```powershell
+Get-FileHash .\downloaded-file.exe -Algorithm SHA256
+Get-AuthenticodeSignature .\downloaded-file.exe
+```
 
 Or run from source:
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agent Workspace Privacy Policy</title>
-  <meta name="description" content="Privacy Policy for Agent Workspace.">
+  <meta name="description" content="This Privacy Policy explains how Agent Workspace handles information when you use the Agent Workspace website, desktop app, and related materials.">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -13,147 +13,151 @@
     <div class="legal-shell">
       <a class="legal-back" href="index.html">← Back to Agent Workspace</a>
       <article class="legal-card">
+        <!-- Generated from docs/legal/PRIVACY_POLICY.md. Do not edit by hand. Run npm run site:legal. -->
         <p class="legal-kicker">Agent Workspace</p>
-        <h1>Privacy Policy</h1>
-        <p class="legal-updated">Effective date: March 17, 2026</p>
-        <p>
-          This Privacy Policy explains how Agent Workspace handles information when you use the
-          Agent Workspace website, desktop app, and related materials.
-        </p>
+        <h1>Agent Workspace Privacy Policy</h1>
+        <p class="legal-updated">Effective date: March 18, 2026</p>
+        <p>This Privacy Policy explains how Agent Workspace handles information when you use the Agent Workspace website, desktop app, and related materials.</p>
 
-        <section class="legal-section">
-          <h2>1. Short Version</h2>
-          <ul>
-            <li>Agent Workspace is designed to be local-first.</li>
-            <li>We do not operate a publisher-hosted user account system for normal app use.</li>
-            <li>We do not rely on publisher-hosted behavioral analytics or publisher-hosted telemetry for the app to function.</li>
-            <li>Your settings, workspace state, local logs, local telemetry, and optional integration credentials are generally stored on your own device.</li>
-            <li>If you connect third-party services such as GitHub, Trello, Discord, or AI providers, your data may be sent to those providers under your direction.</li>
-          </ul>
-        </section>
+<section class="legal-section">
+<h2>1. Short version</h2>
+<p>Agent Workspace is designed to be local-first:</p>
+<ul>
+  <li>we do not operate a publisher-hosted user account system for normal use of the app;</li>
+  <li>we do not rely on publisher-hosted behavioral analytics or publisher-hosted telemetry for the product to function;</li>
+  <li>your settings, workspace state, local logs, local process telemetry, onboarding state, and optional integration credentials are generally stored on your own device;</li>
+  <li>if you choose to connect third-party services such as GitHub, Trello, Discord, browser speech recognition, or AI providers, data may be sent to those providers under your direction and subject to their policies.</li>
+</ul>
+</section>
 
-        <section class="legal-section">
-          <h2>2. Scope</h2>
-          <p>This Privacy Policy applies to:</p>
-          <ul>
-            <li><a href="https://agent-workspace.ai" target="_blank" rel="noopener">agent-workspace.ai</a></li>
-            <li>the packaged Agent Workspace desktop application</li>
-            <li>release artifacts and update channels we control</li>
-          </ul>
-          <p>
-            It does not apply to third-party tools, websites, CLIs, AI models, or services you choose
-            to connect to Agent Workspace.
-          </p>
-        </section>
+<section class="legal-section">
+<h2>2. Scope</h2>
+<p>This Privacy Policy applies to:</p>
+<ul>
+  <li><a href="https://agent-workspace.ai" target="_blank" rel="noopener">agent-workspace.ai</a></li>
+  <li>the packaged Agent Workspace desktop application</li>
+  <li>release artifacts and update channels we control</li>
+</ul>
+<p>It does not apply to third-party tools, websites, CLIs, AI models, or services you choose to connect to Agent Workspace.</p>
+</section>
 
-        <section class="legal-section">
-          <h2>3. Information Stored Locally on Your Device</h2>
-          <p>Depending on how you use Agent Workspace, the software may store:</p>
-          <ul>
-            <li>workspace definitions, thread metadata, project boards, task records, settings, and onboarding state;</li>
-            <li>local logs, diagnostics, and local process telemetry;</li>
-            <li>local browser storage values, including UI preferences and panel state, when using the web UI;</li>
-            <li>local integration settings or credentials that you choose to save, such as Trello credentials or CLI login state managed by other tools;</li>
-            <li>file paths, repository metadata, branch names, session metadata, and local command history used to power product features.</li>
-          </ul>
-          <p>Examples of local storage paths may include:</p>
-          <ul>
-            <li><code>~/.orchestrator/</code></li>
-            <li><code>~/.trello-credentials</code></li>
-            <li><code>%APPDATA%\com.claude.orchestrator</code></li>
-            <li><code>%LOCALAPPDATA%\com.claude.orchestrator</code></li>
-            <li>browser <code>localStorage</code> when you use the web interface</li>
-          </ul>
-        </section>
+<section class="legal-section">
+<h2>3. Information we process</h2>
+<h3>A. Information stored locally on your device</h3>
+<p>Depending on how you use Agent Workspace, the software may store:</p>
+<ul>
+  <li>workspace definitions, thread metadata, project boards, task records, settings, and onboarding state;</li>
+  <li>local logs, diagnostics, and local process telemetry;</li>
+  <li>local browser storage values, including UI preferences, panel state, and first-run acknowledgement state, when using the web UI or desktop app;</li>
+  <li>local integration settings or credentials that you choose to save, such as Trello credentials or CLI login state managed by other tools;</li>
+  <li>file paths, repository metadata, branch names, session metadata, and local command history used to power product features.</li>
+</ul>
+<p>Examples of local storage paths may include:</p>
+<ul>
+  <li><code>~/.orchestrator/</code></li>
+  <li><code>~/.trello-credentials</code></li>
+  <li>desktop-app data directories such as <code>%APPDATA%\\com.claude.orchestrator</code> and <code>%LOCALAPPDATA%\\com.claude.orchestrator</code></li>
+  <li>browser <code>localStorage</code> when you use the web interface or desktop webview</li>
+</ul>
+<h3>B. Information sent to third parties at your direction</h3>
+<p>If you enable integrations or run commands through Agent Workspace, data may be sent to third-party providers. Depending on the feature you use, this can include:</p>
+<ul>
+  <li>repository metadata, pull-request details, or authentication-driven repository lookups sent to GitHub-related APIs or tools;</li>
+  <li>Trello board, list, card, checklist, member, or credential data sent to Trello;</li>
+  <li>queue payloads or task-processing requests sent through Discord workflows you configure;</li>
+  <li>prompts, files, code, and context sent to AI providers or CLIs you invoke through the product;</li>
+  <li>audio or transcript data sent to the speech-recognition backend you select, such as browser speech recognition.</li>
+</ul>
+<p>Those providers process data according to their own terms and privacy policies, not ours.</p>
+<h3>C. Information from our website</h3>
+<p>Based on the current codebase, the public website is a static site and does not include publisher-hosted analytics scripts or advertising trackers in the repository version reviewed for this release. Standard web hosting logs may still exist at the hosting or CDN layer.</p>
+</section>
 
-        <section class="legal-section">
-          <h2>4. Information Sent to Third Parties at Your Direction</h2>
-          <p>
-            If you enable integrations or run commands through Agent Workspace, data may be sent to third-party providers.
-            Depending on the feature, this can include repository metadata, PR data, task data, credentials, prompts, files,
-            code, and other context you choose to send.
-          </p>
-          <p>
-            Examples include GitHub, Trello, Discord, Anthropic, OpenAI, Google, or other local or cloud-based tools.
-            Those providers process data under their own terms and privacy policies, not ours.
-          </p>
-        </section>
+<section class="legal-section">
+<h2>4. How we use information</h2>
+<p>We use information to:</p>
+<ul>
+  <li>operate Agent Workspace features on your device;</li>
+  <li>save your settings and local state;</li>
+  <li>render dashboards, reviews, project boards, voice features, and threads;</li>
+  <li>support optional integrations you enable;</li>
+  <li>distribute software releases and documentation;</li>
+  <li>respond to security disclosures, bug reports, or support requests you send us.</li>
+</ul>
+</section>
 
-        <section class="legal-section">
-          <h2>5. Website Data</h2>
-          <p>
-            Based on the current codebase, the public website is a static site and does not include publisher-hosted
-            analytics scripts or advertising trackers in the repository version reviewed for this release.
-            Standard web hosting logs may still exist at the hosting or CDN layer.
-          </p>
-        </section>
+<section class="legal-section">
+<h2>5. No sale, no ad tech</h2>
+<p>We do not sell your personal information through Agent Workspace, and the reviewed product code does not include third-party advertising trackers or behavioral ad SDKs.</p>
+</section>
 
-        <section class="legal-section">
-          <h2>6. How We Use Information</h2>
-          <ul>
-            <li>to operate Agent Workspace features on your device;</li>
-            <li>to save your settings and local state;</li>
-            <li>to render dashboards, reviews, project boards, and threads;</li>
-            <li>to support optional integrations you enable;</li>
-            <li>to distribute software releases and documentation; and</li>
-            <li>to respond to security disclosures, bug reports, or support requests you send us.</li>
-          </ul>
-        </section>
+<section class="legal-section">
+<h2>6. Third-party services</h2>
+<p>Agent Workspace is designed to work with third-party providers you choose. If you connect those providers, they may receive data such as repository details, prompts, task metadata, tokens, or API requests necessary for the feature you are using.</p>
+<p>Examples include GitHub, Trello, Discord, Anthropic, OpenAI, Google, or other local or cloud-based tools. We do not control those services, and you should review their terms and privacy policies before using them.</p>
+</section>
 
-        <section class="legal-section">
-          <h2>7. No Sale, No Ad Tech</h2>
-          <p>
-            We do not sell your personal information through Agent Workspace, and the reviewed product code does not include
-            third-party advertising trackers or behavioral ad SDKs.
-          </p>
-        </section>
+<section class="legal-section">
+<h2>7. Retention</h2>
+<p>Because Agent Workspace is local-first, retention is often controlled by you:</p>
+<ul>
+  <li>local settings, logs, telemetry, and metadata remain on your device until you delete them, uninstall the app, clear browser storage, or remove the relevant files;</li>
+  <li>third-party providers may retain information you send to them under their own retention policies;</li>
+  <li>if you contact us directly, we may retain that correspondence as needed to respond, keep records, or protect rights and security.</li>
+</ul>
+</section>
 
-        <section class="legal-section">
-          <h2>8. Retention</h2>
-          <p>
-            Because Agent Workspace is local-first, retention is often controlled by you. Local settings, logs,
-            telemetry, and metadata generally remain on your device until you delete them, uninstall the app,
-            clear browser storage, or remove the relevant files.
-          </p>
-          <p>
-            Third-party providers may retain information you send to them under their own retention policies.
-          </p>
-        </section>
+<section class="legal-section">
+<h2>8. Security</h2>
+<p>We take reasonable steps in the product to support local-only storage patterns and secure defaults, but no software is perfectly secure.</p>
+<p>You are responsible for:</p>
+<ul>
+  <li>securing your machine and user account;</li>
+  <li>protecting repositories, tokens, SSH keys, and API credentials;</li>
+  <li>restricting access to local loopback services and enabling auth when exposing the app beyond loopback;</li>
+  <li>reviewing commands and automations before running them.</li>
+</ul>
+<p>If you discover a security issue, please use our security reporting process:</p>
+<p><a href="https://github.com/web3dev1337/claude-orchestrator/security/advisories/new" target="_blank" rel="noopener">Private security advisory intake</a></p>
+</section>
 
-        <section class="legal-section">
-          <h2>9. Security</h2>
-          <p>
-            We take reasonable steps in the product to support local-only storage patterns and secure defaults,
-            but no software is perfectly secure.
-          </p>
-          <p>You are responsible for securing your machine, repositories, tokens, SSH keys, and API credentials.</p>
-          <p>
-            If you discover a security issue, please use our security reporting process:
-            <a href="https://github.com/web3dev1337/claude-orchestrator/security/advisories/new" target="_blank" rel="noopener">private security advisory</a>
-          </p>
-        </section>
+<section class="legal-section">
+<h2>9. International users</h2>
+<p>If you choose to connect third-party providers or hosts located outside your country, your information may be transferred to other jurisdictions under those providers&#39; policies and legal frameworks.</p>
+</section>
 
-        <section class="legal-section">
-          <h2>10. Your Choices and Rights</h2>
-          <p>
-            Because we generally do not maintain a central hosted user database for normal app use, many privacy controls
-            are exercised locally by you, for example by deleting local app data, clearing browser storage, removing local
-            credentials files, uninstalling the app, or disconnecting third-party services.
-          </p>
-          <p>
-            If applicable law gives you rights such as access, correction, deletion, or restriction, and you believe we hold
-            personal information about you directly, contact us through the channels below.
-          </p>
-        </section>
+<section class="legal-section">
+<h2>10. Children</h2>
+<p>Agent Workspace is not directed to children under 13, and we do not knowingly build publisher-hosted profiles for children through the app.</p>
+</section>
 
-        <section class="legal-section">
-          <h2>11. Contact</h2>
-          <ul>
-            <li>GitHub repository: <a href="https://github.com/web3dev1337/claude-orchestrator" target="_blank" rel="noopener">web3dev1337/claude-orchestrator</a></li>
-            <li>Security advisories: <a href="https://github.com/web3dev1337/claude-orchestrator/security/advisories/new" target="_blank" rel="noopener">private security advisory</a></li>
-            <li>X: <a href="https://x.com/AIOnlyDeveloper" target="_blank" rel="noopener">@AIOnlyDeveloper</a></li>
-          </ul>
-        </section>
+<section class="legal-section">
+<h2>11. Your choices and rights</h2>
+<p>Because we generally do not maintain a central hosted user database for normal app use, many privacy controls are exercised locally by you, for example by:</p>
+<ul>
+  <li>deleting local app data;</li>
+  <li>clearing browser storage;</li>
+  <li>removing local credentials files;</li>
+  <li>uninstalling the app;</li>
+  <li>disconnecting third-party services.</li>
+</ul>
+<p>If applicable law gives you rights such as access, correction, deletion, or restriction, and you believe we hold personal information about you directly, contact us. In many cases, the practical answer may be to delete local files on your device or submit a request to the third-party provider you used.</p>
+</section>
+
+<section class="legal-section">
+<h2>12. Changes to this Privacy Policy</h2>
+<p>We may update this Privacy Policy from time to time. When we do, we will update the effective date above.</p>
+</section>
+
+<section class="legal-section">
+<h2>13. Contact</h2>
+<p>Questions or requests about privacy can be directed through:</p>
+<ul>
+  <li>GitHub repository: <a href="https://github.com/web3dev1337/claude-orchestrator" target="_blank" rel="noopener">web3dev1337/claude-orchestrator</a></li>
+  <li>Security advisories: <a href="https://github.com/web3dev1337/claude-orchestrator/security/advisories/new" target="_blank" rel="noopener">Private security advisory intake</a></li>
+  <li>X: <a href="https://x.com/AIOnlyDeveloper" target="_blank" rel="noopener">@AIOnlyDeveloper</a></li>
+</ul>
+</section>
       </article>
     </div>
   </main>
@@ -167,6 +171,7 @@
       <div class="footer-links">
         <a href="index.html">Home</a>
         <a href="terms.html">Terms</a>
+        <a href="privacy.html">Privacy</a>
         <a href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank" rel="noopener">Download</a>
       </div>
       <div class="copyright">© <span id="copy-year"></span> <a href="https://github.com/web3dev1337/claude-orchestrator" target="_blank" rel="noopener">Neural Pixel</a></div>

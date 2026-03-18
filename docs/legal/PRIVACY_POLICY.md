@@ -1,6 +1,6 @@
 # Agent Workspace Privacy Policy
 
-Effective date: March 17, 2026
+Effective date: March 18, 2026
 
 This Privacy Policy explains how Agent Workspace handles information when you use the Agent Workspace website, desktop app, and related materials.
 
@@ -10,14 +10,14 @@ Agent Workspace is designed to be local-first:
 
 - we do not operate a publisher-hosted user account system for normal use of the app;
 - we do not rely on publisher-hosted behavioral analytics or publisher-hosted telemetry for the product to function;
-- your settings, workspace state, local logs, local telemetry, and optional integration credentials are generally stored on your own device;
-- if you choose to connect third-party services such as GitHub, Trello, Discord, or AI providers, your data may be sent to those providers under your direction and subject to their policies.
+- your settings, workspace state, local logs, local process telemetry, onboarding state, and optional integration credentials are generally stored on your own device;
+- if you choose to connect third-party services such as GitHub, Trello, Discord, browser speech recognition, or AI providers, data may be sent to those providers under your direction and subject to their policies.
 
 ## 2. Scope
 
 This Privacy Policy applies to:
 
-- https://agent-workspace.ai
+- [agent-workspace.ai](https://agent-workspace.ai)
 - the packaged Agent Workspace desktop application
 - release artifacts and update channels we control
 
@@ -31,7 +31,7 @@ Depending on how you use Agent Workspace, the software may store:
 
 - workspace definitions, thread metadata, project boards, task records, settings, and onboarding state;
 - local logs, diagnostics, and local process telemetry;
-- local browser storage values, including UI preferences and panel state, when using the web UI;
+- local browser storage values, including UI preferences, panel state, and first-run acknowledgement state, when using the web UI or desktop app;
 - local integration settings or credentials that you choose to save, such as Trello credentials or CLI login state managed by other tools;
 - file paths, repository metadata, branch names, session metadata, and local command history used to power product features.
 
@@ -40,16 +40,17 @@ Examples of local storage paths may include:
 - `~/.orchestrator/`
 - `~/.trello-credentials`
 - desktop-app data directories such as `%APPDATA%\\com.claude.orchestrator` and `%LOCALAPPDATA%\\com.claude.orchestrator`
-- browser `localStorage` when you use the web interface
+- browser `localStorage` when you use the web interface or desktop webview
 
 ### B. Information sent to third parties at your direction
 
-If you enable integrations or run commands through Agent Workspace, data may be sent to third-party providers, including:
+If you enable integrations or run commands through Agent Workspace, data may be sent to third-party providers. Depending on the feature you use, this can include:
 
-- repository metadata and PR data to GitHub-related tools or APIs;
-- task data or credentials to Trello;
-- queue or task payloads to Discord-related workflows you configure;
-- prompts, files, code, and context to AI providers or CLIs you invoke through the product.
+- repository metadata, pull-request details, or authentication-driven repository lookups sent to GitHub-related APIs or tools;
+- Trello board, list, card, checklist, member, or credential data sent to Trello;
+- queue payloads or task-processing requests sent through Discord workflows you configure;
+- prompts, files, code, and context sent to AI providers or CLIs you invoke through the product;
+- audio or transcript data sent to the speech-recognition backend you select, such as browser speech recognition.
 
 Those providers process data according to their own terms and privacy policies, not ours.
 
@@ -63,7 +64,7 @@ We use information to:
 
 - operate Agent Workspace features on your device;
 - save your settings and local state;
-- render dashboards, reviews, project boards, and threads;
+- render dashboards, reviews, project boards, voice features, and threads;
 - support optional integrations you enable;
 - distribute software releases and documentation;
 - respond to security disclosures, bug reports, or support requests you send us.
@@ -99,7 +100,7 @@ You are responsible for:
 
 If you discover a security issue, please use our security reporting process:
 
-https://github.com/web3dev1337/claude-orchestrator/security/advisories/new
+[Private security advisory intake](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new)
 
 ## 9. International users
 
@@ -129,6 +130,6 @@ We may update this Privacy Policy from time to time. When we do, we will update 
 
 Questions or requests about privacy can be directed through:
 
-- GitHub repository: https://github.com/web3dev1337/claude-orchestrator
-- Security advisories: https://github.com/web3dev1337/claude-orchestrator/security/advisories/new
-- X: https://x.com/AIOnlyDeveloper
+- GitHub repository: [web3dev1337/claude-orchestrator](https://github.com/web3dev1337/claude-orchestrator)
+- Security advisories: [Private security advisory intake](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new)
+- X: [@AIOnlyDeveloper](https://x.com/AIOnlyDeveloper)
