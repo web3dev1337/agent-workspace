@@ -689,6 +689,11 @@ a.btn-glow {
   object-position: top;
 }
 
+.feature-shot.contain img {
+  object-fit: contain;
+  background: #060912;
+}
+
 .terminal-grid-visual {
   display: grid;
   grid-template-columns: minmax(170px, 240px) 1fr;
