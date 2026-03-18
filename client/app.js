@@ -124,6 +124,8 @@ class ClaudeOrchestrator {
     // Worktree launches that should not auto-start or auto-show terminals when sessions arrive.
     this.pendingBackgroundWorktrees = new Set(); // worktreeId
     this.scannedReposCache = { value: null, fetchedAt: 0 };
+    this.quickWorktreeRemoteRepos = [];
+    this.quickWorktreeRemoteRepoBySlug = new Map();
     this.projectsBoardCache = { value: null, fetchedAt: 0 };
     this.worktreeModalKeepOpen = this.loadWorktreeModalKeepOpenPreference();
     this.sidebarProjectShortcutsRenderTimer = null;
@@ -139,6 +141,7 @@ class ClaudeOrchestrator {
     this.reviewConsoleDockedTerminals = new Map(); // sessionId -> { wrapper, parent, nextSibling }
     this.reviewConsoleDockedWorktreePath = null;
     this.reviewConsoleHotkeysCleanup = null;
+    this.reviewConsoleVisibilityBypass = new Set();
     // When Review Console is opened from Queue, capture the current filtered PR list so you can
     // navigate Prev/Next without reopening the Queue overlay.
     this.reviewConsoleNav = null; // { source, createdAtMs, items: [{ id, kind, title, url, ... }], index }
@@ -1174,13 +1177,11 @@ class ClaudeOrchestrator {
       // Connection events
       this.socket.on('connect', () => {
         console.log('Connected to server');
-        this.updateConnectionStatus(true);
         resolve();
       });
 
       this.socket.on('connect_error', (error) => {
         console.error('Connection error:', error);
-        this.updateConnectionStatus(false);
 
         if (error.message === 'Authentication failed') {
           this.showError('Authentication failed. Please check your token.');
@@ -1190,7 +1191,6 @@ class ClaudeOrchestrator {
 
       this.socket.on('disconnect', () => {
         console.log('Disconnected from server');
-        this.updateConnectionStatus(false);
       });
 
       // Session events
@@ -3736,10 +3736,12 @@ class ClaudeOrchestrator {
     const session = this.sessions.get(sessionId);
     const visibleByWorktreeToggle = this.isSessionVisibleByWorktreeSelection(sessionId, session);
 
+	    const reviewConsoleBypass = !!this.reviewConsoleVisibilityBypass?.has?.(String(sessionId || '').trim());
+
 	    return visibleByWorktreeToggle
         && this.matchesViewMode(sessionId)
-        && this.matchesTierFilter(sessionId)
-        && this.matchesWorkflowMode(sessionId);
+	        && (reviewConsoleBypass || (this.matchesTierFilter(sessionId)
+	        && this.matchesWorkflowMode(sessionId)));
 	  }
 
 	  handleInitialSessions(sessionStates) {
@@ -4362,9 +4364,27 @@ class ClaudeOrchestrator {
     const sid = String(sessionId || '').trim();
     const row = session || this.sessions.get(sid) || null;
     if (!sid && !row) return '';
-    const worktreeId = String(row?.worktreeId || sid.split('-')[0] || '').trim();
+    const worktreeId = this.getSessionWorktreeId(sid, row);
     const repositoryName = String(row?.repositoryName || this.extractRepositoryName(sid) || '').trim();
     return repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+  }
+
+  getSessionWorktreeId(sessionId, session = null) {
+    const sid = String(sessionId || '').trim();
+    const row = session || this.sessions.get(sid) || null;
+
+    const explicitWorktreeId = String(row?.worktreeId || row?.worktree || '').trim();
+    if (explicitWorktreeId) return explicitWorktreeId;
+
+    const match = sid.match(/(?:^|-)(work\d+)(?=-|$)/i);
+    if (match?.[1]) return match[1];
+
+    const parts = sid.split('-').filter(Boolean);
+    if (parts.length >= 2 && /^(claude|codex|server)$/i.test(parts[parts.length - 1])) {
+      return parts[parts.length - 2];
+    }
+
+    return parts[0] || sid;
   }
 
   getSidebarAgentIdForWorktree(worktreeKey) {
@@ -4445,7 +4465,7 @@ class ClaudeOrchestrator {
         continue; // Skip sessions from other workspaces
       }
 
-      const worktreeId = session.worktreeId || sessionId.split('-')[0];
+      const worktreeId = this.getSessionWorktreeId(sessionId, session);
 
       // Extract repository name from session ID for mixed-repo workspaces
       const repositoryName = this.extractRepositoryName(sessionId);
@@ -5046,7 +5066,7 @@ class ClaudeOrchestrator {
 
     // Fallback: compute the same key used in the sidebar and match against it.
     for (const [sessionId, session] of this.sessions) {
-      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
       const repositoryName = this.extractRepositoryName(sessionId);
       const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
@@ -5078,7 +5098,7 @@ class ClaudeOrchestrator {
 
     // Add only active worktree sessions to visible set
     for (const [sessionId, session] of this.sessions) {
-      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
       const repositoryName = this.extractRepositoryName(sessionId);
       const worktreeKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
@@ -5179,7 +5199,7 @@ class ClaudeOrchestrator {
         }
 
         // For mixed-repo workspaces, build the same key used in buildSidebar
-        const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+        const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
         const repositoryName = this.extractRepositoryName(sessionId);
         const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
@@ -5223,7 +5243,7 @@ class ClaudeOrchestrator {
         }
 
         // For mixed-repo workspaces, build the same key used in buildSidebar
-        const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+        const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
         const repositoryName = this.extractRepositoryName(sessionId);
         const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
@@ -5814,7 +5834,7 @@ class ClaudeOrchestrator {
       if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) continue;
       if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
 
-      const sessionWorktreeId = session.worktreeId || String(sessionId).split('-')[0];
+      const sessionWorktreeId = this.getSessionWorktreeId(sessionId, session);
       const repositoryName = this.extractRepositoryName(sessionId);
       const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
       if (sessionKey === key || sessionWorktreeId === key) {
@@ -6658,7 +6678,7 @@ class ClaudeOrchestrator {
 
 		  getWorktreeRemoveButtonHTML(sessionId) {
 				    const session = this.sessions.get(sessionId);
-				    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
+				    const worktreeId = this.getSessionWorktreeId(sessionId, session);
 				    if (!worktreeId) return '';
 
 		    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
@@ -7159,11 +7179,12 @@ class ClaudeOrchestrator {
             if (sessionId) {
               const session = this.sessions.get(sessionId);
               const p = String(session?.config?.cwd || session?.cwd || session?.worktreePath || '').trim();
+              const prUrlHint = String(this.githubLinks.get(sessionId)?.pr || '').trim();
               if (!p) {
                 this.showToast?.('No worktree path found for session', 'warning');
                 return;
               }
-              await this.openWorktreeInspectorForPath(p, { label: label || session?.worktreeId || sessionId, reviewConsole: true });
+              await this.openWorktreeInspectorForPath(p, { label: label || session?.worktreeId || sessionId, reviewConsole: true, sessionIdHint: sessionId, prUrlHint });
               return;
             }
 
@@ -7898,24 +7919,6 @@ class ClaudeOrchestrator {
     }
   }
 
-  updateConnectionStatus(connected) {
-    const statusElement = document.getElementById('connection-status');
-    if (statusElement) {
-      const dot = statusElement.querySelector('.status-dot');
-      const text = statusElement.querySelector('span:last-child');
-
-      if (connected) {
-        dot.classList.remove('disconnected');
-        dot.classList.add('connected');
-        text.textContent = 'Connected';
-      } else {
-        dot.classList.remove('connected');
-        dot.classList.add('disconnected');
-        text.textContent = 'Disconnected';
-      }
-    }
-  }
-
   showError(message) {
     // For now, use alert. Could be improved with a toast notification
     alert(`Error: ${message}`);
@@ -7924,48 +7927,6 @@ class ClaudeOrchestrator {
   showClaudeUpdateRequired(updateInfo) {
     const existingBanner = document.getElementById('claude-update-banner');
     existingBanner?.remove();
-
-    const banner = document.createElement('div');
-    banner.id = 'claude-update-banner';
-    banner.className = 'update-banner';
-    banner.setAttribute('role', 'status');
-
-    const title = this.escapeHtml(updateInfo?.title || 'Claude CLI Update Required');
-    const message = this.escapeHtml(updateInfo?.message || 'Claude CLI needs an update before new sessions can start.');
-    const instructions = Array.isArray(updateInfo?.instructions) ? updateInfo.instructions : [];
-    const instructionMarkup = instructions
-      .map((line) => {
-        const escaped = this.escapeHtml(line);
-        if (!escaped) {
-          return '<div class="update-instruction-spacer" aria-hidden="true"></div>';
-        }
-        return `<div class="update-instruction">${escaped}</div>`;
-      })
-      .join('');
-
-    banner.innerHTML = `
-      <div class="update-content">
-        <div class="update-copy">
-          <div class="update-title-row">
-            <h3>⚠️ ${title}</h3>
-            <button type="button" class="dismiss-btn update-banner-dismiss">Dismiss</button>
-          </div>
-          <p>${message}</p>
-          <div class="update-instructions">
-            ${instructionMarkup}
-          </div>
-        </div>
-      </div>
-    `;
-
-    banner.querySelector('.update-banner-dismiss')?.addEventListener('click', () => {
-      banner.remove();
-    });
-
-    document.body.appendChild(banner);
-
-    // Also show in console
-    console.warn('Claude Update Required:', updateInfo);
   }
 
   showClaudeReadyNotification(sessionId) {
@@ -9784,34 +9745,62 @@ class ClaudeOrchestrator {
 	  setupDependencySetupWizard() {
 	    const modal = document.getElementById('dependency-setup-modal');
 	    const openBtn = document.getElementById('dependency-setup-open');
+	    const titleEl = document.getElementById('dependency-setup-title');
 	    const summaryEl = document.getElementById('dependency-setup-summary');
 	    const listEl = document.getElementById('dependency-setup-list');
 	    const closeBtn = document.getElementById('dependency-setup-close');
-	    if (!modal || !summaryEl || !listEl) return;
+	    if (!modal || !titleEl || !summaryEl || !listEl) return;
 	    const body = document.body;
-	    const isWindowsHost = (() => {
+	    const legalAcceptedKey = 'orchestrator-legal-accepted-v1';
+	    const readLegalAccepted = () => {
 	      try {
-	        const platform = String(navigator?.platform || '').toLowerCase();
-	        const userAgent = String(navigator?.userAgent || '').toLowerCase();
-	        return platform.includes('win') || userAgent.includes('windows');
+	        return localStorage.getItem(legalAcceptedKey) === 'true';
 	      } catch {
 	        return false;
 	      }
-	    })();
+	    };
+	    const persistLegalAccepted = (value) => {
+	      try {
+	        if (value) localStorage.setItem(legalAcceptedKey, 'true');
+	        else localStorage.removeItem(legalAcceptedKey);
+	      } catch {
+	        // ignore
+	      }
+	    };
+	    const exitApplication = async () => {
+	      try {
+	        const tauriWindow = window.__TAURI__?.window;
+	        if (tauriWindow && typeof tauriWindow.getCurrent === 'function') {
+	          const currentWindow = tauriWindow.getCurrent();
+	          if (currentWindow && typeof currentWindow.close === 'function') {
+	            await currentWindow.close();
+	            return;
+	          }
+	        }
+	      } catch {
+	        // ignore and fall back
+	      }
+	      try {
+	        window.close();
+	      } catch {
+	        // ignore
+	      }
+	      try {
+	        window.location.replace('about:blank');
+	      } catch {
+	        // ignore
+	      }
+	    };
 
 	    const setBootstrapPending = (pending) => {
 	      if (pending) {
-	        if (!isWindowsHost) return;
+	        if (hasResolvedBackendPlatform() && !supportsDependencyOnboarding()) return;
 	        body?.classList?.add?.('dependency-onboarding-booting');
 	        body?.classList?.remove?.('dependency-onboarding-active');
 	        return;
 	      }
 	      body?.classList?.remove?.('dependency-onboarding-booting');
 	    };
-	    if (!isWindowsHost) {
-	      setBootstrapPending(false);
-	      return;
-	    }
 
 	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v3';
 	    const completedKey = 'orchestrator-dependency-onboarding-completed-v2';
@@ -9964,7 +9953,6 @@ class ClaudeOrchestrator {
 	        });
 	      return persistedSetupState.savePromise;
 	    };
-	    setBootstrapPending(true);
 
 	    const state = {
 	      loading: false,
@@ -9973,6 +9961,7 @@ class ClaudeOrchestrator {
 	      currentStep: 0,
 	      hydratedPersistedStep: false,
 	      showWelcome: true,
+	      legalAccepted: readLegalAccepted(),
 	      skippedActionIds: new Set(),
 	      actionRuns: new Map(),
 	      actionRunPollers: new Map(),
@@ -9981,8 +9970,17 @@ class ClaudeOrchestrator {
 	        email: ''
 	      },
 	      gitIdentityHelpVisible: false,
-	      startupPending: true
+	      startupPending: true,
+	      backendPlatform: ''
 	    };
+	    const getBackendPlatform = () => String(state.backendPlatform || '').trim().toLowerCase();
+	    const hasResolvedBackendPlatform = () => getBackendPlatform().length > 0;
+	    const supportsDependencyOnboarding = () => getBackendPlatform() === 'win32';
+	    const setBackendPlatform = (platform) => {
+	      state.backendPlatform = String(platform || '').trim().toLowerCase();
+	      return state.backendPlatform;
+	    };
+	    setBootstrapPending(true);
 
 	    const readDismissed = () => getPersistedSetupState().dismissed === true;
 
@@ -9998,6 +9996,13 @@ class ClaudeOrchestrator {
 	      const next = value === true;
 	      if (readCompleted() === next) return;
 	      void savePersistedSetupState({ completed: next });
+	    };
+
+	    const writeLegalAccepted = (value) => {
+	      const next = value === true;
+	      if (state.legalAccepted === next) return;
+	      state.legalAccepted = next;
+	      persistLegalAccepted(next);
 	    };
 
 	    const readSavedStep = () => Math.max(0, Number(getPersistedSetupState().currentStep) || 0);
@@ -10216,7 +10221,8 @@ class ClaudeOrchestrator {
 	    };
 
 	    const isOnboardingLocked = () => {
-	      if (!isWindowsHost) return false;
+	      if (!hasResolvedBackendPlatform()) return false;
+	      if (!supportsDependencyOnboarding()) return false;
 	      if (readCompleted()) return false;
 	      if (!Array.isArray(state.actions) || state.actions.length === 0) return false;
 	      const toolsMap = toToolMap(state.diagnostics);
@@ -10224,8 +10230,10 @@ class ClaudeOrchestrator {
 	      return !req?.coreReady;
 	    };
 
+	    const isLegalGatePending = () => state.legalAccepted !== true;
+
 	    const applyOnboardingLockUI = () => {
-	      const locked = isOnboardingLocked();
+	      const locked = isLegalGatePending() || isOnboardingLocked();
 	      if (closeBtn) {
 	        closeBtn.disabled = locked;
 	        closeBtn.style.visibility = locked ? 'hidden' : '';
@@ -10278,6 +10286,41 @@ class ClaudeOrchestrator {
 	    };
 
 	    const render = () => {
+	      if (isLegalGatePending()) {
+	        titleEl.textContent = 'Review Terms Before Continuing';
+	        summaryEl.textContent = 'Agent Workspace can execute commands, modify files, and optionally communicate with third-party services you enable.';
+	        listEl.innerHTML = `
+	          <div class="onboarding-legal-card">
+	            <span class="onboarding-legal-kicker">First-run acknowledgement</span>
+	            <h3 class="onboarding-welcome-title">Review the product terms before using Agent Workspace.</h3>
+	            <p class="onboarding-welcome-copy">
+	              This app can run commands, read and write files, interact with repositories, and send data to optional third-party services you choose to use.
+	            </p>
+	            <ul class="onboarding-legal-list">
+	              <li>No publisher-hosted telemetry by default.</li>
+	              <li>Optional GitHub, Trello, Discord, voice, and AI features communicate with services you enable.</li>
+	              <li>You are responsible for reviewing commands, outputs, automations, and connected credentials.</li>
+	              <li>The software is provided "as is," subject to rights that cannot be excluded under applicable law.</li>
+	            </ul>
+	            <div class="onboarding-legal-links">
+	              <a class="onboarding-btn-secondary" href="https://agent-workspace.ai/terms.html" target="_blank" rel="noopener">Terms of Use</a>
+	              <a class="onboarding-btn-secondary" href="https://agent-workspace.ai/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+	            </div>
+	            <div class="onboarding-nav-row onboarding-welcome-actions">
+	              <button class="onboarding-btn-secondary" type="button" data-setup-exit-legal="true">Exit</button>
+	              <button class="onboarding-btn-primary" type="button" data-setup-accept-legal="true">I Agree</button>
+	            </div>
+	          </div>`;
+	        return { req: null, steps: [], current: null, legalPending: true };
+	      }
+
+	      titleEl.textContent = 'Agent Workspace Setup';
+	      if (hasResolvedBackendPlatform() && !supportsDependencyOnboarding()) {
+	        summaryEl.textContent = 'Legal acknowledgement complete.';
+	        listEl.innerHTML = '<div class="dependency-setup-empty">Additional setup guidance is only required when Agent Workspace is running on Windows.</div>';
+	        return { req: null, steps: [], current: null };
+	      }
+
 	      const toolsMap = toToolMap(state.diagnostics);
 	      const req = getRequirementState(toolsMap);
 	      const steps = getResolvedSteps();
@@ -10558,7 +10601,7 @@ class ClaudeOrchestrator {
 	        openModal();
 	        return false;
 	      }
-	      if (!force && !readCompleted()) {
+	      if (!force && supportsDependencyOnboarding() && !readCompleted()) {
 	        writeDismissed(true);
 	      }
 	      modal.classList.add('hidden');
@@ -10567,7 +10610,7 @@ class ClaudeOrchestrator {
 	      return true;
 	    };
 	    const openModal = ({ showWelcome = null, allowDuringStartup = false } = {}) => {
-	      if (readCompleted()) {
+	      if (supportsDependencyOnboarding() && readCompleted() && !isLegalGatePending()) {
 	        closeModal({ force: true });
 	        return false;
 	      }
@@ -10579,12 +10622,12 @@ class ClaudeOrchestrator {
 	      state.startupPending = false;
 	      setBootstrapPending(false);
 	      body?.classList?.add?.('dependency-onboarding-active');
-	      if (typeof showWelcome === 'boolean') {
+	      if (supportsDependencyOnboarding() && typeof showWelcome === 'boolean') {
 	        state.showWelcome = showWelcome;
-	      } else if (wasHidden) {
+	      } else if (supportsDependencyOnboarding() && wasHidden) {
 	        state.showWelcome = true;
 	      }
-	      if (state.diagnostics && Array.isArray(state.actions) && state.actions.length > 0) {
+	      if (isLegalGatePending() || (state.diagnostics && Array.isArray(state.actions) && state.actions.length > 0)) {
 	        render();
 	      }
 	      applyOnboardingLockUI();
@@ -10602,6 +10645,22 @@ class ClaudeOrchestrator {
 	    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 
 	    const loadAndRender = async ({ open = false, forceAutoShow = false, bootstrap = false, explicitOpen = false } = {}) => {
+	      if (isLegalGatePending()) {
+	        render();
+	        openModal({ allowDuringStartup: true });
+	        return true;
+	      }
+	      if (hasResolvedBackendPlatform() && !supportsDependencyOnboarding()) {
+	        state.startupPending = false;
+	        setBootstrapPending(false);
+	        if (explicitOpen) {
+	          render();
+	          openModal({ allowDuringStartup: bootstrap || explicitOpen });
+	        } else {
+	          closeModal({ force: true });
+	        }
+	        return true;
+	      }
 	      if (state.loading) return false;
 	      setLoading(true);
 	      try {
@@ -10621,10 +10680,21 @@ class ClaudeOrchestrator {
 	        }
 
 	        state.diagnostics = diagData;
+	        setBackendPlatform(actionsData?.platform || diagData?.platform);
 	        hydrateGitIdentityDraft(diagData);
 	        const allActions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
-	        const toolsMap = toToolMap(diagData);
 	        state.actions = allActions.filter((action) => String(action?.id || '').trim() !== 'gh-login');
+	        if (!supportsDependencyOnboarding()) {
+	          state.startupPending = false;
+	          setBootstrapPending(false);
+	          if (explicitOpen) {
+	            render();
+	            openModal({ allowDuringStartup: bootstrap || explicitOpen });
+	          } else {
+	            closeModal({ force: true });
+	          }
+	          return true;
+	        }
 	        const allowedActionIds = new Set(
 	          state.actions
 	            .map((action) => String(action?.id || '').trim())
@@ -10646,12 +10716,11 @@ class ClaudeOrchestrator {
 	        applyOnboardingLockUI();
 
 	        const hasCompletedOnboarding = readCompleted();
-	        const coreReady = !!view.req?.coreReady;
 	        if (hasCompletedOnboarding) {
 	          state.startupPending = false;
 	          closeModal({ force: true });
 	        }
-	        const shouldAutoShow = isWindowsHost && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
+	        const shouldAutoShow = supportsDependencyOnboarding() && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
 	        const shouldKeepVisible = !hasCompletedOnboarding && open && !modal.classList.contains('hidden');
 	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
 	          openModal({ allowDuringStartup: bootstrap || explicitOpen });
@@ -10889,6 +10958,16 @@ class ClaudeOrchestrator {
 	    const runBootstrapLoad = async () => {
 	      state.startupPending = true;
 	      setBootstrapPending(true);
+	      if (isLegalGatePending()) {
+	        render();
+	        openModal({ allowDuringStartup: true });
+	        return;
+	      }
+	      if (hasResolvedBackendPlatform() && !supportsDependencyOnboarding()) {
+	        state.startupPending = false;
+	        setBootstrapPending(false);
+	        return;
+	      }
 	      const delaysMs = [0, 240, 420, 700, 1050, 1450, 1900];
 	      for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
 	        if (attempt > 0) {
@@ -11103,6 +11182,21 @@ class ClaudeOrchestrator {
 	    };
 
 	    listEl.addEventListener('click', async (event) => {
+	      const acceptLegalBtn = event.target.closest('[data-setup-accept-legal]');
+	      if (acceptLegalBtn) {
+	        writeLegalAccepted(true);
+	        this.showToast('Terms acknowledged.', 'success');
+	        state.showWelcome = true;
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	        return;
+	      }
+
+	      const exitLegalBtn = event.target.closest('[data-setup-exit-legal]');
+	      if (exitLegalBtn) {
+	        await exitApplication();
+	        return;
+	      }
+
 	      const runBtn = event.target.closest('[data-setup-run]');
 	      if (runBtn) {
 	        await runSetupAction(runBtn.getAttribute('data-setup-run'), runBtn);
@@ -11328,7 +11422,7 @@ class ClaudeOrchestrator {
   async launchDiffViewer(githubUrl) {
     // Parse GitHub URL to extract owner, repo, and PR/commit
     const prMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
-    const commitMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/);
+    const commitMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{7,40})/i);
     const compareMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/compare\/([^?#]+)/);
 
     let diffViewerPath = '';
@@ -11574,6 +11668,7 @@ class ClaudeOrchestrator {
     if (!modal) return;
     try { this.reviewConsoleHotkeysCleanup?.(); } catch {}
     this.reviewConsoleHotkeysCleanup = null;
+    this.reviewConsoleVisibilityBypass?.clear?.();
     this.restoreReviewConsoleDockedTerminals();
     modal.classList.remove('docked');
     modal.classList.remove('fullscreen');
@@ -11581,6 +11676,87 @@ class ClaudeOrchestrator {
     // Re-apply view mode filters so terminals hidden by Agent Only / Servers Only
     // don't leak back into the grid after being undocked.
     this.updateTerminalGrid();
+  }
+
+  setReviewConsoleVisibilityBypass(sessionIds = []) {
+    this.reviewConsoleVisibilityBypass = new Set(
+      (Array.isArray(sessionIds) ? sessionIds : [])
+        .map((sessionId) => String(sessionId || '').trim())
+        .filter(Boolean)
+    );
+  }
+
+  getReviewConsoleSessionIds(worktreePath, { sessionIdHint = '' } = {}) {
+    const norm = (value) => String(value || '').replace(/\\/g, '/').replace(/\/+$/, '');
+    const target = norm(worktreePath);
+
+    const overlaps = (a0, b0) => {
+      const a = norm(a0);
+      const b = norm(b0);
+      if (!a || !b) return false;
+      if (a === b) return true;
+      return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+    };
+
+    const hintedSessionId = String(sessionIdHint || '').trim();
+    const hintedSession = hintedSessionId ? (this.sessions.get(hintedSessionId) || null) : null;
+    const hintedWorktreeKey = hintedSessionId ? this.getSessionWorktreeKey(hintedSessionId, hintedSession) : '';
+
+    const pathParts = splitClientPathSegments(target);
+    const worktreeId = pathParts[pathParts.length - 1] || '';
+    const repoName = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : '';
+
+    const sessionIds = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (!sessionId || !session) continue;
+      if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+
+      if (hintedWorktreeKey && this.getSessionWorktreeKey(sessionId, session) === hintedWorktreeKey) {
+        sessionIds.push(String(sessionId));
+        continue;
+      }
+
+      const cwd = session?.config?.cwd || session?.cwd || '';
+      if (target && cwd && overlaps(cwd, target)) {
+        sessionIds.push(String(sessionId));
+        continue;
+      }
+
+      const sid = String(sessionId).toLowerCase();
+      const wid = worktreeId.toLowerCase();
+      if (wid && (sid.includes(`-${wid}-`) || sid.endsWith(`-${wid}`))) {
+        if (!repoName || sid.includes(repoName.toLowerCase())) {
+          sessionIds.push(String(sessionId));
+        }
+      }
+    }
+
+    const uniqueSessionIds = Array.from(new Set(sessionIds));
+    const baseId = (sid) => String(sid || '').replace(/-(claude|codex|server)$/, '');
+    const isServer = (sid) => {
+      const s = String(sid || '');
+      if (s.endsWith('-server')) return true;
+      const sess = this.sessions.get(s);
+      return String(sess?.type || '').toLowerCase() === 'server';
+    };
+    const rank = (sid) => {
+      const s = String(sid || '');
+      if (isServer(s)) return 2;
+      if (s.endsWith('-codex') || String(this.sessions.get(s)?.type || '').toLowerCase() === 'codex') return 1;
+      return 0;
+    };
+
+    uniqueSessionIds.sort((a, b) => {
+      const aBase = baseId(a);
+      const bBase = baseId(b);
+      if (aBase !== bBase) return aBase.localeCompare(bBase);
+      const ar = rank(a);
+      const br = rank(b);
+      if (ar !== br) return ar - br;
+      return String(a).localeCompare(String(b));
+    });
+
+    return uniqueSessionIds;
   }
 
   restoreReviewConsoleDockedTerminals() {
@@ -11634,87 +11810,28 @@ class ClaudeOrchestrator {
     }
   }
 
-  dockReviewConsoleTerminals(worktreePath, containerEl) {
+  dockReviewConsoleTerminals(worktreePath, containerEl, { sessionIdHint = '' } = {}) {
     const container = containerEl || null;
-    if (!container) return;
+    if (!container) return 0;
 
     const norm = (value) => String(value || '').replace(/\\/g, '/').replace(/\/+$/, '');
     const target = norm(worktreePath);
-    if (!target) return;
+    if (!target) return 0;
 
     // If we're already docked for this same worktree, avoid doing heavy DOM moves.
     if (this.reviewConsoleDockedWorktreePath === target && this.reviewConsoleDockedTerminals?.size) {
-      return;
+      return this.reviewConsoleDockedTerminals.size;
     }
 
     // Ensure we never strand wrappers from a previous console view.
     this.restoreReviewConsoleDockedTerminals();
     this.reviewConsoleDockedWorktreePath = target;
 
-    const overlaps = (a0, b0) => {
-      const a = norm(a0);
-      const b = norm(b0);
-      if (!a || !b) return false;
-      if (a === b) return true;
-      return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
-    };
-
-    // Extract worktree ID from path (e.g., "work4" from ".../zoo-game/work4")
-    const pathParts = splitClientPathSegments(target);
-    const worktreeId = pathParts[pathParts.length - 1] || '';
-    // Also get repo name for better matching (e.g., "zoo-game" from ".../zoo-game/work4")
-    const repoName = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : '';
-
-    const sessionIds = [];
-    for (const [sessionId, session] of this.sessions) {
-      if (!sessionId || !session) continue;
-      if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
-
-      // Try matching by cwd first
-      const cwd = session?.config?.cwd || session?.cwd || '';
-      if (cwd && overlaps(cwd, target)) {
-        sessionIds.push(String(sessionId));
-        continue;
-      }
-
-      // Fallback: match by worktree ID pattern in session ID (e.g., "zoo-game-work4-claude")
-      const sid = String(sessionId).toLowerCase();
-      const wid = worktreeId.toLowerCase();
-      if (wid && (sid.includes(`-${wid}-`) || sid.endsWith(`-${wid}`))) {
-        // Extra check: if we have repo name, make sure it matches too
-        if (!repoName || sid.includes(repoName.toLowerCase())) {
-          sessionIds.push(String(sessionId));
-        }
-      }
-    }
-
-    // Stable ordering: keep pairs adjacent, always put Agent left of Server.
-    const baseId = (sid) => String(sid || '').replace(/-(claude|codex|server)$/, '');
-    const isServer = (sid) => {
-      const s = String(sid || '');
-      if (s.endsWith('-server')) return true;
-      const sess = this.sessions.get(s);
-      return String(sess?.type || '').toLowerCase() === 'server';
-    };
-    const rank = (sid) => {
-      const s = String(sid || '');
-      if (isServer(s)) return 2;
-      if (s.endsWith('-codex') || String(this.sessions.get(s)?.type || '').toLowerCase() === 'codex') return 1;
-      return 0; // claude/other
-    };
-    sessionIds.sort((a, b) => {
-      const aBase = baseId(a);
-      const bBase = baseId(b);
-      if (aBase !== bBase) return aBase.localeCompare(bBase);
-      const ar = rank(a);
-      const br = rank(b);
-      if (ar !== br) return ar - br;
-      return String(a).localeCompare(String(b));
-    });
+    const sessionIds = this.getReviewConsoleSessionIds(target, { sessionIdHint });
 
     if (sessionIds.length === 0) {
-      container.innerHTML = `<div class="worktree-inspector-subtle">No terminals found for this worktree.</div>`;
-      return;
+      container.innerHTML = '';
+      return 0;
     }
 
     container.innerHTML = '';
@@ -11788,6 +11905,8 @@ class ClaudeOrchestrator {
         }
       }, 60);
     }
+
+	  return sessionIds.length;
 	  }
 
 	  resolveWorktreePathForSession(sessionId, sessionOverride = null) {
@@ -11832,10 +11951,10 @@ class ClaudeOrchestrator {
 		    try {
 		      const session = this.sessions.get(sid);
 		      const worktreePath = this.resolveWorktreePathForSession(sid, session) || null;
+		      const prUrlHint = String(this.githubLinks.get(sid)?.pr || '').trim();
 
 		      if (!worktreePath) {
-		        const links = this.githubLinks.get(sid) || {};
-		        const prUrl = String(links.pr || '').trim();
+		        const prUrl = prUrlHint;
 		        if (prUrl) {
 		          await this.openReviewConsoleForPRTask({ url: prUrl, title: `PR (${sid})` });
 		          return;
@@ -11845,14 +11964,14 @@ class ClaudeOrchestrator {
 		      }
 
 		      const label = session?.worktreeId ? `${session.worktreeId}` : sid;
-		      await this.openWorktreeInspectorForPath(worktreePath, { label, reviewConsole: !!reviewConsole });
+		      await this.openWorktreeInspectorForPath(worktreePath, { label, reviewConsole: !!reviewConsole, sessionIdHint: sid, prUrlHint });
 	    } catch (err) {
 	      console.error('openWorktreeInspector failed:', err);
 	      this.showToast?.(`Inspector failed: ${String(err?.message || err)}`, 'error');
 	    }
 	  }
 
-  async openWorktreeInspectorForPath(worktreePath, { label = '', task = null, reviewConsole = false } = {}) {
+  async openWorktreeInspectorForPath(worktreePath, { label = '', task = null, reviewConsole = false, sessionIdHint = '', prUrlHint = '' } = {}) {
     const p = String(worktreePath || '').trim();
     if (!p) {
       this.showToast('No worktree path provided', 'warning');
@@ -11862,6 +11981,12 @@ class ClaudeOrchestrator {
     this.restoreReviewConsoleDockedTerminals();
     try { this.reviewConsoleHotkeysCleanup?.(); } catch {}
     this.reviewConsoleHotkeysCleanup = null;
+
+    if (reviewConsole) {
+      this.setReviewConsoleVisibilityBypass(this.getReviewConsoleSessionIds(p, { sessionIdHint }));
+    } else {
+      this.reviewConsoleVisibilityBypass?.clear?.();
+    }
 
     const modal = this.ensureWorktreeInspectorModal();
     modal.classList.remove('hidden');
@@ -11918,10 +12043,18 @@ class ClaudeOrchestrator {
 		      const rcShowFiles = !reviewConsole || rcSections.files !== false;
 		      const rcShowCommits = !reviewConsole || rcSections.commits !== false;
 		      const rcShowDiff = reviewConsole && rcSections.diff !== false;
+		      const hintedPrUrl = String(prUrlHint || reviewTask?.url || '').trim();
 
-		      let prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : 'No PR';
+		      const hintedPrNumber = (() => {
+		        const match = hintedPrUrl.match(/\/pull\/(\d+)/i);
+		        return match ? Number.parseInt(match[1], 10) : null;
+		      })();
+		      let prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : (hintedPrNumber ? `PR #${hintedPrNumber}` : (hintedPrUrl ? 'PR' : 'No PR'));
 		      let prState = pr?.hasPR ? String(pr?.state || '').toLowerCase() : '';
-		      let prUrl = pr?.hasPR && pr?.url ? String(pr.url) : '';
+		      let prUrl = pr?.hasPR && pr?.url ? String(pr.url) : hintedPrUrl;
+		      const summaryBranch = String(summary?.branch || '').trim();
+		      const summaryRemoteUrl = String(summary?.remoteUrl || '').trim();
+		      const summaryDefaultBranch = String(summary?.defaultBranch || '').trim();
 		      const getDiffViewerPathForGitHubUrl = (githubUrl) => {
 		        const url = String(githubUrl || '').trim();
 		        if (!url) return '';
@@ -11932,15 +12065,67 @@ class ClaudeOrchestrator {
 		          return `/pr/${owner}/${repo}/${prNumber}`;
 		        }
 
-		        const commitMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/i);
+		        const commitMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{7,40})/i);
 		        if (commitMatch) {
 		          const [, owner, repo, sha] = commitMatch;
 		          return `/commit/${owner}/${repo}/${sha}`;
 		        }
 
+		        const compareMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/compare\/([^?#]+)/i);
+		        if (compareMatch) {
+		          const [, owner, repo, refsRaw] = compareMatch;
+		          const parts = String(refsRaw || '').split('...');
+		          if (parts.length === 2) {
+		            const decodeSafe = (value) => {
+		              try { return decodeURIComponent(value); } catch { return value; }
+		            };
+		            const base = decodeSafe(parts[0]);
+		            const head = decodeSafe(parts[1]);
+		            return `/compare/${owner}/${repo}?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`;
+		          }
+		        }
+
 		        return '';
 		      };
+		      const buildCompareFallbackTarget = () => {
+		        if (!summaryRemoteUrl || !summaryBranch) return null;
+		        const remoteMatch = summaryRemoteUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/i);
+		        if (!remoteMatch) return null;
+
+		        const owner = String(remoteMatch[1] || '').trim();
+		        const repo = String(remoteMatch[2] || '').trim().replace(/\.git$/i, '');
+		        const baseRef = summaryDefaultBranch || 'main';
+		        const headRef = summaryBranch;
+		        if (!owner || !repo || !headRef || !baseRef || headRef === baseRef) return null;
+
+		        const compareUrl = `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseRef)}...${encodeURIComponent(headRef)}`;
+		        const comparePath = getDiffViewerPathForGitHubUrl(compareUrl);
+		        if (!comparePath) return null;
+		        return { url: compareUrl, path: comparePath, label: `${baseRef}...${headRef}` };
+		      };
+
+		      const compareFallback = buildCompareFallbackTarget();
+		      let diffViewerSource = prUrl ? 'pr' : '';
+		      let diffViewerUrl = prUrl || '';
 		      let diffViewerPath = prUrl ? getDiffViewerPathForGitHubUrl(prUrl) : '';
+		      if (!diffViewerPath && compareFallback?.path) {
+		        diffViewerSource = 'compare';
+		        diffViewerUrl = compareFallback.url;
+		        diffViewerPath = compareFallback.path;
+		      }
+
+		      const diffNoPrMessage = (() => {
+		        if (prUrl) return '';
+		        if (compareFallback?.path) {
+		          return `No PR detected — showing branch diff ${compareFallback.label}.`;
+		        }
+		        const dirty = Array.isArray(summary?.files) ? summary.files.length : 0;
+		        const ahead = Number(summary?.ahead || 0);
+		        if (dirty > 0 || ahead > 0) {
+		          return 'No PR detected and branch compare is unavailable (branch may not be pushed yet).';
+		        }
+		        return 'No PR detected for this worktree.';
+		      })();
 
 		      const header = (() => {
 		        const branch = gitDetected ? escapeHtml(summary?.branch || '?') : '?';
@@ -12008,7 +12193,7 @@ class ClaudeOrchestrator {
 
 		        const prChip = prUrl
 		          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-url="${escapeHtml(prUrl)}" title="Open PR">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</button>`
-		          : `<span class="worktree-inspector-chip">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
+		          : `<span class="worktree-inspector-chip">${escapeHtml(diffNoPrMessage || prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
 		        parts.push(prChip);
 
 				        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
@@ -12375,7 +12560,7 @@ class ClaudeOrchestrator {
 			                <button class="rc-tiny-btn" type="button" data-diff-open="true" title="Open in tab">↗</button>
 			                <button class="rc-tiny-btn" type="button" data-diff-refresh="true" title="Refresh" disabled>⟳</button>
 			                <button class="rc-tiny-btn" type="button" data-diff-close="true" title="Close embed" disabled>✕</button>
-			                <span class="rc-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath || '/')}</span>
+			                <span class="rc-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath || diffNoPrMessage || '/')}</span>
 			              </div>
 			              <iframe class="rc-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
 			            </div>
@@ -12545,17 +12730,18 @@ class ClaudeOrchestrator {
 		          if (currentFullscreen) modal.classList.add('fullscreen');
 		          else modal.classList.add('docked');
 
-		          if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', currentSections.terminals === false);
+		          let dockedTerminalCount = 0;
+		          if (currentSections.terminals !== false && terminalsContainerEl) {
+		            dockedTerminalCount = this.dockReviewConsoleTerminals(p, terminalsContainerEl, { sessionIdHint });
+		          } else {
+		            this.restoreReviewConsoleDockedTerminals();
+		          }
+
+		          if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', currentSections.terminals === false || dockedTerminalCount === 0);
 		          if (filesPanelEl) filesPanelEl.classList.toggle('hidden', currentSections.files === false);
 		          if (commitsPanelEl) commitsPanelEl.classList.toggle('hidden', currentSections.commits === false);
 		          if (diffPanelEl) diffPanelEl.classList.toggle('hidden', currentSections.diff === false);
 		          updateGrid();
-
-		          if (currentSections.terminals !== false && terminalsContainerEl) {
-		            this.dockReviewConsoleTerminals(p, terminalsContainerEl);
-		          } else {
-		            this.restoreReviewConsoleDockedTerminals();
-		          }
 
 		          bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
 		            const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
@@ -12653,6 +12839,8 @@ class ClaudeOrchestrator {
 		              prState = String(freshPr?.state || '').toLowerCase();
 		              prText = freshPr?.number ? `PR #${Number(freshPr.number)}` : prText;
 		              diffViewerPath = getDiffViewerPathForGitHubUrl(prUrl);
+		              diffViewerUrl = prUrl;
+		              diffViewerSource = 'pr';
 		              // Update header PR link if present
 		              const prLinkEl = bodyEl.querySelector('[data-pr-link]');
 		              if (prLinkEl) {
@@ -12672,8 +12860,8 @@ class ClaudeOrchestrator {
 		          if (currentSections.diff === false) return;
 		          if (diffLoadPromise) return diffLoadPromise;
 
-		          // If no PR yet, retry detection a couple of times before giving up.
-		          if (!prUrl) {
+		          // If we have neither PR nor compare target yet, retry PR detection briefly.
+		          if (!prUrl && !diffViewerPath) {
 		            diffStatusEl.textContent = 'No PR detected — checking…';
 		            for (let attempt = 0; attempt < 3; attempt++) {
 		              await new Promise(r => setTimeout(r, 2000));
@@ -12681,9 +12869,9 @@ class ClaudeOrchestrator {
 		            }
 		          }
 
-		          const targetPath = prUrl ? diffViewerPath : '';
+		          const targetPath = diffViewerPath || '';
 		          if (!targetPath) {
-		            diffStatusEl.textContent = 'No PR detected for this worktree. Push your branch and create a PR, then re-open.';
+		            diffStatusEl.textContent = diffNoPrMessage || 'No PR or compare diff target is available for this worktree.';
 		            if (diffIframeEl) diffIframeEl.classList.add('hidden');
 		            return;
 		          }
@@ -12698,7 +12886,11 @@ class ClaudeOrchestrator {
 		              const url = `${baseUrl}${targetPath}${embedParam}`;
 		              diffIframeEl.src = url;
 		              diffIframeEl.classList.remove('hidden');
-		              diffStatusEl.textContent = `Embedded: ${targetPath || baseUrl}`;
+		              if (!prUrl && diffViewerSource === 'compare') {
+		                diffStatusEl.textContent = `Embedded branch diff: ${targetPath}`;
+		              } else {
+		                diffStatusEl.textContent = `Embedded: ${targetPath || baseUrl}`;
+		              }
 		              if (showToast) this.showToast('Diff embedded', 'success');
 		            } catch (err) {
 		              diffStatusEl.textContent = `Diff Viewer failed to start: ${String(err?.message || err)}`;
@@ -12713,7 +12905,7 @@ class ClaudeOrchestrator {
 		        };
 
 		        diffOpenBtn?.addEventListener('click', () => {
-		          if (prUrl) this.launchDiffViewer(prUrl);
+		          if (diffViewerUrl) this.launchDiffViewer(diffViewerUrl);
 		          else this.openDiffViewerHome();
 		        });
 
@@ -12729,7 +12921,13 @@ class ClaudeOrchestrator {
 		            diffIframeEl.src = '';
 		            diffIframeEl.classList.add('hidden');
 		          }
-		          if (diffStatusEl) diffStatusEl.textContent = diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)';
+		          if (diffStatusEl) {
+		            if (!prUrl && diffViewerSource === 'compare' && diffViewerPath) {
+		              diffStatusEl.textContent = `Target: ${diffViewerPath} (branch compare)`;
+		            } else {
+		              diffStatusEl.textContent = diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)';
+		            }
+		          }
 		          updateDiffControls();
 		        });
 
@@ -13182,6 +13380,11 @@ class ClaudeOrchestrator {
 
     const rc = this.getReviewConsoleConfig();
     const rcShowTerminals = rc?.sections?.terminals !== false;
+    const worktreeKey = sessionId ? (this.getSessionWorktreeKey(sessionId, session) || '') : '';
+    const reviewConsoleSessionIds = rcShowTerminals
+      ? this.getReviewConsoleSessionIds(worktreePath, { sessionIdHint: sessionId })
+      : [];
+    const prUrlHint = String(t.url || this.githubLinks.get(sessionId)?.pr || '').trim();
 
     const inferredWorktreeId = String(
       session?.worktreeId
@@ -13190,17 +13393,19 @@ class ClaudeOrchestrator {
       || this.extractWorktreeLabel(worktreePath)
       || ''
     ).trim();
+    const focusedWorktreeKey = worktreeKey || inferredWorktreeId;
 
-    if (rcShowTerminals && inferredWorktreeId) {
+    if (rcShowTerminals && focusedWorktreeKey) {
+      this.setReviewConsoleVisibilityBypass(reviewConsoleSessionIds);
       // Queue panel is a fullscreen overlay; if we want terminals visible, close Queue.
       if (document.getElementById('queue-panel')) {
         document.getElementById('queue-close-btn')?.click?.();
       }
-      this.showOnlyWorktree(inferredWorktreeId);
+      this.showOnlyWorktree(focusedWorktreeKey);
     }
 
     const label = inferredWorktreeId || String(t.id || '').trim() || worktreePath;
-    await this.openWorktreeInspectorForPath(worktreePath, { label, task: t, reviewConsole: true });
+    await this.openWorktreeInspectorForPath(worktreePath, { label, task: t, reviewConsole: true, sessionIdHint: sessionId, prUrlHint });
 
 	    if (rcShowTerminals) {
 	      const preferredSessionId = sessionId || (inferredWorktreeId ? `${inferredWorktreeId}-claude` : '');
@@ -13239,10 +13444,23 @@ class ClaudeOrchestrator {
       const [, owner, repo, pr] = prMatch;
       return `/pr/${owner}/${repo}/${pr}`;
     }
-    const commitMatch = raw.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/);
+    const commitMatch = raw.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{7,40})/i);
     if (commitMatch) {
       const [, owner, repo, sha] = commitMatch;
       return `/commit/${owner}/${repo}/${sha}`;
+    }
+    const compareMatch = raw.match(/github\.com\/([^\/]+)\/([^\/]+)\/compare\/([^?#]+)/);
+    if (compareMatch) {
+      const [, owner, repo, refsRaw] = compareMatch;
+      const parts = String(refsRaw || '').split('...');
+      if (parts.length === 2) {
+        const decodeSafe = (value) => {
+          try { return decodeURIComponent(value); } catch { return value; }
+        };
+        const base = decodeSafe(parts[0]);
+        const head = decodeSafe(parts[1]);
+        return `/compare/${owner}/${repo}?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`;
+      }
     }
     return '';
   }
@@ -13417,6 +13635,8 @@ class ClaudeOrchestrator {
 		        if (linkedPr === targetPrUrl) matchingSessionIds.push(String(sid));
 		      }
 
+		      this.setReviewConsoleVisibilityBypass(matchingSessionIds);
+
 		      // Fallback: if we don't have explicit GitHub link detection yet, try to link sessions by:
 		      // 1) the task's known worktreePath (Queue/process tasks often include it), or
 		      // 2) repo remote URL + head branch name.
@@ -13507,15 +13727,17 @@ class ClaudeOrchestrator {
 			        const sess = this.sessions.get(s);
 			        return String(sess?.type || '').toLowerCase() === 'server';
 			      };
-			      matchingSessionIds.sort((a, b) => {
-			        const aBase = baseId(a);
-			        const bBase = baseId(b);
-			        if (aBase !== bBase) return aBase.localeCompare(bBase);
-			        const aIsServer = isServer(a);
-			        const bIsServer = isServer(b);
-			        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
-			        return String(a).localeCompare(String(b));
-			      });
+		      matchingSessionIds.sort((a, b) => {
+		        const aBase = baseId(a);
+		        const bBase = baseId(b);
+		        if (aBase !== bBase) return aBase.localeCompare(bBase);
+		        const aIsServer = isServer(a);
+		        const bIsServer = isServer(b);
+		        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
+		        return String(a).localeCompare(String(b));
+		      });
+
+		      this.setReviewConsoleVisibilityBypass(matchingSessionIds);
 
 	      const statusLabel = (s) => {
 	        const v = String(s || '').trim().toLowerCase();
@@ -18131,7 +18353,17 @@ class ClaudeOrchestrator {
             nameEl.textContent = nextNameValue;
             nameEl.title = nextNameValue;
           }
+          const nameInputEl = tabState.tabElement.querySelector('.tab-name-input');
+          if (nameInputEl) {
+            nameInputEl.value = nextNameValue;
+            nameInputEl.title = nextNameValue;
+          }
+          tabState.tabElement.classList.remove('editing');
+          tabState.tabElement.classList.remove('renaming');
         }
+        tabState.isRenaming = false;
+        tabState.renameSubmitting = false;
+        tabState.renameOriginalName = null;
       });
     }
 
@@ -31049,6 +31281,10 @@ class ClaudeOrchestrator {
             <button class="filter-btn" data-filter="hytopia">Hytopia Games</button>
             <button class="filter-btn" data-filter="monogame">MonoGame</button>
           </div>
+          <label class="quick-checkbox" title="Show projects in the Backlog column">
+            <input type="checkbox" id="worktree-modal-show-backlog-projects">
+            Show backlog
+          </label>
           <label class="quick-checkbox" title="Show projects in the Archive column">
             <input type="checkbox" id="worktree-modal-show-archived-projects">
             Show archive
@@ -31088,6 +31324,8 @@ class ClaudeOrchestrator {
     }
 
     const menuVisibilityPrefs = this.getProjectsBoardMenuVisibilityPrefs();
+    const showBacklogEl = modal.querySelector('#worktree-modal-show-backlog-projects');
+    if (showBacklogEl) showBacklogEl.checked = menuVisibilityPrefs.showBacklog !== false;
     const showArchivedEl = modal.querySelector('#worktree-modal-show-archived-projects');
     if (showArchivedEl) showArchivedEl.checked = !!menuVisibilityPrefs.showArchived;
     const showDoneEl = modal.querySelector('#worktree-modal-show-done-projects');
@@ -31095,12 +31333,14 @@ class ClaudeOrchestrator {
 
     const onVisibilityChange = () => {
       const next = {
+        showBacklog: !!modal.querySelector('#worktree-modal-show-backlog-projects')?.checked,
         showArchived: !!modal.querySelector('#worktree-modal-show-archived-projects')?.checked,
         showDone: !!modal.querySelector('#worktree-modal-show-done-projects')?.checked
       };
       this.setProjectsBoardMenuVisibilityPrefs(next);
       this.showAdvancedAddWorktreeModal(this.addWorktreeModalReposRaw);
     };
+    showBacklogEl?.addEventListener('change', onVisibilityChange);
     showArchivedEl?.addEventListener('change', onVisibilityChange);
     showDoneEl?.addEventListener('change', onVisibilityChange);
 
@@ -31168,6 +31408,13 @@ class ClaudeOrchestrator {
         </div>
         <div class="quick-worktree-toolbar">
           <input type="text" id="quick-worktree-search" placeholder="Search repos..." class="search-input">
+          <button class="btn-secondary quick-refresh-btn" id="quick-worktree-refresh" title="Refresh local + GitHub repo lists now">
+            Refresh
+          </button>
+          <button class="btn-secondary quick-folder-map-btn" id="quick-worktree-folder-map" title="Show how category dropdown values map to folders">
+            Folder map
+          </button>
+          <span class="quick-cache-status" id="quick-worktree-cache-status" title="Repo list cache status"></span>
           <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees" style="display:none">
             <input type="checkbox" id="worktree-modal-keep-open">
             Keep open
@@ -31245,6 +31492,10 @@ class ClaudeOrchestrator {
                 </label>
               </div>
               <div class="quick-control-group">
+                <label class="quick-checkbox" title="Show projects in the Backlog column">
+                  <input type="checkbox" id="quick-show-backlog-projects">
+                  Show backlog
+                </label>
                 <label class="quick-checkbox" title="Show projects in the Archive column">
                   <input type="checkbox" id="quick-show-archived-projects">
                   Show archive
@@ -31287,6 +31538,8 @@ class ClaudeOrchestrator {
 
     const searchInput = modal.querySelector('#quick-worktree-search');
     const advancedBtn = modal.querySelector('.quick-advanced-btn');
+    const refreshBtn = modal.querySelector('#quick-worktree-refresh');
+    const folderMapBtn = modal.querySelector('#quick-worktree-folder-map');
     const tabButtons = modal.querySelectorAll('.quick-tab-btn');
     const convMoreBtn = modal.querySelector('.quick-conv-more-btn');
     const convHistoryBtn = modal.querySelector('.quick-conv-history-btn');
@@ -31307,6 +31560,10 @@ class ClaudeOrchestrator {
     }
 
     const menuVisibilityPrefs = this.getProjectsBoardMenuVisibilityPrefs();
+    const showBacklogEl = modal.querySelector('#quick-show-backlog-projects');
+    if (showBacklogEl) {
+      showBacklogEl.checked = menuVisibilityPrefs.showBacklog !== false;
+    }
     const showArchivedEl = modal.querySelector('#quick-show-archived-projects');
     if (showArchivedEl) {
       showArchivedEl.checked = !!menuVisibilityPrefs.showArchived;
@@ -31368,8 +31625,9 @@ class ClaudeOrchestrator {
         return;
       }
 
-      if (e.target && (e.target.id === 'quick-show-archived-projects' || e.target.id === 'quick-show-done-projects')) {
+      if (e.target && (e.target.id === 'quick-show-backlog-projects' || e.target.id === 'quick-show-archived-projects' || e.target.id === 'quick-show-done-projects')) {
         const next = {
+          showBacklog: !!modal.querySelector('#quick-show-backlog-projects')?.checked,
           showArchived: !!modal.querySelector('#quick-show-archived-projects')?.checked,
           showDone: !!modal.querySelector('#quick-show-done-projects')?.checked
         };
@@ -31383,6 +31641,29 @@ class ClaudeOrchestrator {
       advancedBtn.addEventListener('click', () => {
         modal.remove();
         this.showAddWorktreeModalAdvanced();
+      });
+    }
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', async () => {
+        const prevText = refreshBtn.textContent;
+        try {
+          refreshBtn.disabled = true;
+          refreshBtn.textContent = 'Refreshing…';
+          await this.loadQuickWorktreeRepos({ force: true });
+        } catch (error) {
+          console.error('Failed to refresh quick worktree repos:', error);
+          this.showToast(String(error?.message || error), 'error');
+        } finally {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = prevText;
+        }
+      });
+    }
+
+    if (folderMapBtn) {
+      folderMapBtn.addEventListener('click', () => {
+        this.showQuickRemoteFolderMapModal();
       });
     }
 
@@ -31438,7 +31719,8 @@ class ClaudeOrchestrator {
       });
     }
 
-    this.loadQuickWorktreeRepos();
+    this.refreshQuickWorktreeCacheStatus();
+    this.loadQuickWorktreeRepos({ force: false });
   }
 
   applyQuickRepoSearchFilter(modal, term) {
@@ -31464,21 +31746,56 @@ class ClaudeOrchestrator {
 
     // Hide remote repos section divider when all remote repos are filtered out
     modal.querySelectorAll('.quick-repo-section-divider').forEach(divider => {
-      let next = divider.nextElementSibling;
+      const onboardingCard = divider.nextElementSibling?.classList?.contains('quick-remote-onboarding-card')
+        ? divider.nextElementSibling
+        : null;
+      let next = onboardingCard ? onboardingCard.nextElementSibling : divider.nextElementSibling;
       let anyVisible = false;
       while (next && next.classList.contains('quick-repo-remote')) {
         if (next.style.display !== 'none') anyVisible = true;
         next = next.nextElementSibling;
       }
       divider.style.display = anyVisible ? '' : 'none';
+      if (onboardingCard) onboardingCard.style.display = anyVisible ? '' : 'none';
     });
+  }
+
+  refreshQuickWorktreeCacheStatus() {
+    const statusEl = document.getElementById('quick-worktree-cache-status');
+    if (!statusEl) return;
+
+    const scanFetchedAt = Number(this.scannedReposCache?.fetchedAt || 0);
+    const ghFetchedAt = Number(this.githubReposCache?.fetchedAt || 0);
+    const lastFetchedAt = Math.max(scanFetchedAt, ghFetchedAt);
+    if (!lastFetchedAt) {
+      statusEl.textContent = 'Cache empty';
+      statusEl.title = 'Repo list cache is empty';
+      return;
+    }
+
+    const now = Date.now();
+    const ageMs = Math.max(0, now - lastFetchedAt);
+    const ttlMs = this.getWorktreeRepoCatalogCacheTtlMs();
+
+    const ageLabel = (() => {
+      const ageMinutes = Math.floor(ageMs / 60_000);
+      if (ageMinutes < 1) return 'just now';
+      if (ageMinutes < 60) return `${ageMinutes}m ago`;
+      const hours = Math.floor(ageMinutes / 60);
+      const minutes = ageMinutes % 60;
+      if (hours < 24) return `${hours}h ${minutes}m ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    })();
+
+    statusEl.textContent = `Cached ${ageLabel}`;
+    statusEl.title = `Repo cache TTL: ${Math.round(ttlMs / 60_000)} minutes. Last refresh: ${new Date(lastFetchedAt).toLocaleString()}`;
   }
 
   async showAddWorktreeModalAdvanced() {
     try {
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
-      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
-      const allRepos = await response.json();
+      const cacheTtlMs = this.getWorktreeRepoCatalogCacheTtlMs();
+      const allRepos = await this.getScannedRepos({ force: false, cacheTtlMs });
       await this.getProjectsBoard({ force: false }).catch(() => {});
       this.showAdvancedAddWorktreeModal(allRepos);
     } catch (error) {
@@ -31487,15 +31804,15 @@ class ClaudeOrchestrator {
     }
   }
 
-  async loadQuickWorktreeRepos() {
+  async loadQuickWorktreeRepos({ force = false } = {}) {
     const listEl = document.getElementById('quick-repo-list');
     if (!listEl) return;
 
     try {
       await this.getProjectsBoard({ force: false }).catch(() => {});
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
-      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
-      const repos = await response.json();
+      await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+      const cacheTtlMs = this.getWorktreeRepoCatalogCacheTtlMs();
+      const repos = await this.getScannedRepos({ force, cacheTtlMs });
 
       this.quickWorktreeReposRaw = repos
         .map(repo => {
@@ -31510,35 +31827,46 @@ class ClaudeOrchestrator {
 
       // Also fetch remote GitHub repos to show uncloned ones
       try {
-        const ghResponse = await fetch(`${serverUrl}/api/github/repos`);
-        if (ghResponse.ok) {
-          const ghRepos = await ghResponse.json();
-          const localNames = new Set(this.quickWorktreeReposRaw.map(r => (r.name || '').toLowerCase()));
-          const uncloned = (Array.isArray(ghRepos) ? ghRepos : [])
-            .filter(r => r.name && !localNames.has(r.name.toLowerCase()))
-            .map(r => ({
-              name: r.name,
-              path: r.nameWithOwner,
-              type: 'github-remote',
-              isRemote: true,
-              visibility: r.visibility || (r.isPrivate ? 'private' : 'public'),
-              nameWithOwner: r.nameWithOwner,
-              worktrees: [],
-              lastModifiedMs: 0
-            }));
-          this.quickWorktreeRemoteRepos = uncloned;
-        }
+        const ghRepos = await this.getGitHubRepos({ force, limit: 800, cacheTtlMs });
+        const localNames = new Set(this.quickWorktreeReposRaw.map((repo) => String(repo?.name || '').trim().toLowerCase()));
+        const uncloned = (Array.isArray(ghRepos) ? ghRepos : [])
+          .filter((repo) => {
+            const name = String(repo?.name || '').trim().toLowerCase();
+            if (!name) return false;
+            return !localNames.has(name);
+          })
+          .map((repo) => ({
+            name: String(repo?.name || '').trim(),
+            path: String(repo?.nameWithOwner || '').trim(),
+            type: 'github-remote',
+            isRemote: true,
+            visibility: repo?.visibility || (repo?.isPrivate ? 'private' : 'public'),
+            nameWithOwner: String(repo?.nameWithOwner || '').trim(),
+            owner: String(repo?.owner || '').trim(),
+            worktrees: [],
+            lastModifiedMs: 0
+          }))
+          .filter((repo) => !!repo.nameWithOwner)
+          .sort((a, b) => a.nameWithOwner.localeCompare(b.nameWithOwner));
+
+        this.quickWorktreeRemoteRepos = uncloned;
+        this.quickWorktreeRemoteRepoBySlug = new Map(
+          uncloned.map((repo) => [String(repo.nameWithOwner || '').toLowerCase(), repo])
+        );
       } catch (ghErr) {
         // GitHub CLI not available — silently skip remote repos
         this.quickWorktreeRemoteRepos = [];
+        this.quickWorktreeRemoteRepoBySlug = new Map();
       }
 
       if (!this.quickWorktreeReposRaw.length && !(this.quickWorktreeRemoteRepos || []).length) {
         listEl.innerHTML = '<div class="quick-empty">No repos found</div>';
+        this.refreshQuickWorktreeCacheStatus();
         return;
       }
 
       this.renderQuickWorktreeRepoList();
+      this.refreshQuickWorktreeCacheStatus();
 
       // Apply any existing search term
       const modal = document.getElementById('quick-worktree-modal');
@@ -31548,6 +31876,7 @@ class ClaudeOrchestrator {
     } catch (error) {
       console.error('Failed to load repositories:', error);
       listEl.innerHTML = '<div class="quick-empty">Failed to load repos</div>';
+      this.refreshQuickWorktreeCacheStatus();
     }
   }
 
@@ -31598,19 +31927,18 @@ class ClaudeOrchestrator {
     if (remoteRepos.length > 0) {
       const searchTerm = (this.quickWorktreeSearchTerm || '').toLowerCase();
       const matchingRemote = searchTerm
-        ? remoteRepos.filter(r => r.name.toLowerCase().includes(searchTerm))
+        ? remoteRepos.filter((repo) => {
+          const name = String(repo?.name || '').toLowerCase();
+          const slug = String(repo?.nameWithOwner || '').toLowerCase();
+          return name.includes(searchTerm) || slug.includes(searchTerm);
+        })
         : remoteRepos;
       if (matchingRemote.length > 0) {
         html += `<div class="quick-repo-section-divider">GitHub — Not Cloned (${matchingRemote.length})</div>`;
-        html += matchingRemote.map(r => `
-          <div class="quick-repo-card quick-repo-remote" data-repo-name="${this.escapeHtml(r.name)}">
-            <div class="quick-repo-header">
-              <span class="quick-repo-name">${this.escapeHtml(r.name)}</span>
-              <span class="quick-repo-remote-badge">${r.visibility === 'private' ? '🔒' : '🌐'}</span>
-            </div>
-            <div class="quick-repo-remote-owner">${this.escapeHtml(r.nameWithOwner || '')}</div>
-          </div>
-        `).join('');
+        if (!this.isQuickRemoteOnboardingDismissed()) {
+          html += this.renderQuickRemoteOnboardingCard();
+        }
+        html += matchingRemote.map((repo) => this.renderQuickRemoteRepoRow(repo)).join('');
       }
     }
 
@@ -31683,6 +32011,70 @@ class ClaudeOrchestrator {
         return;
       }
 
+      const remoteCloneBtn = event.target.closest('.quick-remote-clone-btn');
+      if (remoteCloneBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const slug = String(remoteCloneBtn.dataset.repoSlug || '').trim();
+        const remoteRepo = this.getQuickRemoteRepoBySlug(slug);
+        if (!remoteRepo) {
+          this.showToast('Could not find selected GitHub repo', 'error');
+          return;
+        }
+
+        (async () => {
+          const prevText = remoteCloneBtn.textContent;
+          try {
+            remoteCloneBtn.disabled = true;
+            remoteCloneBtn.classList.add('is-starting');
+            remoteCloneBtn.textContent = 'Cloning…';
+            await this.cloneQuickRemoteRepoAndStartWorktree({
+              remoteRepo,
+              keepOpen: this.getWorktreeModalKeepOpen()
+            });
+          } catch (err) {
+            console.error('Quick clone remote repo failed:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            remoteCloneBtn.disabled = false;
+            remoteCloneBtn.classList.remove('is-starting');
+            remoteCloneBtn.textContent = prevText;
+          }
+        })();
+        return;
+      }
+
+      const remoteConfigBtn = event.target.closest('.quick-remote-configure-btn');
+      if (remoteConfigBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const slug = String(remoteConfigBtn.dataset.repoSlug || '').trim();
+        const remoteRepo = this.getQuickRemoteRepoBySlug(slug);
+        if (!remoteRepo) {
+          this.showToast('Could not find selected GitHub repo', 'error');
+          return;
+        }
+        this.showQuickRemoteCloneModal(remoteRepo);
+        return;
+      }
+
+      const openFolderMapBtn = event.target.closest('.quick-remote-open-folder-map-btn');
+      if (openFolderMapBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.showQuickRemoteFolderMapModal();
+        return;
+      }
+
+      const dismissRemoteOnboardingBtn = event.target.closest('.quick-remote-dismiss-onboarding-btn');
+      if (dismissRemoteOnboardingBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.setQuickRemoteOnboardingDismissed(true);
+        this.renderQuickWorktreeRepoList();
+        return;
+      }
+
       const menuBtn = event.target.closest('.quick-choose-btn, .quick-start-menu-btn');
       if (menuBtn) {
         event.preventDefault();
@@ -31727,6 +32119,293 @@ class ClaudeOrchestrator {
         }
       })();
     };
+  }
+
+  async cloneQuickRemoteRepoAndStartWorktree({
+    remoteRepo,
+    categoryId,
+    frameworkId,
+    parentPath,
+    worktreeId = 'work1',
+    createFolders = true,
+    keepOpen = false
+  } = {}) {
+    const repo = remoteRepo && typeof remoteRepo === 'object' ? remoteRepo : null;
+    if (!repo?.nameWithOwner || !repo?.name) {
+      throw new Error('Invalid GitHub repo selection');
+    }
+    if (!this.currentWorkspace?.id) {
+      throw new Error('No active workspace selected');
+    }
+
+    await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+    const defaults = this.buildQuickRemoteCloneDefaults(repo, {
+      categoryId,
+      frameworkId,
+      parentPath
+    });
+
+    const payload = {
+      workspaceId: this.currentWorkspace.id,
+      repo: repo.nameWithOwner,
+      categoryId: defaults.categoryId,
+      frameworkId: defaults.frameworkId || '',
+      parentPath: this.sanitizeQuickRemoteParentPath(defaults.parentPath || ''),
+      repositoryType: defaults.repositoryType,
+      worktreeId: String(worktreeId || 'work1'),
+      startTier: (() => {
+        const startTier = Number(this.quickWorktreeStartTier);
+        return (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+      })(),
+      createFolders: createFolders !== false
+    };
+
+    const response = await fetch('/api/github/clone-and-add-worktree', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok === false) {
+      const message = String(data?.error || `Clone failed (HTTP ${response.status})`);
+      throw new Error(message);
+    }
+
+    const cloned = data?.repo?.alreadyCloned === false;
+    const cloneMessage = cloned ? 'Cloned and started' : 'Started from existing clone';
+    this.showToast(`${cloneMessage}: ${repo.nameWithOwner} (${data?.worktree?.id || 'work1'})`, 'success');
+
+    // Refresh repo caches so the repo moves from "Not Cloned" into regular scanned repos.
+    this.scannedReposCache = { value: null, fetchedAt: 0 };
+    await this.loadQuickWorktreeRepos();
+
+    if (!keepOpen) {
+      document.getElementById('quick-worktree-modal')?.remove();
+    }
+
+    return data;
+  }
+
+  async showQuickRemoteCloneModal(remoteRepo) {
+    const repo = remoteRepo && typeof remoteRepo === 'object' ? remoteRepo : null;
+    if (!repo?.nameWithOwner || !repo?.name) {
+      this.showToast('Invalid GitHub repo selection', 'error');
+      return;
+    }
+    await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const frameworksAll = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+    if (!categories.length) {
+      this.showToast('Project taxonomy unavailable (cannot configure folder placement)', 'error');
+      return;
+    }
+
+    const defaults = this.buildQuickRemoteCloneDefaults(repo);
+    const existing = document.getElementById('quick-remote-clone-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'quick-remote-clone-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content quick-remote-clone-modal-content">
+        <div class="modal-header">
+          <h3>Clone GitHub Repo</h3>
+          <button class="close-btn" data-action="close">✕</button>
+        </div>
+        <div class="modal-body quick-remote-clone-body">
+          <div class="quick-remote-clone-repo">${this.escapeHtml(repo.nameWithOwner)}</div>
+          <div class="quick-remote-clone-help">This creates <code>&lt;repo&gt;/master</code>, then starts <code>work1</code> in this workspace.</div>
+
+          <div class="quick-remote-clone-grid">
+            <label class="quick-remote-clone-label">
+              <span>Category</span>
+              <select id="quick-remote-category"></select>
+            </label>
+            <label class="quick-remote-clone-label">
+              <span>Framework</span>
+              <select id="quick-remote-framework"></select>
+            </label>
+          </div>
+          <div id="quick-remote-category-help" class="quick-remote-clone-category-help"></div>
+
+          <label class="quick-remote-clone-label">
+            <span>Parent folders inside category (optional)</span>
+            <input id="quick-remote-parent-path" type="text" class="search-input" placeholder="e.g. hytopia/games">
+          </label>
+          <div id="quick-remote-parent-suggestions" class="quick-remote-parent-suggestions"></div>
+
+          <label class="quick-checkbox" title="Create missing folders on disk">
+            <input type="checkbox" id="quick-remote-create-folders" checked>
+            Auto-create missing folders
+          </label>
+
+          <div class="quick-remote-final-path">
+            <div class="quick-remote-final-path-label">Final path</div>
+            <div id="quick-remote-final-path-value" class="quick-remote-final-path-value"></div>
+          </div>
+        </div>
+        <div class="modal-footer quick-remote-clone-footer">
+          <button class="btn-secondary" data-action="close">Cancel</button>
+          <button class="btn-primary" id="quick-remote-clone-confirm">Clone + Start work1</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const categorySelect = modal.querySelector('#quick-remote-category');
+    const frameworkSelect = modal.querySelector('#quick-remote-framework');
+    const parentInput = modal.querySelector('#quick-remote-parent-path');
+    const parentSuggestionsEl = modal.querySelector('#quick-remote-parent-suggestions');
+    const createFoldersEl = modal.querySelector('#quick-remote-create-folders');
+    const finalPathEl = modal.querySelector('#quick-remote-final-path-value');
+    const categoryHelpEl = modal.querySelector('#quick-remote-category-help');
+    const confirmBtn = modal.querySelector('#quick-remote-clone-confirm');
+
+    const state = {
+      categoryId: defaults.categoryId,
+      frameworkId: defaults.frameworkId,
+      parentPath: defaults.parentPath,
+      parentPathManuallyEdited: false
+    };
+
+    const getFrameworkRows = (categoryId) => frameworksAll.filter((framework) => String(framework?.categoryId || '').trim() === String(categoryId || '').trim());
+
+    const populateCategorySelect = () => {
+      categorySelect.innerHTML = categories.map((category) => {
+        const id = String(category?.id || '').trim();
+        const folder = String(category?.basePath || '').trim().replace(/^\/+|\/+$/g, '') || '(custom)';
+        const label = `${category?.name || id} (${folder})`;
+        const selected = id === state.categoryId ? 'selected' : '';
+        return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(label)}</option>`;
+      }).join('');
+    };
+
+    const populateFrameworkSelect = () => {
+      const rows = getFrameworkRows(state.categoryId);
+      const hasCurrent = rows.some((framework) => String(framework?.id || '').trim() === state.frameworkId);
+      if (!hasCurrent) {
+        state.frameworkId = rows[0]?.id ? String(rows[0].id) : '';
+      }
+      frameworkSelect.innerHTML = [
+        '<option value="">(none)</option>',
+        ...rows.map((framework) => {
+          const id = String(framework?.id || '').trim();
+          const selected = id === state.frameworkId ? 'selected' : '';
+          return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(framework?.name || id)}</option>`;
+        })
+      ].join('');
+    };
+
+    const renderParentSuggestions = (suggestions) => {
+      const rows = Array.isArray(suggestions) ? suggestions.filter(Boolean) : [];
+      if (!rows.length) {
+        parentSuggestionsEl.innerHTML = '<span class="quick-remote-parent-empty">No existing parent folders detected for this category yet.</span>';
+        return;
+      }
+      parentSuggestionsEl.innerHTML = rows.slice(0, 10).map((suggestion) => `
+        <button class="quick-remote-parent-chip" data-parent-path="${this.escapeHtml(suggestion)}" type="button">
+          ${this.escapeHtml(suggestion)}
+        </button>
+      `).join('');
+    };
+
+    const refreshState = ({ preserveManualPath = true } = {}) => {
+      const defaultsForSelection = this.buildQuickRemoteCloneDefaults(repo, {
+        categoryId: state.categoryId,
+        frameworkId: state.frameworkId
+      });
+      if (!preserveManualPath || !state.parentPathManuallyEdited) {
+        state.parentPath = defaultsForSelection.parentPath;
+      }
+
+      const sanitizedParentPath = this.sanitizeQuickRemoteParentPath(state.parentPath);
+      state.parentPath = sanitizedParentPath;
+      parentInput.value = sanitizedParentPath;
+
+      const withParent = this.buildQuickRemoteCloneDefaults(repo, {
+        categoryId: state.categoryId,
+        frameworkId: state.frameworkId,
+        parentPath: sanitizedParentPath
+      });
+
+      const categoryFolder = String(withParent?.category?.basePath || '').trim().replace(/^\/+|\/+$/g, '') || '(custom)';
+      const gitHubRoot = normalizeClientPath(this.projectTypeTaxonomy?.gitHubRoot || '~/GitHub') || '~/GitHub';
+      if (categoryHelpEl) {
+        categoryHelpEl.innerHTML = `Category controls the top-level folder under <code>${this.escapeHtml(gitHubRoot)}</code>. Current category folder: <code>${this.escapeHtml(categoryFolder)}</code>.`;
+      }
+
+      renderParentSuggestions(withParent.parentSuggestions);
+      finalPathEl.textContent = `${withParent.finalPath}/master (worktree: work1)`;
+    };
+
+    populateCategorySelect();
+    populateFrameworkSelect();
+    refreshState({ preserveManualPath: false });
+
+    modal.addEventListener('click', async (event) => {
+      const closeBtn = event.target.closest('[data-action=\"close\"]');
+      if (closeBtn) {
+        event.preventDefault();
+        modal.remove();
+        return;
+      }
+
+      const parentChip = event.target.closest('.quick-remote-parent-chip');
+      if (parentChip) {
+        event.preventDefault();
+        state.parentPath = this.sanitizeQuickRemoteParentPath(parentChip.dataset.parentPath || '');
+        state.parentPathManuallyEdited = true;
+        refreshState({ preserveManualPath: true });
+        return;
+      }
+
+      if (event.target !== confirmBtn) return;
+      event.preventDefault();
+
+      const previousText = confirmBtn.textContent;
+      try {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Cloning…';
+        await this.cloneQuickRemoteRepoAndStartWorktree({
+          remoteRepo: repo,
+          categoryId: state.categoryId,
+          frameworkId: state.frameworkId,
+          parentPath: state.parentPath,
+          createFolders: !!createFoldersEl.checked,
+          worktreeId: 'work1',
+          keepOpen: this.getWorktreeModalKeepOpen()
+        });
+        modal.remove();
+      } catch (error) {
+        console.error('Clone + add worktree failed:', error);
+        this.showToast(String(error?.message || error), 'error');
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = previousText;
+      }
+    });
+
+    categorySelect.addEventListener('change', () => {
+      state.categoryId = String(categorySelect.value || '').trim();
+      state.parentPathManuallyEdited = false;
+      populateFrameworkSelect();
+      refreshState({ preserveManualPath: false });
+    });
+
+    frameworkSelect.addEventListener('change', () => {
+      state.frameworkId = String(frameworkSelect.value || '').trim();
+      state.parentPathManuallyEdited = false;
+      refreshState({ preserveManualPath: false });
+    });
+
+    parentInput.addEventListener('input', () => {
+      state.parentPath = String(parentInput.value || '');
+      state.parentPathManuallyEdited = true;
+      refreshState({ preserveManualPath: true });
+    });
   }
 
   toggleQuickWorktreeFavorite(repoPath) {
@@ -32272,6 +32951,376 @@ class ClaudeOrchestrator {
     }).join('');
 
     return favoritesHtml + groupedHtml;
+  }
+
+  sanitizeQuickRemoteParentPath(value) {
+    const segments = String(value || '')
+      .replace(/\\/g, '/')
+      .split('/')
+      .map((segment) => String(segment || '').trim())
+      .filter(Boolean)
+      .filter((segment) => segment !== '.' && segment !== '..')
+      .map((segment) => segment.replace(/[:*?"<>|]/g, ''));
+    return segments.join('/');
+  }
+
+  isQuickRemoteOnboardingDismissed() {
+    try {
+      return localStorage.getItem('quick-remote-onboarding-dismissed') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  setQuickRemoteOnboardingDismissed(dismissed) {
+    const next = !!dismissed;
+    try {
+      localStorage.setItem('quick-remote-onboarding-dismissed', next ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+  }
+
+  getQuickRemoteCategoryFolderRows() {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    return categories.map((category) => {
+      const id = String(category?.id || '').trim();
+      const name = String(category?.name || id).trim() || id;
+      const baseRelative = String(category?.basePath || '').trim().replace(/^\/+|\/+$/g, '');
+      const baseAbsolute = this.getQuickRemoteCategoryBasePath(category);
+      return {
+        id,
+        name,
+        baseRelative,
+        baseAbsolute,
+        frameworkIds: Array.isArray(category?.frameworkIds) ? category.frameworkIds : []
+      };
+    });
+  }
+
+  renderQuickRemoteOnboardingCard() {
+    const rows = this.getQuickRemoteCategoryFolderRows();
+    const topRows = rows.slice(0, 5);
+    const compactMap = topRows.map((row) => {
+      const folder = row.baseRelative || row.baseAbsolute || '(custom)';
+      return `<span class="quick-remote-map-chip"><strong>${this.escapeHtml(row.name)}</strong> → ${this.escapeHtml(folder)}</span>`;
+    }).join('');
+
+    return `
+      <div class="quick-remote-onboarding-card">
+        <button class="quick-remote-dismiss-onboarding-btn" title="Hide this hint" aria-label="Hide this hint" type="button">✕</button>
+        <div class="quick-remote-onboarding-title">First time setup: where do repos go?</div>
+        <div class="quick-remote-onboarding-text">Choose <strong>location</strong> for a repo, pick a <strong>category</strong>, and Orchestrator clones to <code>&lt;category-folder&gt;/&lt;optional-parent&gt;/&lt;repo&gt;/master</code> then starts <code>work1</code>.</div>
+        <div class="quick-remote-map-row">${compactMap}</div>
+        <div class="quick-remote-onboarding-actions">
+          <button class="btn-secondary quick-remote-open-folder-map-btn" type="button">Open full folder map</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async showQuickRemoteFolderMapModal() {
+    await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+    const rows = this.getQuickRemoteCategoryFolderRows();
+    if (!rows.length) {
+      this.showToast('Project taxonomy is not available yet', 'warning');
+      return;
+    }
+
+    const existing = document.getElementById('quick-remote-folder-map-modal');
+    if (existing) existing.remove();
+
+    const gitHubRoot = normalizeClientPath(this.projectTypeTaxonomy?.gitHubRoot || '~/GitHub') || '~/GitHub';
+    const modal = document.createElement('div');
+    modal.id = 'quick-remote-folder-map-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content quick-remote-folder-map-modal-content">
+        <div class="modal-header">
+          <h3>Category Folder Map</h3>
+          <button class="close-btn" data-action="close">✕</button>
+        </div>
+        <div class="modal-body quick-remote-folder-map-body">
+          <div class="quick-remote-folder-map-help">Category choices in “Choose location…” map to folders under this GitHub root:</div>
+          <div class="quick-remote-folder-map-root"><code>${this.escapeHtml(gitHubRoot)}</code></div>
+          <div class="quick-remote-folder-map-table-wrap">
+            <table class="quick-remote-folder-map-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Folder</th>
+                  <th>Example final clone path</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map((row) => {
+                  const folder = row.baseRelative || normalizeClientPath(row.baseAbsolute) || '(custom)';
+                  const sample = `${gitHubRoot}/${folder}/your-repo/master`.replace(/\/+/g, '/');
+                  return `
+                    <tr>
+                      <td>${this.escapeHtml(row.name)}</td>
+                      <td><code>${this.escapeHtml(folder)}</code></td>
+                      <td><code>${this.escapeHtml(sample)}</code></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="quick-remote-folder-map-help">Change mappings in <code>config/project-types.json</code> (category <code>basePath</code> values), then restart Orchestrator.</div>
+        </div>
+        <div class="modal-footer quick-remote-folder-map-footer">
+          <button class="btn-primary" data-action="close">Close</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (event) => {
+      const close = event.target.closest('[data-action="close"]');
+      if (close) {
+        event.preventDefault();
+        modal.remove();
+      }
+    });
+  }
+
+  getQuickRemoteRepoBySlug(slug) {
+    const key = String(slug || '').trim().toLowerCase();
+    if (!key) return null;
+    return this.quickWorktreeRemoteRepoBySlug?.get(key) || null;
+  }
+
+  getQuickRemoteCategoryBasePath(category) {
+    const cat = category && typeof category === 'object' ? category : {};
+    const taxonomyRoot = normalizeClientPath(this.projectTypeTaxonomy?.gitHubRoot || '');
+    const resolved = normalizeClientPath(cat.basePathResolvedNormalized || cat.basePathResolved || '');
+    if (resolved) return resolved;
+
+    const basePath = normalizeClientPath(cat.basePath || '');
+    if (!basePath) return taxonomyRoot;
+    if (basePath.startsWith('/')) return basePath;
+    return taxonomyRoot ? normalizeClientPath(`${taxonomyRoot}/${basePath}`) : basePath;
+  }
+
+  getQuickRemoteCategoryRelativeBasePath(category) {
+    const cat = category && typeof category === 'object' ? category : {};
+    const basePath = normalizeClientPath(cat.basePath || '');
+    if (basePath && !basePath.startsWith('/')) return basePath;
+
+    const baseAbsolute = this.getQuickRemoteCategoryBasePath(cat);
+    const taxonomyRoot = normalizeClientPath(this.projectTypeTaxonomy?.gitHubRoot || '');
+    if (!baseAbsolute || !taxonomyRoot) return '';
+
+    const normalizedBase = this.normalizeWorktreePath(baseAbsolute);
+    const normalizedRoot = this.normalizeWorktreePath(taxonomyRoot);
+    if (!normalizedBase || !normalizedRoot) return '';
+    if (!normalizedBase.startsWith(`${normalizedRoot}/`) && normalizedBase !== normalizedRoot) return '';
+    return normalizedBase.slice(normalizedRoot.length).replace(/^\/+/, '');
+  }
+
+  detectQuickRemoteCategoryId(remoteRepo) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    if (!categories.length) return '';
+
+    const workspaceRepoPath = normalizeClientPath(this.currentWorkspace?.repository?.path || '');
+    const workspaceRepoPathNorm = this.normalizeWorktreePath(workspaceRepoPath);
+    if (workspaceRepoPathNorm) {
+      for (const category of categories) {
+        const basePath = this.getQuickRemoteCategoryBasePath(category);
+        const basePathNorm = this.normalizeWorktreePath(basePath);
+        if (!basePathNorm) continue;
+        if (workspaceRepoPathNorm === basePathNorm || workspaceRepoPathNorm.startsWith(`${basePathNorm}/`)) {
+          return String(category.id || '').trim();
+        }
+      }
+    }
+
+    const text = `${remoteRepo?.name || ''} ${remoteRepo?.nameWithOwner || ''}`.toLowerCase();
+    let bestCategoryId = '';
+    let bestScore = 0;
+
+    for (const category of categories) {
+      const keywords = Array.isArray(category?.keywords) ? category.keywords : [];
+      let score = 0;
+      for (const keywordRaw of keywords) {
+        const keyword = String(keywordRaw || '').trim().toLowerCase();
+        if (!keyword) continue;
+        if (text.includes(keyword)) score += 1;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestCategoryId = String(category?.id || '').trim();
+      }
+    }
+
+    return bestCategoryId || String(categories[0]?.id || '').trim();
+  }
+
+  resolveQuickRemoteFrameworkId(categoryId, remoteRepo) {
+    const frameworks = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+    const categoryFrameworks = frameworks.filter((framework) => String(framework?.categoryId || '').trim() === String(categoryId || '').trim());
+    if (!categoryFrameworks.length) return '';
+
+    const text = `${remoteRepo?.name || ''} ${remoteRepo?.nameWithOwner || ''}`.toLowerCase();
+    const byKeyword = categoryFrameworks.find((framework) => {
+      const id = String(framework?.id || '').trim().toLowerCase();
+      const name = String(framework?.name || '').trim().toLowerCase();
+      return (!!id && text.includes(id)) || (!!name && text.includes(name));
+    });
+    if (byKeyword?.id) return String(byKeyword.id).trim();
+
+    return String(categoryFrameworks[0]?.id || '').trim();
+  }
+
+  collectQuickRemoteParentPathSuggestions({ categoryId, frameworkId }) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const category = categories.find((row) => String(row?.id || '').trim() === String(categoryId || '').trim());
+    if (!category) return [];
+
+    const baseRelative = this.getQuickRemoteCategoryRelativeBasePath(category);
+    const baseSegments = baseRelative
+      ? baseRelative.split('/').map((segment) => segment.trim()).filter(Boolean)
+      : [];
+    const repoRows = Array.isArray(this.quickWorktreeReposRaw) ? this.quickWorktreeReposRaw : [];
+
+    const counters = new Map();
+    repoRows.forEach((repo) => {
+      const relative = normalizeClientPath(repo?.relativePath || '');
+      if (!relative) return;
+      const segments = relative.split('/').map((segment) => segment.trim()).filter(Boolean);
+      if (segments.length < baseSegments.length + 2) return;
+
+      const matchesBase = baseSegments.every((segment, index) => String(segments[index] || '').toLowerCase() === segment.toLowerCase());
+      if (!matchesBase) return;
+
+      const parentSegments = segments.slice(baseSegments.length, -1);
+      if (!parentSegments.length) return;
+      const parent = parentSegments.join('/');
+      counters.set(parent, (counters.get(parent) || 0) + 1);
+    });
+
+    const rows = Array.from(counters.entries()).map(([pathValue, count]) => ({ path: pathValue, count }));
+    rows.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.path.localeCompare(b.path);
+    });
+
+    const frameworkToken = String(frameworkId || '').trim().toLowerCase();
+    if (!frameworkToken) return rows.map((row) => row.path).slice(0, 20);
+
+    const preferred = rows.filter((row) => row.path.toLowerCase().includes(frameworkToken));
+    if (preferred.length) return preferred.map((row) => row.path).slice(0, 20);
+    return rows.map((row) => row.path).slice(0, 20);
+  }
+
+  guessQuickRemoteParentPath({ categoryId, frameworkId }) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const category = categories.find((row) => String(row?.id || '').trim() === String(categoryId || '').trim());
+    if (!category) return '';
+
+    const workspaceRepoPath = normalizeClientPath(this.currentWorkspace?.repository?.path || '');
+    const workspaceRepoPathNorm = this.normalizeWorktreePath(workspaceRepoPath);
+    const categoryBaseNorm = this.normalizeWorktreePath(this.getQuickRemoteCategoryBasePath(category));
+    if (workspaceRepoPathNorm && categoryBaseNorm && (workspaceRepoPathNorm === categoryBaseNorm || workspaceRepoPathNorm.startsWith(`${categoryBaseNorm}/`))) {
+      const rel = workspaceRepoPathNorm.slice(categoryBaseNorm.length).replace(/^\/+/, '');
+      const relSegments = rel.split('/').filter(Boolean);
+      if (relSegments.length > 1) {
+        return this.sanitizeQuickRemoteParentPath(relSegments.slice(0, -1).join('/'));
+      }
+    }
+
+    const suggestions = this.collectQuickRemoteParentPathSuggestions({ categoryId, frameworkId });
+    if (suggestions[0]) return this.sanitizeQuickRemoteParentPath(suggestions[0]);
+
+    const frameworkToken = String(frameworkId || '').trim().toLowerCase();
+    if (frameworkToken && frameworkToken !== 'generic' && frameworkToken !== 'web-generic') {
+      return this.sanitizeQuickRemoteParentPath(frameworkToken);
+    }
+
+    return '';
+  }
+
+  resolveQuickRemoteRepositoryType({ categoryId, frameworkId }) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const frameworks = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+    const templates = Array.isArray(this.projectTypeTaxonomy?.templates) ? this.projectTypeTaxonomy.templates : [];
+
+    const category = categories.find((row) => String(row?.id || '').trim() === String(categoryId || '').trim()) || null;
+    const framework = frameworks.find((row) => String(row?.id || '').trim() === String(frameworkId || '').trim()) || null;
+    if (framework?.defaultTemplateId) {
+      const template = templates.find((row) => String(row?.id || '').trim() === String(framework.defaultTemplateId || '').trim());
+      const fromTemplate = String(template?.defaultRepositoryType || '').trim();
+      if (fromTemplate) return fromTemplate;
+    }
+
+    const fromCategory = String(category?.defaultRepositoryType || '').trim();
+    if (fromCategory) return fromCategory;
+    return 'tool-project';
+  }
+
+  buildQuickRemoteCloneDefaults(remoteRepo, overrides = {}) {
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    const fallbackCategoryId = this.detectQuickRemoteCategoryId(remoteRepo);
+    const categoryId = String(overrides?.categoryId || fallbackCategoryId || categories[0]?.id || '').trim();
+    const category = categories.find((row) => String(row?.id || '').trim() === categoryId) || categories[0] || null;
+    const selectedCategoryId = String(category?.id || '').trim();
+
+    const frameworkId = String(overrides?.frameworkId || this.resolveQuickRemoteFrameworkId(selectedCategoryId, remoteRepo)).trim();
+    const parentPath = this.sanitizeQuickRemoteParentPath(
+      overrides?.parentPath ?? this.guessQuickRemoteParentPath({ categoryId: selectedCategoryId, frameworkId })
+    );
+    const parentSuggestions = this.collectQuickRemoteParentPathSuggestions({ categoryId: selectedCategoryId, frameworkId });
+    const repositoryType = this.resolveQuickRemoteRepositoryType({ categoryId: selectedCategoryId, frameworkId });
+    const categoryBasePath = this.getQuickRemoteCategoryBasePath(category);
+    const finalPath = normalizeClientPath([categoryBasePath, parentPath, remoteRepo?.name || 'repo'].filter(Boolean).join('/'));
+
+    return {
+      categoryId: selectedCategoryId,
+      frameworkId,
+      parentPath,
+      parentSuggestions,
+      repositoryType,
+      category,
+      categoryBasePath,
+      finalPath
+    };
+  }
+
+  renderQuickRemoteRepoRow(remoteRepo) {
+    const repo = remoteRepo && typeof remoteRepo === 'object' ? remoteRepo : {};
+    const defaults = this.buildQuickRemoteCloneDefaults(repo);
+    const categoryLabel = defaults.category?.name ? ` • ${defaults.category.name}` : '';
+    const previewLabel = defaults.finalPath ? `Planned: ${defaults.finalPath}/master + work1` : 'Planned: choose folder placement';
+    const slug = String(repo.nameWithOwner || '').trim();
+
+    return `
+      <div class="quick-repo-row quick-repo-remote"
+           data-repo-name="${this.escapeHtml(String(repo.name || '').toLowerCase())}"
+           data-repo-path="${this.escapeHtml(String(repo.nameWithOwner || '').toLowerCase())}">
+        <div class="quick-repo-meta">
+          <span class="quick-repo-icon">🐙</span>
+          <div class="quick-repo-info">
+            <div class="quick-repo-name">${this.escapeHtml(repo.name || 'repo')}</div>
+            <div class="quick-repo-path">${this.escapeHtml(repo.nameWithOwner || '')}${categoryLabel}</div>
+            <div class="quick-summary-text">${this.escapeHtml(previewLabel)}</div>
+          </div>
+        </div>
+        <div class="quick-repo-actions">
+          <button class="btn-primary quick-remote-clone-btn"
+                  data-repo-slug="${this.escapeHtml(slug)}"
+                  title="Clone into the suggested folder and start work1">
+            Clone suggested path
+          </button>
+          <button class="btn-secondary quick-remote-configure-btn"
+                  data-repo-slug="${this.escapeHtml(slug)}"
+                  title="Choose category, subfolders, and placement">
+            Choose location…
+          </button>
+          <span class="quick-repo-remote-badge">${repo.visibility === 'private' ? '🔒' : '🌐'}</span>
+        </div>
+      </div>
+    `;
   }
 
   getQuickWorktreeCreatePresets() {
@@ -33407,9 +34456,17 @@ class ClaudeOrchestrator {
     return m && typeof m === 'object' ? m : null;
   }
 
-  async getScannedRepos({ force = false } = {}) {
+  getWorktreeRepoCatalogCacheTtlMs() {
+    const raw = Number(this.userSettings?.global?.ui?.worktrees?.repoCatalogCacheMinutes);
+    const minutes = Number.isFinite(raw) ? raw : (24 * 60);
+    const safeMinutes = Math.min(Math.max(Math.round(minutes), 5), 7 * 24 * 60);
+    return safeMinutes * 60 * 1000;
+  }
+
+  async getScannedRepos({ force = false, cacheTtlMs = null } = {}) {
     const now = Date.now();
-    const ttlMs = 20_000;
+    const ttlRaw = Number(cacheTtlMs);
+    const ttlMs = Number.isFinite(ttlRaw) && ttlRaw >= 0 ? ttlRaw : 20_000;
     if (!force && this.scannedReposCache?.value && (now - (this.scannedReposCache.fetchedAt || 0) < ttlMs)) {
       return this.scannedReposCache.value;
     }
@@ -33428,26 +34485,36 @@ class ClaudeOrchestrator {
 
   getProjectsBoardMenuVisibilityPrefs() {
     const fromServer = this.userSettings?.global?.ui?.projects?.board?.menus;
+    const serverShowBacklog = typeof fromServer?.showBacklog === 'boolean' ? fromServer.showBacklog : null;
     const serverShowArchived = typeof fromServer?.showArchived === 'boolean' ? fromServer.showArchived : null;
     const serverShowDone = typeof fromServer?.showDone === 'boolean' ? fromServer.showDone : null;
 
-    const fromLocalStorage = (key) => {
-      try { return localStorage.getItem(key) === 'true'; } catch { return false; }
+    const fromLocalStorage = (key, defaultValue = false) => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw === null) return defaultValue;
+        return raw === 'true';
+      } catch {
+        return defaultValue;
+      }
     };
 
     return {
-      showArchived: serverShowArchived === null ? fromLocalStorage('projects-board-menus-show-archived') : serverShowArchived,
-      showDone: serverShowDone === null ? fromLocalStorage('projects-board-menus-show-done') : serverShowDone
+      showBacklog: serverShowBacklog === null ? fromLocalStorage('projects-board-menus-show-backlog', true) : serverShowBacklog,
+      showArchived: serverShowArchived === null ? fromLocalStorage('projects-board-menus-show-archived', false) : serverShowArchived,
+      showDone: serverShowDone === null ? fromLocalStorage('projects-board-menus-show-done', false) : serverShowDone
     };
   }
 
   async setProjectsBoardMenuVisibilityPrefs(next) {
     const desired = next && typeof next === 'object' ? next : {};
     const prefs = {
+      showBacklog: desired.showBacklog !== false,
       showArchived: !!desired.showArchived,
       showDone: !!desired.showDone
     };
 
+    try { localStorage.setItem('projects-board-menus-show-backlog', prefs.showBacklog ? 'true' : 'false'); } catch {}
     try { localStorage.setItem('projects-board-menus-show-archived', prefs.showArchived ? 'true' : 'false'); } catch {}
     try { localStorage.setItem('projects-board-menus-show-done', prefs.showDone ? 'true' : 'false'); } catch {}
 
@@ -33518,15 +34585,17 @@ class ClaudeOrchestrator {
 
     return rows.filter((repo) => {
       const col = this.getProjectsBoardColumnForRepo(repo, board);
+      if (!prefs.showBacklog && col === 'backlog') return false;
       if (!prefs.showArchived && col === 'archived') return false;
       if (!prefs.showDone && col === 'done') return false;
       return true;
     });
   }
 
-  async getGitHubRepos({ force = false, limit = 500, owner = null } = {}) {
+  async getGitHubRepos({ force = false, limit = 500, owner = null, cacheTtlMs = null } = {}) {
     const now = Date.now();
-    const ttlMs = 60_000;
+    const ttlRaw = Number(cacheTtlMs);
+    const ttlMs = Number.isFinite(ttlRaw) && ttlRaw >= 0 ? ttlRaw : 60_000;
     const limitRaw = Number(limit);
     const safeLimit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.round(limitRaw), 1), 2000) : 500;
     const ownerKey = owner ? String(owner).trim() : '';

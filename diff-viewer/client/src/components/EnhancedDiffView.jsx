@@ -185,7 +185,13 @@ const StandardDiffView = ({ file, diffData }) => {
         <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>
           {lines.map((line, idx) => {
             let className = '';
-            let style = { margin: 0, padding: '2px 5px', whiteSpace: 'pre' };
+            let style = {
+              margin: 0,
+              padding: '2px 5px',
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
+              wordBreak: 'break-word'
+            };
             
             if (line.startsWith('+')) {
               className = 'added';

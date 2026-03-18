@@ -17,6 +17,7 @@ FRONTEND:   client/app.js, client/terminal.js        - Web client
 NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
 PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resources + reusable packaged prod deps
+            scripts/tauri/run-tauri-build.js          - Centralized Tauri build entrypoint (local Windows fast-cache pinning + profile dispatch)
 DIFF:       diff-viewer/                             - Advanced diff viewer component
 SITE:       site/                                    - Standalone showcase site for future GitHub Pages publishing
 PLANS:      PLANS/                                   - Date-stamped planning + implementation notes
@@ -63,6 +64,8 @@ server/claudeVersionChecker.js     - Claude Code version detection
 tests/unit/claudeVersionChecker.test.js - Coverage for update-banner version fallback messaging
 tests/unit/claudeVersionChecker.spawnOptions.test.js - Verifies Windows-hidden spawn flags for startup Claude version checks
 tests/unit/worktreeHelper.spawnOptions.test.js - Verifies Windows-hidden spawn flags for auto-created worktree git commands
+tests/unit/commanderService.test.js - Covers Commander launch buffering, trust-prompt auto-accept, and preserved output history
+tests/unit/sessionManager.trustPrompt.test.js - Verifies auto-accept of Claude folder trust prompts in launched worktree sessions
 server/utils/processUtils.js       - Shared spawn/env hardening helpers
 ├─ Windows packaging guardrails: applies `windowsHide`/`CREATE_NO_WINDOW`, augments GUI-app PATH with Git/node/npm/common CLI locations, and builds hidden PowerShell argument lists
 └─ Cross-platform behavior: non-Windows platforms pass through unchanged so Linux/macOS launch behavior stays stable
@@ -97,13 +100,20 @@ server/auditExportService.js       - Redacted audit export across activity + sch
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
 server/projectTypeService.js       - Project taxonomy loader/validator for category→framework→template metadata (`config/project-types.json`)
+server/githubCloneWorktreeService.js - GitHub import flow for Quick Work (`owner/repo` parse, category/subfolder placement, clone into `master/`, and mixed-worktree bootstrap)
 server/portRegistry.js             - Port assignment + live service scanner (`/api/ports/scan`)
 ├─ Windows scan path: uses hidden `netstat`/`tasklist` probes so packaged Tauri builds do not flash console windows when Ports/Dashboard panels refresh
 └─ UI metadata: labels orchestrator-assigned ports, known dev servers, and custom user labels
 scripts/tauri/prepare-backend-resources.js - Tauri backend packager
 ├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
+├─ Resource-sync reuse: repeated runs skip recopying server/client/templates/config payloads when the source-tree stamp still matches
 ├─ Prod-deps reuse: repeated `--install-prod` runs skip `npm ci` when package-lock + bundled Node stamp still match
 └─ CI cache: Windows release workflow restores `src-tauri/resources/backend/node_modules` so warm installer builds avoid re-installing backend prod deps
+scripts/tauri/run-tauri-build.js    - Shared local/CI Tauri build launcher
+├─ Profiles: dispatches `release` vs `fast` builds from one script instead of duplicating shell commands
+├─ Windows fast-cache pinning: local non-CI `fast` builds use a stable `%LOCALAPPDATA%\\AgentWorkspaceBuildCache\\tauri-target` root so repo renames/worktree moves do not discard Cargo incremental state
+├─ Local installer trim: local non-CI Windows `fast` builds default to `nsis` instead of building both Windows installer formats
+└─ Overrides: respects explicit `CARGO_TARGET_DIR` / `ORCHESTRATOR_TAURI_TARGET_DIR` when callers want a custom target root
 ```
 
 ### Multi-Workspace System (Core Feature)
@@ -181,6 +191,9 @@ client/app.js                      - Main client application
 ├─ Projects + Chats automation: `project-chats-new` Commander/voice action supports explicit workspace + repository targeting
 ├─ Projects + Chats list: repository-first aggregation (project-centric view) while preserving workspace context for mixed workspaces
 ├─ Projects + Chats data source: prefers server-aggregated repository projects from `GET /api/thread-projects` with client fallback aggregation
+├─ Quick Work cache: local scan + GitHub repo lists use a configurable cache window (`ui.worktrees.repoCatalogCacheMinutes`, default 1440) with manual Refresh button support
+├─ Quick Work GitHub import: “GitHub — Not Cloned” rows can clone directly or open a placement modal (category/framework/parent folders) before auto-starting `work1`
+├─ Quick Work onboarding: first-run hint card + “Folder map” modal explain category→folder mapping (`game -> games`, `website -> websites`, etc.) for fresh installs
 ├─ Status UI: visual state mapping for `busy`, `waiting`, `ready-new`, and `no-agent`
 └─ Dependencies: Socket.IO client, terminal emulation
 
@@ -304,6 +317,7 @@ src-tauri/src/lib.rs               - Tauri application library
 ### Configuration Files
 ```
 src-tauri/tauri.conf.json          - Tauri app configuration
+├─ Bundle metadata: packaged app name/version, bundle targets, icons, and Windows installer license/EULA file path
 src-tauri/Cargo.toml               - Rust dependencies + build profiles (release, fast)
 ├─ profile.release: lto=true, codegen-units=1, opt-level="s" — smallest binary, slow compile (CI/distribution)
 └─ profile.fast: lto=false, codegen-units=256, incremental — ~3-5x faster compile (local dev/testing)
@@ -328,6 +342,7 @@ scripts/migrate-to-workspaces.js   - Migration script for legacy workspaces
 scripts/public-release-audit.js    - Public-release safety audit automation
 ├─ Checks: tracked cache/DB artifacts, public-doc path hygiene, loopback/auth defaults
 └─ Optional: full-history gitleaks scan (`--history-secrets`)
+scripts/render-legal-pages.js      - Generates `site/terms.html` and `site/privacy.html` from canonical markdown in `docs/legal/`
 
 scripts/create-project.js          - Taxonomy-driven project scaffold generator (template/project-kit source resolution, optional post-create hooks, git init, optional GitHub remote, worktree bootstrap via WorktreeHelper)
 scripts/preview-site.js            - Tiny local preview server for the standalone `site/` showcase
@@ -337,10 +352,20 @@ scripts/preview-site.js            - Tiny local preview server for the standalon
 ```
 site/                              - Concise product/showcase site kept separate from internal docs for future GitHub Pages deployment
 ├─ index.html                      - Single-page product overview and quick-start narrative
+├─ terms.html                      - Generated public Terms of Use page linked from footer + install/download flows
+├─ privacy.html                    - Generated public Privacy Policy page linked from footer + install/download flows
 ├─ styles.css                      - Showcase visual system, layout, and motion
 ├─ script.js                       - Small reveal-on-scroll enhancement
 ├─ assets/                         - Favicon, provider logos, generated Open Graph preview, and real UI screenshot
 └─ README.md                       - Local preview and future publishing notes
+```
+
+### Legal Documents
+```
+docs/legal/                        - Product-specific legal docs used by the website, README, and Windows installer
+├─ TERMS_OF_USE.md                 - Canonical product-facing terms covering desktop app, downloads, website, AI use, and liability posture
+├─ PRIVACY_POLICY.md               - Canonical local-first/privacy disclosures describing on-device storage and optional third-party integrations
+└─ WINDOWS_INSTALLER_EULA.txt      - Plain-text Windows installer agreement referenced by `src-tauri/tauri.conf.json`
 ```
 
 ## Advanced Diff Viewer Component
@@ -432,6 +457,7 @@ PORT=3001
 LOG_LEVEL=info
 NODE_ENV=development
 ENABLE_FILE_WATCHING=true
+WORKSPACE_SCAN_MAX_DEPTH=6        # optional, clamp 1-12 for /api/workspaces/scan-repos depth
 ```
 
 ## Development Workflow
@@ -529,6 +555,8 @@ GET /api/project-types            - Full project taxonomy (categories/frameworks
 GET /api/project-types/categories - Project categories with resolved base paths
 GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
 GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
+GET /api/github/repos             - List GitHub repositories via `gh` (owner/limit/force supported)
+POST /api/github/clone-and-add-worktree - Clone `owner/repo` into taxonomy-guided folder placement (`<repo>/master`) and attach/start a mixed worktree (default `work1`)
 POST /api/projects/create-workspace - Create project scaffold + matching workspace in one request
 GET /api/discord/status            - Discord queue + services health/status (counts + signature status); endpoint can be gated by `DISCORD_API_TOKEN`
 POST /api/discord/ensure-services  - Ensure Services workspace/session bootstrap; accepts optional `dangerousModeOverride` (gated by `DISCORD_ALLOW_DANGEROUS_OVERRIDE`)

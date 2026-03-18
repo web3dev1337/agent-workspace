@@ -7,19 +7,19 @@ const app = express();
 const BASE_PORT = parseInt(process.env.CLIENT_PORT || '9461', 10);
 const SERVER_PORT = process.env.ORCHESTRATOR_PORT || 9460;
 
-// Proxy socket.io requests to the backend server
-app.use('/socket.io', createProxyMiddleware({
-    target: `http://localhost:${SERVER_PORT}`,
-    ws: true,
-    changeOrigin: true
-}));
+function createBackendProxy(prefix, options = {}) {
+    return createProxyMiddleware({
+        target: `http://localhost:${SERVER_PORT}${prefix}`,
+        changeOrigin: true,
+        ...options
+    });
+}
 
-// Proxy API requests to the backend server
-app.use('/api', createProxyMiddleware({
-    target: `http://localhost:${SERVER_PORT}`,
-    changeOrigin: true
-    // Remove pathRewrite to preserve default behavior
-}));
+// Express strips the mounted prefix before handing the request to the proxy,
+// so include the prefix in the proxy target to preserve backend routes.
+app.use('/socket.io', createBackendProxy('/socket.io', { ws: true }));
+app.use('/api', createBackendProxy('/api'));
+app.use('/bootstrap', createBackendProxy('/bootstrap'));
 
 // Serve static files from client directory
 app.use(express.static(__dirname));

@@ -601,6 +601,12 @@ fn main() {
         .setup(|app| {
             println!("Agent Workspace starting...");
 
+            if let Some(icon) = app.default_window_icon().cloned() {
+                for window in app.webview_windows().values() {
+                    let _ = window.set_icon(icon.clone());
+                }
+            }
+
             // Manage backend process (Tauri-spawned Node server)
             app.manage(BackendProcess::new());
 
