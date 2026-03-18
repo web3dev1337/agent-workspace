@@ -4380,6 +4380,57 @@ class ClaudeOrchestrator {
     return repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
   }
 
+  getCurrentInteractionSessionId() {
+    return String(this.focusedTerminalInfo?.sessionId || this.lastInteractedSessionId || '').trim();
+  }
+
+  getSessionIdsForWorktreeKey(worktreeKey) {
+    const target = String(worktreeKey || '').trim();
+    if (!target) return [];
+
+    const sessionIds = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (!sessionId || !session) continue;
+      const type = String(session?.type || '').trim().toLowerCase();
+      if (type !== 'claude' && type !== 'codex' && type !== 'server') continue;
+      if (this.getSessionWorktreeKey(sessionId, session) !== target) continue;
+      sessionIds.push(String(sessionId));
+    }
+
+    return sessionIds;
+  }
+
+  getReviewConsoleCurrentContextSessionIds({ repoUrl = '', headRef = '', allowAnyCurrentWorktree = false } = {}) {
+    const activeSessionId = this.getCurrentInteractionSessionId();
+    if (!activeSessionId) return [];
+
+    const activeSession = this.sessions.get(activeSessionId);
+    if (!activeSession) return [];
+
+    const activeWorktreeKey = this.getSessionWorktreeKey(activeSessionId, activeSession);
+    if (!activeWorktreeKey) return [];
+
+    const normalizeUrl = (value) => String(value || '').trim().replace(/\/+$/, '').replace(/\.git$/i, '');
+    const normalizedRepoUrl = normalizeUrl(repoUrl);
+    const activeRemoteUrl = normalizeUrl(activeSession?.remoteUrl || '');
+    const activeBranch = String(activeSession?.branch || '').trim();
+
+    const repoMatches = normalizedRepoUrl && activeRemoteUrl
+      ? (
+        activeRemoteUrl === normalizedRepoUrl
+        || activeRemoteUrl.endsWith(`/${formatClientPathTail(normalizedRepoUrl)}`)
+        || normalizedRepoUrl.endsWith(activeRemoteUrl)
+      )
+      : false;
+    const branchMatches = !!headRef && activeBranch === String(headRef || '').trim();
+
+    if (!allowAnyCurrentWorktree && !repoMatches && !branchMatches) {
+      return [];
+    }
+
+    return this.getSessionIdsForWorktreeKey(activeWorktreeKey);
+  }
+
   getSessionWorktreeId(sessionId, session = null) {
     const sid = String(sessionId || '').trim();
     const row = session || this.sessions.get(sid) || null;
@@ -13639,8 +13690,14 @@ class ClaudeOrchestrator {
 		        && files.length === 0
 		        && commits.length === 0;
 
-			      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
-			      const targetPrUrl = normUrl(pr.url || prUrl);
+		      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
+		      const targetPrUrl = normUrl(pr.url || prUrl);
+		      const prRepoUrl = (() => {
+		        const u = String(pr?.url || prUrl || '').trim();
+		        const m = u.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+		        if (!m) return '';
+		        return `https://github.com/${m[1]}/${m[2]}`;
+		      })();
 
 		      const matchingSessionIds = [];
 		      for (const [sid, links] of this.githubLinks) {
@@ -13680,13 +13737,7 @@ class ClaudeOrchestrator {
 
 		        if (matchingSessionIds.length === 0) {
 		          const headRef = String(pr?.headRefName || '').trim();
-		          const repoUrl = (() => {
-		            const u = String(pr?.url || prUrl || '').trim();
-		            const m = u.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-		            if (!m) return '';
-		            return `https://github.com/${m[1]}/${m[2]}`;
-		          })();
-		          const repoNorm = normUrl(repoUrl);
+		          const repoNorm = normUrl(prRepoUrl);
 		          if (repoNorm && headRef) {
 		            for (const [sid, session] of this.sessions) {
 		              if (!sid || !session) continue;
@@ -13698,6 +13749,17 @@ class ClaudeOrchestrator {
 		              if (!(remote === repoNorm || remote.endsWith(`/${formatClientPathTail(repoNorm)}`) || repoNorm.endsWith(remote))) continue;
 		              matchingSessionIds.push(String(sid));
 		            }
+		          }
+		        }
+		        
+		        if (matchingSessionIds.length === 0) {
+		          const activeFallbackSessionIds = this.getReviewConsoleCurrentContextSessionIds({
+		            repoUrl: prRepoUrl,
+		            headRef: String(pr?.headRefName || '').trim(),
+		            allowAnyCurrentWorktree: !openedFromQueue
+		          });
+		          if (activeFallbackSessionIds.length) {
+		            matchingSessionIds.push(...activeFallbackSessionIds);
 		          }
 		        }
 		      }
