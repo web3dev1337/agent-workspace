@@ -11,7 +11,7 @@ Agent Workspace is designed to be local-first:
 - we do not operate a publisher-hosted user account system for normal use of the app;
 - we do not rely on publisher-hosted behavioral analytics or publisher-hosted telemetry for the product to function;
 - your settings, workspace state, local logs, local process telemetry, onboarding state, and optional integration credentials are generally stored on your own device;
-- if you choose to connect third-party services such as GitHub, Trello, Discord, browser speech recognition, or AI providers, data may be sent to those providers under your direction and subject to their policies.
+- if you choose to connect third-party services such as GitHub, Trello, browser speech recognition, or AI providers, data may be sent to those providers under your direction and subject to their policies.
 
 ## 2. Scope
 
@@ -48,7 +48,6 @@ If you enable integrations or run commands through Agent Workspace, data may be 
 
 - repository metadata, pull-request details, or authentication-driven repository lookups sent to GitHub-related APIs or tools;
 - Trello board, list, card, checklist, member, or credential data sent to Trello;
-- queue payloads or task-processing requests sent through Discord workflows you configure;
 - prompts, files, code, and context sent to AI providers or CLIs you invoke through the product;
 - audio or transcript data sent to the speech-recognition backend you select, such as browser speech recognition.
 
@@ -77,7 +76,7 @@ We do not sell your personal information through Agent Workspace, and the review
 
 Agent Workspace is designed to work with third-party providers you choose. If you connect those providers, they may receive data such as repository details, prompts, task metadata, tokens, or API requests necessary for the feature you are using.
 
-Examples include GitHub, Trello, Discord, Anthropic, OpenAI, Google, or other local or cloud-based tools. We do not control those services, and you should review their terms and privacy policies before using them.
+Examples include GitHub, Trello, Anthropic, OpenAI, Google, or other local or cloud-based tools. We do not control those services, and you should review their terms and privacy policies before using them.
 
 ## 7. Retention
 

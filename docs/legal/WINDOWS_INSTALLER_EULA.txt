@@ -31,7 +31,7 @@ If verification fails or the file does not match the published release informati
 
 4. License to use the packaged app
 
-Subject to your compliance with these terms and applicable law, Neural Pixel grants you a personal, non-exclusive, revocable license to install and use the packaged Agent Workspace application and related release materials.
+Subject to your compliance with these terms and applicable law, the Agent Workspace maintainers grant you a personal, non-exclusive, revocable license to install and use the packaged Agent Workspace application and related release materials.
 
 5. Your responsibilities
 
@@ -39,7 +39,7 @@ You are responsible for:
 - the commands, prompts, scripts, automations, and actions you run through Agent Workspace;
 - reviewing AI-generated output before relying on it or shipping it;
 - securing your machine, repositories, credentials, tokens, and API keys;
-- complying with the terms of any third-party provider you connect, including GitHub, Trello, Discord, Anthropic, OpenAI, Google, or other agent or cloud services;
+- complying with the terms of any third-party provider you connect, including GitHub, Trello, Anthropic, OpenAI, Google, or other agent or cloud services;
 - ensuring your use is lawful and authorized for the machines, repositories, and data you access.
 
 6. Prohibited use
@@ -52,9 +52,9 @@ You may not use Agent Workspace:
 
 7. Third-party services
 
-Agent Workspace may use or connect to third-party tools and services that are not controlled by Neural Pixel. Those services have separate terms, privacy policies, uptime, and security practices. Neural Pixel is not responsible for third-party services or their actions.
+Agent Workspace may use or connect to third-party tools and services that are not controlled by the Agent Workspace maintainers. Those services have separate terms, privacy policies, uptime, and security practices. The Agent Workspace maintainers are not responsible for third-party services or their actions.
 
-Examples of optional service-backed features in the current product include GitHub-linked repository and pull-request workflows, Trello task workflows, Discord queue-processing workflows, optional speech-recognition backends, and provider-backed AI helpers.
+Examples of optional service-backed features in the current product include GitHub-linked repository and pull-request workflows, Trello task workflows, optional speech-recognition backends, and provider-backed AI helpers.
 
 8. Privacy and local data
 
@@ -70,17 +70,17 @@ Nothing in this installer agreement excludes, restricts, or modifies any rights 
 
 11. Limitation of liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, NEURAL PIXEL AND ITS LICENSORS, CONTRIBUTORS, AND SUPPLIERS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF DATA, PROFITS, REVENUE, GOODWILL, BUSINESS OPPORTUNITY, OR SYSTEM AVAILABILITY, ARISING OUT OF OR RELATED TO THE SOFTWARE OR YOUR USE OF IT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE AGENT WORKSPACE MAINTAINERS AND THEIR LICENSORS, CONTRIBUTORS, AND SUPPLIERS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF DATA, PROFITS, REVENUE, GOODWILL, BUSINESS OPPORTUNITY, OR SYSTEM AVAILABILITY, ARISING OUT OF OR RELATED TO THE SOFTWARE OR YOUR USE OF IT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE TOTAL LIABILITY OF NEURAL PIXEL AND ITS LICENSORS, CONTRIBUTORS, AND SUPPLIERS FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THE SOFTWARE WILL NOT EXCEED THE GREATER OF (A) THE AMOUNT YOU PAID FOR THE SOFTWARE, OR (B) U.S. $50.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE TOTAL LIABILITY OF THE AGENT WORKSPACE MAINTAINERS AND THEIR LICENSORS, CONTRIBUTORS, AND SUPPLIERS FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THE SOFTWARE WILL NOT EXCEED THE GREATER OF (A) THE AMOUNT YOU PAID FOR THE SOFTWARE, OR (B) U.S. $50.
 
 12. Your indemnity
 
-To the maximum extent permitted by law, you will defend, indemnify, and hold harmless Neural Pixel and its licensors, contributors, and suppliers from claims, losses, liabilities, damages, judgments, and costs arising from your misuse of Agent Workspace, your violation of law, your violation of these terms, or your unauthorized access to systems, repositories, or data.
+To the maximum extent permitted by law, you will defend, indemnify, and hold harmless the Agent Workspace maintainers and their licensors, contributors, and suppliers from claims, losses, liabilities, damages, judgments, and costs arising from your misuse of Agent Workspace, your violation of law, your violation of these terms, or your unauthorized access to systems, repositories, or data.
 
 13. Updates and changes
 
-Neural Pixel may release updates, patches, or changes to the software, documentation, installer terms, Terms of Use, or Privacy Policy. Your continued use after an update becomes effective means you accept the updated terms to the extent permitted by law.
+The Agent Workspace maintainers may release updates, patches, or changes to the software, documentation, installer terms, Terms of Use, or Privacy Policy. Your continued use after an update becomes effective means you accept the updated terms to the extent permitted by law.
 
 14. Contact
 
