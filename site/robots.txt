@@ -1,0 +1,10 @@
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: *
+Allow: /
+
+Sitemap: https://agent-workspace.ai/sitemap.xml

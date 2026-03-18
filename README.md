@@ -10,6 +10,32 @@ All your Agents. One Workspace.
 
 Run multiple CLI agents in parallel across different repos. Your hardware, your plans, your API keys. No publisher-hosted telemetry by default.
 
+## What Agent Workspace Is
+
+Agent Workspace is a local-first orchestration layer for CLI coding agents.
+
+- **Control plane for agent CLIs** — Run Claude Code, Codex CLI, Gemini CLI, OpenCode, and other terminal-based agents in one UI.
+- **Multi-repo and multi-worktree execution** — Keep multiple repositories and branches active side by side.
+- **Review + runtime workflow** — Pair agent windows with server windows, then jump directly to GitHub diffs and PRs.
+
+## Runs Locally vs Models by Provider
+
+- **Runs locally:** sessions, workspaces, worktrees, orchestration state.
+- **Runs via provider accounts:** model inference through your selected AI CLI/provider accounts.
+- **No platform-managed model relay:** you choose provider and account context.
+
+## Quick Answers
+
+- **Does Agent Workspace run locally?** Yes, orchestration and sessions run on your machine.
+- **Can I use multiple repositories at once?** Yes, one workspace can include one or many repositories.
+- **Can I run server processes in the same worktree?** Yes, agent and server windows can run side by side.
+- **Can I jump straight to GitHub review pages?** Yes, the review flow supports direct links to GitHub PRs and diffs.
+
+## Discovery Files
+
+- Website AI index: [agent-workspace.ai/llms.txt](https://agent-workspace.ai/llms.txt)
+- Extended AI index: [agent-workspace.ai/llms-full.txt](https://agent-workspace.ai/llms-full.txt)
+
 ## Product Screenshots
 
 ### Main Workspace View

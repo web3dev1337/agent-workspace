@@ -1,0 +1,22 @@
+# Agent Workspace
+> Local-first control plane for running multiple CLI coding agents across repositories and worktrees.
+
+Agent Workspace helps teams run agent sessions, server processes, reviews, and task flow in one interface while keeping orchestration on local hardware.
+
+## Key Facts
+- Runs locally: sessions, workspaces, and orchestration run on your machine.
+- Models by provider: inference runs through the provider CLIs and accounts you configure.
+- Multi-repo and multi-worktree: one workspace can include one or many repositories with parallel worktrees.
+- Review workflow: in-app review with direct links to GitHub pull requests and diffs.
+
+## Primary Pages
+- [Homepage](https://agent-workspace.ai/)
+- [GitHub Repository](https://github.com/web3dev1337/agent-workspace)
+- [README](https://github.com/web3dev1337/agent-workspace#readme)
+- [Latest Release](https://github.com/web3dev1337/agent-workspace/releases/latest)
+- [Security Policy](https://github.com/web3dev1337/agent-workspace/blob/main/SECURITY.md)
+- [Terms of Use](https://agent-workspace.ai/terms.html)
+- [Privacy Policy](https://agent-workspace.ai/privacy.html)
+
+## Sponsor
+- [GitHub Sponsors](https://github.com/sponsors/web3dev1337)

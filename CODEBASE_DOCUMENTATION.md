@@ -364,6 +364,10 @@ site/                              - Concise product/showcase site kept separate
 ├─ index.html                      - Single-page product overview and quick-start narrative
 ├─ terms.html                      - Generated public Terms of Use page linked from footer + install/download flows
 ├─ privacy.html                    - Generated public Privacy Policy page linked from footer + install/download flows
+├─ robots.txt                      - Crawl policy for search/AI bots + sitemap declaration
+├─ sitemap.xml                     - Canonical URL inventory for core public pages
+├─ llms.txt                        - Short AI-oriented summary + canonical product links
+├─ llms-full.txt                   - Extended AI-oriented product details for retrieval/chat assistants
 ├─ styles.css                      - Showcase visual system, layout, and motion
 ├─ script.js                       - Small reveal-on-scroll enhancement
 ├─ assets/                         - Favicon, provider logos, generated Open Graph preview, and real UI screenshot

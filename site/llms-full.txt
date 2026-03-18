@@ -1,0 +1,58 @@
+# Agent Workspace
+
+Agent Workspace is an open-source, local-first orchestration layer for CLI coding agents.
+
+## Product Summary
+
+- **What it is:** A GUI control plane for agent CLIs and server terminals.
+- **Who it is for:** Developers running parallel coding tasks, reviews, and runtime checks across worktrees.
+- **Core model:** Keep execution and orchestration local; use your own provider/CLI accounts for inference.
+
+## Core Capabilities
+
+1. **Workspaces + Worktrees**
+   - One workspace can contain one or many repositories.
+   - Each repository can run multiple worktrees in parallel.
+2. **Native Terminal Grid**
+   - Agent sessions run in real terminals.
+   - Side-by-side server panes can run websites, game runtimes, tests, and CLI commands.
+3. **Review and Diff Workflow**
+   - Built-in review context with links to GitHub pull requests and diffs.
+   - Re-prompt and verification loops from the same interface.
+4. **Task and Tier Flow**
+   - Tier assignment (T1-T4) helps route focus, backup, batch review, and overnight runs.
+   - Task board and project board views support ongoing planning and execution.
+5. **Ports and Runtime Visibility**
+   - Track active services and assigned local ports.
+
+## Quick Answers
+
+- **Does Agent Workspace run locally?**
+  Yes. Sessions, workspaces, and orchestration run locally.
+- **Where do model requests run?**
+  Through the provider CLIs and accounts selected by the user.
+- **Can it run more than one repository at once?**
+  Yes, via mixed-repository workspace configuration.
+- **Can users jump directly to GitHub PRs and diffs?**
+  Yes, the review flow includes direct GitHub link actions.
+
+## Installation
+
+### Windows (recommended)
+- Download: <https://github.com/web3dev1337/agent-workspace/releases/latest>
+
+### Source
+```bash
+git clone https://github.com/web3dev1337/agent-workspace.git
+cd agent-workspace && npm install
+npm start
+```
+
+## Canonical Links
+
+- Homepage: <https://agent-workspace.ai/>
+- Repository: <https://github.com/web3dev1337/agent-workspace>
+- README: <https://github.com/web3dev1337/agent-workspace#readme>
+- Terms: <https://agent-workspace.ai/terms.html>
+- Privacy: <https://agent-workspace.ai/privacy.html>
+- Sponsors: <https://github.com/sponsors/web3dev1337>

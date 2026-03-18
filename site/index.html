@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agent Workspace | All Your Agents, One Workspace</title>
   <meta name="description" content="Run multiple CLI agents in parallel across repos with full local control. Agent Workspace runs locally; model inference runs through the providers and CLIs you choose.">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <link rel="canonical" href="https://agent-workspace.ai/">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
@@ -19,6 +21,35 @@
   <meta name="twitter:title" content="Agent Workspace | All Your Agents, One Workspace">
   <meta name="twitter:description" content="Run multiple CLI agents in parallel across repos. Agent Workspace runs locally on your machine, while model requests use your selected providers and CLI accounts.">
   <meta name="twitter:image" content="https://agent-workspace.ai/assets/og-card.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Agent Workspace",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Windows, macOS, Linux, Web",
+    "url": "https://agent-workspace.ai/",
+    "downloadUrl": "https://github.com/web3dev1337/agent-workspace/releases/latest",
+    "description": "Agent Workspace is a local-first control plane for running multiple CLI coding agents across repositories and worktrees.",
+    "isAccessibleForFree": true,
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Agent Workspace Maintainers",
+      "url": "https://github.com/web3dev1337/agent-workspace"
+    },
+    "sameAs": [
+      "https://github.com/web3dev1337/agent-workspace",
+      "https://github.com/sponsors/web3dev1337"
+    ],
+    "screenshot": "https://agent-workspace.ai/assets/home-page-windows.png"
+  }
+  </script>
 
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -254,6 +285,16 @@
         </div>
       </article>
 
+      <article class="feature-card reveal" style="--delay: 0.03s">
+        <div class="feature-copy">
+          <h3 class="feature-title">Quick Answers</h3>
+          <p class="feature-desc"><strong>Does Agent Workspace run locally?</strong> Yes. Sessions, workspaces, worktrees, and orchestration run on your machine.</p>
+          <p class="feature-desc"><strong>Where does model inference run?</strong> Through the AI provider CLIs and accounts you configure.</p>
+          <p class="feature-desc"><strong>Can it manage multiple repositories and worktrees?</strong> Yes. You can run one or many repositories with multiple worktrees in the same workspace.</p>
+          <p class="feature-desc"><strong>Can I jump straight to GitHub diffs and PRs?</strong> Yes. The review workflow supports direct links to GitHub diffs and PR pages.</p>
+        </div>
+      </article>
+
       <article class="feature-card reveal" style="--delay: 0.05s">
         <div class="feature-copy">
           <h3 class="feature-title text-blue-deep">Native Terminal Grid + Worktree Sidebar</h3>
@@ -369,13 +410,13 @@
           <p class="feature-desc">Open multiple workspaces at once in browser-like tabs. Switch contexts without killing sessions, and keep each workspace state isolated while terminals continue running in the background.</p>
         </div>
         <div class="feature-visual tabs-visual" aria-hidden="true">
-          <img class="tab-strip-inline" src="assets/workspace-tabs-windows.png" alt="">
+          <img class="tab-strip-inline" src="assets/workspace-tabs-windows.png" alt="Browser-like tabs showing two active workspaces in Agent Workspace">
           <div class="tabs-side-by-side">
             <figure class="tabs-shot">
-              <img src="assets/home-page-windows.png" alt="">
+              <img src="assets/home-page-windows.png" alt="Workspace 1 with multiple agent terminals and worktree sidebar">
             </figure>
             <figure class="tabs-shot">
-              <img src="assets/workspace2-windows.png" alt="">
+              <img src="assets/workspace2-windows.png" alt="Workspace 2 running a separate set of worktrees and agent sessions">
             </figure>
           </div>
         </div>
