@@ -99,8 +99,7 @@ jobs:
 
       - name: Build Windows installer (Tauri)
         run: |
-          node scripts/tauri/prepare-backend-resources.js --install-prod
-          npx tauri build -- --profile ${{ steps.build_profile.outputs.value }}
+          node scripts/tauri/run-tauri-build.js --profile ${{ steps.build_profile.outputs.value }}
 
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
