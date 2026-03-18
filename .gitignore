@@ -55,7 +55,7 @@ src-tauri/WixTools/
 src-tauri/resources/
 
 # Tauri generated files
-src-tauri/gen/thoughts/ledgers/
+src-tauri/gen/
 coverage/
 
 # Playwright
