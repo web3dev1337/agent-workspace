@@ -3313,13 +3313,20 @@ class ClaudeOrchestrator {
     const min = Number.isFinite(Number(minNumber)) ? Number(minNumber) : this.autoCreateWorktreeMinNumber;
     const entries = Array.isArray(repo?.worktreeDirs) ? repo.worktreeDirs : [];
     let maxExisting = 0;
+    let hasExisting = false;
     for (const e of entries) {
       const id = String(e?.id || '');
       const m = id.match(/^work(\d+)$/i);
       if (!m) continue;
       const n = Number(m[1]);
-      if (Number.isFinite(n)) maxExisting = Math.max(maxExisting, n);
+      if (!Number.isFinite(n)) continue;
+      hasExisting = true;
+      maxExisting = Math.max(maxExisting, n);
     }
+
+    // If this repo has no detected worktrees yet, start at work1.
+    if (!hasExisting) return 'work1';
+
     const start = Math.max(min, maxExisting + 1);
     return `work${start}`;
   }
@@ -31520,7 +31527,7 @@ class ClaudeOrchestrator {
               </div>
               <div class="quick-control-group" style="display:none">
                 <span class="quick-control-label">Create</span>
-                <input type="number" id="quick-worktree-create-count" class="quick-number-input" min="1" max="8" value="${this.quickWorktreeCreateCount}" title="How many new worktrees to create (work9+)" />
+                <input type="number" id="quick-worktree-create-count" class="quick-number-input" min="1" max="8" value="${this.quickWorktreeCreateCount}" title="How many new worktrees to create" />
                 <label class="quick-checkbox" title="Create terminals but keep them hidden (skip auto-start)">
                   <input type="checkbox" id="quick-worktree-create-background" ${this.quickWorktreeCreateBackground ? 'checked' : ''}>
                   Background
@@ -34710,7 +34717,7 @@ class ClaudeOrchestrator {
       this.pendingWorktreeLaunches.set(nextId, { promptText: prompt, autoSendPrompt: true, agentConfig });
       try {
         await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId: nextId });
-        this.showToast(`Creating ${repo.name} ${nextId} (work9+)`, 'success');
+        this.showToast(`Creating ${repo.name} ${nextId}`, 'success');
         return { worktreeId: nextId, worktreePath: `${repo.path}/${nextId}`, repositoryRoot: repo.path, repositoryName: repo.name };
       } catch (e) {
         this.pendingWorktreeLaunches.delete(nextId);
@@ -34824,7 +34831,7 @@ class ClaudeOrchestrator {
       this.pendingWorktreeLaunches.set(nextId, { promptText: prompt, autoSendPrompt: true, agentConfig });
       try {
         await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId: nextId });
-        this.showToast(`Creating ${repo.name} ${nextId} (work9+)`, 'success');
+        this.showToast(`Creating ${repo.name} ${nextId}`, 'success');
         return { worktreeId: nextId, worktreePath: `${repo.path}/${nextId}`, repositoryRoot: repo.path, repositoryName: repo.name };
       } catch (e) {
         this.pendingWorktreeLaunches.delete(nextId);
@@ -34934,7 +34941,7 @@ class ClaudeOrchestrator {
       this.pendingWorktreeLaunches.set(nextId, { promptText: prompt, autoSendPrompt: true, agentConfig });
       try {
         await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId: nextId });
-        this.showToast(`Creating ${repo.name} ${nextId} (work9+)`, 'success');
+        this.showToast(`Creating ${repo.name} ${nextId}`, 'success');
         return { worktreeId: nextId, worktreePath: `${repo.path}/${nextId}`, repositoryRoot: repo.path, repositoryName: repo.name };
       } catch (e) {
         this.pendingWorktreeLaunches.delete(nextId);
@@ -35071,7 +35078,7 @@ class ClaudeOrchestrator {
 	      });
       try {
         await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId: nextId });
-        this.showToast(`Creating ${repo.name} ${nextId} (work9+)`, 'success');
+        this.showToast(`Creating ${repo.name} ${nextId}`, 'success');
         return;
       } catch (e) {
         this.pendingWorktreeLaunches.delete(nextId);
