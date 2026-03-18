@@ -1042,6 +1042,28 @@ a.btn-glow {
   margin: 0 auto 2.5rem;
 }
 
+.cli-compat-list {
+  max-width: 860px;
+  margin: -1.25rem auto 2.5rem;
+  padding: 1rem 1.25rem;
+  list-style: none;
+  text-align: left;
+  background: rgba(7, 15, 33, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+.cli-compat-list li {
+  color: var(--text-muted);
+  margin: 0.4rem 0;
+  line-height: 1.5;
+}
+
+.cli-compat-list li::before {
+  content: "• ";
+  color: var(--cyan);
+}
+
 .logo-showcase {
   display: flex;
   align-items: center;
