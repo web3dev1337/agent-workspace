@@ -169,7 +169,18 @@ function getMacSetupActions() {
       id: 'install-homebrew',
       title: 'Homebrew',
       description: 'macOS package manager. Required to install other dependencies.',
-      command: '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+      command: [
+        'if command -v brew >/dev/null 2>&1; then echo "Homebrew is already installed."; brew --version; exit 0; fi',
+        'echo "Installing Homebrew to ~/.homebrew (no sudo required)..."',
+        'mkdir -p ~/.homebrew',
+        'curl -fsSL https://github.com/Homebrew/brew/tarball/master | tar xz --strip-components 1 -C ~/.homebrew',
+        'eval "$(~/.homebrew/bin/brew shellenv)"',
+        'echo >> ~/.zprofile',
+        'echo \'eval "$(~/.homebrew/bin/brew shellenv)"\' >> ~/.zprofile',
+        'brew update --force --quiet',
+        'echo "Homebrew installed successfully."',
+        'brew --version'
+      ].join('\n'),
       docsUrl: 'https://brew.sh/',
       required: true,
       runSupported: true
@@ -572,11 +583,12 @@ function launchShellCommand(action) {
   pruneOldRuns();
 
   try {
+    const homeBrewLocal = path.join(os.homedir(), '.homebrew', 'bin');
     const brewPrefix = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
-    const pathEnv = `${brewPrefix}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
+    const pathEnv = `${homeBrewLocal}:${brewPrefix}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
     const npmGlobalBin = path.join(os.homedir(), '.npm-global', 'bin');
     const nPrefix = path.join(os.homedir(), '.nvm', 'versions', 'node');
-    let fullPath = `${npmGlobalBin}:${brewPrefix}:${pathEnv}`;
+    let fullPath = `${npmGlobalBin}:${homeBrewLocal}:${brewPrefix}:${pathEnv}`;
     try {
       const nvmVersions = fs.readdirSync(nPrefix);
       if (nvmVersions.length > 0) {
