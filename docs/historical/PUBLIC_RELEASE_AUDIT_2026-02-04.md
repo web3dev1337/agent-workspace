@@ -129,6 +129,5 @@ Options if you want to minimize exposure:
 - [ ] Disable diff-viewer permissive CORS + bind diff-viewer to loopback by default.
 - [ ] Bind orchestrator to loopback by default; warn/require `AUTH_TOKEN` for non-loopback.
 - [ ] Remove `test-results/.last-run.json` from tracking.
-- [ ] Replace `/home/ab` + `C:\\Users\\AB` etc in docs with placeholders.
+- [ ] Replace `/home/<user>` + `C:\\Users\\<USER>` etc in docs with placeholders.
 - [ ] Decide whether to (a) rewrite history or (b) publish a squashed snapshot repo.
-
