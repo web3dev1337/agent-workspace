@@ -3945,6 +3945,10 @@ header {
   min-height: 34px;
 }
 
+.quick-folder-map-btn {
+  min-height: 34px;
+}
+
 .quick-cache-status {
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -4104,6 +4108,63 @@ header {
   padding: var(--space-md) 0 var(--space-xs);
   margin-top: var(--space-md);
   border-top: 1px solid var(--border-color);
+}
+
+.quick-remote-onboarding-card {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, var(--border-color) 65%);
+  background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-secondary) 92%);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: var(--space-sm);
+}
+
+.quick-remote-dismiss-onboarding-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.quick-remote-onboarding-title {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  padding-right: 28px;
+}
+
+.quick-remote-onboarding-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.quick-remote-map-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.quick-remote-map-chip {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  padding: 4px 10px;
+}
+
+.quick-remote-onboarding-actions {
+  margin-top: 10px;
 }
 
 .quick-repo-remote {
@@ -4273,6 +4334,12 @@ header {
   padding: 8px 10px;
 }
 
+.quick-remote-clone-category-help {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 .quick-remote-parent-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -4325,6 +4392,62 @@ header {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-sm);
+}
+
+.quick-remote-folder-map-modal-content {
+  width: min(980px, 96vw);
+}
+
+.quick-remote-folder-map-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.quick-remote-folder-map-help {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.quick-remote-folder-map-root code {
+  font-size: 0.8rem;
+}
+
+.quick-remote-folder-map-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.quick-remote-folder-map-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.quick-remote-folder-map-table th,
+.quick-remote-folder-map-table td {
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.quick-remote-folder-map-table thead th {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.quick-remote-folder-map-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.quick-remote-folder-map-footer {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .quick-primary-action-btn,
