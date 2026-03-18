@@ -63,6 +63,8 @@ function buildShellArgs(commands) {
 }
 
 const HOME_DIR = process.env.HOME || os.homedir();
+const CLAUDE_TRUST_PROMPT_BUFFER_CHARS = 6000;
+const CLAUDE_TRUST_PROMPT_WINDOW_MS = 15000;
 
 class SessionManager extends EventEmitter {
   constructor(io, agentManager) {
@@ -817,7 +819,8 @@ class SessionManager extends EventEmitter {
           previous: null,
           stack: []
         },
-        autoStarted: false  // Track if auto-start has been triggered
+        autoStarted: false,  // Track if auto-start has been triggered
+        claudeLaunchState: null
       };
       
       // Set up inactivity timer (respect per-type timeout; 0 disables)
@@ -833,6 +836,7 @@ class SessionManager extends EventEmitter {
         session.buffer += data;
         session.lastActivity = Date.now();
         this.handleTerminalOutputForSession(session, data);
+        this.maybeHandleClaudeTrustPrompt(session, data);
 
         // Reset inactivity timer
         this.resetInactivityTimer(session);
@@ -2991,6 +2995,8 @@ class SessionManager extends EventEmitter {
       this.applyStatusUpdate(sessionId, session, 'busy');
     }
 
+    this.beginClaudeLaunch(session, { expectTrustPrompt: !!finalOptions.skipPermissions });
+
     // Send the command to the terminal
     this.writeToSession(sessionId, `${commandToRun}\n`);
     
@@ -3065,6 +3071,13 @@ class SessionManager extends EventEmitter {
       // Mark terminal busy immediately when launching an agent command.
       if (session.status !== 'busy') {
         this.applyStatusUpdate(sessionId, session, 'busy');
+      }
+
+      if (finalConfig.agentId === 'claude') {
+        const skipPermissions = Array.isArray(finalConfig.flags) && finalConfig.flags.includes('skipPermissions');
+        this.beginClaudeLaunch(session, { expectTrustPrompt: skipPermissions });
+      } else {
+        this.resetClaudeLaunch(session);
       }
 
       // Send the command to the terminal
@@ -3160,6 +3173,64 @@ class SessionManager extends EventEmitter {
     this.cleanupGitWatchers();
 
     logger.info('All sessions cleaned up');
+  }
+
+  stripControlSequences(text) {
+    return String(text || '')
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+      .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
+      .replace(/\x1b[()][A-Za-z0-9]/g, '');
+  }
+
+  beginClaudeLaunch(session, { expectTrustPrompt = false } = {}) {
+    if (!session) return;
+    this.resetClaudeLaunch(session);
+    session.claudeLaunchState = {
+      startedAt: Date.now(),
+      expectTrustPrompt: !!expectTrustPrompt,
+      trustPromptAccepted: false,
+      recentOutput: ''
+    };
+  }
+
+  resetClaudeLaunch(session) {
+    if (!session) return;
+    session.claudeLaunchState = null;
+  }
+
+  maybeHandleClaudeTrustPrompt(session, data) {
+    if (!session || session.type !== 'claude') return;
+    const launch = session.claudeLaunchState;
+    if (!launch?.expectTrustPrompt || launch.trustPromptAccepted) return;
+    if (Date.now() - Number(launch.startedAt || 0) > CLAUDE_TRUST_PROMPT_WINDOW_MS) {
+      this.resetClaudeLaunch(session);
+      return;
+    }
+
+    const normalized = this.stripControlSequences(data).toLowerCase();
+    if (!normalized) return;
+
+    launch.recentOutput = `${launch.recentOutput}${normalized}`.slice(-CLAUDE_TRUST_PROMPT_BUFFER_CHARS);
+    if (!this.matchesClaudeTrustPrompt(launch.recentOutput)) return;
+
+    launch.trustPromptAccepted = true;
+    try {
+      session.pty?.write(process.platform === 'win32' ? '1\r' : '1\r');
+      logger.info('Auto-accepted Claude trust prompt', { sessionId: session.id });
+    } catch (error) {
+      logger.warn('Failed to auto-accept Claude trust prompt', {
+        sessionId: session.id,
+        error: error.message
+      });
+    }
+    this.resetClaudeLaunch(session);
+  }
+
+  matchesClaudeTrustPrompt(text) {
+    const normalized = String(text || '');
+    return normalized.includes('quick safety check')
+      && normalized.includes('trust this folder')
+      && normalized.includes('yes, i trust this folder');
   }
 }
 

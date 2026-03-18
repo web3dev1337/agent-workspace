@@ -45,6 +45,9 @@ describe('ProcessAdvisorService', () => {
     expect(qActions.some(a => a?.action === 'open-prs')).toBe(true);
     expect(qActions.some(a => a?.action === 'queue-conveyor-t2')).toBe(true);
 
+    const reviewSlowAdvice = (result.advice || []).find(a => a.code === 'review_slow');
+    expect(reviewSlowAdvice?.message || '').not.toMatch(/button/i);
+
     const tier3Advice = (result.advice || []).find(a => a.code === 'tier3_unreviewed_prs');
     const actions = Array.isArray(tier3Advice?.actions) ? tier3Advice.actions : [];
     expect(actions.some(a => a?.action === 'queue-next')).toBe(true);
