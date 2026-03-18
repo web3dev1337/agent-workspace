@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORCHESTRATOR_DIR="$(dirname "$SCRIPT_DIR")"
 BIN_PATH="$HOME/.local/bin/orchestrator"
 DESKTOP_FILE="$HOME/Desktop/Agent-Workspace.desktop"
-APPLICATIONS_FILE="$HOME/.local/share/applications/claude-orchestrator.desktop"
+APPLICATIONS_FILE="$HOME/.local/share/applications/agent-workspace.desktop"
 
 echo -e "${BLUE}🚀 Installing Agent Workspace startup shortcuts...${NC}"
 
@@ -37,7 +37,7 @@ Exec=$BIN_PATH
 Icon=$ORCHESTRATOR_DIR/client/icon.png
 Terminal=false
 Categories=Development;IDE;
-StartupWMClass=claude-orchestrator
+StartupWMClass=agent-workspace
 EOF
 
 chmod +x "$DESKTOP_FILE"

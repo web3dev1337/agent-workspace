@@ -26,10 +26,10 @@ const logger = winston.createLogger({
   ]
 });
 
-const ORCHESTRATOR_MASTER_PATH = path.resolve(
+const ORCHESTRATOR_MASTER_PATHS = ['agent-workspace', 'claude-orchestrator'].map((repoDir) => path.resolve(
   os.homedir(),
-  'GitHub/tools/automation/claude-orchestrator/master'
-);
+  `GitHub/tools/automation/${repoDir}/master`
+));
 const DEFAULT_ALLOWED_ROOT = path.resolve(os.homedir(), 'GitHub');
 
 // Helper function to get the appropriate shell for the platform
@@ -41,7 +41,7 @@ class ProductLauncherService {
   constructor() {
     this.running = new Map(); // productId -> { pid, startedAt, logPath }
     this.allowedRoot = DEFAULT_ALLOWED_ROOT;
-    this.disallowedMasterPaths = new Set([ORCHESTRATOR_MASTER_PATH]);
+    this.disallowedMasterPaths = new Set(ORCHESTRATOR_MASTER_PATHS);
   }
 
   static getInstance() {

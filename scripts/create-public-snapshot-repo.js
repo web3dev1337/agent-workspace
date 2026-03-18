@@ -93,7 +93,7 @@ function ensureInsideGitRepo(sourceDir) {
 
 function resolveDefaultOutputDir() {
   const stamp = new Date().toISOString().replace(/[:]/g, '-').replace(/\..+$/, '');
-  return path.join(os.tmpdir(), `claude-orchestrator-public-snapshot-${stamp}`);
+  return path.join(os.tmpdir(), `agent-workspace-public-snapshot-${stamp}`);
 }
 
 function getTrackedFiles(sourceDir) {

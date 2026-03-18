@@ -145,7 +145,7 @@ function getRemainingWorkStatus(repoRoot) {
 }
 
 function getSnapshotStatus(repoRoot, snapshotDirArg) {
-  const defaultDir = '/home/<user>/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-public-snapshot';
+  const defaultDir = '/home/<user>/GitHub/tools/automation/agent-workspace/agent-workspace-public-snapshot';
   const target = path.resolve(snapshotDirArg || defaultDir);
   const exists = fs.existsSync(target);
   let hasGit = false;

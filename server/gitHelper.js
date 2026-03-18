@@ -364,7 +364,7 @@ class GitHelper {
         return new Promise((resolve) => {
           const req = https.get(apiUrl, {
             headers: {
-              'User-Agent': 'claude-orchestrator',
+              'User-Agent': 'agent-workspace',
               'Accept': 'application/vnd.github.v3+json'
             },
             timeout: 10000

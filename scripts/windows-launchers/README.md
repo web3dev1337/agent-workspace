@@ -13,7 +13,7 @@ These scripts provide one-click launching of the Agent Workspace from Windows.
 2. **Update the path** (if needed):
    - Open the `.bat` file in Notepad
    - Change the path on line with `code --folder-uri` to match your setup
-   - Default is: `~/GitHub/tools/automation/claude-orchestrator/master`
+   - Default is: `~/GitHub/tools/automation/agent-workspace/master`
 
 3. **Double-click to launch!**
 

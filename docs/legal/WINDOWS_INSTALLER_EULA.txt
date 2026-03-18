@@ -85,8 +85,8 @@ Neural Pixel may release updates, patches, or changes to the software, documenta
 14. Contact
 
 Questions:
-- GitHub repository: https://github.com/web3dev1337/claude-orchestrator
-- Security reports: https://github.com/web3dev1337/claude-orchestrator/security/advisories/new
+- GitHub repository: https://github.com/web3dev1337/agent-workspace
+- Security reports: https://github.com/web3dev1337/agent-workspace/security/advisories/new
 - X: https://x.com/AIOnlyDeveloper
 
 If you do not agree to these terms, select "I do not agree" or cancel the installation.

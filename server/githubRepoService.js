@@ -437,7 +437,7 @@ class GitHubRepoService {
         `https://api.github.com/repos/${owner}/${repo}`,
         {
           headers: {
-            'User-Agent': 'claude-orchestrator',
+            'User-Agent': 'agent-workspace',
             'Accept': 'application/vnd.github+json'
           },
           timeout: this.timeoutMs

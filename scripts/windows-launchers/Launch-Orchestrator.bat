@@ -16,8 +16,8 @@ echo Starting VS Code with orchestrator...
 echo.
 
 REM NOTE: Update the path below if your orchestrator is in a different location
-REM Default: /home/YOUR_USERNAME/GitHub/tools/automation/claude-orchestrator/master
-code --folder-uri "vscode-remote://wsl+Ubuntu/home/YOUR_USERNAME/GitHub/tools/automation/claude-orchestrator/master"
+REM Default: /home/YOUR_USERNAME/GitHub/tools/automation/agent-workspace/master
+code --folder-uri "vscode-remote://wsl+Ubuntu/home/YOUR_USERNAME/GitHub/tools/automation/agent-workspace/master"
 
 echo.
 echo VS Code launched!

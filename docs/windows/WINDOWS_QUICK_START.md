@@ -32,7 +32,7 @@ Prereqs:
 
 Commands (PowerShell):
 ```powershell
-cd claude-orchestrator-dev
+cd agent-workspace-dev
 npm install
 npm run dev
 ```
@@ -55,7 +55,7 @@ Prereqs:
 
 Build (PowerShell):
 ```powershell
-cd claude-orchestrator-dev
+cd agent-workspace-dev
 npm install
 npm run tauri:build
 ```

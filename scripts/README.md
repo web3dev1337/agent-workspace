@@ -9,7 +9,7 @@ Platform-specific scripts for auto-starting the orchestrator on system boot/logi
 From PowerShell (as Administrator):
 
 ```powershell
-cd path\to\claude-orchestrator\scripts\windows
+cd path\to\agent-workspace\scripts\windows
 powershell -ExecutionPolicy Bypass -File install-startup.ps1
 ```
 
@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File install-startup.ps1
 ### Quick Install
 
 ```bash
-cd path/to/claude-orchestrator/scripts/linux
+cd path/to/agent-workspace/scripts/linux
 chmod +x install-startup.sh start-orchestrator.sh
 ./install-startup.sh
 ```
@@ -77,14 +77,14 @@ If the installers don't work for your setup:
 ```bash
 # Create user service
 mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/claude-orchestrator.service << EOF
+cat > ~/.config/systemd/user/agent-workspace.service << EOF
 [Unit]
 Description=Agent Workspace
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/path/to/claude-orchestrator
+WorkingDirectory=/path/to/agent-workspace
 ExecStart=/usr/bin/npm start
 Restart=on-failure
 
@@ -93,8 +93,8 @@ WantedBy=default.target
 EOF
 
 # Enable and start
-systemctl --user enable claude-orchestrator
-systemctl --user start claude-orchestrator
+systemctl --user enable agent-workspace
+systemctl --user start agent-workspace
 ```
 
 ## Troubleshooting

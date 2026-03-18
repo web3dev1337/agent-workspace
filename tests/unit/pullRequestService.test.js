@@ -14,7 +14,7 @@ describe('PullRequestService', () => {
     execFile.mockImplementation((cmd, args, opts, cb) => cb(null, 'merged', ''));
 
     const service = PullRequestService.getInstance();
-    const result = await service.mergePullRequestByUrl('https://github.com/web3dev1337/claude-orchestrator/pull/123', {
+    const result = await service.mergePullRequestByUrl('https://github.com/web3dev1337/agent-workspace/pull/123', {
       method: 'merge',
       auto: true
     });
@@ -40,7 +40,7 @@ describe('PullRequestService', () => {
     execFile.mockImplementation((cmd, args, opts, cb) => cb(null, 'approved', ''));
 
     const service = PullRequestService.getInstance();
-    const url = 'https://github.com/web3dev1337/claude-orchestrator/pull/123';
+    const url = 'https://github.com/web3dev1337/agent-workspace/pull/123';
     const result = await service.reviewPullRequestByUrl(url, { action: 'approve' });
 
     expect(result.ok).toBe(true);
@@ -54,7 +54,7 @@ describe('PullRequestService', () => {
     execFile.mockImplementation((cmd, args, opts, cb) => cb(null, 'requested', ''));
 
     const service = PullRequestService.getInstance();
-    const url = 'https://github.com/web3dev1337/claude-orchestrator/pull/123';
+    const url = 'https://github.com/web3dev1337/agent-workspace/pull/123';
     const result = await service.reviewPullRequestByUrl(url, { action: 'request_changes', body: 'please fix' });
 
     expect(result.ok).toBe(true);
@@ -99,7 +99,7 @@ describe('PullRequestService', () => {
       sort: 'updated',
       limit: 10,
       query: 'something',
-      repos: ['web3dev1337/claude-orchestrator'],
+      repos: ['web3dev1337/agent-workspace'],
       owners: ['web3dev1337']
     });
 

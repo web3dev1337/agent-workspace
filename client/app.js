@@ -24,6 +24,10 @@ const normalizeSettingsSectionId = (value, fallback = '') => String(value || '')
 const normalizeClientPath = (value) => String(value || '').replace(/\\/g, '/').trim();
 const splitClientPathSegments = (value) => normalizeClientPath(value).split('/').filter(Boolean);
 const formatClientPathTail = (value, count = 2) => splitClientPathSegments(value).slice(-count).join('/');
+const SETTINGS_STORAGE_KEY = 'agent-workspace-settings';
+const LEGACY_SETTINGS_STORAGE_KEY = 'claude-orchestrator-settings';
+const AUTH_TOKEN_STORAGE_KEY = 'agent-workspace-token';
+const LEGACY_AUTH_TOKEN_STORAGE_KEY = 'claude-orchestrator-token';
 
 // Enhanced Agent Workspace with sidebar and flexible viewing
 class ClaudeOrchestrator {
@@ -7981,7 +7985,8 @@ class ClaudeOrchestrator {
 	  }
 
 	  loadSettings() {
-	    const stored = localStorage.getItem('claude-orchestrator-settings');
+	    const stored = localStorage.getItem(SETTINGS_STORAGE_KEY)
+	      || localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
 	    const defaults = {
 	      notifications: false,
 	      sounds: false,
@@ -7992,6 +7997,9 @@ class ClaudeOrchestrator {
 	    };
 
 	    if (stored) {
+	      if (!localStorage.getItem(SETTINGS_STORAGE_KEY)) {
+	        localStorage.setItem(SETTINGS_STORAGE_KEY, stored);
+	      }
 	      return {
 	        ...defaults,
 	        ...JSON.parse(stored),
@@ -8760,7 +8768,7 @@ class ClaudeOrchestrator {
   }
 
   saveSettings() {
-    localStorage.setItem('claude-orchestrator-settings', JSON.stringify(this.settings));
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(this.settings));
   }
 
 	  applyTheme() {
@@ -15084,14 +15092,19 @@ class ClaudeOrchestrator {
 
     if (tokenFromUrl) {
       // Save to localStorage for future use
-      localStorage.setItem('claude-orchestrator-token', tokenFromUrl);
+      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, tokenFromUrl);
       // Remove from URL for security
       window.history.replaceState({}, document.title, window.location.pathname);
       return tokenFromUrl;
     }
 
 	    // Check localStorage
-    return localStorage.getItem('claude-orchestrator-token');
+    const storedToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
+      || localStorage.getItem(LEGACY_AUTH_TOKEN_STORAGE_KEY);
+    if (storedToken && !localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)) {
+      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, storedToken);
+    }
+    return storedToken;
   }
 
   async refreshLicenseStatus() {

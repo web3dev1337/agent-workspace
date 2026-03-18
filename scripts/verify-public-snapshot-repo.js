@@ -6,7 +6,7 @@ const { spawnSync } = require('child_process');
 
 function parseArgs(argv) {
   const args = {
-    snapshotDir: '/home/<user>/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-public-snapshot',
+    snapshotDir: '/home/<user>/GitHub/tools/automation/agent-workspace/agent-workspace-public-snapshot',
     json: false,
     enforceSingleCommit: true
   };

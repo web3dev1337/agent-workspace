@@ -26,14 +26,14 @@ describe('ProjectBoardService', () => {
     const storePath = path.join(tmp, 'project-board.json');
     const svc = new ProjectBoardService({ storePath });
 
-    const saved = await svc.moveProject({ projectKey: 'tools/automation/claude-orchestrator', columnId: 'active' });
-    expect(saved.projectToColumn['tools/automation/claude-orchestrator']).toBe('active');
-    expect(saved.orderByColumn.active).toEqual(['tools/automation/claude-orchestrator']);
+    const saved = await svc.moveProject({ projectKey: 'tools/automation/agent-workspace', columnId: 'active' });
+    expect(saved.projectToColumn['tools/automation/agent-workspace']).toBe('active');
+    expect(saved.orderByColumn.active).toEqual(['tools/automation/agent-workspace']);
     expect(typeof saved.updatedAt).toBe('string');
 
     const reloaded = await svc.load({ refresh: true });
-    expect(reloaded.projectToColumn['tools/automation/claude-orchestrator']).toBe('active');
-    expect(reloaded.orderByColumn.active).toEqual(['tools/automation/claude-orchestrator']);
+    expect(reloaded.projectToColumn['tools/automation/agent-workspace']).toBe('active');
+    expect(reloaded.orderByColumn.active).toEqual(['tools/automation/agent-workspace']);
   });
 
   test('backlog clears mapping entry', async () => {

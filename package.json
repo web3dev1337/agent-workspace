@@ -1,5 +1,5 @@
 {
-  "name": "claude-orchestrator",
+  "name": "agent-workspace",
   "version": "1.0.0",
   "description": "Multi-terminal orchestrator for Claude Code sessions",
   "main": "server/index.js",

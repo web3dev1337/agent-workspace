@@ -12,8 +12,8 @@ Agent Workspace is published under the Neural Pixel brand. In these Terms, "Neur
 
 Current public contact channels:
 
-- GitHub repository: [web3dev1337/claude-orchestrator](https://github.com/web3dev1337/claude-orchestrator)
-- Security advisories: [Private security advisory intake](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new)
+- GitHub repository: [web3dev1337/agent-workspace](https://github.com/web3dev1337/agent-workspace)
+- Security advisories: [Private security advisory intake](https://github.com/web3dev1337/agent-workspace/security/advisories/new)
 - X: [@AIOnlyDeveloper](https://x.com/AIOnlyDeveloper)
 
 ## 2. What Agent Workspace is
@@ -190,6 +190,6 @@ Our failure to enforce a provision is not a waiver of that provision.
 
 Questions about these Terms can be directed through:
 
-- GitHub repository: [web3dev1337/claude-orchestrator](https://github.com/web3dev1337/claude-orchestrator)
-- Security advisories: [Private security advisory intake](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new)
+- GitHub repository: [web3dev1337/agent-workspace](https://github.com/web3dev1337/agent-workspace)
+- Security advisories: [Private security advisory intake](https://github.com/web3dev1337/agent-workspace/security/advisories/new)
 - X: [@AIOnlyDeveloper](https://x.com/AIOnlyDeveloper)

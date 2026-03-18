@@ -9,8 +9,8 @@
 Write-Host "🚀 Launching Agent Workspace..." -ForegroundColor Cyan
 
 # NOTE: Update the path below if your orchestrator is in a different location
-# Default: /home/YOUR_USERNAME/GitHub/tools/automation/claude-orchestrator/master
-& code --folder-uri "vscode-remote://wsl+Ubuntu/home/YOUR_USERNAME/GitHub/tools/automation/claude-orchestrator/master"
+# Default: /home/YOUR_USERNAME/GitHub/tools/automation/agent-workspace/master
+& code --folder-uri "vscode-remote://wsl+Ubuntu/home/YOUR_USERNAME/GitHub/tools/automation/agent-workspace/master"
 
 Write-Host "✅ VS Code launched!" -ForegroundColor Green
 Write-Host "⏳ Server will auto-start in a few seconds..." -ForegroundColor Yellow
