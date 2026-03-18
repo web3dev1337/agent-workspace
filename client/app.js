@@ -9751,16 +9751,6 @@ class ClaudeOrchestrator {
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !titleEl || !summaryEl || !listEl) return;
 	    const body = document.body;
-	    const isWindowsHost = (() => {
-	      try {
-	        const platform = String(navigator?.platform || '').toLowerCase();
-	        const userAgent = String(navigator?.userAgent || '').toLowerCase();
-	        return platform.includes('win') || userAgent.includes('windows');
-	      } catch {
-	        return false;
-	      }
-	    })();
-	    const supportsDependencyOnboarding = isWindowsHost;
 	    const legalAcceptedKey = 'orchestrator-legal-accepted-v1';
 	    const readLegalAccepted = () => {
 	      try {
@@ -9804,7 +9794,7 @@ class ClaudeOrchestrator {
 
 	    const setBootstrapPending = (pending) => {
 	      if (pending) {
-	        if (!supportsDependencyOnboarding) return;
+	        if (hasResolvedBackendPlatform() && !supportsDependencyOnboarding()) return;
 	        body?.classList?.add?.('dependency-onboarding-booting');
 	        body?.classList?.remove?.('dependency-onboarding-active');
 	        return;
@@ -9963,7 +9953,6 @@ class ClaudeOrchestrator {
 	        });
 	      return persistedSetupState.savePromise;
 	    };
-	    setBootstrapPending(true);
 
 	    const state = {
 	      loading: false,
@@ -9981,8 +9970,17 @@ class ClaudeOrchestrator {
 	        email: ''
 	      },
 	      gitIdentityHelpVisible: false,
-	      startupPending: true
+	      startupPending: true,
+	      backendPlatform: ''
 	    };
+	    const getBackendPlatform = () => String(state.backendPlatform || '').trim().toLowerCase();
+	    const hasResolvedBackendPlatform = () => getBackendPlatform().length > 0;
+	    const supportsDependencyOnboarding = () => getBackendPlatform() === 'win32';
+	    const setBackendPlatform = (platform) => {
+	      state.backendPlatform = String(platform || '').trim().toLowerCase();
+	      return state.backendPlatform;
+	    };
+	    setBootstrapPending(true);
 
 	    const readDismissed = () => getPersistedSetupState().dismissed === true;
 
@@ -10223,7 +10221,8 @@ class ClaudeOrchestrator {
 	    };
 
 	    const isOnboardingLocked = () => {
-	      if (!supportsDependencyOnboarding) return false;
+	      if (!hasResolvedBackendPlatform()) return false;
+	      if (!supportsDependencyOnboarding()) return false;
 	      if (readCompleted()) return false;
 	      if (!Array.isArray(state.actions) || state.actions.length === 0) return false;
 	      const toolsMap = toToolMap(state.diagnostics);
@@ -10316,9 +10315,9 @@ class ClaudeOrchestrator {
 	      }
 
 	      titleEl.textContent = 'Agent Workspace Setup';
-	      if (!supportsDependencyOnboarding) {
+	      if (hasResolvedBackendPlatform() && !supportsDependencyOnboarding()) {
 	        summaryEl.textContent = 'Legal acknowledgement complete.';
-	        listEl.innerHTML = '<div class="dependency-setup-empty">Setup guidance is only required on Windows hosts.</div>';
+	        listEl.innerHTML = '<div class="dependency-setup-empty">Additional setup guidance is only required when Agent Workspace is running on Windows.</div>';
 	        return { req: null, steps: [], current: null };
 	      }
 
@@ -10602,7 +10601,7 @@ class ClaudeOrchestrator {
 	        openModal();
 	        return false;
 	      }
-	      if (!force && supportsDependencyOnboarding && !readCompleted()) {
+	      if (!force && supportsDependencyOnboarding() && !readCompleted()) {
 	        writeDismissed(true);
 	      }
 	      modal.classList.add('hidden');
@@ -10611,7 +10610,7 @@ class ClaudeOrchestrator {
 	      return true;
 	    };
 	    const openModal = ({ showWelcome = null, allowDuringStartup = false } = {}) => {
-	      if (supportsDependencyOnboarding && readCompleted() && !isLegalGatePending()) {
+	      if (supportsDependencyOnboarding() && readCompleted() && !isLegalGatePending()) {
 	        closeModal({ force: true });
 	        return false;
 	      }
@@ -10623,9 +10622,9 @@ class ClaudeOrchestrator {
 	      state.startupPending = false;
 	      setBootstrapPending(false);
 	      body?.classList?.add?.('dependency-onboarding-active');
-	      if (supportsDependencyOnboarding && typeof showWelcome === 'boolean') {
+	      if (supportsDependencyOnboarding() && typeof showWelcome === 'boolean') {
 	        state.showWelcome = showWelcome;
-	      } else if (supportsDependencyOnboarding && wasHidden) {
+	      } else if (supportsDependencyOnboarding() && wasHidden) {
 	        state.showWelcome = true;
 	      }
 	      if (isLegalGatePending() || (state.diagnostics && Array.isArray(state.actions) && state.actions.length > 0)) {
@@ -10651,10 +10650,15 @@ class ClaudeOrchestrator {
 	        openModal({ allowDuringStartup: true });
 	        return true;
 	      }
-	      if (!supportsDependencyOnboarding) {
+	      if (hasResolvedBackendPlatform() && !supportsDependencyOnboarding()) {
 	        state.startupPending = false;
 	        setBootstrapPending(false);
-	        closeModal({ force: true });
+	        if (explicitOpen) {
+	          render();
+	          openModal({ allowDuringStartup: bootstrap || explicitOpen });
+	        } else {
+	          closeModal({ force: true });
+	        }
 	        return true;
 	      }
 	      if (state.loading) return false;
@@ -10676,10 +10680,21 @@ class ClaudeOrchestrator {
 	        }
 
 	        state.diagnostics = diagData;
+	        setBackendPlatform(actionsData?.platform || diagData?.platform);
 	        hydrateGitIdentityDraft(diagData);
 	        const allActions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
-	        const toolsMap = toToolMap(diagData);
 	        state.actions = allActions.filter((action) => String(action?.id || '').trim() !== 'gh-login');
+	        if (!supportsDependencyOnboarding()) {
+	          state.startupPending = false;
+	          setBootstrapPending(false);
+	          if (explicitOpen) {
+	            render();
+	            openModal({ allowDuringStartup: bootstrap || explicitOpen });
+	          } else {
+	            closeModal({ force: true });
+	          }
+	          return true;
+	        }
 	        const allowedActionIds = new Set(
 	          state.actions
 	            .map((action) => String(action?.id || '').trim())
@@ -10701,12 +10716,11 @@ class ClaudeOrchestrator {
 	        applyOnboardingLockUI();
 
 	        const hasCompletedOnboarding = readCompleted();
-	        const coreReady = !!view.req?.coreReady;
 	        if (hasCompletedOnboarding) {
 	          state.startupPending = false;
 	          closeModal({ force: true });
 	        }
-	        const shouldAutoShow = supportsDependencyOnboarding && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
+	        const shouldAutoShow = supportsDependencyOnboarding() && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
 	        const shouldKeepVisible = !hasCompletedOnboarding && open && !modal.classList.contains('hidden');
 	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
 	          openModal({ allowDuringStartup: bootstrap || explicitOpen });
@@ -10949,7 +10963,7 @@ class ClaudeOrchestrator {
 	        openModal({ allowDuringStartup: true });
 	        return;
 	      }
-	      if (!supportsDependencyOnboarding) {
+	      if (hasResolvedBackendPlatform() && !supportsDependencyOnboarding()) {
 	        state.startupPending = false;
 	        setBootstrapPending(false);
 	        return;
@@ -11172,12 +11186,8 @@ class ClaudeOrchestrator {
 	      if (acceptLegalBtn) {
 	        writeLegalAccepted(true);
 	        this.showToast('Terms acknowledged.', 'success');
-	        if (!supportsDependencyOnboarding) {
-	          closeModal({ force: true });
-	          return;
-	        }
 	        state.showWelcome = true;
-	        await loadAndRender({ open: true, forceAutoShow: true, explicitOpen: true });
+	        await loadAndRender({ open: true, forceAutoShow: true });
 	        return;
 	      }
 
