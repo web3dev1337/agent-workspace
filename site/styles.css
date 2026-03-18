@@ -1044,13 +1044,18 @@ a.btn-glow {
 
 .cli-compat-list {
   max-width: 860px;
-  margin: -1.25rem auto 2.5rem;
+  margin: 1.25rem auto 2.5rem;
   padding: 1rem 1.25rem;
   list-style: none;
   text-align: left;
   background: rgba(7, 15, 33, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
+}
+
+.cli-compat-rule {
+  margin-top: 2rem;
+  margin-bottom: 0;
 }
 
 .cli-compat-list li {
