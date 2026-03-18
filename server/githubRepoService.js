@@ -68,6 +68,30 @@ function normalizeVisibility(value) {
   return null;
 }
 
+function normalizeAffiliation(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw || raw === 'all') {
+    return 'owner,collaborator,organization_member';
+  }
+  const parts = raw.split(',').map((part) => part.trim()).filter(Boolean);
+  return parts.length ? parts.join(',') : 'owner,collaborator,organization_member';
+}
+
+function parseLineDelimitedJson(payload) {
+  const lines = String(payload || '').split(/\r?\n/);
+  const out = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      out.push(JSON.parse(trimmed));
+    } catch {
+      // ignore invalid lines
+    }
+  }
+  return out;
+}
+
 function uniqueCommandCandidates(candidates = []) {
   const seen = new Set();
   const out = [];
@@ -386,6 +410,65 @@ class GitHubRepoService {
     } catch (error) {
       logger.debug('gh repo list failed', { owner: safeOwner || '@me', error: error.message });
       throw new Error('Failed to list GitHub repos (requires `gh auth login`)');
+    }
+  }
+
+  async listAccessibleRepos({ limit = 200, force = false, affiliation = null } = {}) {
+    const limitRaw = Number(limit);
+    const safeLimit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.round(limitRaw), 1), 2000) : 200;
+    const affiliationValue = normalizeAffiliation(affiliation);
+    const key = `repos:accessible:${affiliationValue}:${safeLimit}`;
+
+    if (!force) {
+      const cached = this.getListCached(key);
+      if (cached) return cached;
+    }
+
+    try {
+      const ghCommand = await this.resolveGhCommand();
+      if (!ghCommand) {
+        throw new Error('GitHub CLI not installed');
+      }
+
+      const params = new URLSearchParams({
+        per_page: '100',
+        sort: 'updated',
+        direction: 'desc',
+        visibility: 'all',
+        affiliation: affiliationValue
+      });
+
+      const args = [
+        'api',
+        `user/repos?${params.toString()}`,
+        '--paginate',
+        '--jq',
+        '.[] | { nameWithOwner: .full_name, name: .name, owner: { login: .owner.login }, isPrivate: .private, visibility: .visibility, isFork: .fork, pushedAt: .pushed_at, updatedAt: .updated_at }'
+      ];
+
+      const { stdout } = await execFileAsync(ghCommand, args, { timeout: Math.max(20000, this.timeoutMs) });
+      const parsed = parseLineDelimitedJson(stdout);
+      const normalized = parsed.map((r) => {
+        const nameWithOwner = String(r?.nameWithOwner || '').trim();
+        const name = String(r?.name || '').trim();
+        const ownerLogin = String(r?.owner?.login || r?.owner || '').trim();
+        const visibility = normalizeVisibility(r?.visibility) || (r?.isPrivate ? 'private' : 'public');
+        return {
+          nameWithOwner,
+          name,
+          owner: ownerLogin,
+          isPrivate: !!r?.isPrivate,
+          isFork: !!r?.isFork,
+          visibility: visibility || null,
+          pushedAt: r?.pushedAt || null,
+          updatedAt: r?.updatedAt || null
+        };
+      }).filter((r) => !!r.nameWithOwner);
+
+      return this.setListCached(key, normalized.slice(0, safeLimit));
+    } catch (error) {
+      logger.debug('gh api user/repos failed', { error: error.message, affiliation: affiliationValue });
+      throw new Error('Failed to list accessible GitHub repos (requires `gh auth login`)');
     }
   }
 
