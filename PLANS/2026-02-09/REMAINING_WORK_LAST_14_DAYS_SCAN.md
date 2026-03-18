@@ -320,7 +320,7 @@ Scope: all tracked markdown files (`git ls-files "*.md"`).
 - PUBLIC_RELEASE_AUDIT_2026-02-04.md:129 — Disable diff-viewer permissive CORS + bind diff-viewer to loopback by default.
 - PUBLIC_RELEASE_AUDIT_2026-02-04.md:130 — Bind orchestrator to loopback by default; warn/require \`AUTH_TOKEN\` for non-loopback.
 - PUBLIC_RELEASE_AUDIT_2026-02-04.md:131 — Remove \`test-results/.last-run.json\` from tracking.
-- PUBLIC_RELEASE_AUDIT_2026-02-04.md:132 — Replace \`/home/ab\` + \`C:\\Users\\AB\` etc in docs with placeholders.
+- PUBLIC_RELEASE_AUDIT_2026-02-04.md:132 — Replace \`/home/<user>\` + \`C:\\Users\\<USER>\` etc in docs with placeholders.
 - PUBLIC_RELEASE_AUDIT_2026-02-04.md:133 — Decide whether to (a) rewrite history or (b) publish a squashed snapshot repo.
 
 ### `ai-memory/feature-terminal-autosuggestions-9f058a5/progress.md`
