@@ -2242,6 +2242,44 @@ header {
   max-height: none;
 }
 
+.greenfield-wizard-modal .field-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.greenfield-wizard-modal .field-row select {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.greenfield-wizard-modal .field-suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.greenfield-framework-modal .framework-modal-content {
+  width: min(640px, 94vw);
+  max-width: 640px;
+  max-height: 86vh;
+  overflow-y: auto;
+}
+
+.greenfield-framework-modal .form-error {
+  margin-top: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--accent-danger);
+  border-radius: var(--radius-sm);
+  color: var(--accent-danger);
+  background: color-mix(in srgb, var(--accent-danger) 10%, transparent);
+}
+
 .projects-chats-shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);

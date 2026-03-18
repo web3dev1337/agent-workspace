@@ -1417,6 +1417,16 @@ app.get('/api/project-types/frameworks', (req, res) => {
   }
 });
 
+app.post('/api/project-types/frameworks', express.json(), async (req, res) => {
+  try {
+    const result = await projectTypeService.addFramework(req.body || {});
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    logger.error('Failed to add project-type framework', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
 app.get('/api/project-types/templates', (req, res) => {
   try {
     const categoryId = String(req.query.categoryId || '').trim();
