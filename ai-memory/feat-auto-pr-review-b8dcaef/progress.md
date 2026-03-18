@@ -1,8 +1,0 @@
-- [x] Create prReviewAutomationService.js with polling, webhook handlers, reviewer spawning, feedback loop
-- [x] Add import + initialization in index.js
-- [x] Extend webhook handler for pull_request.opened, ready_for_review, pull_request_review.submitted
-- [x] Add REST endpoints: POST .../pr-review/run, GET .../pr-review/status, PUT .../pr-review/config
-- [x] Add pr-review-poll scheduler template
-- [x] Register pr-review-poll command in commandRegistry
-- [x] Syntax check all files
-- [ ] Commit, push, create PR

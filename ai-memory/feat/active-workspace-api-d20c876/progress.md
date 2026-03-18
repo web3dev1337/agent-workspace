@@ -1,4 +1,0 @@
-- [x] Added GET /api/workspaces/active endpoint
-- [x] Includes config fallback for persisted activeWorkspace
-- [x] Syntax check passed
-- [ ] PR created
