@@ -90,6 +90,8 @@
 
 .rich-diff-body {
   overflow-x: hidden;
+  width: 100%;
+  min-width: 0;
 }
 
 .rich-hunk {
@@ -109,6 +111,9 @@
 .rich-hunk-rows {
   font-family: Consolas, Monaco, monospace;
   font-size: 12px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .rich-line {
@@ -117,6 +122,7 @@
   align-items: stretch;
   width: 100%;
   min-width: 0;
+  overflow: hidden;
 }
 
 .rich-gutter {
@@ -126,14 +132,20 @@
   user-select: none;
   border-right: 1px solid var(--border-color);
   background: var(--bg-primary);
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .rich-code {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  column-gap: 6px;
   padding: 2px 10px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
   background: var(--bg-primary);
 }
 
@@ -148,9 +160,22 @@
 
 .rich-prefix {
   display: inline-block;
+  min-width: 14px;
   width: 14px;
-  margin-right: 6px;
+  margin-right: 0;
   color: var(--text-secondary);
+}
+
+.rich-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rich-collapsed {
+  display: block;
 }
 
 .rich-line-added .rich-code-new,

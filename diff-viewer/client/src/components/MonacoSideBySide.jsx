@@ -39,7 +39,13 @@ const MonacoSideBySide = ({ original, modified, language, height = "100%" }) => 
             glyphMargin: false,
             folding: false,
             lineDecorationsWidth: 0,
-            lineNumbersMinChars: 3
+            lineNumbersMinChars: 3,
+            wordWrap: 'on',
+            wrappingStrategy: 'advanced',
+            scrollbar: {
+              horizontal: 'hidden',
+              alwaysConsumeMouseWheel: false
+            }
           }}
           onMount={(editor) => {
             leftEditorRef.current = editor;
@@ -67,7 +73,13 @@ const MonacoSideBySide = ({ original, modified, language, height = "100%" }) => 
             glyphMargin: false,
             folding: false,
             lineDecorationsWidth: 0,
-            lineNumbersMinChars: 3
+            lineNumbersMinChars: 3,
+            wordWrap: 'on',
+            wrappingStrategy: 'advanced',
+            scrollbar: {
+              horizontal: 'hidden',
+              alwaysConsumeMouseWheel: false
+            }
           }}
           onMount={(editor) => {
             rightEditorRef.current = editor;
