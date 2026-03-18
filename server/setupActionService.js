@@ -6,6 +6,7 @@ const { spawn } = require('child_process');
 const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 
 const IS_WIN = process.platform === 'win32';
+const IS_MAC = process.platform === 'darwin';
 
 function execQuiet(command, args, options = {}) {
   const timeout = Number(options.timeout) || 3000;
@@ -162,7 +163,101 @@ function firstNonEmptyLine(text) {
     .find(Boolean) || '';
 }
 
+function getMacSetupActions() {
+  return [
+    {
+      id: 'install-homebrew',
+      title: 'Homebrew',
+      description: 'macOS package manager. Required to install other dependencies.',
+      command: '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+      docsUrl: 'https://brew.sh/',
+      required: true,
+      runSupported: true
+    },
+    {
+      id: 'install-git',
+      title: 'Git Integration',
+      description: 'Required for repository and worktree access.',
+      command: 'brew install git',
+      docsUrl: 'https://git-scm.com/download/mac',
+      required: true,
+      runSupported: true
+    },
+    {
+      id: 'configure-git-identity',
+      title: 'Git Identity',
+      description: 'Set your name and email for accurate commits.',
+      command: 'git config --global user.name "Your Name"\ngit config --global user.email "you@example.com"',
+      docsUrl: 'https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup',
+      required: false,
+      optional: true,
+      runSupported: false
+    },
+    {
+      id: 'install-node',
+      title: 'Node.js LTS',
+      description: 'Required core dependency for running agents.',
+      command: 'brew install node@20 && brew link --overwrite node@20',
+      docsUrl: 'https://nodejs.org/en/download',
+      required: false,
+      runSupported: true
+    },
+    {
+      id: 'install-gh',
+      title: 'GitHub CLI',
+      description: 'Optional. Install now, then continue to GitHub login in the next step.',
+      command: 'brew install gh',
+      docsUrl: 'https://cli.github.com/',
+      required: false,
+      optional: true,
+      runSupported: true
+    },
+    {
+      id: 'gh-login',
+      title: 'GitHub Authentication',
+      description: 'Optional after GitHub CLI install. Sign in to enable PR and repo actions.',
+      command: [
+        'export NO_COLOR=1',
+        'export GH_PAGER=""',
+        'if gh auth status --hostname github.com >/dev/null 2>&1; then',
+        '  echo "GitHub CLI is already authenticated."',
+        '  exit 0',
+        'fi',
+        'echo "Starting GitHub CLI web login..."',
+        'echo "Expect a one-time code and https://github.com/login/device below."',
+        'gh auth login --hostname github.com --git-protocol https --web --skip-ssh-key'
+      ].join('\n'),
+      docsUrl: 'https://cli.github.com/manual/gh_auth_login',
+      required: false,
+      optional: true,
+      runSupported: true
+    },
+    {
+      id: 'install-claude',
+      title: 'Claude Code CLI',
+      description: 'Primary AI agent powered by Anthropic.',
+      command: 'npm install -g @anthropic-ai/claude-code',
+      docsUrl: 'https://docs.claude.com/en/docs/claude-code/setup',
+      required: false,
+      optional: true,
+      runSupported: true
+    },
+    {
+      id: 'install-codex',
+      title: 'Codex CLI',
+      description: 'Alternative AI agent tool for development.',
+      command: 'npm install -g @openai/codex',
+      docsUrl: 'https://developers.openai.com/codex/cli',
+      required: false,
+      runSupported: true
+    }
+  ];
+}
+
 function getSetupActions(platform = process.platform) {
+  if (platform === 'darwin') {
+    return getMacSetupActions();
+  }
   if (platform !== 'win32') {
     return [];
   }
@@ -447,6 +542,106 @@ function launchPowerShellCommand(action) {
   return run;
 }
 
+function launchShellCommand(action) {
+  const runId = createRunId(action.id);
+  const run = {
+    runId,
+    actionId: action.id,
+    title: action.title,
+    command: action.command,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    pid: null,
+    exitCode: null,
+    error: null,
+    output: [],
+    ghDeviceCode: null,
+    ghDeviceUrl: null,
+    ghHasDeviceHint: false,
+    ghDebugLogPath: action.id === 'gh-login' ? getGhLoginDebugLogPath() : null,
+    updatedAt: null
+  };
+  run.updatedAt = run.startedAt;
+  if (action.id === 'gh-login') {
+    appendGhLoginDebugLog('run_started', { runId: run.runId, title: run.title });
+  }
+
+  setupActionRuns.set(runId, run);
+  latestRunByActionId.set(action.id, runId);
+  pruneOldRuns();
+
+  try {
+    const brewPrefix = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
+    const pathEnv = `${brewPrefix}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
+    const npmGlobalBin = path.join(os.homedir(), '.npm-global', 'bin');
+    const nPrefix = path.join(os.homedir(), '.nvm', 'versions', 'node');
+    let fullPath = `${npmGlobalBin}:${brewPrefix}:${pathEnv}`;
+    try {
+      const nvmVersions = fs.readdirSync(nPrefix);
+      if (nvmVersions.length > 0) {
+        const latest = nvmVersions.sort().pop();
+        fullPath = `${path.join(nPrefix, latest, 'bin')}:${fullPath}`;
+      }
+    } catch { /* nvm not installed */ }
+
+    const child = spawn(
+      '/bin/bash',
+      ['-l', '-c', String(action.command || '')],
+      {
+        detached: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          PATH: fullPath,
+          NONINTERACTIVE: '1',
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+        }
+      }
+    );
+    run.pid = Number.isFinite(child?.pid) ? child.pid : null;
+    run.updatedAt = new Date().toISOString();
+
+    child.stdout.on('data', (chunk) => appendRunOutput(run, chunk, 'stdout'));
+    child.stderr.on('data', (chunk) => appendRunOutput(run, chunk, 'stderr'));
+
+    child.on('error', (error) => {
+      run.status = 'failed';
+      run.error = String(error?.message || error || 'Failed to launch setup action');
+      run.endedAt = new Date().toISOString();
+      run.updatedAt = run.endedAt;
+    });
+
+    child.on('close', (code) => {
+      run.exitCode = Number.isInteger(code) ? code : null;
+      run.status = code === 0 ? 'success' : 'failed';
+      if (code !== 0 && !run.error) {
+        run.error = `Setup action exited with code ${String(code)}`;
+      }
+      run.endedAt = new Date().toISOString();
+      run.updatedAt = run.endedAt;
+      if (action.id === 'gh-login') {
+        appendGhLoginDebugLog('run_closed', {
+          runId: run.runId,
+          status: run.status,
+          exitCode: run.exitCode,
+          error: run.error || null,
+          parsedCode: run.ghDeviceCode || null,
+          parsedUrl: run.ghDeviceUrl || null,
+          sawHint: !!run.ghHasDeviceHint
+        });
+      }
+    });
+  } catch (error) {
+    run.status = 'failed';
+    run.error = String(error?.message || error || 'Failed to launch setup action');
+    run.endedAt = new Date().toISOString();
+    run.updatedAt = run.endedAt;
+  }
+
+  return run;
+}
+
 function getSetupActionRun(runId) {
   const key = String(runId || '').trim();
   if (!key) return null;
@@ -462,8 +657,8 @@ function getLatestSetupActionRun(actionId) {
 }
 
 function runSetupAction(actionId, platform = process.platform) {
-  if (platform !== 'win32') {
-    const err = new Error('Setup actions are currently implemented for Windows only.');
+  if (platform !== 'win32' && platform !== 'darwin') {
+    const err = new Error('Setup actions are currently implemented for Windows and macOS only.');
     err.code = 'unsupported_platform';
     throw err;
   }
@@ -493,7 +688,7 @@ function runSetupAction(actionId, platform = process.platform) {
     };
   }
 
-  const run = launchPowerShellCommand(action);
+  const run = platform === 'darwin' ? launchShellCommand(action) : launchPowerShellCommand(action);
   const runSummary = getRunSummary(run);
 
   return {
@@ -507,8 +702,8 @@ function runSetupAction(actionId, platform = process.platform) {
 }
 
 async function configureGitIdentity({ name, email } = {}, platform = process.platform) {
-  if (platform !== 'win32') {
-    const err = new Error('Git identity setup is currently implemented for Windows only.');
+  if (platform !== 'win32' && platform !== 'darwin') {
+    const err = new Error('Git identity setup is currently implemented for Windows and macOS only.');
     err.code = 'unsupported_platform';
     throw err;
   }
