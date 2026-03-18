@@ -2,13 +2,13 @@
 
 Effective date: March 18, 2026
 
-These Terms of Use govern your access to and use of the Agent Workspace website, downloads, packaged desktop application, release artifacts, update feeds, documentation, and related materials that Neural Pixel makes available.
+These Terms of Use govern your access to and use of the Agent Workspace website, downloads, packaged desktop application, release artifacts, update feeds, documentation, and related materials that the Agent Workspace maintainers make available.
 
 By accessing, downloading, installing, or using Agent Workspace, you agree to these Terms. If you do not agree, do not use Agent Workspace.
 
 ## 1. Who we are
 
-Agent Workspace is published under the Neural Pixel brand. In these Terms, "Neural Pixel," "Agent Workspace," "we," "our," and "us" refer to the publisher and maintainers of Agent Workspace.
+Agent Workspace is published by the Agent Workspace maintainers. In these Terms, "Agent Workspace," "we," "our," and "us" refer to the publisher and maintainers of Agent Workspace.
 
 Current public contact channels:
 
@@ -18,7 +18,7 @@ Current public contact channels:
 
 ## 2. What Agent Workspace is
 
-Agent Workspace is local-first developer tooling. It can orchestrate terminal-based agents, repositories, worktrees, local services, command execution, prompts, reviews, browser-like workspace tabs, dashboards, and optional service-backed features such as GitHub-linked repository and pull-request workflows, Trello task workflows, Discord queue-processing workflows, optional speech-recognition backends, and provider-backed AI helpers.
+Agent Workspace is local-first developer tooling. It can orchestrate terminal-based agents, repositories, worktrees, local services, command execution, prompts, reviews, browser-like workspace tabs, dashboards, and optional service-backed features such as GitHub-linked repository and pull-request workflows, Trello task workflows, optional speech-recognition backends, and provider-backed AI helpers.
 
 Because Agent Workspace can launch commands, read and write files, and trigger actions through connected tools, it is powerful software that can materially affect your machine, repositories, services, secrets, and data.
 
@@ -92,9 +92,9 @@ You are solely responsible for:
 
 ## 9. Third-party tools and service-backed features
 
-Agent Workspace can work with third-party tools and services, including but not limited to GitHub, Trello, Discord, Anthropic, OpenAI, Google, local CLIs, and other agent providers.
+Agent Workspace can work with third-party tools and services, including but not limited to GitHub, Trello, Anthropic, OpenAI, Google, local CLIs, and other agent providers.
 
-Examples of optional service-backed features in the current product include GitHub repository discovery and pull-request workflows, Trello board and card workflows, Discord queue processing, optional browser speech recognition, and provider-backed AI requests.
+Examples of optional service-backed features in the current product include GitHub repository discovery and pull-request workflows, Trello board and card workflows, optional browser speech recognition, and provider-backed AI requests.
 
 Those third parties are independent from us. They have separate terms, privacy policies, availability, quotas, pricing, and security practices. We are not responsible for:
 
@@ -147,9 +147,9 @@ Nothing in these Terms excludes, restricts, or modifies any rights or remedies t
 
 ## 17. Limitation of liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, NEURAL PIXEL AND ITS LICENSORS, CONTRIBUTORS, CONTRACTORS, AND SUPPLIERS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, BUSINESS, GOODWILL, DATA, SECRETS, REPOSITORIES, OR SYSTEM AVAILABILITY, ARISING OUT OF OR RELATING TO AGENT WORKSPACE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE AGENT WORKSPACE MAINTAINERS AND THEIR LICENSORS, CONTRIBUTORS, CONTRACTORS, AND SUPPLIERS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, BUSINESS, GOODWILL, DATA, SECRETS, REPOSITORIES, OR SYSTEM AVAILABILITY, ARISING OUT OF OR RELATING TO AGENT WORKSPACE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE TOTAL AGGREGATE LIABILITY OF NEURAL PIXEL AND ITS LICENSORS, CONTRIBUTORS, CONTRACTORS, AND SUPPLIERS FOR ALL CLAIMS ARISING OUT OF OR RELATING TO AGENT WORKSPACE WILL NOT EXCEED THE GREATER OF:
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE TOTAL AGGREGATE LIABILITY OF THE AGENT WORKSPACE MAINTAINERS AND THEIR LICENSORS, CONTRIBUTORS, CONTRACTORS, AND SUPPLIERS FOR ALL CLAIMS ARISING OUT OF OR RELATING TO AGENT WORKSPACE WILL NOT EXCEED THE GREATER OF:
 
 - the amount you paid us for the applicable product in the twelve months before the event giving rise to the claim; or
 - U.S. $50.
@@ -158,7 +158,7 @@ Some jurisdictions do not allow certain limitations, so parts of this section ma
 
 ## 18. Indemnification
 
-To the maximum extent permitted by law, you will defend, indemnify, and hold harmless Neural Pixel and its licensors, contributors, contractors, and suppliers from claims, damages, losses, liabilities, judgments, penalties, and expenses, including reasonable attorneys' fees, arising out of or related to:
+To the maximum extent permitted by law, you will defend, indemnify, and hold harmless the Agent Workspace maintainers and their licensors, contributors, contractors, and suppliers from claims, damages, losses, liabilities, judgments, penalties, and expenses, including reasonable attorneys' fees, arising out of or related to:
 
 - your misuse of Agent Workspace;
 - your violation of these Terms;
