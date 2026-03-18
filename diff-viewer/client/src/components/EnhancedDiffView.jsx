@@ -236,7 +236,15 @@ const StandardDiffView = ({ file, diffData }) => {
         readOnly: true,
         renderSideBySide: true,
         scrollBeyondLastLine: false,
-        minimap: { enabled: false }
+        minimap: { enabled: false },
+        wordWrap: 'on',
+        wordWrapOverride1: 'on',
+        wordWrapOverride2: 'on',
+        wrappingStrategy: 'advanced',
+        scrollbar: {
+          horizontal: 'hidden',
+          alwaysConsumeMouseWheel: false
+        }
       }}
     />
   );

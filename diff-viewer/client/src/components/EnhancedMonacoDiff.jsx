@@ -143,6 +143,12 @@ const EnhancedMonacoDiff = ({ file }) => {
           lineNumbers: 'on',
           renderLineHighlight: 'all',
           renderWhitespace: 'selection',
+          wordWrap: 'on',
+          wrappingStrategy: 'advanced',
+          scrollbar: {
+            horizontal: 'hidden',
+            alwaysConsumeMouseWheel: false
+          },
           guides: {
             indentation: false
           }

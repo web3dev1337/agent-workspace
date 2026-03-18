@@ -30,12 +30,12 @@ function SplitLineRow({ kind, oldLine, oldPrefix, oldChildren, newLine, newPrefi
       <div className="rich-gutter rich-old">{oldLine ?? ''}</div>
       <div className="rich-code rich-code-old">
         <span className="rich-prefix">{oldPrefix ?? ' '}</span>
-        {oldChildren}
+        <span className="rich-content">{oldChildren ?? ''}</span>
       </div>
       <div className="rich-gutter rich-new">{newLine ?? ''}</div>
       <div className="rich-code rich-code-new">
         <span className="rich-prefix">{newPrefix ?? ' '}</span>
-        {newChildren}
+        <span className="rich-content">{newChildren ?? ''}</span>
       </div>
     </div>
   );
