@@ -1177,13 +1177,11 @@ class ClaudeOrchestrator {
       // Connection events
       this.socket.on('connect', () => {
         console.log('Connected to server');
-        this.updateConnectionStatus(true);
         resolve();
       });
 
       this.socket.on('connect_error', (error) => {
         console.error('Connection error:', error);
-        this.updateConnectionStatus(false);
 
         if (error.message === 'Authentication failed') {
           this.showError('Authentication failed. Please check your token.');
@@ -1193,7 +1191,6 @@ class ClaudeOrchestrator {
 
       this.socket.on('disconnect', () => {
         console.log('Disconnected from server');
-        this.updateConnectionStatus(false);
       });
 
       // Session events
@@ -7919,24 +7916,6 @@ class ClaudeOrchestrator {
 	      if (terminalEl && terminalEl.children.length === 0) {
 	        term.open(terminalEl);
 	      }
-    }
-  }
-
-  updateConnectionStatus(connected) {
-    const statusElement = document.getElementById('connection-status');
-    if (statusElement) {
-      const dot = statusElement.querySelector('.status-dot');
-      const text = statusElement.querySelector('span:last-child');
-
-      if (connected) {
-        dot.classList.remove('disconnected');
-        dot.classList.add('connected');
-        text.textContent = 'Connected';
-      } else {
-        dot.classList.remove('connected');
-        dot.classList.add('disconnected');
-        text.textContent = 'Disconnected';
-      }
     }
   }
 
