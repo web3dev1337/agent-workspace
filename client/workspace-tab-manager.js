@@ -104,13 +104,7 @@ class WorkspaceTabManager {
       // Keep workspace metadata fresh
       existingTab.workspace = workspace;
       existingTab.displayName = workspace.name || existingTab.displayName;
-      if (existingTab.tabElement) {
-        const nameEl = existingTab.tabElement.querySelector('.tab-name');
-        if (nameEl) {
-          nameEl.textContent = existingTab.displayName;
-          nameEl.title = existingTab.displayName;
-        }
-      }
+      this.syncTabDisplayName(existingTab);
       return existingTab.id;
     }
 
@@ -144,7 +138,12 @@ class WorkspaceTabManager {
       resizeObserver: null,
 
       // Socket listeners for cleanup
-      socketListeners: []
+      socketListeners: [],
+
+      // Inline rename state
+      isRenaming: false,
+      renameSubmitting: false,
+      renameOriginalName: null
     };
 
     // Seed session map if we were given initial session states (e.g. from workspace-changed)
@@ -197,16 +196,17 @@ class WorkspaceTabManager {
 
     tabEl.innerHTML = `
       <span class="tab-icon">📁</span>
-      <span class="tab-name" title="${tabState.displayName}">${tabState.displayName}</span>
+      <span class="tab-name"></span>
+      <input class="tab-name-input" type="text" maxlength="120" spellcheck="false" />
       <span class="tab-badge hidden" data-count="0">0</span>
+      <button class="tab-rename" title="Rename workspace" aria-label="Rename workspace">✎</button>
       <button class="tab-close" title="Close tab">×</button>
     `;
 
     // Tab click handler
     tabEl.addEventListener('click', (e) => {
-      if (!e.target.classList.contains('tab-close')) {
-        this.switchTab(tabState.id);
-      }
+      if (e.target.closest('.tab-close') || e.target.closest('.tab-rename') || e.target.closest('.tab-name-input')) return;
+      this.switchTab(tabState.id);
     });
 
     // Close button handler
@@ -214,6 +214,35 @@ class WorkspaceTabManager {
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.closeTab(tabState.id);
+    });
+
+    // Rename button handler
+    const renameBtn = tabEl.querySelector('.tab-rename');
+    renameBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.startTabRename(tabState.id);
+    });
+
+    // Inline rename input handlers
+    const nameInput = tabEl.querySelector('.tab-name-input');
+    nameInput?.addEventListener('mousedown', (e) => e.stopPropagation());
+    nameInput?.addEventListener('click', (e) => e.stopPropagation());
+    nameInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.submitTabRename(tabState.id);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.cancelTabRename(tabState);
+      }
+    });
+    nameInput?.addEventListener('blur', () => {
+      if (!tabState.isRenaming || tabState.renameSubmitting) return;
+      this.submitTabRename(tabState.id, { fromBlur: true });
     });
 
     // Add to tabs container (before the + button if it exists)
@@ -233,6 +262,113 @@ class WorkspaceTabManager {
     }
 
     tabState.tabElement = tabEl;
+    this.syncTabDisplayName(tabState);
+  }
+
+  syncTabDisplayName(tabState) {
+    if (!tabState || !tabState.tabElement) return;
+
+    const displayName = String(tabState.displayName || '').trim() || 'Workspace';
+    tabState.displayName = displayName;
+
+    const nameEl = tabState.tabElement.querySelector('.tab-name');
+    if (nameEl) {
+      nameEl.textContent = displayName;
+      nameEl.title = displayName;
+    }
+
+    const inputEl = tabState.tabElement.querySelector('.tab-name-input');
+    if (inputEl) {
+      inputEl.value = displayName;
+      inputEl.title = displayName;
+      inputEl.setAttribute('aria-label', `Workspace name: ${displayName}`);
+    }
+  }
+
+  startTabRename(tabId) {
+    const tabState = this.tabs.get(tabId);
+    if (!tabState || !tabState.tabElement || tabState.renameSubmitting) return;
+
+    const inputEl = tabState.tabElement.querySelector('.tab-name-input');
+    if (!inputEl) return;
+
+    tabState.isRenaming = true;
+    tabState.renameOriginalName = String(tabState.displayName || '').trim() || 'Workspace';
+    tabState.tabElement.classList.add('editing');
+    tabState.tabElement.classList.remove('renaming');
+    inputEl.value = tabState.renameOriginalName;
+
+    requestAnimationFrame(() => {
+      inputEl.focus();
+      inputEl.select();
+    });
+  }
+
+  cancelTabRename(tabState, { restoreValue = true } = {}) {
+    if (!tabState || !tabState.tabElement) return;
+
+    tabState.isRenaming = false;
+    tabState.renameSubmitting = false;
+    tabState.tabElement.classList.remove('editing');
+    tabState.tabElement.classList.remove('renaming');
+
+    if (restoreValue) {
+      this.syncTabDisplayName(tabState);
+    }
+
+    tabState.renameOriginalName = null;
+  }
+
+  async submitTabRename(tabId, { fromBlur = false } = {}) {
+    const tabState = this.tabs.get(tabId);
+    if (!tabState || !tabState.isRenaming || tabState.renameSubmitting || !tabState.tabElement) return;
+
+    const inputEl = tabState.tabElement.querySelector('.tab-name-input');
+    if (!inputEl) return;
+
+    const nextName = String(inputEl.value || '').trim();
+    const currentName = String(tabState.displayName || '').trim();
+
+    if (!nextName) {
+      this.orchestrator?.showToast?.('Workspace name cannot be empty', 'warning');
+      if (fromBlur) {
+        inputEl.value = tabState.renameOriginalName || currentName || 'Workspace';
+      }
+      requestAnimationFrame(() => {
+        inputEl.focus();
+        inputEl.select();
+      });
+      return;
+    }
+
+    if (nextName === currentName) {
+      this.cancelTabRename(tabState);
+      return;
+    }
+
+    tabState.renameSubmitting = true;
+    tabState.tabElement.classList.add('renaming');
+
+    try {
+      if (typeof this.orchestrator?.renameWorkspace === 'function' && tabState.workspaceId) {
+        await this.orchestrator.renameWorkspace(tabState.workspaceId, nextName);
+      } else {
+        tabState.displayName = nextName;
+        if (tabState.workspace && typeof tabState.workspace === 'object') {
+          tabState.workspace.name = nextName;
+        }
+      }
+      this.cancelTabRename(tabState);
+    } catch (error) {
+      tabState.renameSubmitting = false;
+      tabState.tabElement.classList.remove('renaming');
+      console.error('Failed to rename workspace from tab:', error);
+      this.orchestrator?.showToast?.(`Failed to rename workspace: ${error.message || 'unknown error'}`, 'error');
+      requestAnimationFrame(() => {
+        inputEl.focus();
+        inputEl.select();
+      });
+    }
   }
 
   /**
