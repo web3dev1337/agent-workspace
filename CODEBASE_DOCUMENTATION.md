@@ -16,6 +16,7 @@ SERVICES:   server/statusDetector.js, gitHelper.js   - Core services
 FRONTEND:   client/app.js, client/terminal.js        - Web client
 NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
+META:       .github/FUNDING.yml                      - GitHub Sponsors button configuration
 PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resources + reusable packaged prod deps
             scripts/tauri/run-tauri-build.js          - Centralized Tauri build entrypoint (local Windows fast-cache pinning + profile dispatch)
 DIFF:       diff-viewer/                             - Advanced diff viewer component
