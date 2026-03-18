@@ -1,5 +1,5 @@
 [package]
-name = "claude-orchestrator"
+name = "agent-workspace"
 version = "0.1.5-2"
 description = "A Tauri App for Agent Workspace"
 authors = ["you"]
@@ -8,7 +8,7 @@ repository = ""
 edition = "2021"
 
 [lib]
-name = "claude_orchestrator_lib"
+name = "agent_workspace_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

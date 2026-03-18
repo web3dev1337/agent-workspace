@@ -39,7 +39,7 @@ Examples of local storage paths may include:
 
 - `~/.orchestrator/`
 - `~/.trello-credentials`
-- desktop-app data directories such as `%APPDATA%\\com.claude.orchestrator` and `%LOCALAPPDATA%\\com.claude.orchestrator`
+- desktop-app data directories such as `%APPDATA%\\com.agent.workspace` and `%LOCALAPPDATA%\\com.agent.workspace`
 - browser `localStorage` when you use the web interface or desktop webview
 
 ### B. Information sent to third parties at your direction
@@ -100,7 +100,7 @@ You are responsible for:
 
 If you discover a security issue, please use our security reporting process:
 
-[Private security advisory intake](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new)
+[Private security advisory intake](https://github.com/web3dev1337/agent-workspace/security/advisories/new)
 
 ## 9. International users
 
@@ -130,6 +130,6 @@ We may update this Privacy Policy from time to time. When we do, we will update 
 
 Questions or requests about privacy can be directed through:
 
-- GitHub repository: [web3dev1337/claude-orchestrator](https://github.com/web3dev1337/claude-orchestrator)
-- Security advisories: [Private security advisory intake](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new)
+- GitHub repository: [web3dev1337/agent-workspace](https://github.com/web3dev1337/agent-workspace)
+- Security advisories: [Private security advisory intake](https://github.com/web3dev1337/agent-workspace/security/advisories/new)
 - X: [@AIOnlyDeveloper](https://x.com/AIOnlyDeveloper)

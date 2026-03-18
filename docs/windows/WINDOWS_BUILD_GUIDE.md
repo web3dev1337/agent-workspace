@@ -515,8 +515,8 @@ ptyProcess.onExit(({ exitCode }) => {
 #### 2. Clone Repository
 
 ```bash
-git clone https://github.com/web3dev1337/claude-orchestrator.git
-cd claude-orchestrator
+git clone https://github.com/web3dev1337/agent-workspace.git
+cd agent-workspace
 ```
 
 #### 3. Install Dependencies
@@ -589,7 +589,7 @@ Or install the MSI for enterprise deployment.
 
 ### Summary of Code Changes
 
-All changes are in PR: https://github.com/web3dev1337/claude-orchestrator/pull/602
+All changes are in PR: https://github.com/web3dev1337/agent-workspace/pull/602
 
 #### Files Modified
 
@@ -996,7 +996,7 @@ logger.info('Sending to PTY', {
 ### How the Bundled App Works
 
 ```
-Tauri App (claude-orchestrator.exe)
+Tauri App (agent-workspace.exe)
 ├─ Rust wrapper (native Windows app)
 ├─ Embedded WebView (UI)
 └─ Bundled backend resources
@@ -1019,14 +1019,14 @@ On startup:
 
 **Development:** Run from source
 ```bash
-cd ~/GitHub/tools/automation/claude-orchestrator
+cd ~/GitHub/tools/automation/agent-workspace
 npm start
 # Uses source code directly, hot-reload enabled
 ```
 
 **Production:** Run from installed app
 ```
-%LOCALAPPDATA%\\Agent Workspace\\claude-orchestrator.exe
+%LOCALAPPDATA%\\Agent Workspace\\agent-workspace.exe
 # Uses bundled resources from installation
 ```
 
@@ -1142,7 +1142,7 @@ The Agent Workspace now fully supports Windows with native PowerShell integratio
 
 **For questions or issues, refer to:**
 - This guide: `WINDOWS_BUILD_GUIDE.md`
-- Pull Request: https://github.com/web3dev1337/claude-orchestrator/pull/602
+- Pull Request: https://github.com/web3dev1337/agent-workspace/pull/602
 - Main docs: `CODEBASE_DOCUMENTATION.md`
 
 ---

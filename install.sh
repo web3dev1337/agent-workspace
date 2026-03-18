@@ -49,7 +49,7 @@ echo ""
 read -p "Would you like to create a systemd service? (y/N) " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    cat > claude-orchestrator.service <<EOF
+    cat > agent-workspace.service <<EOF
 [Unit]
 Description=Agent Workspace
 After=network.target
@@ -69,10 +69,10 @@ Environment=NODE_ENV=production
 WantedBy=multi-user.target
 EOF
     
-    echo "✅ Created systemd service file: claude-orchestrator.service"
-    echo "   To install: sudo cp claude-orchestrator.service /etc/systemd/system/"
-    echo "   To enable:  sudo systemctl enable claude-orchestrator"
-    echo "   To start:   sudo systemctl start claude-orchestrator"
+    echo "✅ Created systemd service file: agent-workspace.service"
+    echo "   To install: sudo cp agent-workspace.service /etc/systemd/system/"
+    echo "   To enable:  sudo systemctl enable agent-workspace"
+    echo "   To start:   sudo systemctl start agent-workspace"
 fi
 
 # Display next steps

@@ -193,9 +193,9 @@ function renderPage({ title, sourcePath, heading, effectiveDate, bodyHtml, descr
         <a href="index.html">Home</a>
         <a href="terms.html">Terms</a>
         <a href="privacy.html">Privacy</a>
-        <a href="https://github.com/web3dev1337/claude-orchestrator/releases/latest" target="_blank" rel="noopener">Download</a>
+        <a href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank" rel="noopener">Download</a>
       </div>
-      <div class="copyright">© <span id="copy-year"></span> <a href="https://github.com/web3dev1337/claude-orchestrator" target="_blank" rel="noopener">Neural Pixel</a></div>
+      <div class="copyright">© <span id="copy-year"></span> <a href="https://github.com/web3dev1337/agent-workspace" target="_blank" rel="noopener">Neural Pixel</a></div>
     </div>
   </footer>
 

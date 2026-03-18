@@ -1,15 +1,13 @@
 # Agent Workspace
 
 [![Website](https://img.shields.io/badge/Website-agent--workspace.ai-00d4ff?style=for-the-badge)](https://agent-workspace.ai)
-[![Download](https://img.shields.io/badge/Download-Windows%20App-00d4ff?style=for-the-badge)](https://github.com/web3dev1337/claude-orchestrator/releases/latest)
+[![Download](https://img.shields.io/badge/Download-Windows%20App-00d4ff?style=for-the-badge)](https://github.com/web3dev1337/agent-workspace/releases/latest)
 [![Follow on X](https://img.shields.io/badge/Follow-%40AIOnlyDeveloper-000000?style=for-the-badge&logo=x)](https://x.com/AIOnlyDeveloper)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
 All your Agents. One Workspace.
 
 Run multiple CLI agents in parallel across different repos. Your hardware, your plans, your API keys. No publisher-hosted telemetry by default.
-
-> The repo is named `claude-orchestrator` for historical reasons. The product is **Agent Workspace**.
 
 ## A GUI for your TUIs
 
@@ -40,7 +38,7 @@ Agent Workspace wraps your preferred terminal tools and runs them side by side w
 
 ### Windows
 
-[Download the latest release](https://github.com/web3dev1337/claude-orchestrator/releases/latest) — the app bundles everything, no dev tools needed.
+[Download the latest release](https://github.com/web3dev1337/agent-workspace/releases/latest) — the app bundles everything, no dev tools needed.
 
 Before running the installer, verify the published SHA-256 digest on the GitHub release. If a code-signing signature is present, verify that too. If verification fails, do not run the file.
 
@@ -52,16 +50,16 @@ Get-AuthenticodeSignature .\downloaded-file.exe
 Or run from source:
 
 ```bash
-git clone https://github.com/web3dev1337/claude-orchestrator.git
-cd claude-orchestrator && npm install
+git clone https://github.com/web3dev1337/agent-workspace.git
+cd agent-workspace && npm install
 npm start
 ```
 
 ### Mac / Linux / WSL
 
 ```bash
-git clone https://github.com/web3dev1337/claude-orchestrator.git
-cd claude-orchestrator && npm install
+git clone https://github.com/web3dev1337/agent-workspace.git
+cd agent-workspace && npm install
 npm start
 ```
 

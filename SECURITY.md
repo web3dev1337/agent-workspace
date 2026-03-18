@@ -10,7 +10,7 @@ If you believe you found a security vulnerability:
 
 1) **Do not open a public issue.**
 2) Send details privately to the maintainer:
-   - GitHub: [open a private security advisory](https://github.com/web3dev1337/claude-orchestrator/security/advisories/new) (preferred)
+   - GitHub: [open a private security advisory](https://github.com/web3dev1337/agent-workspace/security/advisories/new) (preferred)
    - Or DM on X: [@AIOnlyDeveloper](https://x.com/AIOnlyDeveloper)
 
 Please include:

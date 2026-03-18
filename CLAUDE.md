@@ -205,14 +205,14 @@ git checkout -b fix/your-feature-name origin/main
 ```
 
 **NOTE (worktrees):** This repo commonly runs as **two git worktrees**:
-- `~/GitHub/tools/automation/claude-orchestrator/master` (your daily “production” instance)
-- `~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev` (development)
+- `~/GitHub/tools/automation/agent-workspace/master` (your daily “production” instance)
+- `~/GitHub/tools/automation/agent-workspace/agent-workspace-dev` (development)
 
-Because `main` is usually checked out in the `master/` worktree, **do not try to check out `main` inside `claude-orchestrator-dev/`** (Git will error: “branch 'main' is already used by worktree…”). Always branch from `origin/main` in dev.
+Because `main` is usually checked out in the `master/` worktree, **do not try to check out `main` inside `agent-workspace-dev/`** (Git will error: “branch 'main' is already used by worktree…”). Always branch from `origin/main` in dev.
 
-**CRITICAL SAFETY:** If you are working in `claude-orchestrator-dev/`, **do not edit, pull, or run commands in the `master/` folder** unless explicitly requested — that instance may be running on port **3000**.
+**CRITICAL SAFETY:** If you are working in `agent-workspace-dev/`, **do not edit, pull, or run commands in the `master/` folder** unless explicitly requested — that instance may be running on port **3000**.
 
-**ALSO CRITICAL:** If Commander Claude is running FROM `master/`, **NEVER edit files in `master/`**. Even if you revert changes, nodemon will detect the file change and restart the production server, which crashes all active sessions. ALL code changes go in `claude-orchestrator-dev/` on a feature branch, then PR into main. The ONLY exception is if the user explicitly asks you to edit production.
+**ALSO CRITICAL:** If Commander Claude is running FROM `master/`, **NEVER edit files in `master/`**. Even if you revert changes, nodemon will detect the file change and restart the production server, which crashes all active sessions. ALL code changes go in `agent-workspace-dev/` on a feature branch, then PR into main. The ONLY exception is if the user explicitly asks you to edit production.
 
 **TEST SAFETY (ports):**
 - Never use port `3000` for dev/test runs.
@@ -287,7 +287,7 @@ Commander Claude is a special Claude Code instance that runs from the orchestrat
 
 **Read the full Commander instructions:**
 ```bash
-cat ~/GitHub/tools/automation/claude-orchestrator/master/docs/COMMANDER_CLAUDE.md
+cat ~/GitHub/tools/automation/agent-workspace/master/docs/COMMANDER_CLAUDE.md
 ```
 
 ### Port Detection (MANDATORY — do this first)
@@ -743,8 +743,8 @@ To avoid conflicts when developing the Orchestrator itself while using it for ot
 
 ```bash
 # 1. Production instance (port 3000)
-git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/automation/claude-orchestrator/master
-cd ~/GitHub/tools/automation/claude-orchestrator/master
+git clone https://github.com/web3dev1337/agent-workspace.git ~/GitHub/tools/automation/agent-workspace/master
+cd ~/GitHub/tools/automation/agent-workspace/master
 
 cat > .env << 'EOF'
 ORCHESTRATOR_PORT=3000
@@ -760,8 +760,8 @@ npm install
 cd diff-viewer && npm install && cd ..
 
 # 2. Dev instance (port 4000)
-git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
-cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
+git clone https://github.com/web3dev1337/agent-workspace.git ~/GitHub/tools/automation/agent-workspace/agent-workspace-dev
+cd ~/GitHub/tools/automation/agent-workspace/agent-workspace-dev
 
 cat > .env << 'EOF'
 ORCHESTRATOR_PORT=4000
@@ -781,13 +781,13 @@ cd diff-viewer && npm install && cd ..
 
 #### Production Instance (Your Daily Work):
 ```bash
-cd ~/GitHub/tools/automation/claude-orchestrator/master
+cd ~/GitHub/tools/automation/agent-workspace/master
 npm start           # Runs on ports 3000/2080/7655
 ```
 
 #### Development Instance (Modifying the Orchestrator):
 ```bash
-cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
+cd ~/GitHub/tools/automation/agent-workspace/agent-workspace-dev
 npm start           # Runs on ports 4000/2081/7656
 ```
 
@@ -795,8 +795,8 @@ npm start           # Runs on ports 4000/2081/7656
 
 | Purpose | Directory | Command | Ports | Use Case |
 |---------|-----------|---------|-------|----------|
-| **Production** | ~/GitHub/tools/automation/claude-orchestrator/master | `npm start` | 3000/2080/7655 | Your daily Claude work |
-| **Development** | ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev | `npm start` | 4000/2081/7656 | Modifying Orchestrator |
+| **Production** | ~/GitHub/tools/automation/agent-workspace/master | `npm start` | 3000/2080/7655 | Your daily Claude work |
+| **Development** | ~/GitHub/tools/automation/agent-workspace/agent-workspace-dev | `npm start` | 4000/2081/7656 | Modifying Orchestrator |
 
 ### What Gets Started:
 All commands run these 4 services:
@@ -806,7 +806,7 @@ All commands run these 4 services:
 - **Diff Viewer** (PR review tool on port 7655 for prod, 7656 for dev)
 
 ### Important Notes:
-- **DO NOT touch the production `master/` instance when developing:** if you’re working in `claude-orchestrator-dev/` (feature branches / PRs), treat `~/GitHub/tools/automation/claude-orchestrator/master` as **run-only**. Do all code changes + commits in `claude-orchestrator-dev/`, then open PRs into `main`. Only `git pull` in `master/` when you explicitly want to update the running production copy.
+- **DO NOT touch the production `master/` instance when developing:** if you’re working in `agent-workspace-dev/` (feature branches / PRs), treat `~/GitHub/tools/automation/agent-workspace/master` as **run-only**. Do all code changes + commits in `agent-workspace-dev/`, then open PRs into `main`. Only `git pull` in `master/` when you explicitly want to update the running production copy.
 - Both instances can run simultaneously without conflicts
 - The `.env` files control which ports are used
 - `npm start`, `npm run dev`, and `npm run prod` are all equivalent
