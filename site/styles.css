@@ -694,6 +694,12 @@ a.btn-glow {
   background: #060912;
 }
 
+.feature-shot.narrow {
+  max-width: 380px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .terminal-grid-visual {
   display: grid;
   grid-template-columns: minmax(170px, 240px) 1fr;
