@@ -197,7 +197,7 @@ body {
 /* Hero Section Fluid */
 .hero-fluid {
   min-height: min(100vh, 900px);
-  padding: 10vh max(5vw, 2rem) 5vh;
+  padding: max(12vh, 5rem) max(5vw, 2rem) 5vh;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4vw;
@@ -1589,7 +1589,7 @@ body.legal-page {
   .hero-fluid {
     grid-template-columns: 1fr;
     text-align: center;
-    padding-top: 15vh;
+    padding-top: max(15vh, 5rem);
   }
   
   .hero-content {
