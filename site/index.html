@@ -83,12 +83,8 @@
 
       <div class="hero-showcase reveal">
         <div class="glass-panel main-ui">
-          <div class="panel-header">
-            <div class="traffic-lights"><i></i><i></i><i></i></div>
-            <div class="address-bar">workspace://local/orchestrator</div>
-          </div>
           <div class="panel-body">
-            <img src="assets/hero-homepage-windows.png" alt="Agent Workspace running on Windows with multi-agent terminal grid" class="ui-img">
+            <img src="assets/home-page-windows.png" alt="Agent Workspace running on Windows with multi-agent terminal grid" class="ui-img">
             <div class="overlay-scanline"></div>
           </div>
         </div>
@@ -258,6 +254,16 @@
 
       <article class="feature-card reveal" style="--delay: 0.1s">
         <div class="feature-copy">
+          <h3 class="feature-title">Agent + Server Windows per Worktree</h3>
+          <p class="feature-desc">Run an agent window and a server window side by side in the same worktree. Keep coding/review in the agent pane while the server pane runs your website, game runtime, tests, or any CLI command from that exact folder.</p>
+        </div>
+        <figure class="feature-shot contain">
+          <img src="assets/server-run-windows.png" alt="Agent and server windows running side by side in the same worktree">
+        </figure>
+      </article>
+
+      <article class="feature-card reveal" style="--delay: 0.15s">
+        <div class="feature-copy">
           <h3 class="feature-title">Built-in Diff Viewer + Review Console</h3>
           <p class="feature-desc">Review diffs in-app with agent and server context still visible in the same workflow. Use action buttons to jump directly to the GitHub PR or GitHub diff, re-prompt agents from review context, run verification steps, and merge once checks pass.</p>
         </div>
@@ -289,7 +295,7 @@
         </div>
       </article>
 
-      <article class="feature-card reveal" style="--delay: 0.15s">
+      <article class="feature-card reveal" style="--delay: 0.2s">
         <div class="feature-copy">
           <h3 class="feature-title">Commander</h3>
           <p class="feature-desc">Use a top-level commander terminal to orchestrate the rest of your sessions: launch agents, fan out prompts, re-run commands, and coordinate review or merge flows from one control point.</p>
@@ -299,9 +305,9 @@
         </figure>
       </article>
 
-      <article class="feature-card reveal" style="--delay: 0.2s">
+      <article class="feature-card reveal" style="--delay: 0.25s">
         <div class="feature-copy">
-          <h3 class="feature-title">Tasks Section</h3>
+          <h3 class="feature-title">Tasks Board</h3>
           <p class="feature-desc">Manage task flow in one place with board and list views, tier filters (T1-T4), provider toggles, and automation controls so you can route work to the right agent quickly.</p>
         </div>
         <figure class="feature-shot contain">
@@ -309,7 +315,7 @@
         </figure>
       </article>
 
-      <article class="feature-card reveal" style="--delay: 0.225s">
+      <article class="feature-card reveal" style="--delay: 0.3s">
         <div class="feature-copy">
           <h3 class="feature-title">Tier System</h3>
           <p class="feature-desc">Keep work organized by priority with a dedicated tier lane (T1-T4), plus quick filters to isolate focus work, reviews, and background tasks from the same worktree sidebar.</p>
@@ -319,9 +325,9 @@
         </figure>
       </article>
 
-      <article class="feature-card reveal" id="projects" style="--delay: 0.25s">
+      <article class="feature-card reveal" id="projects" style="--delay: 0.35s">
         <div class="feature-copy">
-          <h3 class="feature-title">Projects Section</h3>
+          <h3 class="feature-title">Projects Board</h3>
           <p class="feature-desc">Track active and shipped work with the projects board workflow. Keep previous project history visible while new work moves through planning, active implementation, and ship queues.</p>
         </div>
         <figure class="feature-shot contain">
@@ -329,9 +335,9 @@
         </figure>
       </article>
 
-      <article class="feature-card reveal" id="ports" style="--delay: 0.3s">
+      <article class="feature-card reveal" id="ports" style="--delay: 0.4s">
         <div class="feature-copy">
-          <h3 class="feature-title">Ports Section</h3>
+          <h3 class="feature-title">Ports Panel</h3>
           <p class="feature-desc">See the running services list in one place, including assigned ports and owning worktrees. This makes it easy to inspect local stacks, debug collisions, and jump to the right runtime quickly.</p>
         </div>
         <figure class="feature-shot contain">
@@ -339,23 +345,20 @@
         </figure>
       </article>
 
-      <article class="feature-card reveal" id="multitab" style="--delay: 0.35s">
+      <article class="feature-card reveal" id="multitab" style="--delay: 0.45s">
         <div class="feature-copy">
           <h3 class="feature-title">Multi-Tab Workspaces</h3>
           <p class="feature-desc">Open multiple workspaces at once in browser-like tabs. Switch contexts without killing sessions, and keep each workspace state isolated while terminals continue running in the background.</p>
         </div>
         <div class="feature-visual tabs-visual" aria-hidden="true">
           <img class="tab-strip-inline" src="assets/workspace-tabs-windows.png" alt="">
-          <div class="tabs-row">
-            <span class="tab-chip active">Website</span>
-            <span class="tab-chip">API</span>
-            <span class="tab-chip">Infra</span>
-            <span class="tab-chip">Review</span>
-          </div>
-          <div class="tabs-content">
-            <div>website/work1 · Claude</div>
-            <div>website/work2 · Codex</div>
-            <div>website/work3 · Server</div>
+          <div class="tabs-side-by-side">
+            <figure class="tabs-shot">
+              <img src="assets/home-page-windows.png" alt="">
+            </figure>
+            <figure class="tabs-shot">
+              <img src="assets/workspace2-windows.png" alt="">
+            </figure>
           </div>
         </div>
       </article>

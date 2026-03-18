@@ -397,57 +397,22 @@ a.btn-glow {
   transform-style: preserve-3d;
   transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   position: absolute;
-  top: 50%;
+  top: 49%;
   left: 50%;
   width: 120%;
-  margin-left: -60%;
-  margin-top: -35%;
+  margin-left: -62%;
+  margin-top: -36%;
 }
 
 .hero-showcase:hover .glass-panel {
   transform: rotateY(-5deg) rotateX(2deg) scale(1);
 }
 
-.panel-header {
-  background: rgba(0,0,0,0.5);
-  padding: 1rem;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-.traffic-lights {
-  display: flex;
-  gap: 8px;
-  margin-right: 1.5rem;
-}
-
-.traffic-lights i {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #333;
-}
-
-.traffic-lights i:nth-child(1) { background: #ff5f56; }
-.traffic-lights i:nth-child(2) { background: #ffbd2e; }
-.traffic-lights i:nth-child(3) { background: #27c93f; }
-
-.address-bar {
-  flex: 1;
-  background: rgba(255,255,255,0.05);
-  border-radius: 6px;
-  padding: 0.4rem 1rem;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  text-align: center;
-}
-
 .panel-body {
   position: relative;
   width: 100%;
-  padding-top: 56.25%; /* 16:9 aspect ratio */
+  aspect-ratio: 1705 / 1109;
+  background: #060912;
 }
 
 .ui-img {
@@ -456,8 +421,8 @@ a.btn-glow {
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: top;
+  object-fit: contain;
+  object-position: top center;
 }
 
 .overlay-scanline {
@@ -945,7 +910,7 @@ a.btn-glow {
 
 .tab-strip-inline {
   width: 100%;
-  max-width: 620px;
+  max-width: 740px;
   height: auto;
   max-height: 64px;
   object-fit: contain;
@@ -956,38 +921,28 @@ a.btn-glow {
   padding: 0.35rem;
 }
 
-.tabs-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.tab-chip {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  color: #d1d5db;
-  padding: 0.35rem 0.7rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-}
-
-.tab-chip.active {
-  border-color: rgba(59, 130, 246, 0.5);
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, 0.22);
-}
-
-.tabs-content {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(2, 6, 23, 0.76);
-  padding: 0.75rem;
+.tabs-side-by-side {
   display: grid;
-  gap: 0.45rem;
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
-  color: #e5e7eb;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.tabs-shot {
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.76);
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+
+.tabs-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  background: #060912;
 }
 
 /* Integrations Fluid */
@@ -1706,6 +1661,10 @@ body.legal-page {
   .visual-grid,
   .diff-columns,
   .projects-visual {
+    grid-template-columns: 1fr;
+  }
+
+  .tabs-side-by-side {
     grid-template-columns: 1fr;
   }
 }
