@@ -11,15 +11,25 @@ Run multiple CLI agents in parallel across different repos. Your hardware, your 
 
 ## Product Screenshots
 
+### Hero
+
 ![Agent Workspace hero](site/assets/home-page-windows.png)
 
-| Worktree Grid + Sidebar | Multi-Workspace Tabs |
-| --- | --- |
-| ![Workspace grid](site/assets/workspace2-windows.png) | ![Tabs with multi workspace](site/assets/workspace-tabs-windows.png) |
+### Multi-Workspace Tabs
 
-| Projects Board | Ports Panel |
-| --- | --- |
-| ![Projects board](site/assets/projects-board-windows.png) | ![Ports panel](site/assets/ports-windows.png) |
+![Multi-workspace tabs](site/assets/workspace2-windows.png)
+
+### Agent + Server Windows
+
+![Agent and server windows](site/assets/server-run-windows.png)
+
+### Projects Board
+
+![Projects board](site/assets/projects-board-windows.png)
+
+### Ports Panel
+
+![Ports panel](site/assets/ports-windows.png)
 
 ## A GUI for your TUIs
 
