@@ -224,6 +224,7 @@ client/workspace-wizard.js         - Workspace creation wizard
 └─ Integration: Worktree creation and template application
 
 client/greenfield-wizard.js        - New-project wizard (greenfield creation flow)
+client/greenfield-framework-modal.js - Framework creation modal for the greenfield wizard
 ├─ Uses project taxonomy categories before rendering
 ├─ Calls `orchestrator.createProjectWorkspace(options)` to centralize socket + REST fallback (`POST /api/projects/create-workspace`)
 ├─ Category → framework → template drilldown based on taxonomy relationships
@@ -332,6 +333,7 @@ src-tauri/Cargo.toml               - Rust dependencies + build profiles (release
 ├─ profile.release: lto=true, codegen-units=1, opt-level="s" — smallest binary, slow compile (CI/distribution)
 └─ profile.fast: lto=false, codegen-units=256, incremental — ~3-5x faster compile (local dev/testing)
 config.json                        - Shared application configuration
+config/project-types.json          - Greenfield category/framework/template taxonomy (supports framework pathSuffix defaults)
 package.json                       - Node.js dependencies and scripts
 
 user-settings.json                 - User preferences and workspace settings
@@ -568,6 +570,7 @@ POST /api/threads/:id/archive     - Archive thread (hidden unless includeArchive
 GET /api/project-types            - Full project taxonomy (categories/frameworks/templates + metadata)
 GET /api/project-types/categories - Project categories with resolved base paths
 GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
+POST /api/project-types/frameworks - Add a framework to the project taxonomy
 GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
 GET /api/github/repos             - List GitHub repositories via `gh` (owner/limit/force supported)
 POST /api/github/clone-and-add-worktree - Clone `owner/repo` into taxonomy-guided folder placement (`<repo>/master`) and attach/start a mixed worktree (default `work1`)

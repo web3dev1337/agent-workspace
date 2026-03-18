@@ -10,6 +10,8 @@ class GreenfieldWizard {
       category: '',
       framework: '',
       template: '',
+      basePathOverride: '',
+      subfolderPath: '',
       repo: '',
       githubOrg: '',
       createGithub: true,
@@ -23,6 +25,7 @@ class GreenfieldWizard {
     this.frameworks = [];
     this.templates = [];
     this.contextSuggestion = null;
+    this.frameworkModal = new GreenfieldFrameworkModal(this);
     // Always use same-origin API requests; the dev server proxies `/api` to the backend.
     this.serverUrl = window.location.origin;
     this._onEscape = null;
@@ -35,7 +38,6 @@ class GreenfieldWizard {
     this.contextSuggestion = null;
     await this.loadTaxonomy();
     this.applyContextSuggestion();
-    this.ensureValidSelection();
 
     // Show wizard modal
     this.renderWizard();
@@ -60,6 +62,7 @@ class GreenfieldWizard {
           name: String(framework?.name || framework?.id || '').trim(),
           description: String(framework?.description || '').trim(),
           categoryId: String(framework?.categoryId || '').trim(),
+          pathSuffix: String(framework?.pathSuffix || '').trim(),
           defaultTemplateId: String(framework?.defaultTemplateId || '').trim(),
           templateIds: Array.isArray(framework?.templateIds) ? framework.templateIds.map((id) => String(id || '').trim()).filter(Boolean) : []
         })).filter((item) => item.id) : [];
@@ -96,6 +99,7 @@ class GreenfieldWizard {
           name: String(framework?.name || framework?.id || '').trim(),
           description: String(framework?.description || '').trim(),
           categoryId: String(framework?.categoryId || '').trim(),
+          pathSuffix: String(framework?.pathSuffix || '').trim(),
           defaultTemplateId: String(framework?.defaultTemplateId || '').trim(),
           templateIds: Array.isArray(framework?.templateIds) ? framework.templateIds.map((id) => String(id || '').trim()).filter(Boolean) : []
         })).filter((item) => item.id) : [];
@@ -233,19 +237,34 @@ class GreenfieldWizard {
       frameworkId: framework?.id || '',
       templateId: template.id
     };
-
-    if (!this.data.category) this.data.category = categoryId;
-    if (!this.data.framework && framework?.id) this.data.framework = framework.id;
-    if (!this.data.template) this.data.template = template.id;
   }
 
-  ensureValidSelection() {
-    if (!this.data.category && this.categories.length) {
-      this.data.category = this.categories[0].id;
-    }
+  acceptContextSuggestion() {
+    if (!this.contextSuggestion) return;
+    this.data.category = this.contextSuggestion.categoryId || '';
+    this.data.framework = this.contextSuggestion.frameworkId || '';
+    this.data.template = this.contextSuggestion.templateId || '';
+    this.ensureValidSelection();
+    this.showStep(this.currentStep);
+  }
 
+  acceptDetectedCategory() {
+    const detected = String(this.data.detectedCategory || '').trim();
+    if (!detected) return;
+    this.data.category = detected;
+    this.data.framework = '';
+    this.data.template = '';
+    this.ensureValidSelection();
+    this.showStep(this.currentStep);
+  }
+
+  ensureValidSelection({ allowTemplateAuto = true } = {}) {
     const category = this.getSelectedCategory();
-    if (!category) return;
+    if (!category) {
+      this.data.framework = '';
+      this.data.template = '';
+      return;
+    }
 
     const frameworks = this.getFrameworksForCategory(category.id);
     if (!frameworks.length) {
@@ -255,42 +274,50 @@ class GreenfieldWizard {
     }
 
     const selectedFramework = frameworks.find((framework) => framework.id === this.data.framework);
-    const framework = selectedFramework || frameworks[0];
-    this.data.framework = framework.id;
+    if (!selectedFramework) {
+      this.data.framework = '';
+      this.data.template = '';
+      return;
+    }
 
-    const templates = this.getTemplatesForFramework(framework.id);
+    const templates = this.getTemplatesForFramework(selectedFramework.id);
     if (!templates.length) {
       this.data.template = '';
       return;
     }
 
-    const preferredTemplateId = this.data.template
-      || framework.defaultTemplateId
-      || category.defaultTemplateId
-      || templates[0].id;
-    const selectedTemplate = templates.find((template) => template.id === preferredTemplateId) || templates[0];
-    this.data.template = selectedTemplate.id;
+    const selectedTemplate = templates.find((template) => template.id === this.data.template);
+    if (!selectedTemplate && allowTemplateAuto) {
+      const preferredTemplateId = selectedFramework.defaultTemplateId
+        || category.defaultTemplateId
+        || templates[0].id;
+      const preferredTemplate = templates.find((template) => template.id === preferredTemplateId) || templates[0];
+      this.data.template = preferredTemplate.id;
+    }
   }
 
   setCategory(categoryId) {
     const next = String(categoryId || '').trim();
-    if (!next) return;
     this.data.category = next;
+    const frameworks = next ? this.getFrameworksForCategory(next) : [];
+    if (!frameworks.find((framework) => framework.id === this.data.framework)) {
+      this.data.framework = '';
+      this.data.template = '';
+    }
     this.ensureValidSelection();
   }
 
   setFramework(frameworkId) {
     const next = String(frameworkId || '').trim();
-    if (!next) return;
     this.data.framework = next;
+    this.data.template = '';
     this.ensureValidSelection();
   }
 
   setTemplate(templateId) {
     const next = String(templateId || '').trim();
-    if (!next) return;
     this.data.template = next;
-    this.ensureValidSelection();
+    this.ensureValidSelection({ allowTemplateAuto: false });
   }
 
   renderWizard() {
@@ -344,7 +371,7 @@ class GreenfieldWizard {
   showStep(step) {
     this.currentStep = step;
     if (step === 2 || step === 3) {
-      this.ensureValidSelection();
+      this.ensureValidSelection({ allowTemplateAuto: true });
     }
 
     // Update progress indicators
@@ -403,6 +430,7 @@ class GreenfieldWizard {
           <span class="category-value">${suggestedTemplate?.name || this.contextSuggestion.templateId}</span>
           <span class="category-path">based on current repo type ${this.contextSuggestion.repositoryType}</span>
           ${suggestedFramework ? `<span class="category-path">framework: ${suggestedFramework.name}</span>` : ''}
+          <button class="btn-small secondary" onclick="window.greenfieldWizard.acceptContextSuggestion()">Use suggestion</button>
         </div>
         ` : ''}
 
@@ -411,6 +439,7 @@ class GreenfieldWizard {
           <span class="category-label">Detected category:</span>
           <span class="category-value">${detectedCategory?.name || this.data.detectedCategory}</span>
           <span class="category-path">${this.getCategoryPath(this.data.detectedCategory)}</span>
+          <button class="btn-small secondary" onclick="window.greenfieldWizard.acceptDetectedCategory()">Use detected category</button>
         </div>
         ` : ''}
       </div>
@@ -418,27 +447,39 @@ class GreenfieldWizard {
   }
 
   renderConfigureStep() {
-    this.ensureValidSelection();
+    this.ensureValidSelection({ allowTemplateAuto: true });
     const category = this.getSelectedCategory();
-    const frameworks = this.getFrameworksForCategory(category?.id);
-    const templates = this.getTemplatesForFramework(this.data.framework);
+    const frameworks = category ? this.getFrameworksForCategory(category.id) : [];
+    const templates = this.data.framework ? this.getTemplatesForFramework(this.data.framework) : [];
     const repoPreview = this.getRepositoryTargetPreview();
+    const placementRoot = this.getPlacementRootPath();
+    const projectPathPreview = this.getProjectRootPath();
+    const frameworkSuggestion = this.getFrameworkSubfolderSuggestion();
 
-    const categoryOptions = this.categories.map((c) => `
-      <option value="${c.id}" ${this.data.category === c.id ? 'selected' : ''}>
-        ${(c.name || c.id)} (${c.path})
-      </option>
-    `).join('');
-    const frameworkOptions = frameworks.map((framework) => `
-      <option value="${framework.id}" ${this.data.framework === framework.id ? 'selected' : ''}>
-        ${framework.name || framework.id}
-      </option>
-    `).join('');
-    const templateOptions = templates.map((template) => `
-      <option value="${template.id}" ${this.data.template === template.id ? 'selected' : ''}>
-        ${template.name || template.id}
-      </option>
-    `).join('');
+    const categoryOptions = [
+      '<option value="">(choose category)</option>',
+      ...this.categories.map((c) => `
+        <option value="${c.id}" ${this.data.category === c.id ? 'selected' : ''}>
+          ${(c.name || c.id)} (${c.path})
+        </option>
+      `)
+    ].join('');
+    const frameworkOptions = [
+      '<option value="">(choose framework)</option>',
+      ...frameworks.map((framework) => `
+        <option value="${framework.id}" ${this.data.framework === framework.id ? 'selected' : ''}>
+          ${framework.name || framework.id}
+        </option>
+      `)
+    ].join('');
+    const templateOptions = [
+      '<option value="">(choose template)</option>',
+      ...templates.map((template) => `
+        <option value="${template.id}" ${this.data.template === template.id ? 'selected' : ''}>
+          ${template.name || template.id}
+        </option>
+      `)
+    ].join('');
     const selectedTemplate = this.getSelectedTemplate();
 
     return `
@@ -456,18 +497,44 @@ class GreenfieldWizard {
 
         <div class="form-group">
           <label for="gf-framework">Framework</label>
-          <select id="gf-framework" onchange="window.greenfieldWizard.setFramework(this.value); window.greenfieldWizard.showStep(2);">
-            ${frameworkOptions || '<option value="">(none)</option>'}
-          </select>
+          <div class="field-row">
+            <select id="gf-framework" ${category ? '' : 'disabled'} onchange="window.greenfieldWizard.setFramework(this.value); window.greenfieldWizard.showStep(2);">
+              ${frameworkOptions}
+            </select>
+            <button class="btn-small secondary" type="button" onclick="window.greenfieldWizard.openFrameworkBuilder()">Add framework</button>
+          </div>
           <p class="field-help">${this.getSelectedFramework()?.description || 'Framework-specific defaults and template options'}</p>
         </div>
 
         <div class="form-group">
           <label for="gf-template">Template</label>
-          <select id="gf-template" onchange="window.greenfieldWizard.setTemplate(this.value); window.greenfieldWizard.showStep(2);">
-            ${templateOptions || '<option value="">(none)</option>'}
+          <select id="gf-template" ${this.data.framework ? '' : 'disabled'} onchange="window.greenfieldWizard.setTemplate(this.value); window.greenfieldWizard.showStep(2);">
+            ${templateOptions}
           </select>
           <p class="field-help">${selectedTemplate?.description || 'Scaffold starter kit'}</p>
+        </div>
+
+        <div class="form-group">
+          <label for="gf-base-path">Base folder (optional)</label>
+          <input type="text" id="gf-base-path" value="${this.data.basePathOverride || ''}"
+                 placeholder="${category?.path || '~/GitHub/projects'}"
+                 oninput="window.greenfieldWizard.updateData('basePathOverride', this.value)">
+          <p class="field-help">Leave blank to use the category default. Use ~ to reference your home directory.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="gf-subfolder-path">Subfolder (optional)</label>
+          <input type="text" id="gf-subfolder-path" value="${this.data.subfolderPath || ''}"
+                 placeholder="e.g., unity or experiments/alpha"
+                 oninput="window.greenfieldWizard.updateData('subfolderPath', this.value)">
+          <p class="field-help">Adds an extra folder level under the base folder.</p>
+          ${frameworkSuggestion && !this.data.subfolderPath ? `
+          <div class="field-suggestion">
+            Suggested subfolder: <code>${frameworkSuggestion}</code>
+            <button class="btn-small secondary" type="button" onclick="window.greenfieldWizard.applyFrameworkSubfolderSuggestion()">Use</button>
+          </div>
+          ` : ''}
+          <p class="field-help">Preview: <code>${projectPathPreview || placementRoot || ''}</code></p>
         </div>
 
         <div class="form-group">
@@ -541,8 +608,7 @@ class GreenfieldWizard {
   }
 
   renderReviewStep() {
-    const categoryPath = this.getCategoryPath(this.data.category);
-    const fullPath = `${categoryPath}/${this.data.name}`;
+    const fullPath = this.getProjectRootPath();
     const selectedCategory = this.getSelectedCategory();
     const selectedFramework = this.getSelectedFramework();
     const selectedTemplate = this.getSelectedTemplate();
@@ -562,7 +628,7 @@ class GreenfieldWizard {
             <p class="review-description">${this.data.description || '(not set)'}</p>
           </div>
           <div class="review-item">
-            <strong>Location:</strong> ${fullPath}
+            <strong>Location:</strong> ${fullPath || '(not set)'}
           </div>
           <div class="review-item">
             <strong>Category:</strong> ${selectedCategory?.name || this.data.category || '(not set)'}
@@ -592,7 +658,7 @@ class GreenfieldWizard {
         <div class="creation-flow">
           <h4>What will happen:</h4>
           <ol>
-            <li>Create folder: <code>${fullPath}/master</code></li>
+            <li>Create folder: <code>${this.joinPathSegments(fullPath, 'master')}</code></li>
             <li>Initialize git repository</li>
             ${this.data.createGithub
               ? `<li>Create GitHub repo (${this.data.isPrivate ? 'private' : 'public'})${repoPreview ? ` as <code>${repoPreview}</code>` : ''}</li>`
@@ -613,6 +679,74 @@ class GreenfieldWizard {
   getCategoryPath(categoryId) {
     const cat = this.getCategoryById(categoryId);
     return cat?.path || '~/GitHub/projects';
+  }
+
+  getFrameworkSubfolderSuggestion() {
+    const framework = this.getSelectedFramework();
+    return String(framework?.pathSuffix || '').trim();
+  }
+
+  applyFrameworkSubfolderSuggestion() {
+    const suggestion = this.getFrameworkSubfolderSuggestion();
+    if (!suggestion) return;
+    this.data.subfolderPath = suggestion;
+    this.showStep(this.currentStep);
+  }
+
+  getPlacementBasePath() {
+    const override = String(this.data.basePathOverride || '').trim();
+    if (override) return override;
+    return this.getCategoryPath(this.data.category);
+  }
+
+  getPlacementSubfolder() {
+    const raw = String(this.data.subfolderPath || '').trim();
+    if (!raw) return '';
+    return raw.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  }
+
+  joinPathSegments(base, segment) {
+    const root = String(base || '').trim();
+    const suffix = String(segment || '').trim();
+    if (!root) return suffix;
+    if (!suffix) return root;
+    const sep = root.includes('\\') || /^[A-Za-z]:/.test(root) ? '\\' : '/';
+    const cleanRoot = root.replace(/[\\/]+$/g, '');
+    const cleanSuffix = suffix.replace(/^[\\/]+/g, '');
+    return `${cleanRoot}${sep}${cleanSuffix}`;
+  }
+
+  getPlacementRootPath() {
+    const basePath = this.getPlacementBasePath();
+    const subfolder = this.getPlacementSubfolder();
+    return this.joinPathSegments(basePath, subfolder);
+  }
+
+  getProjectRootPath() {
+    const basePath = this.getPlacementRootPath();
+    const name = String(this.data.name || '').trim();
+    if (!name) return basePath;
+    return this.joinPathSegments(basePath, name);
+  }
+
+  validatePlacement() {
+    const basePath = String(this.data.basePathOverride || '').trim();
+    if (basePath && /(^|[\\/])\\.\\.([\\/]|$)/.test(basePath)) {
+      alert('Base folder cannot include ".." segments');
+      return false;
+    }
+    const subfolder = String(this.data.subfolderPath || '').trim();
+    if (subfolder) {
+      if (/^[\\/]/.test(subfolder) || /^[A-Za-z]:/.test(subfolder)) {
+        alert('Subfolder should be relative (no leading / or drive letters)');
+        return false;
+      }
+      if (/(^|[\\/])\\.\\.([\\/]|$)/.test(subfolder)) {
+        alert('Subfolder cannot include ".." segments');
+        return false;
+      }
+    }
+    return true;
   }
 
   getRepositoryTargetPreview() {
@@ -648,9 +782,6 @@ class GreenfieldWizard {
         if (response.ok) {
           const result = await response.json();
           this.data.detectedCategory = result.category;
-          if (!this.data.category && result.category) {
-            this.setCategory(result.category);
-          }
 
           if (this.currentStep === 1) {
             this.showStep(1);
@@ -671,6 +802,10 @@ class GreenfieldWizard {
         .replace(/^@+/, '')
         .replace(/^https?:\/\/github\.com\//i, '')
         .replace(/\/+$/, '');
+    } else if (key === 'basePathOverride') {
+      this.data.basePathOverride = String(value || '').trim();
+    } else if (key === 'subfolderPath') {
+      this.data.subfolderPath = String(value || '').replace(/\\/g, '/');
     } else {
       this.data[key] = value;
     }
@@ -683,6 +818,22 @@ class GreenfieldWizard {
     if (this.currentStep === 2 || this.currentStep === 3) {
       this.showStep(this.currentStep);
     }
+  }
+
+  openFrameworkBuilder() {
+    this.frameworkModal?.open();
+  }
+
+  updateFrameworkDraft(key, value) {
+    this.frameworkModal?.updateDraft(key, value);
+  }
+
+  closeFrameworkBuilder() {
+    this.frameworkModal?.close();
+  }
+
+  submitFrameworkDraft() {
+    this.frameworkModal?.submit();
   }
 
   prevStep() {
@@ -713,14 +864,9 @@ class GreenfieldWizard {
           alert('Please enter a project description (at least 10 characters)');
           return false;
         }
-        // Set category if not set
-        if (!this.data.category) {
-          this.data.category = this.data.detectedCategory || 'other';
-        }
-        this.ensureValidSelection();
         return true;
       case 2:
-        this.ensureValidSelection();
+        this.ensureValidSelection({ allowTemplateAuto: true });
         if (!this.data.category) {
           alert('Please select a category');
           return false;
@@ -731,6 +877,9 @@ class GreenfieldWizard {
         }
         if (!this.data.template) {
           alert('Please select a template');
+          return false;
+        }
+        if (!this.validatePlacement()) {
           return false;
         }
         return true;
@@ -758,12 +907,16 @@ class GreenfieldWizard {
       const repoInput = String(this.data.repo || '').trim();
       const repoTarget = repoInput || (this.data.createGithub ? this.data.name : '');
       const githubOrg = String(this.data.githubOrg || '').trim();
+      const basePathOverride = String(this.data.basePathOverride || '').trim();
+      const subfolder = this.getPlacementSubfolder();
+      const basePath = (basePathOverride || subfolder) ? this.getPlacementRootPath() : '';
       const payload = {
         name: this.data.name,
         description: this.data.description,
         category: this.data.category,
         framework: this.data.framework,
         template: this.data.template,
+        basePath: basePath || undefined,
         repo: repoTarget || undefined,
         githubOrg: githubOrg || undefined,
         private: this.data.isPrivate,

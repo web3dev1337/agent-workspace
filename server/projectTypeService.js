@@ -190,6 +190,15 @@ function normalizeString(value) {
   return String(value || '').trim();
 }
 
+function normalizePathSegment(value) {
+  const raw = normalizeString(value).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (!raw) return '';
+  const segments = raw.split('/').filter(Boolean);
+  if (!segments.length) return '';
+  if (segments.some((segment) => segment === '.' || segment === '..')) return '';
+  return segments.join('/');
+}
+
 function normalizePathForApi(value) {
   return String(value || '').replace(/\\/g, '/').replace(/\/+$/, '');
 }
@@ -267,6 +276,7 @@ class ProjectTypeService {
       if (!id || frameworkIds.has(id)) continue;
       frameworkIds.add(id);
 
+      const pathSuffix = normalizePathSegment(row?.pathSuffix);
       const rowTemplateIds = [];
       for (const templateId of Array.isArray(row?.templateIds) ? row.templateIds : []) {
         const normalized = normalizeString(templateId);
@@ -285,6 +295,7 @@ class ProjectTypeService {
         name: normalizeString(row?.name) || id,
         description: normalizeString(row?.description),
         categoryId: normalizeString(row?.categoryId),
+        pathSuffix,
         defaultTemplateId: rowTemplateIds[0] || null,
         templateIds: rowTemplateIds
       });
@@ -341,13 +352,19 @@ class ProjectTypeService {
       const categoryId = categoryById[framework.categoryId]
         ? framework.categoryId
         : this.findCategoryForFramework(framework.id, categories);
+      const categoryBasePath = categoryById[categoryId]?.basePathResolved || '';
+      const resolvedFrameworkPath = categoryBasePath && framework.pathSuffix
+        ? path.join(categoryBasePath, framework.pathSuffix)
+        : categoryBasePath || '';
       const templateIdsForFramework = framework.templateIds.filter((templateId) => {
         const template = templates.find((item) => item.id === templateId);
-        return !!template && (!template.frameworkId || template.frameworkId === framework.id);
+        return !!template;
       });
       return {
         ...framework,
         categoryId: categoryId || '',
+        basePathResolved: resolvedFrameworkPath,
+        basePathResolvedNormalized: resolvedFrameworkPath ? normalizePathForApi(resolvedFrameworkPath) : '',
         defaultTemplateId: templateIdsForFramework.includes(framework.defaultTemplateId)
           ? framework.defaultTemplateId
           : (templateIdsForFramework[0] || null),
@@ -478,6 +495,20 @@ class ProjectTypeService {
     const templates = clone(this.taxonomy.templates || []);
 
     if (frameworkId) {
+      const framework = (this.taxonomy.frameworks || []).find((item) => item.id === frameworkId);
+      const explicitTemplateIds = Array.isArray(framework?.templateIds) ? framework.templateIds : [];
+      if (explicitTemplateIds.length) {
+        const idSet = new Set(explicitTemplateIds);
+        const ordered = [];
+        for (const templateId of explicitTemplateIds) {
+          const template = templates.find((item) => item.id === templateId);
+          if (template) ordered.push(template);
+        }
+        for (const template of templates) {
+          if (template.frameworkId === frameworkId && !idSet.has(template.id)) ordered.push(template);
+        }
+        if (ordered.length) return ordered;
+      }
       return templates.filter((template) => template.frameworkId === frameworkId);
     }
 
@@ -510,6 +541,106 @@ class ProjectTypeService {
     }
 
     return bestCategoryId;
+  }
+
+  readRawTaxonomy() {
+    try {
+      if (!fs.existsSync(this.configPath)) {
+        return clone(FALLBACK_TAXONOMY);
+      }
+      const raw = fs.readFileSync(this.configPath, 'utf8');
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.error?.('Failed to read project-types config', { error: error.message });
+      return clone(FALLBACK_TAXONOMY);
+    }
+  }
+
+  async writeRawTaxonomy(raw) {
+    const payload = raw && typeof raw === 'object' ? raw : clone(FALLBACK_TAXONOMY);
+    if (!payload.version) payload.version = 1;
+    await fs.promises.writeFile(this.configPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  }
+
+  async addFramework(input = {}) {
+    const id = normalizeString(input.id).toLowerCase();
+    if (!id) {
+      throw new Error('Framework id is required');
+    }
+    if (!/^[a-z0-9-]+$/.test(id)) {
+      throw new Error('Framework id must use lowercase letters, numbers, and hyphens');
+    }
+    const categoryId = normalizeString(input.categoryId).toLowerCase();
+    if (!categoryId) {
+      throw new Error('Framework category is required');
+    }
+    const name = normalizeString(input.name) || id;
+    const description = normalizeString(input.description);
+    const pathSuffix = normalizePathSegment(input.pathSuffix);
+    if (input.pathSuffix && !pathSuffix) {
+      throw new Error('Framework subfolder must be a relative path without dots');
+    }
+
+    const raw = this.readRawTaxonomy();
+    raw.categories = Array.isArray(raw.categories) ? raw.categories : [];
+    raw.frameworks = Array.isArray(raw.frameworks) ? raw.frameworks : [];
+    raw.templates = Array.isArray(raw.templates) ? raw.templates : [];
+
+    if (raw.frameworks.some((framework) => normalizeString(framework.id).toLowerCase() === id)) {
+      throw new Error(`Framework "${id}" already exists`);
+    }
+
+    const category = raw.categories.find((item) => normalizeString(item.id).toLowerCase() === categoryId);
+    if (!category) {
+      throw new Error(`Unknown category "${categoryId}"`);
+    }
+
+    const templateIds = Array.isArray(input.templateIds) ? input.templateIds : [];
+    const defaultTemplateId = normalizeString(input.defaultTemplateId);
+    const normalizedTemplateIds = [];
+    for (const templateId of templateIds) {
+      const normalized = normalizeString(templateId);
+      if (!normalized || normalizedTemplateIds.includes(normalized)) continue;
+      normalizedTemplateIds.push(normalized);
+    }
+    if (defaultTemplateId && !normalizedTemplateIds.includes(defaultTemplateId)) {
+      normalizedTemplateIds.unshift(defaultTemplateId);
+    }
+
+    if (!normalizedTemplateIds.length) {
+      throw new Error('Framework needs at least one template');
+    }
+
+    const templateIdSet = new Set(raw.templates.map((item) => normalizeString(item.id)));
+    for (const templateId of normalizedTemplateIds) {
+      if (!templateIdSet.has(templateId)) {
+        throw new Error(`Unknown template "${templateId}"`);
+      }
+    }
+
+    raw.frameworks.push({
+      id,
+      name,
+      description,
+      categoryId,
+      pathSuffix: pathSuffix || undefined,
+      defaultTemplateId: normalizedTemplateIds[0],
+      templateIds: normalizedTemplateIds
+    });
+
+    category.frameworkIds = Array.isArray(category.frameworkIds) ? category.frameworkIds : [];
+    if (!category.frameworkIds.includes(id)) {
+      category.frameworkIds.push(id);
+    }
+
+    await this.writeRawTaxonomy(raw);
+    this.reload();
+
+    const framework = this.getFrameworks().find((item) => item.id === id) || null;
+    return {
+      framework,
+      taxonomy: this.getTaxonomy()
+    };
   }
 }
 
