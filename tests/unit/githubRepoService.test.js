@@ -1,4 +1,9 @@
-const { parseGitHubOwnerRepo, normalizeVisibility } = require('../../server/githubRepoService');
+const {
+  parseGitHubOwnerRepo,
+  normalizeVisibility,
+  parseGitHubAuthOutput,
+  parseGitHubHostsFile
+} = require('../../server/githubRepoService');
 
 describe('GitHubRepoService helpers', () => {
   describe('parseGitHubOwnerRepo', () => {
@@ -34,5 +39,47 @@ describe('GitHubRepoService helpers', () => {
       expect(normalizeVisibility('')).toBeNull();
     });
   });
-});
 
+  describe('parseGitHubAuthOutput', () => {
+    it('parses authenticated output even when gh writes it to stderr', () => {
+      expect(parseGitHubAuthOutput('', `
+github.com
+  ✓ Logged in to github.com account octocat (/tmp/hosts.yml)
+  - Active account: true
+      `)).toEqual(expect.objectContaining({
+        authenticated: true,
+        user: 'octocat'
+      }));
+    });
+
+    it('parses not-authenticated output', () => {
+      expect(parseGitHubAuthOutput('', 'You are not logged into any GitHub hosts. To log in, run: gh auth login'))
+        .toEqual(expect.objectContaining({
+          authenticated: false,
+          user: null
+        }));
+    });
+  });
+
+  describe('parseGitHubHostsFile', () => {
+    it('extracts stored auth hints from github.com block', () => {
+      expect(parseGitHubHostsFile(`
+github.com:
+    user: octocat
+    oauth_token: gho_test
+    git_protocol: https
+`)).toEqual({
+        hasStoredAuth: true,
+        user: 'octocat'
+      });
+    });
+
+    it('returns null when github.com block is missing', () => {
+      expect(parseGitHubHostsFile(`
+example.com:
+    user: someone
+    oauth_token: token
+`)).toBeNull();
+    });
+  });
+});

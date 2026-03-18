@@ -46,6 +46,8 @@ function getCommonWindowsPathEntries(env = process.env) {
     appData ? path.join(appData, 'npm') : '',
     localAppData ? path.join(localAppData, 'Microsoft', 'WinGet', 'Links') : '',
     localAppData ? path.join(localAppData, 'Programs', 'GitHub CLI') : '',
+    programFiles ? path.join(programFiles, 'GitHub CLI') : '',
+    programFilesX86 ? path.join(programFilesX86, 'GitHub CLI') : '',
     localAppData ? path.join(localAppData, 'Programs', 'nodejs') : '',
     programFiles ? path.join(programFiles, 'Git', 'cmd') : '',
     programFiles ? path.join(programFiles, 'Git', 'bin') : '',

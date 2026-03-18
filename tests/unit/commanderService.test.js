@@ -6,6 +6,7 @@ const { CommanderService } = require('../../server/commanderService');
 
 describe('CommanderService', () => {
   let service;
+  const newline = process.platform === 'win32' ? '\r\n' : '\n';
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -103,7 +104,7 @@ describe('CommanderService', () => {
       expect(writes).toEqual(['1\r']);
 
       service.handleClaudeLaunchOutput('Welcome to Claude Code!\n? for shortcuts');
-      expect(writes).toEqual(['1\r', 'ship it\n']);
+      expect(writes).toEqual(['1\r', `ship it${newline}`]);
       expect(service.claudeLaunchState).toBeNull();
     });
   });

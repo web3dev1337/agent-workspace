@@ -7,10 +7,12 @@ const { GitHubRepoService } = require('../../server/githubRepoService');
 
 describe('GitHubRepoService listRepos', () => {
   const originalPlatform = process.platform;
+  const originalEnv = { ...process.env };
 
   beforeEach(() => {
     execFile.mockReset();
     GitHubRepoService.instance = null;
+    process.env = { ...originalEnv };
   });
 
   afterEach(() => {
@@ -18,6 +20,7 @@ describe('GitHubRepoService listRepos', () => {
       configurable: true,
       value: originalPlatform
     });
+    process.env = { ...originalEnv };
   });
 
   it('lists repos via gh and normalizes output', async () => {
@@ -47,7 +50,7 @@ describe('GitHubRepoService listRepos', () => {
     const second = await svc.listRepos({ limit: 10, force: false });
 
     expect(first).toEqual(second);
-    expect(execFile).toHaveBeenCalledTimes(1);
+    expect(execFile).toHaveBeenCalledTimes(2);
   });
 
   it('throws when gh fails', async () => {
@@ -76,7 +79,16 @@ describe('GitHubRepoService listRepos', () => {
     await svc.listRepos({ force: true });
 
     expect(execFile).toHaveBeenCalledWith(
-      'gh',
+      expect.any(String),
+      ['--version'],
+      expect.objectContaining({
+        windowsHide: true,
+        creationFlags: 0x08000000
+      }),
+      expect.any(Function)
+    );
+    expect(execFile).toHaveBeenCalledWith(
+      expect.any(String),
       expect.arrayContaining(['repo', 'list']),
       expect.objectContaining({
         windowsHide: true,
@@ -84,5 +96,132 @@ describe('GitHubRepoService listRepos', () => {
       }),
       expect.any(Function)
     );
+  });
+
+  it('reports authenticated when gh auth status succeeds via stderr output', async () => {
+    execFile.mockImplementation((cmd, args, opts, cb) => {
+      if (args.includes('--version')) {
+        cb(null, 'gh version 2.87.3\n', '');
+        return;
+      }
+      if (args[0] === 'auth' && args[1] === 'status') {
+        cb(null, '', 'github.com\n  ✓ Logged in to github.com account octocat (/tmp/hosts.yml)\n  - Active account: true\n');
+        return;
+      }
+      cb(new Error(`Unexpected command: ${cmd} ${args.join(' ')}`), '', '');
+    });
+
+    const svc = GitHubRepoService.getInstance();
+    const status = await svc.getAuthStatus({ force: true });
+
+    expect(status).toEqual({
+      authenticated: true,
+      user: 'octocat',
+      ghInstalled: true
+    });
+  });
+
+  it('falls back to Windows install paths when plain gh is not on PATH', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    });
+    process.env.ProgramFiles = 'C:\\Program Files';
+
+    execFile.mockImplementation((cmd, args, opts, cb) => {
+      if (cmd === 'gh.exe') {
+        const err = new Error('spawn gh.exe ENOENT');
+        err.code = 'ENOENT';
+        cb(err, '', '');
+        return;
+      }
+      if (cmd === 'gh') {
+        const err = new Error('spawn gh ENOENT');
+        err.code = 'ENOENT';
+        cb(err, '', '');
+        return;
+      }
+      if (String(cmd).includes('GitHub CLI') && args.includes('--version')) {
+        cb(null, 'gh version 2.87.3\n', '');
+        return;
+      }
+      if (String(cmd).includes('GitHub CLI') && args[0] === 'auth' && args[1] === 'status') {
+        cb(null, '', 'github.com\n  ✓ Logged in to github.com account windows-user (C:\\Users\\Tester\\AppData\\Roaming\\GitHub CLI\\hosts.yml)\n  - Active account: true\n');
+        return;
+      }
+      cb(new Error(`Unexpected command: ${cmd} ${args.join(' ')}`), '', '');
+    });
+
+    const svc = GitHubRepoService.getInstance();
+    const status = await svc.getAuthStatus({ force: true });
+
+    expect(status).toEqual({
+      authenticated: true,
+      user: 'windows-user',
+      ghInstalled: true
+    });
+  });
+
+  it('uses hosts.yml only as a non-authenticated hint when live probes are inconclusive', async () => {
+    const os = require('os');
+    const fs = require('fs');
+    const path = require('path');
+
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-hosts-'));
+    const configDir = path.join(tempHome, '.config', 'gh');
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, 'hosts.yml'), [
+      'github.com:',
+      '    user: cache-user',
+      '    oauth_token: gho_test',
+      '    git_protocol: https',
+      ''
+    ].join('\n'));
+    process.env.HOME = tempHome;
+    process.env.XDG_CONFIG_HOME = path.join(tempHome, '.config');
+
+    execFile.mockImplementation((cmd, args, opts, cb) => {
+      if (args.includes('--version')) {
+        cb(null, 'gh version 2.87.3\n', '');
+        return;
+      }
+      if (args[0] === 'auth' && args[1] === 'status') {
+        cb(new Error('status probe failed'), '', '');
+        return;
+      }
+      if (args[0] === 'api' && args[1] === 'user') {
+        cb(new Error('api probe failed'), '', '');
+        return;
+      }
+      cb(new Error(`Unexpected command: ${cmd} ${args.join(' ')}`), '', '');
+    });
+
+    const svc = GitHubRepoService.getInstance();
+    const status = await svc.getAuthStatus({ force: true });
+
+    expect(status).toEqual({
+      authenticated: false,
+      user: 'cache-user',
+      ghInstalled: true,
+      error: 'GitHub auth status unavailable'
+    });
+  });
+
+  it('reports gh missing when no candidate resolves', async () => {
+    execFile.mockImplementation((cmd, args, opts, cb) => {
+      const err = new Error(`spawn ${cmd} ENOENT`);
+      err.code = 'ENOENT';
+      cb(err, '', '');
+    });
+
+    const svc = GitHubRepoService.getInstance();
+    const status = await svc.getAuthStatus({ force: true });
+
+    expect(status).toEqual({
+      authenticated: false,
+      user: null,
+      ghInstalled: false,
+      error: 'GitHub CLI not installed'
+    });
   });
 });

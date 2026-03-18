@@ -39,6 +39,7 @@ describe('processUtils', () => {
     expect(next.Path).toContain('C:\\Windows\\System32');
     expect(next.Path).toContain(path.join(env.APPDATA, 'npm'));
     expect(next.Path).toContain(path.join(env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links'));
+    expect(next.Path).toContain(path.join(env.ProgramFiles, 'GitHub CLI'));
     expect(next.Path).toContain(path.join(env.ProgramFiles, 'Git', 'cmd'));
     expect(next.Path).toContain(path.join(env.ProgramFiles, 'nodejs'));
   });
