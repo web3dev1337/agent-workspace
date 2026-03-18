@@ -120,6 +120,29 @@ const parseNumstat = (numstat) => {
   return map;
 };
 
+const normalizeRemoteUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  if (raw.startsWith('git@github.com:')) {
+    return raw
+      .replace('git@github.com:', 'https://github.com/')
+      .replace(/\.git$/, '');
+  }
+
+  if (raw.startsWith('ssh://git@github.com/')) {
+    return raw
+      .replace('ssh://git@github.com/', 'https://github.com/')
+      .replace(/\.git$/, '');
+  }
+
+  if (raw.startsWith('https://') || raw.startsWith('http://')) {
+    return raw.replace(/\.git$/, '');
+  }
+
+  return raw;
+};
+
 class WorktreeGitService {
   constructor() {
     this.cache = new TTLCache({ defaultTtlMs: 5_000, maxEntries: 250 });
@@ -143,6 +166,8 @@ class WorktreeGitService {
       let branch = null;
       let ahead = 0;
       let behind = 0;
+      let remoteUrl = null;
+      let defaultBranch = null;
       let statusOutput = '';
       let diffUnstaged = '';
       let diffStaged = '';
@@ -165,6 +190,8 @@ class WorktreeGitService {
           branch,
           ahead,
           behind,
+          remoteUrl,
+          defaultBranch,
           files: [],
           commits: [],
           unpushedCommits: []
@@ -176,6 +203,30 @@ class WorktreeGitService {
         branch = stdout.trim() || null;
       } catch (error) {
         logger.debug('Failed to get branch', { path: p, error: error.message });
+      }
+
+      try {
+        const { stdout } = await execFileSafe('git', ['config', '--get', 'remote.origin.url'], { cwd: p, timeout: 7000 });
+        remoteUrl = normalizeRemoteUrl(stdout) || null;
+      } catch {
+        remoteUrl = null;
+      }
+
+      try {
+        const { stdout } = await execFileSafe('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], { cwd: p, timeout: 7000 });
+        defaultBranch = String(stdout || '').trim().replace('refs/remotes/origin/', '') || null;
+      } catch {
+        try {
+          await execFileSafe('git', ['show-ref', '--verify', '--quiet', 'refs/heads/main'], { cwd: p, timeout: 7000 });
+          defaultBranch = 'main';
+        } catch {
+          try {
+            await execFileSafe('git', ['show-ref', '--verify', '--quiet', 'refs/heads/master'], { cwd: p, timeout: 7000 });
+            defaultBranch = 'master';
+          } catch {
+            defaultBranch = null;
+          }
+        }
       }
 
       try {
@@ -257,6 +308,8 @@ class WorktreeGitService {
         branch,
         ahead,
         behind,
+        remoteUrl,
+        defaultBranch,
         files,
         commits,
         unpushedCommits
