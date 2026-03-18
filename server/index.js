@@ -5255,11 +5255,16 @@ app.get('/api/github/status', async (req, res) => {
 app.get('/api/github/repos', async (req, res) => {
   try {
     const owner = typeof req.query.owner === 'string' ? req.query.owner.trim() : '';
+    const scope = typeof req.query.scope === 'string' ? req.query.scope.trim().toLowerCase() : '';
+    const affiliation = typeof req.query.affiliation === 'string' ? req.query.affiliation.trim() : '';
     const limitRaw = parseInt(String(req.query.limit || '200'), 10);
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 2000) : 200;
     const force = String(req.query.force || '').toLowerCase() === 'true';
 
-    const repos = await githubRepoService.listRepos({ owner: owner || null, limit, force });
+    const useAccessible = !owner && (scope === 'all' || scope === 'accessible' || scope === 'full' || !!affiliation);
+    const repos = useAccessible
+      ? await githubRepoService.listAccessibleRepos({ limit, force, affiliation: affiliation || null })
+      : await githubRepoService.listRepos({ owner: owner || null, limit, force });
     res.json(repos);
   } catch (error) {
     logger.error('Failed to list GitHub repos', { error: error.message, stack: error.stack });

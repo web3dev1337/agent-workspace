@@ -31535,6 +31535,12 @@ class ClaudeOrchestrator {
                 </label>
               </div>
             </div>
+            <div class="quick-remote-input-row">
+              <input type="text" id="quick-remote-repo-input" class="search-input" placeholder="Paste GitHub repo URL or owner/repo">
+              <button class="btn-secondary" id="quick-remote-repo-add">Clone</button>
+              <button class="btn-secondary" id="quick-remote-repo-configure">Choose location…</button>
+            </div>
+            <div class="quick-remote-input-hint">New access? Hit Refresh or paste a URL to clone immediately.</div>
             <div id="quick-repo-list" class="quick-repo-list">
               <div class="loading">Loading repos...</div>
             </div>
@@ -31561,6 +31567,9 @@ class ClaudeOrchestrator {
     const advancedBtn = modal.querySelector('.quick-advanced-btn');
     const refreshBtn = modal.querySelector('#quick-worktree-refresh');
     const folderMapBtn = modal.querySelector('#quick-worktree-folder-map');
+    const quickRemoteInput = modal.querySelector('#quick-remote-repo-input');
+    const quickRemoteAddBtn = modal.querySelector('#quick-remote-repo-add');
+    const quickRemoteConfigBtn = modal.querySelector('#quick-remote-repo-configure');
     const tabButtons = modal.querySelectorAll('.quick-tab-btn');
     const convMoreBtn = modal.querySelector('.quick-conv-more-btn');
     const convHistoryBtn = modal.querySelector('.quick-conv-history-btn');
@@ -31692,6 +31701,58 @@ class ClaudeOrchestrator {
       });
     }
 
+    const resolveQuickRemoteFromInput = () => {
+      const raw = String(quickRemoteInput?.value || '').trim();
+      if (!raw) {
+        this.showToast('Paste a GitHub repo URL or owner/repo', 'warning');
+        return null;
+      }
+      const parsed = this.parseQuickRemoteRepoInput(raw);
+      if (!parsed) {
+        this.showToast('Invalid GitHub repo input. Use owner/repo or a GitHub URL.', 'error');
+        return null;
+      }
+      return {
+        nameWithOwner: parsed.nameWithOwner,
+        name: parsed.repo,
+        owner: parsed.owner,
+        isRemote: true,
+        visibility: null,
+        worktrees: []
+      };
+    };
+
+    if (quickRemoteAddBtn) {
+      quickRemoteAddBtn.addEventListener('click', async () => {
+        const remoteRepo = resolveQuickRemoteFromInput();
+        if (!remoteRepo) return;
+        const prevText = quickRemoteAddBtn.textContent;
+        try {
+          quickRemoteAddBtn.disabled = true;
+          quickRemoteAddBtn.textContent = 'Cloning…';
+          await this.cloneQuickRemoteRepoAndStartWorktree({
+            remoteRepo,
+            keepOpen: this.getWorktreeModalKeepOpen()
+          });
+          if (quickRemoteInput) quickRemoteInput.value = '';
+        } catch (error) {
+          console.error('Quick clone from input failed:', error);
+          this.showToast(String(error?.message || error), 'error');
+        } finally {
+          quickRemoteAddBtn.disabled = false;
+          quickRemoteAddBtn.textContent = prevText;
+        }
+      });
+    }
+
+    if (quickRemoteConfigBtn) {
+      quickRemoteConfigBtn.addEventListener('click', () => {
+        const remoteRepo = resolveQuickRemoteFromInput();
+        if (!remoteRepo) return;
+        this.showQuickRemoteCloneModal(remoteRepo);
+      });
+    }
+
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         tabButtons.forEach(b => b.classList.remove('active'));
@@ -31741,6 +31802,14 @@ class ClaudeOrchestrator {
         } else {
           this.applyQuickRepoSearchFilter(modal, term);
         }
+      });
+    }
+
+    if (quickRemoteInput) {
+      quickRemoteInput.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        quickRemoteAddBtn?.click();
       });
     }
 
@@ -31868,11 +31937,20 @@ class ClaudeOrchestrator {
             visibility: repo?.visibility || (repo?.isPrivate ? 'private' : 'public'),
             nameWithOwner: String(repo?.nameWithOwner || '').trim(),
             owner: String(repo?.owner || '').trim(),
+            pushedAt: repo?.pushedAt || repo?.updatedAt || null,
             worktrees: [],
-            lastModifiedMs: 0
+            lastModifiedMs: (() => {
+              const pushedAtMs = repo?.pushedAt ? Date.parse(repo.pushedAt) : 0;
+              const updatedAtMs = repo?.updatedAt ? Date.parse(repo.updatedAt) : 0;
+              return Math.max(pushedAtMs || 0, updatedAtMs || 0, 0);
+            })()
           }))
           .filter((repo) => !!repo.nameWithOwner)
-          .sort((a, b) => a.nameWithOwner.localeCompare(b.nameWithOwner));
+          .sort((a, b) => {
+            const delta = (b.lastModifiedMs || 0) - (a.lastModifiedMs || 0);
+            if (delta !== 0) return delta;
+            return a.nameWithOwner.localeCompare(b.nameWithOwner);
+          });
 
         this.quickWorktreeRemoteRepos = uncloned;
         this.quickWorktreeRemoteRepoBySlug = new Map(
@@ -32987,6 +33065,31 @@ class ClaudeOrchestrator {
       .filter((segment) => segment !== '.' && segment !== '..')
       .map((segment) => segment.replace(/[:*?"<>|]/g, ''));
     return segments.join('/');
+  }
+
+  parseQuickRemoteRepoInput(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
+    const withoutProto = raw
+      .replace(/^https?:\/\/github\.com\//i, '')
+      .replace(/^git@github\.com:/i, '')
+      .replace(/^ssh:\/\/git@github\.com\//i, '')
+      .replace(/\.git$/i, '')
+      .replace(/^\/+|\/+$/g, '');
+
+    const parts = withoutProto.split('/').map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 2) return null;
+
+    const owner = parts[0];
+    const repo = parts[1];
+    if (!owner || !repo) return null;
+
+    return {
+      owner,
+      repo,
+      nameWithOwner: `${owner}/${repo}`
+    };
   }
 
   isQuickRemoteOnboardingDismissed() {
@@ -34633,6 +34736,7 @@ class ClaudeOrchestrator {
     const url = new URL('/api/github/repos', window.location.origin);
     url.searchParams.set('limit', String(safeLimit));
     if (ownerKey) url.searchParams.set('owner', ownerKey);
+    if (!ownerKey) url.searchParams.set('scope', 'all');
     if (force) url.searchParams.set('force', 'true');
 
     const res = await fetch(url.toString());

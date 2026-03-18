@@ -3936,6 +3936,33 @@ header {
   padding: var(--space-md);
 }
 
+.quick-remote-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.quick-remote-input-row .search-input {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.quick-remote-input-row .btn-secondary {
+  min-height: 34px;
+}
+
+.quick-remote-input-hint {
+  margin: 0 0 var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 .quick-repo-controls {
   display: flex;
   flex-wrap: wrap;
