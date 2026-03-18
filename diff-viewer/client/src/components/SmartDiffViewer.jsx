@@ -378,7 +378,13 @@ const SmartDiffViewer = ({ data, initialFilePath = '' }) => {
                       ) : selectedFile.patch ? (
                         <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>
                           {selectedFile.patch.split('\n').map((line, idx) => {
-                            let style = { margin: 0, padding: '2px 5px', whiteSpace: 'pre' };
+                            let style = {
+                              margin: 0,
+                              padding: '2px 5px',
+                              whiteSpace: 'pre-wrap',
+                              overflowWrap: 'anywhere',
+                              wordBreak: 'break-word'
+                            };
                             
                             if (line.startsWith('+')) {
                               style.backgroundColor = 'var(--diff-added-bg)';

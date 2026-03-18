@@ -187,7 +187,7 @@ class WorktreeMetadataService {
       // Check for PR on this branch
       const { stdout: prOutput } = await execFileSafe(
         'gh',
-        ['pr', 'list', '--head', branch, '--json', 'number,title,state,url,isDraft,mergeable', '--limit', '1'],
+        ['pr', 'list', '--head', branch, '--state', 'all', '--json', 'number,title,state,url,isDraft,mergeable,mergedAt,closedAt', '--limit', '1'],
         { cwd: worktreePath, timeout: 10000 }
       );
 
@@ -208,7 +208,9 @@ class WorktreeMetadataService {
         state: pr.state.toLowerCase(), // OPEN, CLOSED, MERGED
         url: pr.url,
         isDraft: pr.isDraft,
-        mergeable: pr.mergeable
+        mergeable: pr.mergeable,
+        mergedAt: pr.mergedAt || null,
+        closedAt: pr.closedAt || null
       };
 
       this.setCache(cacheKey, result);

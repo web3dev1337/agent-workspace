@@ -188,7 +188,13 @@ const SmartDiffView = ({ analysis, file }) => {
                 fontSize: '13px'
               }}>
                 {file.patch.split('\n').map((line, idx) => {
-                  let style = { margin: 0, padding: '2px 5px' };
+                  let style = {
+                    margin: 0,
+                    padding: '2px 5px',
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word'
+                  };
                   if (line.startsWith('+')) {
                     style.backgroundColor = 'var(--diff-added-bg)';
                     style.color = 'var(--text-primary)';

@@ -11412,7 +11412,7 @@ class ClaudeOrchestrator {
   async launchDiffViewer(githubUrl) {
     // Parse GitHub URL to extract owner, repo, and PR/commit
     const prMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
-    const commitMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/);
+    const commitMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{7,40})/i);
     const compareMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/compare\/([^?#]+)/);
 
     let diffViewerPath = '';
@@ -12042,6 +12042,9 @@ class ClaudeOrchestrator {
 		      let prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : (hintedPrNumber ? `PR #${hintedPrNumber}` : (hintedPrUrl ? 'PR' : 'No PR'));
 		      let prState = pr?.hasPR ? String(pr?.state || '').toLowerCase() : '';
 		      let prUrl = pr?.hasPR && pr?.url ? String(pr.url) : hintedPrUrl;
+		      const summaryBranch = String(summary?.branch || '').trim();
+		      const summaryRemoteUrl = String(summary?.remoteUrl || '').trim();
+		      const summaryDefaultBranch = String(summary?.defaultBranch || '').trim();
 		      const getDiffViewerPathForGitHubUrl = (githubUrl) => {
 		        const url = String(githubUrl || '').trim();
 		        if (!url) return '';
@@ -12052,15 +12055,67 @@ class ClaudeOrchestrator {
 		          return `/pr/${owner}/${repo}/${prNumber}`;
 		        }
 
-		        const commitMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/i);
+		        const commitMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{7,40})/i);
 		        if (commitMatch) {
 		          const [, owner, repo, sha] = commitMatch;
 		          return `/commit/${owner}/${repo}/${sha}`;
 		        }
 
+		        const compareMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/compare\/([^?#]+)/i);
+		        if (compareMatch) {
+		          const [, owner, repo, refsRaw] = compareMatch;
+		          const parts = String(refsRaw || '').split('...');
+		          if (parts.length === 2) {
+		            const decodeSafe = (value) => {
+		              try { return decodeURIComponent(value); } catch { return value; }
+		            };
+		            const base = decodeSafe(parts[0]);
+		            const head = decodeSafe(parts[1]);
+		            return `/compare/${owner}/${repo}?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`;
+		          }
+		        }
+
 		        return '';
 		      };
+		      const buildCompareFallbackTarget = () => {
+		        if (!summaryRemoteUrl || !summaryBranch) return null;
+		        const remoteMatch = summaryRemoteUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/i);
+		        if (!remoteMatch) return null;
+
+		        const owner = String(remoteMatch[1] || '').trim();
+		        const repo = String(remoteMatch[2] || '').trim().replace(/\.git$/i, '');
+		        const baseRef = summaryDefaultBranch || 'main';
+		        const headRef = summaryBranch;
+		        if (!owner || !repo || !headRef || !baseRef || headRef === baseRef) return null;
+
+		        const compareUrl = `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseRef)}...${encodeURIComponent(headRef)}`;
+		        const comparePath = getDiffViewerPathForGitHubUrl(compareUrl);
+		        if (!comparePath) return null;
+		        return { url: compareUrl, path: comparePath, label: `${baseRef}...${headRef}` };
+		      };
+
+		      const compareFallback = buildCompareFallbackTarget();
+		      let diffViewerSource = prUrl ? 'pr' : '';
+		      let diffViewerUrl = prUrl || '';
 		      let diffViewerPath = prUrl ? getDiffViewerPathForGitHubUrl(prUrl) : '';
+		      if (!diffViewerPath && compareFallback?.path) {
+		        diffViewerSource = 'compare';
+		        diffViewerUrl = compareFallback.url;
+		        diffViewerPath = compareFallback.path;
+		      }
+
+		      const diffNoPrMessage = (() => {
+		        if (prUrl) return '';
+		        if (compareFallback?.path) {
+		          return `No PR detected — showing branch diff ${compareFallback.label}.`;
+		        }
+		        const dirty = Array.isArray(summary?.files) ? summary.files.length : 0;
+		        const ahead = Number(summary?.ahead || 0);
+		        if (dirty > 0 || ahead > 0) {
+		          return 'No PR detected and branch compare is unavailable (branch may not be pushed yet).';
+		        }
+		        return 'No PR detected for this worktree.';
+		      })();
 
 		      const header = (() => {
 		        const branch = gitDetected ? escapeHtml(summary?.branch || '?') : '?';
@@ -12128,7 +12183,7 @@ class ClaudeOrchestrator {
 
 		        const prChip = prUrl
 		          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-url="${escapeHtml(prUrl)}" title="Open PR">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</button>`
-		          : `<span class="worktree-inspector-chip">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
+		          : `<span class="worktree-inspector-chip">${escapeHtml(diffNoPrMessage || prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
 		        parts.push(prChip);
 
 				        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
@@ -12495,7 +12550,7 @@ class ClaudeOrchestrator {
 			                <button class="rc-tiny-btn" type="button" data-diff-open="true" title="Open in tab">↗</button>
 			                <button class="rc-tiny-btn" type="button" data-diff-refresh="true" title="Refresh" disabled>⟳</button>
 			                <button class="rc-tiny-btn" type="button" data-diff-close="true" title="Close embed" disabled>✕</button>
-			                <span class="rc-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath || '/')}</span>
+			                <span class="rc-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath || diffNoPrMessage || '/')}</span>
 			              </div>
 			              <iframe class="rc-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
 			            </div>
@@ -12774,6 +12829,8 @@ class ClaudeOrchestrator {
 		              prState = String(freshPr?.state || '').toLowerCase();
 		              prText = freshPr?.number ? `PR #${Number(freshPr.number)}` : prText;
 		              diffViewerPath = getDiffViewerPathForGitHubUrl(prUrl);
+		              diffViewerUrl = prUrl;
+		              diffViewerSource = 'pr';
 		              // Update header PR link if present
 		              const prLinkEl = bodyEl.querySelector('[data-pr-link]');
 		              if (prLinkEl) {
@@ -12793,8 +12850,8 @@ class ClaudeOrchestrator {
 		          if (currentSections.diff === false) return;
 		          if (diffLoadPromise) return diffLoadPromise;
 
-		          // If no PR yet, retry detection a couple of times before giving up.
-		          if (!prUrl) {
+		          // If we have neither PR nor compare target yet, retry PR detection briefly.
+		          if (!prUrl && !diffViewerPath) {
 		            diffStatusEl.textContent = 'No PR detected — checking…';
 		            for (let attempt = 0; attempt < 3; attempt++) {
 		              await new Promise(r => setTimeout(r, 2000));
@@ -12802,9 +12859,9 @@ class ClaudeOrchestrator {
 		            }
 		          }
 
-		          const targetPath = prUrl ? diffViewerPath : '';
+		          const targetPath = diffViewerPath || '';
 		          if (!targetPath) {
-		            diffStatusEl.textContent = 'No PR detected for this worktree. Push your branch and create a PR, then re-open.';
+		            diffStatusEl.textContent = diffNoPrMessage || 'No PR or compare diff target is available for this worktree.';
 		            if (diffIframeEl) diffIframeEl.classList.add('hidden');
 		            return;
 		          }
@@ -12819,7 +12876,11 @@ class ClaudeOrchestrator {
 		              const url = `${baseUrl}${targetPath}${embedParam}`;
 		              diffIframeEl.src = url;
 		              diffIframeEl.classList.remove('hidden');
-		              diffStatusEl.textContent = `Embedded: ${targetPath || baseUrl}`;
+		              if (!prUrl && diffViewerSource === 'compare') {
+		                diffStatusEl.textContent = `Embedded branch diff: ${targetPath}`;
+		              } else {
+		                diffStatusEl.textContent = `Embedded: ${targetPath || baseUrl}`;
+		              }
 		              if (showToast) this.showToast('Diff embedded', 'success');
 		            } catch (err) {
 		              diffStatusEl.textContent = `Diff Viewer failed to start: ${String(err?.message || err)}`;
@@ -12834,7 +12895,7 @@ class ClaudeOrchestrator {
 		        };
 
 		        diffOpenBtn?.addEventListener('click', () => {
-		          if (prUrl) this.launchDiffViewer(prUrl);
+		          if (diffViewerUrl) this.launchDiffViewer(diffViewerUrl);
 		          else this.openDiffViewerHome();
 		        });
 
@@ -12850,7 +12911,13 @@ class ClaudeOrchestrator {
 		            diffIframeEl.src = '';
 		            diffIframeEl.classList.add('hidden');
 		          }
-		          if (diffStatusEl) diffStatusEl.textContent = diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)';
+		          if (diffStatusEl) {
+		            if (!prUrl && diffViewerSource === 'compare' && diffViewerPath) {
+		              diffStatusEl.textContent = `Target: ${diffViewerPath} (branch compare)`;
+		            } else {
+		              diffStatusEl.textContent = diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)';
+		            }
+		          }
 		          updateDiffControls();
 		        });
 
@@ -13367,10 +13434,23 @@ class ClaudeOrchestrator {
       const [, owner, repo, pr] = prMatch;
       return `/pr/${owner}/${repo}/${pr}`;
     }
-    const commitMatch = raw.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/);
+    const commitMatch = raw.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{7,40})/i);
     if (commitMatch) {
       const [, owner, repo, sha] = commitMatch;
       return `/commit/${owner}/${repo}/${sha}`;
+    }
+    const compareMatch = raw.match(/github\.com\/([^\/]+)\/([^\/]+)\/compare\/([^?#]+)/);
+    if (compareMatch) {
+      const [, owner, repo, refsRaw] = compareMatch;
+      const parts = String(refsRaw || '').split('...');
+      if (parts.length === 2) {
+        const decodeSafe = (value) => {
+          try { return decodeURIComponent(value); } catch { return value; }
+        };
+        const base = decodeSafe(parts[0]);
+        const head = decodeSafe(parts[1]);
+        return `/compare/${owner}/${repo}?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`;
+      }
     }
     return '';
   }
