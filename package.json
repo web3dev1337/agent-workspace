@@ -18,6 +18,7 @@
     "dev:web": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:web:safe": "ORCHESTRATOR_PORT=4001 CLIENT_PORT=4100 npm run dev:web",
     "site:preview": "node scripts/preview-site.js",
+    "site:legal": "node scripts/render-legal-pages.js",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "jest",
     "test:e2e": "node scripts/run-e2e-safe.js",
