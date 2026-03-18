@@ -8,6 +8,7 @@ describe('CommanderService', () => {
   let service;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     // Clear singleton for testing
     CommanderService.instance = null;
     service = CommanderService.getInstance({ io: null, sessionManager: null });
@@ -19,6 +20,8 @@ describe('CommanderService', () => {
       service.stop();
     }
     CommanderService.instance = null;
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
   });
 
   describe('getInstance', () => {
@@ -66,7 +69,7 @@ describe('CommanderService', () => {
     });
 
     it('should return recent lines from buffer', () => {
-      service.outputBuffer = ['line1', 'line2', 'line3'];
+      service.outputBuffer = 'line1\nline2\nline3';
       const output = service.getRecentOutput(2);
       expect(output).toBe('line2\nline3');
     });
@@ -74,9 +77,34 @@ describe('CommanderService', () => {
 
   describe('clearBuffer', () => {
     it('should clear output buffer', () => {
-      service.outputBuffer = ['line1', 'line2'];
+      service.outputBuffer = 'line1\nline2';
       service.clearBuffer();
-      expect(service.outputBuffer.length).toBe(0);
+      expect(service.outputBuffer).toBe('');
+    });
+  });
+
+  describe('Claude trust flow', () => {
+    it('queues commander input until Claude is ready and auto-accepts trust prompt', () => {
+      const writes = [];
+      service.session = {
+        id: 'commander',
+        pty: {
+          write: (data) => writes.push(data),
+          kill: jest.fn()
+        }
+      };
+      service.claudeStarted = true;
+      service.beginClaudeLaunch({ expectTrustPrompt: true });
+
+      expect(service.sendInput('ship it\n')).toBe(true);
+      expect(writes).toEqual([]);
+
+      service.handleClaudeLaunchOutput('Quick safety check: Is this a project you created or one you trust?\n1. Yes, I trust this folder');
+      expect(writes).toEqual(['1\r']);
+
+      service.handleClaudeLaunchOutput('Welcome to Claude Code!\n? for shortcuts');
+      expect(writes).toEqual(['1\r', 'ship it\n']);
+      expect(service.claudeLaunchState).toBeNull();
     });
   });
 

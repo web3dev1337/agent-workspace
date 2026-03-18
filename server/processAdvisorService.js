@@ -163,7 +163,7 @@ class ProcessAdvisorService {
           level: 'info',
           code: 'review_slow',
           title: 'Reviews are taking a while',
-          message: `Average review time is ~${Math.round(avgReviewSeconds / 60)} minutes. Consider using the Queue “Reviewer” button for Tier 3 PRs.`,
+          message: `Average review time is ~${Math.round(avgReviewSeconds / 60)} minutes. Consider running the Queue reviewer flow for Tier 3 PRs.`,
           actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
         });
       }

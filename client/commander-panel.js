@@ -20,6 +20,17 @@ class CommanderPanel {
     this.lineBuffer = '';
   }
 
+  fitTerminalSoon() {
+    if (!this.fitAddon || !this.terminal) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.fitAddon?.fit();
+        this.terminal?.refresh?.(0, Math.max(0, (this.terminal.rows || 1) - 1));
+        this.terminal?.focus();
+      });
+    });
+  }
+
   /**
    * Initialize the Commander Panel
    */
@@ -143,13 +154,24 @@ class CommanderPanel {
     // Create terminal
     this.terminal = new Terminal({
       cursorBlink: true,
-      fontSize: 13,
-      fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
+      cursorStyle: 'bar',
+      fontSize: 12,
+      fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+      scrollback: 5000,
+      tabStopWidth: 4,
+      bellStyle: 'none',
+      allowTransparency: false,
+      convertEol: false,
+      wordSeparator: ' ()[]{}\'"',
+      rightClickSelectsWord: true,
+      rendererType: 'canvas',
+      experimentalCharAtlas: 'dynamic',
       theme: {
         background: '#0d1117',
         foreground: '#c9d1d9',
-        cursor: '#58a6ff',
-        selection: 'rgba(56, 139, 253, 0.4)',
+        cursor: '#c9d1d9',
+        cursorAccent: '#0d1117',
+        selection: 'rgba(88, 166, 255, 0.3)',
         black: '#484f58',
         red: '#ff7b72',
         green: '#3fb950',
@@ -157,7 +179,15 @@ class CommanderPanel {
         blue: '#58a6ff',
         magenta: '#bc8cff',
         cyan: '#39c5cf',
-        white: '#b1bac4'
+        white: '#b1bac4',
+        brightBlack: '#6e7681',
+        brightRed: '#ffa198',
+        brightGreen: '#56d364',
+        brightYellow: '#e3b341',
+        brightBlue: '#79c0ff',
+        brightMagenta: '#d2a8ff',
+        brightCyan: '#56d4dd',
+        brightWhite: '#f0f6fc'
       }
     });
 
@@ -169,19 +199,16 @@ class CommanderPanel {
     this.terminal.open(container);
 
     // Use requestAnimationFrame to ensure renderer is ready before fitting
-    requestAnimationFrame(() => {
-      this.fitAddon.fit();
-      this.terminal.focus();
+    this.fitTerminalSoon();
 
-      // Write any pending output that was buffered before terminal was ready
-      if (this.pendingOutput) {
-        this.terminal.write(this.pendingOutput);
-        this.pendingOutput = '';
-      }
+    // Write any pending output that was buffered before terminal was ready
+    if (this.pendingOutput) {
+      this.terminal.write(this.pendingOutput);
+      this.pendingOutput = '';
+    }
 
-      // Fetch and display existing output from Commander
-      this.fetchInitialOutput();
-    });
+    // Fetch and display existing output from Commander
+    this.fetchInitialOutput();
 
     // Handle input - send to Commander service (with optional command-mode interception)
     this.terminal.onData((data) => {
@@ -247,7 +274,7 @@ class CommanderPanel {
     // Handle resize
     window.addEventListener('resize', () => {
       if (this.isVisible && this.fitAddon) {
-        requestAnimationFrame(() => this.fitAddon.fit());
+        this.fitTerminalSoon();
       }
     });
   }
@@ -566,10 +593,7 @@ class CommanderPanel {
 
       // Fit and focus terminal
       if (this.fitAddon && this.terminal) {
-        requestAnimationFrame(() => {
-          this.fitAddon.fit();
-          this.terminal.focus();
-        });
+        this.fitTerminalSoon();
       }
     }
   }
