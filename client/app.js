@@ -183,6 +183,34 @@ class ClaudeOrchestrator {
     return type === 'server' || /-server$/.test(sid);
   }
 
+  async maybePlanWorkspaceRecovery(workspaceId, { interactive = true } = {}) {
+    const targetWorkspaceId = String(workspaceId || '').trim();
+    const DashboardCtor = window.Dashboard || (typeof Dashboard !== 'undefined' ? Dashboard : null);
+    if (!this.dashboard && DashboardCtor) {
+      this.dashboard = new DashboardCtor(this);
+    }
+    if (!targetWorkspaceId || !this.dashboard?.planRecoveryForWorkspace) {
+      return null;
+    }
+
+    const pendingWorkspaceId = String(this.dashboard?.pendingRecovery?.workspaceId || '').trim();
+    if (pendingWorkspaceId && pendingWorkspaceId === targetWorkspaceId) {
+      return this.dashboard.pendingRecovery;
+    }
+
+    try {
+      const recoveryPlan = await this.dashboard.planRecoveryForWorkspace(targetWorkspaceId, { interactive });
+      if (recoveryPlan?.pending) {
+        this.dashboard.pendingRecovery = recoveryPlan.pending;
+        return recoveryPlan.pending;
+      }
+    } catch (error) {
+      console.warn('Failed to prepare workspace recovery plan', { workspaceId: targetWorkspaceId, error });
+    }
+
+    return null;
+  }
+
   isMainlineBranch(branch) {
     const raw = String(branch || '').trim().toLowerCase();
     if (!raw) return true;
@@ -1575,6 +1603,10 @@ class ClaudeOrchestrator {
           }
         }
 
+        if (active) {
+          await this.maybePlanWorkspaceRecovery(active.id, { interactive: true });
+        }
+
         // Update voice command context with workspace info
         this.updateVoiceContext();
         this.applySimpleModeConfig();
@@ -1642,6 +1674,7 @@ class ClaudeOrchestrator {
             // visibility state that was just restored from the tab (fix #786).
             this.lastSessionsWorkspaceId = nextWorkspace.id;
 
+            await this.maybePlanWorkspaceRecovery(nextWorkspace.id, { interactive: true });
             this.handleInitialSessions(sessions);
 
             // Update workspace switcher
@@ -1669,6 +1702,7 @@ class ClaudeOrchestrator {
             // Pre-fetch worktree-specific configs for all terminals
             await this.prefetchWorktreeConfigs(nextWorkspace, sessions);
 
+            await this.maybePlanWorkspaceRecovery(nextWorkspace.id, { interactive: true });
             // Rebuild with new workspace sessions
             // Terminals will now register to the correct tab via currentTabId
             this.handleInitialSessions(sessions);
