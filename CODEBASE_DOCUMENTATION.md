@@ -370,6 +370,7 @@ site/                              - Concise product/showcase site kept separate
 ├─ sitemap.xml                     - Canonical URL inventory for core public pages
 ├─ llms.txt                        - Short AI-oriented summary + canonical product links
 ├─ llms-full.txt                   - Extended AI-oriented product details for retrieval/chat assistants
+├─ lllms.txt / llm.txt / llm-full.txt - Compatibility aliases for typo/guess-path AI metadata requests, each pointing back to canonical `llms*.txt`
 ├─ styles.css                      - Showcase visual system, layout, and motion
 ├─ script.js                       - Small reveal-on-scroll enhancement
 ├─ assets/                         - Favicon, provider logos, generated Open Graph preview, and real UI screenshots (home page, diff viewer, projects, ports, tabs)

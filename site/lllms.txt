@@ -1,0 +1,9 @@
+# Agent Workspace
+Canonical: https://agent-workspace.ai/llms.txt
+
+This is a compatibility alias for a common typo path.
+
+- Agent Workspace runs orchestration locally on the user's machine.
+- It works with Claude Code on Claude Max and Codex CLI on ChatGPT/Codex plans.
+- Many users do not need separate API keys for normal plan-backed workflows.
+- It helps reduce human context switching by keeping multiple agents, worktrees, servers, and reviews in one place.
