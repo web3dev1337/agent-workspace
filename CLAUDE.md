@@ -614,6 +614,31 @@ node scripts/migrate-to-workspaces.js
 - **`release`** (default `tauri:build`): `lto=true`, `codegen-units=1`, `opt-level="s"` — smallest binary, slowest compile. Use for distribution/CI.
 - **`fast`** (`tauri:build:fast`): `lto=false`, `codegen-units=256`, `incremental=true` — ~3-5x faster compile. Use for local dev/testing.
 
+### Release Versioning
+- `package.json` is the single source of truth for the release version.
+- Keep `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` synced with `npm run release:sync-version`.
+- Validate the repo before tagging or building release assets with `npm run release:check-version`.
+- Release tags must be `v<package.json version>`. If the tag and `package.json` do not match, release CI will fail.
+- `scripts/tauri/run-tauri-build.js` clears the profile-specific `bundle/` output before each build and verifies that every uploaded installer filename includes the expected version. This prevents stale cached assets from being attached to a new GitHub release.
+
+### Release Prep
+```bash
+# 1. Bump package.json + package-lock.json
+npm version 0.1.8 --no-git-tag-version
+
+# 2. Mirror package version into Tauri/Cargo metadata
+npm run release:sync-version
+
+# 3. Verify everything matches before tagging
+npm run release:check-version
+
+# 4. Commit the version bump, then tag the exact same version
+git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
+git commit -m "chore: release 0.1.8"
+git tag v0.1.8
+git push origin your-branch --follow-tags
+```
+
 ### Local Tauri Build Prerequisites
 ```bash
 # 1. Rust (no sudo)

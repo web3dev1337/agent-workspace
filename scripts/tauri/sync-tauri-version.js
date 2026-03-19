@@ -2,10 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-
-function getProjectRoot() {
-  return path.resolve(__dirname, '..', '..');
-}
+const { getProjectRoot, readPackageVersion } = require('../release/version-utils');
 
 function parseVersionArgument(argv) {
   for (let i = 0; i < argv.length; i += 1) {
@@ -20,13 +17,7 @@ function parseVersionArgument(argv) {
 }
 
 function getDefaultVersion(root) {
-  const pkgPath = path.join(root, 'package.json');
-  if (!fs.existsSync(pkgPath)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
-  } catch (error) {
-    return null;
-  }
+  return readPackageVersion(root);
 }
 
 function updateTauriConfig(tauriConfigPath, version) {

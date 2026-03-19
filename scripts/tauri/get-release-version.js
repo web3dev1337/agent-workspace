@@ -1,31 +1,10 @@
 const fs = require('fs');
-const path = require('path');
+const { getProjectRoot, readPackageVersion, readTagVersionFromEnv } = require('../release/version-utils');
 
 const GITHUB_OUTPUT = process.env.GITHUB_OUTPUT;
 const GITHUB_ENV = process.env.GITHUB_ENV;
 
-const root = path.resolve(__dirname, '..', '..');
-
-function readPackageVersion() {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-    return typeof pkg.version === 'string' ? pkg.version : null;
-  } catch (error) {
-    return null;
-  }
-}
-
-function fromTag() {
-  const ref = process.env.GITHUB_REF;
-  if (!ref || !ref.startsWith('refs/tags/')) {
-    return null;
-  }
-  let version = ref.slice('refs/tags/'.length);
-  if (version.startsWith('v')) {
-    version = version.slice(1);
-  }
-  return version || null;
-}
+const root = getProjectRoot(__dirname);
 
 function writeLine(filePath, line) {
   if (!filePath) return;
@@ -33,13 +12,17 @@ function writeLine(filePath, line) {
 }
 
 function main() {
-  const tagVersion = fromTag();
-  const pkgVersion = readPackageVersion();
-  const version = tagVersion || pkgVersion;
+  const tagVersion = readTagVersionFromEnv(process.env);
+  const pkgVersion = readPackageVersion(root);
 
-  if (!version) {
+  if (!pkgVersion) {
     throw new Error('Unable to determine release version (tag or package.json)');
   }
+  if (tagVersion && tagVersion !== pkgVersion) {
+    throw new Error(`Git tag version ${tagVersion} does not match package.json version ${pkgVersion}`);
+  }
+
+  const version = tagVersion || pkgVersion;
 
   writeLine(GITHUB_OUTPUT, `value=${version}`);
   writeLine(GITHUB_ENV, `RELEASE_VERSION=${version}`);

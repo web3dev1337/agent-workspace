@@ -35,6 +35,10 @@ function resolveRepoRoot() {
   return path.resolve(__dirname, '..', '..');
 }
 
+function resolveTargetRoot({ repoRoot, targetDir }) {
+  return path.resolve(targetDir || path.join(repoRoot, 'src-tauri', 'target'));
+}
+
 function resolveWindowsCacheRoot(env) {
   if (env.LOCALAPPDATA) {
     return env.LOCALAPPDATA;
@@ -120,6 +124,12 @@ function run(cmd, args, opts = {}) {
   }
 }
 
+function clearBundleOutputDir({ repoRoot, targetDir, profile }) {
+  const bundleOutputDir = path.join(resolveTargetRoot({ repoRoot, targetDir }), profile, 'bundle');
+  fs.rmSync(bundleOutputDir, { recursive: true, force: true });
+  return bundleOutputDir;
+}
+
 function main() {
   const { profile, bundles, dryRun } = parseArgs(process.argv);
   const repoRoot = resolveRepoRoot();
@@ -149,6 +159,19 @@ function main() {
     return;
   }
 
+  run(process.execPath, [path.join(repoRoot, 'scripts', 'tauri', 'sync-tauri-version.js')], {
+    cwd: repoRoot,
+    env
+  });
+
+  run(process.execPath, [path.join(repoRoot, 'scripts', 'release', 'check-version-consistency.js')], {
+    cwd: repoRoot,
+    env
+  });
+
+  const clearedBundleOutputDir = clearBundleOutputDir({ repoRoot, targetDir, profile });
+  console.log(`[tauri] Cleared bundle output dir: ${clearedBundleOutputDir}`);
+
   run(process.execPath, [path.join(repoRoot, 'scripts', 'tauri', 'prepare-backend-resources.js'), '--install-prod'], {
     cwd: repoRoot,
     env
@@ -164,6 +187,22 @@ function main() {
     cwd: repoRoot,
     env
   });
+
+  const verifyArgs = [
+    path.join(repoRoot, 'scripts', 'release', 'verify-bundle-version.js'),
+    '--profile',
+    profile,
+    '--target-dir',
+    resolveTargetRoot({ repoRoot, targetDir })
+  ];
+  if (bundleTargets && bundleTargets.length > 0) {
+    verifyArgs.push('--bundles', bundleTargets.join(','));
+  }
+
+  run(process.execPath, verifyArgs, {
+    cwd: repoRoot,
+    env
+  });
 }
 
 if (require.main === module) {
@@ -171,9 +210,11 @@ if (require.main === module) {
 }
 
 module.exports = {
+  clearBundleOutputDir,
   defaultLocalWindowsFastTargetDir,
   parseArgs,
   parseBundleList,
   resolveBundleTargets,
-  resolveCargoTargetDir
+  resolveCargoTargetDir,
+  resolveTargetRoot
 };

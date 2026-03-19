@@ -39,6 +39,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Release version consistency
+        run: npm run release:check-version
+
       - name: Unit tests
         run: npm run test:unit
 
@@ -91,8 +94,11 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Sync Tauri & Cargo version
-        run: node scripts/tauri/sync-tauri-version.js
+      - name: Sync release versions
+        run: npm run release:sync-version
+
+      - name: Release version consistency
+        run: npm run release:check-version
 
       - name: Determine build profile
         id: build_profile
@@ -123,6 +129,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Agent Workspace ${{ steps.release_version.outputs.value }}
+          generate_release_notes: true
           files: |
             src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/msi/*.msi
             src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/nsis/*.exe
