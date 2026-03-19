@@ -4111,9 +4111,28 @@ header {
   min-height: 34px;
 }
 
-.quick-create-btn.is-starting {
+.quick-create-btn.is-starting,
+.quick-primary-action-btn.is-starting,
+.quick-remote-clone-btn.is-starting,
+#quick-remote-repo-add.is-starting {
   opacity: 0.75;
   pointer-events: none;
+}
+
+.quick-create-btn.is-starting::before,
+.quick-primary-action-btn.is-starting::before,
+.quick-remote-clone-btn.is-starting::before,
+#quick-remote-repo-add.is-starting::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -1px;
 }
 
 .quick-tab-panel {

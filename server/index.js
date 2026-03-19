@@ -1064,7 +1064,8 @@ io.on('connection', (socket) => {
         worktreeId,
         worktreePath,
         repositoryName,
-        repositoryType
+        repositoryType,
+        includeExistingSessions: true
       });
 
       // IMPORTANT: Update workspace config to persist this worktree
@@ -1076,10 +1077,11 @@ io.on('connection', (socket) => {
 
           // Handle mixed-repo workspaces (terminals is an array)
           if (Array.isArray(updatedConfig.terminals)) {
-            // Add new terminal entries for claude and server
+            // Add new terminal entries for claude and server, but never duplicate
+            // persisted workspace terminals when a user reopens an existing worktree.
             const baseRepo = {
               name: repositoryName || worktreeId.split('-')[0],
-              path: repositoryRoot || worktreePath.replace(/\/work\d+$/, ''),
+              path: repositoryRoot || worktreePath.replace(/[\\/]+work\d+$/i, ''),
               type: repositoryType,
               masterBranch: 'master'
             };
@@ -1088,21 +1090,34 @@ io.on('connection', (socket) => {
               ? `${repositoryName}-${worktreeId}`
               : worktreeId;
 
-            updatedConfig.terminals.push({
-              id: `${terminalIdBase}-claude`,
-              repository: baseRepo,
-              worktree: worktreeId,
-              worktreePath: worktreePath,
-              terminalType: 'claude',
-              visible: true
-            });
-            updatedConfig.terminals.push({
-              id: `${terminalIdBase}-server`,
-              repository: baseRepo,
-              worktree: worktreeId,
-              worktreePath: worktreePath,
-              terminalType: 'server',
-              visible: true
+            const nextTerminals = [
+              {
+                id: `${terminalIdBase}-claude`,
+                repository: baseRepo,
+                worktree: worktreeId,
+                worktreePath: worktreePath,
+                terminalType: 'claude',
+                visible: true
+              },
+              {
+                id: `${terminalIdBase}-server`,
+                repository: baseRepo,
+                worktree: worktreeId,
+                worktreePath: worktreePath,
+                terminalType: 'server',
+                visible: true
+              }
+            ];
+            const existingTerminalIds = new Set(
+              updatedConfig.terminals
+                .map((terminal) => String(terminal?.id || '').trim())
+                .filter(Boolean)
+            );
+
+            nextTerminals.forEach((terminal) => {
+              if (existingTerminalIds.has(terminal.id)) return;
+              updatedConfig.terminals.push(terminal);
+              existingTerminalIds.add(terminal.id);
             });
           }
           // Handle single-repo workspaces (terminals.pairs is a number)
@@ -5314,6 +5329,7 @@ app.post('/api/github/clone-and-add-worktree', express.json(), async (req, res) 
       parentPath,
       repositoryType,
       worktreeId,
+      socketId,
       startTier,
       createFolders
     } = req.body || {};
@@ -5326,6 +5342,7 @@ app.post('/api/github/clone-and-add-worktree', express.json(), async (req, res) 
       parentPath: String(parentPath || '').trim(),
       repositoryType: String(repositoryType || '').trim(),
       worktreeId: String(worktreeId || 'work1').trim(),
+      socketId: String(socketId || '').trim(),
       startTier,
       createFolders: createFolders !== false,
       ensureWorkspaceMixedWorktree
