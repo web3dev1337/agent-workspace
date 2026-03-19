@@ -31,6 +31,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Agent Workspace",
     "license": "MIT",
     "licenseFile": "../docs/legal/WINDOWS_INSTALLER_EULA.txt",
     "icon": [

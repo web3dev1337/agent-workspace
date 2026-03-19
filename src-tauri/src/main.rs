@@ -12,16 +12,38 @@ use uuid::Uuid;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
+use std::{ffi::OsStr, iter::once, os::windows::ffi::OsStrExt};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 #[cfg(target_os = "windows")]
 const DETACHED_PROCESS: u32 = 0x00000008;
+#[cfg(target_os = "windows")]
+const WINDOWS_APP_USER_MODEL_ID: &str = "AgentWorkspace.Desktop";
 
 mod file_watcher;
 mod terminal;
 use file_watcher::{FileEvent, FileWatcherManager};
 use terminal::{TerminalManager, TerminalOutput};
+
+#[cfg(target_os = "windows")]
+fn set_windows_process_identity() {
+    let app_id: Vec<u16> = OsStr::new(WINDOWS_APP_USER_MODEL_ID)
+        .encode_wide()
+        .chain(once(0))
+        .collect();
+
+    let hr = unsafe { SetCurrentProcessExplicitAppUserModelID(app_id.as_ptr()) };
+    if hr < 0 {
+        eprintln!("Failed to set Windows AppUserModelID (0x{:08x})", hr as u32);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn set_windows_process_identity() {}
 
 struct BackendProcess {
     child: Mutex<Option<Child>>,
@@ -588,6 +610,8 @@ async fn list_watched_paths(
 }
 
 fn main() {
+    set_windows_process_identity();
+
     // Create channels for terminal output and file events
     let (output_tx, mut output_rx) = mpsc::unbounded_channel::<TerminalOutput>();
     let (file_event_tx, mut file_event_rx) = mpsc::unbounded_channel::<FileEvent>();
