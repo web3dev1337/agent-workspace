@@ -19,6 +19,8 @@ CONFIG:     config.json, package.json                - Configuration files
 META:       .github/FUNDING.yml                      - GitHub Sponsors button configuration
 PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resources + reusable packaged prod deps
             scripts/tauri/run-tauri-build.js          - Centralized Tauri build entrypoint (local Windows fast-cache pinning + profile dispatch)
+            scripts/tauri/get-release-version.js     - Extracts the release version (tag or package.json) and exports it for CI jobs.
+            scripts/tauri/sync-tauri-version.js      - Mirrors the release version into `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` before packaging.
 DIFF:       diff-viewer/                             - Advanced diff viewer component
 SITE:       site/                                    - Standalone showcase site for future GitHub Pages publishing
 PLANS:      PLANS/                                   - Date-stamped planning + implementation notes
