@@ -1,7 +1,7 @@
 # Agent Workspace
 
 [![Website](https://img.shields.io/badge/Website-agent--workspace.ai-00d4ff?style=for-the-badge)](https://agent-workspace.ai)
-[![Download](https://img.shields.io/badge/Download-Windows%20App-00d4ff?style=for-the-badge)](https://github.com/web3dev1337/agent-workspace/releases/latest)
+[![Download](https://img.shields.io/badge/Download-Latest%20Release-00d4ff?style=for-the-badge)](https://github.com/web3dev1337/agent-workspace/releases/latest)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/web3dev1337)
 [![Follow on X](https://img.shields.io/badge/Follow-%40AIOnlyDeveloper-000000?style=for-the-badge&logo=x)](https://x.com/AIOnlyDeveloper)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
@@ -90,7 +90,7 @@ Compatibility rule: if it can be launched from a terminal command in your worktr
 - **Task Integration** — Pull tasks from Trello and/or use local task records. GitHub Issues and Linear coming soon.
 - **Browser-like Tabs** — Multiple workspaces open simultaneously, each with its own terminals and state.
 - **Runs Locally** — Runs on your hardware. Access through the desktop app or the browser. No publisher-hosted telemetry by default.
-- **Windows Desktop App** — Native Tauri app with bundled Node.js. Mac app coming soon.
+- **Desktop Apps** — Native Tauri builds for Windows and macOS are published on the latest GitHub release.
 
 ## Tier System
 
@@ -107,7 +107,7 @@ Keep work organized by priority with a dedicated tier lane (T1-T4), plus quick f
 
 ### Windows
 
-[Download the latest release](https://github.com/web3dev1337/agent-workspace/releases/latest) — the app bundles everything, no dev tools needed.
+[Download the latest release](https://github.com/web3dev1337/agent-workspace/releases/latest) and grab the `.exe` or `.msi` installer — the app bundles everything, no dev tools needed.
 
 Before running the installer, verify the published SHA-256 digest on the GitHub release. If a code-signing signature is present, verify that too. If verification fails, do not run the file.
 
@@ -115,6 +115,14 @@ Before running the installer, verify the published SHA-256 digest on the GitHub 
 Get-FileHash .\downloaded-file.exe -Algorithm SHA256
 Get-AuthenticodeSignature .\downloaded-file.exe
 ```
+
+### macOS
+
+[Download the latest release](https://github.com/web3dev1337/agent-workspace/releases/latest) and grab the `.dmg` build.
+
+Current macOS releases are packaged as Apple Silicon (`aarch64`) disk images. Open the `.dmg`, drag **Agent Workspace** into `Applications`, then launch it from there.
+
+If Gatekeeper blocks the first launch, right-click the app and choose **Open**, or allow it in **System Settings -> Privacy & Security**.
 
 Or run from source:
 
