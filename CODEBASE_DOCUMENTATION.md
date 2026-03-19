@@ -331,6 +331,7 @@ Dashboard notes:
 src-tauri/src/main.rs              - Tauri application entry point
 ├─ Features: Native performance, system integration, tray icon
 ├─ Commands: File operations, system notifications, window management
+├─ Windows identity: sets an explicit AppUserModelID before UI startup so packaged WebView2 windows group as Agent Workspace instead of a generic host process
 └─ Frontend: Rust backend + web frontend hybrid
 
 src-tauri/src/terminal.rs          - Native terminal integration
@@ -341,8 +342,9 @@ src-tauri/src/lib.rs               - Tauri application library
 ### Configuration Files
 ```
 src-tauri/tauri.conf.json          - Tauri app configuration
-├─ Bundle metadata: packaged app name/version, bundle targets, icons, and Windows installer license/EULA file path
+├─ Bundle metadata: packaged app name/version, cross-platform icons (`.png`/`.icns`/`.ico`), Linux GTK app identity, Windows publisher branding, and Windows installer license/EULA file path
 src-tauri/Cargo.toml               - Rust dependencies + build profiles (release, fast)
+├─ Windows EXE metadata: `package.metadata.tauri-winres` sets embedded identity fields like `InternalName`, `OriginalFilename`, and comments for the packaged binary
 ├─ profile.release: lto=true, codegen-units=1, opt-level="s" — smallest binary, slow compile (CI/distribution)
 └─ profile.fast: lto=false, codegen-units=256, incremental — ~3-5x faster compile (local dev/testing)
 config.json                        - Shared application configuration

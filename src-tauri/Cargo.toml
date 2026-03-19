@@ -7,6 +7,11 @@ license = "MIT"
 repository = ""
 edition = "2021"
 
+[package.metadata.tauri-winres]
+Comments = "Agent Workspace desktop application"
+InternalName = "Agent Workspace"
+OriginalFilename = "agent-workspace.exe"
+
 [lib]
 name = "agent_workspace_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -28,6 +33,9 @@ uuid = { version = "1.4", features = ["v4"] }
 notify = "6.0"
 open = "5.0"
 url = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_Shell"] }
 
 [profile.release]
 panic = "abort"
