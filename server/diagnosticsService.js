@@ -198,6 +198,29 @@ function buildPlatformSmoke({ platform, tools }) {
   };
 }
 
+function getMacBrewPrefixes() {
+  const home = os.homedir();
+  return [
+    path.join(home, '.homebrew', 'bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin'
+  ];
+}
+
+function getMacNvmNodeBins() {
+  const nvmDir = path.join(os.homedir(), '.nvm', 'versions', 'node');
+  try {
+    const versions = fs.readdirSync(nvmDir);
+    return versions.sort().reverse().map((v) => path.join(nvmDir, v, 'bin'));
+  } catch { return []; }
+}
+
+function macCandidates(binary) {
+  if (process.platform !== 'darwin') return [];
+  const prefixes = [...getMacNvmNodeBins(), ...getMacBrewPrefixes()];
+  return prefixes.map((p) => ({ command: path.join(p, binary), args: ['--version'] }));
+}
+
 async function collectDiagnostics() {
   const platform = process.platform;
   const homeDir = process.env.HOME || os.homedir();
@@ -211,13 +234,27 @@ async function collectDiagnostics() {
 
   const tools = [];
 
+  if (platform === 'darwin') {
+    const brewCandidates = uniqueCommandCandidates([
+      { command: 'brew', args: ['--version'] },
+      ...macCandidates('brew')
+    ]);
+    tools.push({
+      id: 'brew',
+      name: 'Homebrew',
+      ...(await checkFirstAvailable(brewCandidates))
+    });
+  }
+
+  const isBundledNode = String(process.execPath || '').includes('.app/Contents/Resources/');
   const nodeCandidates = uniqueCommandCandidates([
     { command: 'node', args: ['--version'] },
     { command: platform === 'win32' ? 'node.exe' : 'node', args: ['--version'] },
+    ...macCandidates('node'),
     platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'nodejs', 'node.exe'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env['ProgramFiles(x86)'] || '', 'nodejs', 'node.exe'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe'), args: ['--version'] } : null,
-    { command: process.execPath || 'node', args: ['--version'] }
+    isBundledNode ? null : { command: process.execPath || 'node', args: ['--version'] }
   ]);
   const nodeCheck = await checkFirstAvailable(nodeCandidates);
   const nodeCommand = String(nodeCheck?.command || '').trim();
@@ -226,6 +263,7 @@ async function collectDiagnostics() {
   const npmCandidates = uniqueCommandCandidates([
     { command: platform === 'win32' ? 'npm.cmd' : 'npm', args: ['--version'] },
     platform === 'win32' ? { command: 'npm', args: ['--version'] } : null,
+    ...macCandidates('npm'),
     platform === 'win32' && nodeDir ? { command: path.join(nodeDir, 'npm.cmd'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'nodejs', 'npm.cmd'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env['ProgramFiles(x86)'] || '', 'nodejs', 'npm.cmd'), args: ['--version'] } : null,
@@ -247,6 +285,7 @@ async function collectDiagnostics() {
 
   const gitCandidates = uniqueCommandCandidates([
     { command: 'git', args: ['--version'] },
+    ...macCandidates('git'),
     platform === 'win32' ? { command: 'git.exe', args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'Git', 'cmd', 'git.exe'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'Git', 'bin', 'git.exe'), args: ['--version'] } : null,
@@ -269,6 +308,7 @@ async function collectDiagnostics() {
 
   const ghCandidates = uniqueCommandCandidates([
     { command: 'gh', args: ['--version'] },
+    ...macCandidates('gh'),
     platform === 'win32' ? { command: 'gh.exe', args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'GitHub CLI', 'gh.exe'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env['ProgramFiles(x86)'] || '', 'GitHub CLI', 'gh.exe'), args: ['--version'] } : null,

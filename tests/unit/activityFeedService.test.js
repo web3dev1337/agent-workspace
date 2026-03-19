@@ -72,6 +72,7 @@ describe('ActivityFeedService', () => {
 
   test('track() emits to socket.io when configured and appends JSONL to file (best-effort)', async () => {
     const filePath = nextTmpFile('activity.jsonl');
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
     const svc = new ActivityFeedService({ filePath, maxEvents: 10 });
     const io = { emit: jest.fn() };
     svc.setIO(io);
@@ -84,8 +85,14 @@ describe('ActivityFeedService', () => {
     expect(ev.ts).toBe(12345);
     expect(io.emit).toHaveBeenCalledWith('activity-event', expect.objectContaining({ id: ev.id }));
 
-    // Allow async append to happen
-    await new Promise(resolve => setTimeout(resolve, 25));
+    // Allow async append to happen (Windows CI can be slow)
+    for (let i = 0; i < 20; i++) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      try {
+        const contents = await fs.readFile(filePath, 'utf8');
+        if (contents.includes('"kind":"server.started"')) break;
+      } catch { /* file not yet written */ }
+    }
     const contents = await fs.readFile(filePath, 'utf8');
     expect(contents).toContain('"kind":"server.started"');
 

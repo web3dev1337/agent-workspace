@@ -10246,7 +10246,7 @@ class ClaudeOrchestrator {
 	    };
 	    const getBackendPlatform = () => String(state.backendPlatform || '').trim().toLowerCase();
 	    const hasResolvedBackendPlatform = () => getBackendPlatform().length > 0;
-	    const supportsDependencyOnboarding = () => getBackendPlatform() === 'win32';
+	    const supportsDependencyOnboarding = () => getBackendPlatform() === 'win32' || getBackendPlatform() === 'darwin';
 	    const setBackendPlatform = (platform) => {
 	      state.backendPlatform = String(platform || '').trim().toLowerCase();
 	      return state.backendPlatform;
@@ -10409,6 +10409,8 @@ class ClaudeOrchestrator {
 
 	    const isActionComplete = (actionId, toolsMap) => {
 	      switch (String(actionId || '').trim()) {
+	        case 'install-homebrew':
+	          return !!toolsMap.get('brew');
 	        case 'install-git':
 	          return !!toolsMap.get('git');
 	        case 'configure-git-identity':
@@ -10588,7 +10590,7 @@ class ClaudeOrchestrator {
 	      titleEl.textContent = 'Agent Workspace Setup';
 	      if (hasResolvedBackendPlatform() && !supportsDependencyOnboarding()) {
 	        summaryEl.textContent = 'Legal acknowledgement complete.';
-	        listEl.innerHTML = '<div class="dependency-setup-empty">Additional setup guidance is only required when Agent Workspace is running on Windows.</div>';
+	        listEl.innerHTML = '<div class="dependency-setup-empty">Additional setup guidance is only required when Agent Workspace is running on Windows or macOS.</div>';
 	        return { req: null, steps: [], current: null };
 	      }
 

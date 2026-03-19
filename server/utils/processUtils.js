@@ -60,8 +60,42 @@ function getCommonWindowsPathEntries(env = process.env) {
   ].filter(Boolean);
 }
 
+function getCommonMacPathEntries(env = process.env) {
+  const homeDir = String(env.HOME || os.homedir() || '').trim();
+  const entries = [
+    homeDir ? path.join(homeDir, '.homebrew', 'bin') : '',
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    homeDir ? path.join(homeDir, '.cargo', 'bin') : '',
+    homeDir ? path.join(homeDir, '.local', 'bin') : ''
+  ];
+  // Add nvm node versions
+  const nvmDir = homeDir ? path.join(homeDir, '.nvm', 'versions', 'node') : '';
+  if (nvmDir) {
+    try {
+      const versions = require('fs').readdirSync(nvmDir);
+      const sorted = versions.sort().reverse();
+      for (const v of sorted) {
+        entries.push(path.join(nvmDir, v, 'bin'));
+      }
+    } catch { /* nvm not installed */ }
+  }
+  return entries.filter(Boolean);
+}
+
 function augmentProcessEnv(env = process.env, platform = process.platform) {
   const next = { ...env };
+
+  if (platform === 'darwin') {
+    const basePathValue = next.PATH || process.env.PATH || '';
+    const entries = splitPathList(basePathValue, platform);
+    for (const candidate of getCommonMacPathEntries({ ...process.env, ...next })) {
+      appendUniquePathEntry(entries, candidate);
+    }
+    next.PATH = joinPathList(entries, platform);
+    return next;
+  }
+
   if (!isWindows(platform)) return next;
 
   const basePathValue = next.Path || next.PATH || process.env.Path || process.env.PATH || '';
