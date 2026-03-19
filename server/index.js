@@ -2747,10 +2747,12 @@ app.post('/api/sessions/intent-haiku', async (req, res) => {
 
 function pickNextWorktreeIdForWorkspace(workspace, { repositoryPath } = {}) {
   const repoPathNorm = normalizeRepositoryPath(repositoryPath);
+  const primarySlotLimit = 8;
 
   if (workspace?.workspaceType === 'mixed-repo') {
     const terminals = Array.isArray(workspace?.terminals) ? workspace.terminals : [];
     let max = 0;
+    const used = new Set();
     for (const terminal of terminals) {
       const terminalRepoPath = normalizeRepositoryPath(terminal?.repository?.path);
       if (repoPathNorm && terminalRepoPath && terminalRepoPath !== repoPathNorm) continue;
@@ -2758,13 +2760,20 @@ function pickNextWorktreeIdForWorkspace(workspace, { repositoryPath } = {}) {
       const match = String(id || '').match(/^work(\d+)$/);
       if (!match) continue;
       const n = Number(match[1]);
-      if (Number.isFinite(n)) max = Math.max(max, n);
+      if (!Number.isFinite(n)) continue;
+      used.add(`work${n}`);
+      max = Math.max(max, n);
     }
-    return `work${Math.max(1, max + 1)}`;
+    for (let i = 1; i <= primarySlotLimit; i += 1) {
+      const candidate = `work${i}`;
+      if (!used.has(candidate)) return candidate;
+    }
+    return `work${Math.max(primarySlotLimit + 1, max + 1)}`;
   }
 
   const pairs = Number(workspace?.terminals?.pairs || 0);
-  return `work${Math.max(1, pairs + 1)}`;
+  if (pairs < primarySlotLimit) return `work${Math.max(1, pairs + 1)}`;
+  return `work${Math.max(primarySlotLimit + 1, pairs + 1)}`;
 }
 
 function resolveThreadRepositoryContext(workspace, { repositoryPath, repositoryName, repositoryType } = {}) {
