@@ -207,8 +207,22 @@ function getMacSetupActions() {
     {
       id: 'install-node',
       title: 'Node.js LTS',
-      description: 'Required core dependency for running agents.',
-      command: 'brew install node@20 && brew link --overwrite node@20',
+      description: 'Installs nvm (Node Version Manager) and Node.js 20 LTS.',
+      command: [
+        'if command -v node >/dev/null 2>&1; then echo "Node.js is already installed."; node --version; exit 0; fi',
+        'echo "Installing nvm (Node Version Manager)..."',
+        'export NVM_DIR="$HOME/.nvm"',
+        'if [ ! -s "$NVM_DIR/nvm.sh" ]; then',
+        '  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash',
+        'fi',
+        '. "$NVM_DIR/nvm.sh"',
+        'echo "Installing Node.js 20 LTS..."',
+        'nvm install 20',
+        'nvm alias default 20',
+        'echo "Node.js installed successfully."',
+        'node --version',
+        'npm --version'
+      ].join('\n'),
       docsUrl: 'https://nodejs.org/en/download',
       required: false,
       runSupported: true
