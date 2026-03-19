@@ -30,6 +30,7 @@ Agent Workspace is a local-first orchestration layer for CLI coding agents.
 - **Can I use multiple repositories at once?** Yes, one workspace can include one or many repositories.
 - **Can I run server processes in the same worktree?** Yes, agent and server windows can run side by side.
 - **Can I jump straight to GitHub review pages?** Yes, the review flow supports direct links to GitHub PRs and diffs.
+- **Does anyone actually use this?** Yes. We built it over a few days in July 2025 and have used it ever since to ship websites and multiple games, with more than half a million plays across those projects. We have not opened an IDE since.
 
 ## Discovery Files
 

@@ -35,6 +35,8 @@ Agent Workspace is an open-source, local-first orchestration layer for CLI codin
   Yes, via mixed-repository workspace configuration.
 - **Can users jump directly to GitHub PRs and diffs?**
   Yes, the review flow includes direct GitHub link actions.
+- **Does anyone actually use this?**
+  Yes. We built it over a few days in July 2025 and have used it ever since to ship websites and multiple games, with more than half a million plays across those projects. We have not opened an IDE since.
 
 ## Installation
 
