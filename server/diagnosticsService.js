@@ -234,6 +234,18 @@ async function collectDiagnostics() {
 
   const tools = [];
 
+  if (platform === 'darwin') {
+    const brewCandidates = uniqueCommandCandidates([
+      { command: 'brew', args: ['--version'] },
+      ...macCandidates('brew')
+    ]);
+    tools.push({
+      id: 'brew',
+      name: 'Homebrew',
+      ...(await checkFirstAvailable(brewCandidates))
+    });
+  }
+
   const nodeCandidates = uniqueCommandCandidates([
     { command: 'node', args: ['--version'] },
     { command: platform === 'win32' ? 'node.exe' : 'node', args: ['--version'] },

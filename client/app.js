@@ -10153,6 +10153,8 @@ class ClaudeOrchestrator {
 
 	    const isActionComplete = (actionId, toolsMap) => {
 	      switch (String(actionId || '').trim()) {
+	        case 'install-homebrew':
+	          return !!toolsMap.get('brew');
 	        case 'install-git':
 	          return !!toolsMap.get('git');
 	        case 'configure-git-identity':
