@@ -36,6 +36,10 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Determine release version
+        id: release_version
+        run: node scripts/tauri/get-release-version.js
+
       - name: Resolve bundled Node version
         id: bundled_node_version
         run: |
@@ -59,6 +63,12 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      - name: Sync release versions
+        run: npm run release:sync-version
+
+      - name: Release version consistency
+        run: npm run release:check-version
 
       - name: Determine build profile
         id: build_profile
@@ -85,5 +95,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: Agent Workspace ${{ steps.release_version.outputs.value }}
+          generate_release_notes: true
           files: |
             src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/dmg/*.dmg

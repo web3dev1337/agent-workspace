@@ -16,9 +16,14 @@ SERVICES:   server/statusDetector.js, gitHelper.js   - Core services
 FRONTEND:   client/app.js, client/terminal.js        - Web client
 NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
+GUIDES:     CLAUDE.md, AGENTS.md                     - Repo workflow + release guardrails for contributors/agents
 META:       .github/FUNDING.yml                      - GitHub Sponsors button configuration
 PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resources + reusable packaged prod deps
             scripts/tauri/run-tauri-build.js          - Centralized Tauri build entrypoint (local Windows fast-cache pinning + profile dispatch)
+            scripts/tauri/get-release-version.js     - Extracts the release version (tag or package.json) and exports it for CI jobs.
+            scripts/tauri/sync-tauri-version.js      - Mirrors the release version into `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` before packaging.
+            scripts/release/check-version-consistency.js - Fails builds/tags when package/Tauri/Cargo/tag versions drift.
+            scripts/release/verify-bundle-version.js - Rejects stale bundle filenames before GitHub release upload.
 DIFF:       diff-viewer/                             - Advanced diff viewer component
 SITE:       site/                                    - Standalone showcase site for future GitHub Pages publishing
 PLANS:      PLANS/                                   - Date-stamped planning + implementation notes
@@ -114,7 +119,15 @@ scripts/tauri/run-tauri-build.js    - Shared local/CI Tauri build launcher
 ├─ Profiles: dispatches `release` vs `fast` builds from one script instead of duplicating shell commands
 ├─ Windows fast-cache pinning: local non-CI `fast` builds use a stable `%LOCALAPPDATA%\\AgentWorkspaceBuildCache\\tauri-target` root so repo renames/worktree moves do not discard Cargo incremental state
 ├─ Local installer trim: local non-CI Windows `fast` builds default to `nsis` instead of building both Windows installer formats
+├─ Version guardrails: syncs Tauri/Cargo metadata from `package.json`, runs release consistency checks, and clears stale bundle output before each build
+├─ Artifact verification: blocks CI/local release builds if installer filenames in `bundle/` do not include the expected version
 └─ Overrides: respects explicit `CARGO_TARGET_DIR` / `ORCHESTRATOR_TAURI_TARGET_DIR` when callers want a custom target root
+scripts/release/check-version-consistency.js - Release metadata guardrail
+├─ Validates: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and the active Git tag (when present)
+└─ CI usage: runs in PR/main workflows so version drift cannot merge silently
+scripts/release/verify-bundle-version.js - Bundle filename verifier
+├─ Validates: Windows `.exe`/`.msi` and macOS `.dmg` filenames include the expected release version
+└─ Failure mode: catches stale cached artifacts that wildcard GitHub release uploads would otherwise attach
 scripts/debug/                      - Manual debug helpers kept out of the repo root
 ├─ `test-button-merge.js` verifies config merge behavior against `WorkspaceManager`
 └─ `test-cascade-debug.js` prints cascaded config layers for manual inspection

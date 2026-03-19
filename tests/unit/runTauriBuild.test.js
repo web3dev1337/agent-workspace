@@ -1,11 +1,15 @@
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const {
+  clearBundleOutputDir,
   defaultLocalWindowsFastTargetDir,
   parseArgs,
   parseBundleList,
   resolveBundleTargets,
-  resolveCargoTargetDir
+  resolveCargoTargetDir,
+  resolveTargetRoot
 } = require('../../scripts/tauri/run-tauri-build');
 
 describe('run-tauri-build', () => {
@@ -79,5 +83,26 @@ describe('run-tauri-build', () => {
       bundleTargets: ['msi'],
       reason: 'arg:--bundles'
     });
+  });
+
+  test('uses repo-local target dir when no override is present', () => {
+    expect(resolveTargetRoot({
+      repoRoot: '/repo/root',
+      targetDir: null
+    })).toBe(path.resolve('/repo/root', 'src-tauri', 'target'));
+  });
+
+  test('clears the profile bundle output directory before build', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'run-tauri-build-'));
+    const bundleDir = path.join(repoRoot, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
+    fs.mkdirSync(bundleDir, { recursive: true });
+    fs.writeFileSync(path.join(bundleDir, 'stale.exe'), 'old');
+
+    const clearedPath = clearBundleOutputDir({ repoRoot, targetDir: null, profile: 'release' });
+
+    expect(clearedPath).toBe(path.join(repoRoot, 'src-tauri', 'target', 'release', 'bundle'));
+    expect(fs.existsSync(clearedPath)).toBe(false);
+
+    fs.rmSync(repoRoot, { recursive: true, force: true });
   });
 });
