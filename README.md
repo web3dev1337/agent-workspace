@@ -187,3 +187,7 @@ See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
 ## License
 
 [MIT](LICENSE)
+
+## Coming Soon
+
+Productivity workflows, agent orchestration, and human context management tools built to help you ship.
