@@ -342,7 +342,7 @@ src-tauri/src/lib.rs               - Tauri application library
 ### Configuration Files
 ```
 src-tauri/tauri.conf.json          - Tauri app configuration
-├─ Bundle metadata: packaged app name/version, bundle targets, icons, Windows publisher branding, and Windows installer license/EULA file path
+├─ Bundle metadata: packaged app name/version, cross-platform icons (`.png`/`.icns`/`.ico`), Linux GTK app identity, Windows publisher branding, and Windows installer license/EULA file path
 src-tauri/Cargo.toml               - Rust dependencies + build profiles (release, fast)
 ├─ Windows EXE metadata: `package.metadata.tauri-winres` sets embedded identity fields like `InternalName`, `OriginalFilename`, and comments for the packaged binary
 ├─ profile.release: lto=true, codegen-units=1, opt-level="s" — smallest binary, slow compile (CI/distribution)
