@@ -11825,6 +11825,103 @@ class ClaudeOrchestrator {
     return uniqueSessionIds;
   }
 
+  getReviewConsoleTerminalScrollContainer(containerEl) {
+    const container = containerEl || null;
+    if (!container) return null;
+    return container.closest?.('[data-rc-panel="terminals"]')
+      || container.closest?.('.worktree-inspector-panel')
+      || container;
+  }
+
+  scrollReviewConsoleTerminalIntoView(containerEl, sessionId, { block = 'center' } = {}) {
+    const container = this.getReviewConsoleTerminalScrollContainer(containerEl);
+    const sid = String(sessionId || '').trim();
+    if (!container || !sid) return;
+
+    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sid));
+    if (!wrapper || !wrapper.isConnected) return;
+
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    if (!wrapperRect.height || !containerRect.height) return;
+
+    const deltaTop = wrapperRect.top - containerRect.top;
+    const deltaBottom = wrapperRect.bottom - containerRect.bottom;
+    let nextScrollTop = container.scrollTop;
+
+    if (block === 'nearest') {
+      if (deltaTop < 0) nextScrollTop += deltaTop;
+      else if (deltaBottom > 0) nextScrollTop += deltaBottom;
+    } else {
+      nextScrollTop += deltaTop - Math.max(0, (containerRect.height - wrapperRect.height) / 2);
+    }
+
+    container.scrollTop = Math.max(0, nextScrollTop);
+  }
+
+  queueReviewConsoleTerminalLayout(containerEl, sessionIds, { preferredSessionId = '', scrollToBottom = false } = {}) {
+    const container = containerEl || null;
+    const uniqueSessionIds = Array.from(new Set(
+      (Array.isArray(sessionIds) ? sessionIds : [])
+        .map((sid) => String(sid || '').trim())
+        .filter(Boolean)
+    ));
+    if (!container || uniqueSessionIds.length === 0) return;
+
+    const runLayoutPass = ({ anchor = false, pushBottom = false } = {}) => {
+      const visibleSessionIds = [];
+      uniqueSessionIds.forEach((sid) => {
+        const wrapper = document.getElementById(this.getSessionDomId('wrapper', sid));
+        if (!wrapper || !wrapper.isConnected || wrapper.style.display === 'none' || wrapper.classList.contains('hidden')) {
+          return;
+        }
+
+        visibleSessionIds.push(sid);
+        try {
+          this.terminalManager?.fitTerminal?.(sid);
+        } catch {
+          // ignore
+        }
+
+        const term = this.terminalManager?.terminals?.get?.(sid);
+        if (!term) return;
+
+        try {
+          term.refresh(0, Math.max(0, term.rows - 1));
+        } catch {
+          // ignore
+        }
+
+        if (!pushBottom) return;
+
+        try {
+          this.terminalManager?.userScrolling?.set?.(sid, false);
+        } catch {
+          // ignore
+        }
+        try {
+          term.scrollToBottom?.();
+        } catch {
+          // ignore
+        }
+      });
+
+      if (!anchor || visibleSessionIds.length === 0) return;
+      const preferred = String(preferredSessionId || visibleSessionIds[0] || '').trim();
+      if (preferred) {
+        this.scrollReviewConsoleTerminalIntoView(container, preferred, { block: 'center' });
+      }
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        runLayoutPass({ anchor: true, pushBottom: !!scrollToBottom });
+        setTimeout(() => runLayoutPass({ anchor: false, pushBottom: false }), 140);
+        setTimeout(() => runLayoutPass({ anchor: false, pushBottom: false }), 420);
+      });
+    });
+  }
+
   restoreReviewConsoleDockedTerminals() {
     try {
       if (!this.reviewConsoleDockedTerminals || this.reviewConsoleDockedTerminals.size === 0) {
@@ -11961,16 +12058,12 @@ class ClaudeOrchestrator {
       wrapper.style.display = '';
       wrapper.classList.add('review-console-terminal');
       container.appendChild(wrapper);
-
-      // Let layout settle, then fit.
-      setTimeout(() => {
-        try {
-          this.terminalManager?.fitTerminal?.(sid);
-        } catch {
-          // ignore
-        }
-      }, 60);
     }
+
+    this.queueReviewConsoleTerminalLayout(container, sessionIds, {
+      preferredSessionId: sessionIdHint || sessionIds[0] || '',
+      scrollToBottom: true
+    });
 
 	  return sessionIds.length;
 	  }
@@ -13472,14 +13565,6 @@ class ClaudeOrchestrator {
 
     const label = inferredWorktreeId || String(t.id || '').trim() || worktreePath;
     await this.openWorktreeInspectorForPath(worktreePath, { label, task: t, reviewConsole: true, sessionIdHint: sessionId, prUrlHint });
-
-	    if (rcShowTerminals) {
-	      const preferredSessionId = sessionId || (inferredWorktreeId ? `${inferredWorktreeId}-claude` : '');
-	      if (preferredSessionId) {
-	        const wrapper = document.getElementById(this.getSessionDomId('wrapper', preferredSessionId));
-	        wrapper?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-	      }
-	    }
 	  }
 
 	  async fetchPullRequestDetails(prUrl, { maxFiles = 300, maxCommits = 200, maxComments = 50, maxReviews = 50 } = {}) {
@@ -13813,6 +13898,14 @@ class ClaudeOrchestrator {
 		        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
 		        return String(a).localeCompare(String(b));
 		      });
+
+          const preferredMatchingSessionId = (() => {
+            const taskSessionId = String(t?.sessionId || '').trim();
+            if (taskSessionId && matchingSessionIds.includes(taskSessionId)) return taskSessionId;
+            const currentSessionId = this.getCurrentInteractionSessionId?.();
+            if (currentSessionId && matchingSessionIds.includes(currentSessionId)) return currentSessionId;
+            return matchingSessionIds.find((sid) => !isServer(sid)) || matchingSessionIds[0] || '';
+          })();
 
 		      this.setReviewConsoleVisibilityBypass(matchingSessionIds);
 
@@ -14259,13 +14352,11 @@ class ClaudeOrchestrator {
 				        });
 				        terminalsContainer.classList.toggle('paired-layout', hasVisibleAgent && hasVisibleServer);
 
-				        if (visibleSessionIds.length) {
-				          setTimeout(() => {
-			            visibleSessionIds.forEach((sid) => {
-			              try { this.terminalManager?.fitTerminal?.(sid); } catch {}
-			            });
-			          }, 60);
-			        }
+                if (visibleSessionIds.length) {
+                  this.queueReviewConsoleTerminalLayout(terminalsContainer, visibleSessionIds, {
+                    preferredSessionId: preferredMatchingSessionId
+                  });
+                }
 			      };
 
 			      const updateGrid = () => {
@@ -14996,15 +15087,11 @@ class ClaudeOrchestrator {
 		          wrapper.style.display = '';
 		          wrapper.classList.add('review-console-terminal');
 		          terminalsContainer.appendChild(wrapper);
-
-		          setTimeout(() => {
-		            try {
-		              this.terminalManager?.fitTerminal?.(sid);
-		            } catch {
-		              // ignore
-		            }
-		          }, 60);
 		        }
+            this.queueReviewConsoleTerminalLayout(terminalsContainer, matchingSessionIds, {
+              preferredSessionId: preferredMatchingSessionId,
+              scrollToBottom: true
+            });
 		        try { updateTerminalKindVisibility(); } catch {}
 		      }
 

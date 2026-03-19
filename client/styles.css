@@ -2847,6 +2847,7 @@ header {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
 }
@@ -2872,6 +2873,7 @@ header {
   padding: 6px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -2963,7 +2965,9 @@ header {
 
 .worktree-inspector-terminals.review-console-terminals-grid {
   grid-template-columns: minmax(0, 1fr);
-  height: 100%;
+  flex: 1 1 auto;
+  height: auto;
+  min-width: 0;
   min-height: 0;
   align-content: stretch;
   grid-auto-rows: minmax(160px, 1fr);
@@ -2976,7 +2980,13 @@ header {
 
 .worktree-inspector-terminals .terminal-wrapper.review-console-terminal {
   height: 100%;
+  min-width: 0;
   min-height: 160px;
+}
+
+.review-console-grid .worktree-inspector-terminals-panel {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .rc-panel-toggle-btn {
