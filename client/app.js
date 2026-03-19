@@ -183,6 +183,34 @@ class ClaudeOrchestrator {
     return type === 'server' || /-server$/.test(sid);
   }
 
+  async maybePlanWorkspaceRecovery(workspaceId, { interactive = true } = {}) {
+    const targetWorkspaceId = String(workspaceId || '').trim();
+    const DashboardCtor = window.Dashboard || (typeof Dashboard !== 'undefined' ? Dashboard : null);
+    if (!this.dashboard && DashboardCtor) {
+      this.dashboard = new DashboardCtor(this);
+    }
+    if (!targetWorkspaceId || !this.dashboard?.planRecoveryForWorkspace) {
+      return null;
+    }
+
+    const pendingWorkspaceId = String(this.dashboard?.pendingRecovery?.workspaceId || '').trim();
+    if (pendingWorkspaceId && pendingWorkspaceId === targetWorkspaceId) {
+      return this.dashboard.pendingRecovery;
+    }
+
+    try {
+      const recoveryPlan = await this.dashboard.planRecoveryForWorkspace(targetWorkspaceId, { interactive });
+      if (recoveryPlan?.pending) {
+        this.dashboard.pendingRecovery = recoveryPlan.pending;
+        return recoveryPlan.pending;
+      }
+    } catch (error) {
+      console.warn('Failed to prepare workspace recovery plan', { workspaceId: targetWorkspaceId, error });
+    }
+
+    return null;
+  }
+
   isMainlineBranch(branch) {
     const raw = String(branch || '').trim().toLowerCase();
     if (!raw) return true;
@@ -1575,6 +1603,10 @@ class ClaudeOrchestrator {
           }
         }
 
+        if (active) {
+          await this.maybePlanWorkspaceRecovery(active.id, { interactive: true });
+        }
+
         // Update voice command context with workspace info
         this.updateVoiceContext();
         this.applySimpleModeConfig();
@@ -1642,6 +1674,7 @@ class ClaudeOrchestrator {
             // visibility state that was just restored from the tab (fix #786).
             this.lastSessionsWorkspaceId = nextWorkspace.id;
 
+            await this.maybePlanWorkspaceRecovery(nextWorkspace.id, { interactive: true });
             this.handleInitialSessions(sessions);
 
             // Update workspace switcher
@@ -1669,6 +1702,7 @@ class ClaudeOrchestrator {
             // Pre-fetch worktree-specific configs for all terminals
             await this.prefetchWorktreeConfigs(nextWorkspace, sessions);
 
+            await this.maybePlanWorkspaceRecovery(nextWorkspace.id, { interactive: true });
             // Rebuild with new workspace sessions
             // Terminals will now register to the correct tab via currentTabId
             this.handleInitialSessions(sessions);
@@ -4378,6 +4412,57 @@ class ClaudeOrchestrator {
     const worktreeId = this.getSessionWorktreeId(sid, row);
     const repositoryName = String(row?.repositoryName || this.extractRepositoryName(sid) || '').trim();
     return repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+  }
+
+  getCurrentInteractionSessionId() {
+    return String(this.focusedTerminalInfo?.sessionId || this.lastInteractedSessionId || '').trim();
+  }
+
+  getSessionIdsForWorktreeKey(worktreeKey) {
+    const target = String(worktreeKey || '').trim();
+    if (!target) return [];
+
+    const sessionIds = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (!sessionId || !session) continue;
+      const type = String(session?.type || '').trim().toLowerCase();
+      if (type !== 'claude' && type !== 'codex' && type !== 'server') continue;
+      if (this.getSessionWorktreeKey(sessionId, session) !== target) continue;
+      sessionIds.push(String(sessionId));
+    }
+
+    return sessionIds;
+  }
+
+  getReviewConsoleCurrentContextSessionIds({ repoUrl = '', headRef = '', allowAnyCurrentWorktree = false } = {}) {
+    const activeSessionId = this.getCurrentInteractionSessionId();
+    if (!activeSessionId) return [];
+
+    const activeSession = this.sessions.get(activeSessionId);
+    if (!activeSession) return [];
+
+    const activeWorktreeKey = this.getSessionWorktreeKey(activeSessionId, activeSession);
+    if (!activeWorktreeKey) return [];
+
+    const normalizeUrl = (value) => String(value || '').trim().replace(/\/+$/, '').replace(/\.git$/i, '');
+    const normalizedRepoUrl = normalizeUrl(repoUrl);
+    const activeRemoteUrl = normalizeUrl(activeSession?.remoteUrl || '');
+    const activeBranch = String(activeSession?.branch || '').trim();
+
+    const repoMatches = normalizedRepoUrl && activeRemoteUrl
+      ? (
+        activeRemoteUrl === normalizedRepoUrl
+        || activeRemoteUrl.endsWith(`/${formatClientPathTail(normalizedRepoUrl)}`)
+        || normalizedRepoUrl.endsWith(activeRemoteUrl)
+      )
+      : false;
+    const branchMatches = !!headRef && activeBranch === String(headRef || '').trim();
+
+    if (!allowAnyCurrentWorktree && !repoMatches && !branchMatches) {
+      return [];
+    }
+
+    return this.getSessionIdsForWorktreeKey(activeWorktreeKey);
   }
 
   getSessionWorktreeId(sessionId, session = null) {
@@ -11776,6 +11861,103 @@ class ClaudeOrchestrator {
     return uniqueSessionIds;
   }
 
+  getReviewConsoleTerminalScrollContainer(containerEl) {
+    const container = containerEl || null;
+    if (!container) return null;
+    return container.closest?.('[data-rc-panel="terminals"]')
+      || container.closest?.('.worktree-inspector-panel')
+      || container;
+  }
+
+  scrollReviewConsoleTerminalIntoView(containerEl, sessionId, { block = 'center' } = {}) {
+    const container = this.getReviewConsoleTerminalScrollContainer(containerEl);
+    const sid = String(sessionId || '').trim();
+    if (!container || !sid) return;
+
+    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sid));
+    if (!wrapper || !wrapper.isConnected) return;
+
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    if (!wrapperRect.height || !containerRect.height) return;
+
+    const deltaTop = wrapperRect.top - containerRect.top;
+    const deltaBottom = wrapperRect.bottom - containerRect.bottom;
+    let nextScrollTop = container.scrollTop;
+
+    if (block === 'nearest') {
+      if (deltaTop < 0) nextScrollTop += deltaTop;
+      else if (deltaBottom > 0) nextScrollTop += deltaBottom;
+    } else {
+      nextScrollTop += deltaTop - Math.max(0, (containerRect.height - wrapperRect.height) / 2);
+    }
+
+    container.scrollTop = Math.max(0, nextScrollTop);
+  }
+
+  queueReviewConsoleTerminalLayout(containerEl, sessionIds, { preferredSessionId = '', scrollToBottom = false } = {}) {
+    const container = containerEl || null;
+    const uniqueSessionIds = Array.from(new Set(
+      (Array.isArray(sessionIds) ? sessionIds : [])
+        .map((sid) => String(sid || '').trim())
+        .filter(Boolean)
+    ));
+    if (!container || uniqueSessionIds.length === 0) return;
+
+    const runLayoutPass = ({ anchor = false, pushBottom = false } = {}) => {
+      const visibleSessionIds = [];
+      uniqueSessionIds.forEach((sid) => {
+        const wrapper = document.getElementById(this.getSessionDomId('wrapper', sid));
+        if (!wrapper || !wrapper.isConnected || wrapper.style.display === 'none' || wrapper.classList.contains('hidden')) {
+          return;
+        }
+
+        visibleSessionIds.push(sid);
+        try {
+          this.terminalManager?.fitTerminal?.(sid);
+        } catch {
+          // ignore
+        }
+
+        const term = this.terminalManager?.terminals?.get?.(sid);
+        if (!term) return;
+
+        try {
+          term.refresh(0, Math.max(0, term.rows - 1));
+        } catch {
+          // ignore
+        }
+
+        if (!pushBottom) return;
+
+        try {
+          this.terminalManager?.userScrolling?.set?.(sid, false);
+        } catch {
+          // ignore
+        }
+        try {
+          term.scrollToBottom?.();
+        } catch {
+          // ignore
+        }
+      });
+
+      if (!anchor || visibleSessionIds.length === 0) return;
+      const preferred = String(preferredSessionId || visibleSessionIds[0] || '').trim();
+      if (preferred) {
+        this.scrollReviewConsoleTerminalIntoView(container, preferred, { block: 'center' });
+      }
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        runLayoutPass({ anchor: true, pushBottom: !!scrollToBottom });
+        setTimeout(() => runLayoutPass({ anchor: false, pushBottom: false }), 140);
+        setTimeout(() => runLayoutPass({ anchor: false, pushBottom: false }), 420);
+      });
+    });
+  }
+
   restoreReviewConsoleDockedTerminals() {
     try {
       if (!this.reviewConsoleDockedTerminals || this.reviewConsoleDockedTerminals.size === 0) {
@@ -11912,16 +12094,12 @@ class ClaudeOrchestrator {
       wrapper.style.display = '';
       wrapper.classList.add('review-console-terminal');
       container.appendChild(wrapper);
-
-      // Let layout settle, then fit.
-      setTimeout(() => {
-        try {
-          this.terminalManager?.fitTerminal?.(sid);
-        } catch {
-          // ignore
-        }
-      }, 60);
     }
+
+    this.queueReviewConsoleTerminalLayout(container, sessionIds, {
+      preferredSessionId: sessionIdHint || sessionIds[0] || '',
+      scrollToBottom: true
+    });
 
 	  return sessionIds.length;
 	  }
@@ -13423,14 +13601,6 @@ class ClaudeOrchestrator {
 
     const label = inferredWorktreeId || String(t.id || '').trim() || worktreePath;
     await this.openWorktreeInspectorForPath(worktreePath, { label, task: t, reviewConsole: true, sessionIdHint: sessionId, prUrlHint });
-
-	    if (rcShowTerminals) {
-	      const preferredSessionId = sessionId || (inferredWorktreeId ? `${inferredWorktreeId}-claude` : '');
-	      if (preferredSessionId) {
-	        const wrapper = document.getElementById(this.getSessionDomId('wrapper', preferredSessionId));
-	        wrapper?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-	      }
-	    }
 	  }
 
 	  async fetchPullRequestDetails(prUrl, { maxFiles = 300, maxCommits = 200, maxComments = 50, maxReviews = 50 } = {}) {
@@ -13641,8 +13811,14 @@ class ClaudeOrchestrator {
 		        && files.length === 0
 		        && commits.length === 0;
 
-			      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
-			      const targetPrUrl = normUrl(pr.url || prUrl);
+		      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
+		      const targetPrUrl = normUrl(pr.url || prUrl);
+		      const prRepoUrl = (() => {
+		        const u = String(pr?.url || prUrl || '').trim();
+		        const m = u.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+		        if (!m) return '';
+		        return `https://github.com/${m[1]}/${m[2]}`;
+		      })();
 
 		      const matchingSessionIds = [];
 		      for (const [sid, links] of this.githubLinks) {
@@ -13682,13 +13858,7 @@ class ClaudeOrchestrator {
 
 		        if (matchingSessionIds.length === 0) {
 		          const headRef = String(pr?.headRefName || '').trim();
-		          const repoUrl = (() => {
-		            const u = String(pr?.url || prUrl || '').trim();
-		            const m = u.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-		            if (!m) return '';
-		            return `https://github.com/${m[1]}/${m[2]}`;
-		          })();
-		          const repoNorm = normUrl(repoUrl);
+		          const repoNorm = normUrl(prRepoUrl);
 		          if (repoNorm && headRef) {
 		            for (const [sid, session] of this.sessions) {
 		              if (!sid || !session) continue;
@@ -13700,6 +13870,17 @@ class ClaudeOrchestrator {
 		              if (!(remote === repoNorm || remote.endsWith(`/${formatClientPathTail(repoNorm)}`) || repoNorm.endsWith(remote))) continue;
 		              matchingSessionIds.push(String(sid));
 		            }
+		          }
+		        }
+		        
+		        if (matchingSessionIds.length === 0) {
+		          const activeFallbackSessionIds = this.getReviewConsoleCurrentContextSessionIds({
+		            repoUrl: prRepoUrl,
+		            headRef: String(pr?.headRefName || '').trim(),
+		            allowAnyCurrentWorktree: !openedFromQueue
+		          });
+		          if (activeFallbackSessionIds.length) {
+		            matchingSessionIds.push(...activeFallbackSessionIds);
 		          }
 		        }
 		      }
@@ -13753,6 +13934,14 @@ class ClaudeOrchestrator {
 		        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
 		        return String(a).localeCompare(String(b));
 		      });
+
+          const preferredMatchingSessionId = (() => {
+            const taskSessionId = String(t?.sessionId || '').trim();
+            if (taskSessionId && matchingSessionIds.includes(taskSessionId)) return taskSessionId;
+            const currentSessionId = this.getCurrentInteractionSessionId?.();
+            if (currentSessionId && matchingSessionIds.includes(currentSessionId)) return currentSessionId;
+            return matchingSessionIds.find((sid) => !isServer(sid)) || matchingSessionIds[0] || '';
+          })();
 
 		      this.setReviewConsoleVisibilityBypass(matchingSessionIds);
 
@@ -14199,13 +14388,11 @@ class ClaudeOrchestrator {
 				        });
 				        terminalsContainer.classList.toggle('paired-layout', hasVisibleAgent && hasVisibleServer);
 
-				        if (visibleSessionIds.length) {
-				          setTimeout(() => {
-			            visibleSessionIds.forEach((sid) => {
-			              try { this.terminalManager?.fitTerminal?.(sid); } catch {}
-			            });
-			          }, 60);
-			        }
+                if (visibleSessionIds.length) {
+                  this.queueReviewConsoleTerminalLayout(terminalsContainer, visibleSessionIds, {
+                    preferredSessionId: preferredMatchingSessionId
+                  });
+                }
 			      };
 
 			      const updateGrid = () => {
@@ -14936,15 +15123,11 @@ class ClaudeOrchestrator {
 		          wrapper.style.display = '';
 		          wrapper.classList.add('review-console-terminal');
 		          terminalsContainer.appendChild(wrapper);
-
-		          setTimeout(() => {
-		            try {
-		              this.terminalManager?.fitTerminal?.(sid);
-		            } catch {
-		              // ignore
-		            }
-		          }, 60);
 		        }
+            this.queueReviewConsoleTerminalLayout(terminalsContainer, matchingSessionIds, {
+              preferredSessionId: preferredMatchingSessionId,
+              scrollToBottom: true
+            });
 		        try { updateTerminalKindVisibility(); } catch {}
 		      }
 

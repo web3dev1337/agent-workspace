@@ -4536,6 +4536,13 @@ app.get('/api/recovery/:workspaceId', async (req, res) => {
       allowSessionIds: allowSessionIds.length ? allowSessionIds : null,
       pruneMissing: true
     });
+    const pendingRecoverySessions = Array.isArray(recoveryInfo?.sessions)
+      ? recoveryInfo.sessions.filter((entry) => {
+          const sessionId = String(entry?.sessionId || '').trim();
+          if (!sessionId) return false;
+          return !sessionManager.hasSessionHydrated(sessionId, { workspaceId });
+        })
+      : [];
 
     let configuredWorktreeCount = 0;
     if (workspace) {
@@ -4558,8 +4565,14 @@ app.get('/api/recovery/:workspaceId', async (req, res) => {
 
     res.json({
       ...recoveryInfo,
+      recoverableSessions: pendingRecoverySessions.length,
+      sessions: pendingRecoverySessions,
       configuredTerminalCount: allowSessionIds.length,
-      configuredWorktreeCount
+      configuredWorktreeCount,
+      recoveryAlreadyAppliedCount: Math.max(
+        0,
+        Number(recoveryInfo?.recoverableSessions || 0) - pendingRecoverySessions.length
+      )
     });
   } catch (error) {
     logger.error('Failed to get recovery info', { error: error.message });

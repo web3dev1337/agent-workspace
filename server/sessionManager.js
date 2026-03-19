@@ -75,6 +75,7 @@ class SessionManager extends EventEmitter {
     // Keep inactive workspaces' sessions alive (PTYs keep running), keyed by workspace id.
     // The active workspace is always `this.workspace`, and its sessions live in `this.sessions`.
     this.workspaceSessionMaps = new Map(); // workspaceId -> Map(sessionId -> session)
+    this.recoveryHydratedSessions = new Set(); // `${workspaceId}::${sessionId}` after the current server boot
     this.statusDetector = null; // Will be set later
     this.gitHelper = null; // Will be set later
     this.fileWatchers = new Map(); // Store file watchers for .git/HEAD files
@@ -104,6 +105,34 @@ class SessionManager extends EventEmitter {
 
     // Worktrees will be built when workspace is set
     this.worktrees = [];
+  }
+
+  getRecoveryHydrationKey(sessionId, { workspaceId = null, session = null } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return null;
+    const resolvedSession = session || this.getSessionById(sid, { workspaceId }) || null;
+    const ws = String(workspaceId || resolvedSession?.workspace || '').trim();
+    if (!ws) return null;
+    return `${ws}::${sid}`;
+  }
+
+  markSessionHydrated(sessionId, { workspaceId = null, session = null } = {}) {
+    const key = this.getRecoveryHydrationKey(sessionId, { workspaceId, session });
+    if (!key) return false;
+    this.recoveryHydratedSessions.add(key);
+    return true;
+  }
+
+  clearSessionHydrated(sessionId, { workspaceId = null, session = null } = {}) {
+    const key = this.getRecoveryHydrationKey(sessionId, { workspaceId, session });
+    if (!key) return false;
+    return this.recoveryHydratedSessions.delete(key);
+  }
+
+  hasSessionHydrated(sessionId, { workspaceId = null, session = null } = {}) {
+    const key = this.getRecoveryHydrationKey(sessionId, { workspaceId, session });
+    if (!key) return false;
+    return this.recoveryHydratedSessions.has(key);
   }
 
   // Determine effective inactivity timeout per session (ms)
@@ -958,6 +987,7 @@ class SessionManager extends EventEmitter {
       // Add workspace ID to session
       session.workspace = this.workspace?.id || null;
       this.sessions.set(sessionId, session);
+      this.clearSessionHydrated(sessionId, { workspaceId: session.workspace, session });
 
       if (session.workspace) {
         sessionRecoveryService.updateSession(session.workspace, sessionId, {
@@ -1768,6 +1798,14 @@ class SessionManager extends EventEmitter {
       }
 
       const sanitizedInput = this.sanitizeInputData(data);
+      const hasMeaningfulInput = Array.from(sanitizedInput).some((char) => (
+        char === '\r' ||
+        char === '\n' ||
+        (char.length === 1 && char.charCodeAt(0) >= 32)
+      ));
+      if (hasMeaningfulInput) {
+        this.markSessionHydrated(sessionId, { workspaceId: session.workspace, session });
+      }
       for (const char of sanitizedInput) {
         if (char === '\r' || char === '\n') {
           const command = session.currentCommand.trim();
@@ -2510,6 +2548,7 @@ class SessionManager extends EventEmitter {
     if (!session) return;
 
     logger.info('Terminating session', { sessionId: sid, workspaceId: session.workspace || ws || null });
+    this.clearSessionHydrated(sid, { workspaceId: session.workspace || ws || null, session });
 
     // Clear the inactivity timer to prevent infinite loops
     if (session.inactivityTimer) {
