@@ -4201,17 +4201,12 @@ class Dashboard {
     return typeLabels[type] || type;
   }
 
-  confirmDeleteWorkspace(workspace) {
-    const confirmed = confirm(
-      `⚠️ DELETE WORKSPACE?\n\n` +
-      `Workspace: ${workspace.name}\n` +
-      `Type: ${workspace.type}\n\n` +
-      `This will:\n` +
-      `✅ Move the workspace configuration to Recently Deleted\n` +
-      `✅ Keep all git worktrees and code intact\n` +
-      `✅ Stop any running sessions\n\n` +
-      `You can restore it later from the dashboard.\n\n` +
-      `Are you sure?`
+  async confirmDeleteWorkspace(workspace) {
+    const confirmed = await this.orchestrator.showConfirmationDialog(
+      'Delete Workspace',
+      `Delete "${workspace.name}"?\n\nThis will move the workspace configuration to Recently Deleted, stop any running sessions, and keep all git worktrees and code intact.\n\nYou can restore it later from the dashboard.`,
+      'Delete',
+      'Cancel'
     );
 
     if (confirmed) {
