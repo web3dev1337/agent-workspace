@@ -297,6 +297,11 @@ class PortRegistry {
    */
   async getProcessCwd(pid) {
     try {
+      if (process.platform === 'darwin') {
+        const { stdout } = await execAsync(`lsof -p ${pid} -Fn 2>/dev/null | grep '^n/' | grep 'cwd$' || lsof -p ${pid} -d cwd -Fn 2>/dev/null | grep '^n/'`, { timeout: 3000 });
+        const line = String(stdout || '').trim().split('\n').find((l) => l.startsWith('n/'));
+        return line ? line.slice(1) : null;
+      }
       const cwd = await fs.readlink(`/proc/${pid}/cwd`);
       return cwd;
     } catch (e) {
@@ -453,7 +458,11 @@ class PortRegistry {
         return await this.scanAllPortsWindows(customLabels);
       }
 
-      // Use ss (socket statistics) to get listening ports
+      if (process.platform === 'darwin') {
+        return await this.scanAllPortsMac(customLabels);
+      }
+
+      // Use ss (socket statistics) to get listening ports (Linux)
       const { stdout } = await execAsync('ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null', { timeout: 5000 });
       const ports = [];
       const lines = stdout.split('\n');
@@ -575,6 +584,49 @@ class PortRegistry {
       return ports;
     } catch (error) {
       logger.error('Failed to scan ports (windows)', { error: error.message });
+      return [];
+    }
+  }
+
+  async scanAllPortsMac(customLabels = {}) {
+    try {
+      const { stdout } = await execAsync('lsof -i -P -n -sTCP:LISTEN 2>/dev/null', { timeout: 8000, maxBuffer: 10 * 1024 * 1024 });
+      const ports = [];
+      const lines = String(stdout || '').split('\n');
+
+      for (const line of lines) {
+        // lsof output: node  12345  user  21u  IPv4  0x...  0t0  TCP  127.0.0.1:3000 (LISTEN)
+        const m = line.match(/^(\S+)\s+(\d+)\s+\S+\s+\S+\s+IPv[46]\s+\S+\s+\S+\s+TCP\s+\S+:(\d+)\s+\(LISTEN\)/);
+        if (!m) continue;
+
+        const processName = m[1];
+        const pid = parseInt(m[2], 10);
+        const port = parseInt(m[3], 10);
+        if (port < 1000) continue;
+        if (ports.find(p => p.port === port)) continue;
+
+        const cwd = pid ? await this.getProcessCwd(pid) : null;
+        const projectInfo = cwd ? await this.detectProjectName(cwd) : null;
+        const serviceInfo = this.identifyService(port, processName, projectInfo);
+        const customLabel = customLabels[port];
+
+        ports.push({
+          port,
+          pid,
+          processName,
+          cwd,
+          project: projectInfo,
+          customLabel,
+          ...serviceInfo,
+          name: customLabel || serviceInfo.name,
+          url: `http://localhost:${port}`
+        });
+      }
+
+      ports.sort((a, b) => a.port - b.port);
+      return ports;
+    } catch (error) {
+      logger.error('Failed to scan ports (macOS)', { error: error.message });
       return [];
     }
   }
