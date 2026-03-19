@@ -107,9 +107,13 @@ function uniqueCommandCandidates(candidates = []) {
 }
 
 function getGitHubCliCandidates(env = process.env, platform = process.platform) {
+  const homeDir = env.HOME || os.homedir() || '';
   return uniqueCommandCandidates([
     platform === 'win32' ? 'gh.exe' : 'gh',
     'gh',
+    platform === 'darwin' ? path.join(homeDir, '.homebrew', 'bin', 'gh') : '',
+    platform === 'darwin' ? '/opt/homebrew/bin/gh' : '',
+    platform === 'darwin' ? '/usr/local/bin/gh' : '',
     platform === 'win32' ? path.join(env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'gh.exe') : '',
     platform === 'win32' ? path.join(env.ProgramFiles || '', 'GitHub CLI', 'gh.exe') : '',
     platform === 'win32' ? path.join(env['ProgramFiles(x86)'] || '', 'GitHub CLI', 'gh.exe') : '',
