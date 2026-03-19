@@ -327,32 +327,12 @@
           <h3 class="feature-title">Built-in Diff Viewer + Review Console</h3>
           <p class="feature-desc">Review diffs in-app with agent and server context still visible in the same workflow. Use action buttons to jump directly to the GitHub PR or GitHub diff, re-prompt agents from review context, run verification steps, and merge once checks pass.</p>
         </div>
-        <div class="feature-visual diff-visual" aria-hidden="true">
-          <aside class="diff-sidebar">
-            <div class="visual-heading">Agents + Servers</div>
-            <div class="visual-tag">website/work1 · Claude</div>
-            <div class="visual-tag">website/work1 · Server</div>
-            <div class="visual-tag">website/work2 · Codex</div>
-          </aside>
-          <div class="diff-main">
-            <div class="diff-toolbar">
-              <span>PR #842</span>
-              <span>Open PR on GitHub</span>
-              <span>Open Diff on GitHub</span>
-              <span>Re-prompt Agent</span>
-              <span>Run Server</span>
-              <span>Merge</span>
-            </div>
-            <div class="diff-columns">
-              <pre>- const staleFlag = true;
-- if (staleFlag) return;
-- // old branch parsing</pre>
-              <pre>+ const isReady = branchState.ready;
-+ if (!isReady) return;
-+ refreshBranchLabel(sessionId);</pre>
-            </div>
-          </div>
-        </div>
+        <figure class="feature-shot contain diff-viewer-shot">
+          <img src="assets/diff-viewer-windows.png" alt="Diff viewer review console with agent and server panes alongside the in-app diff viewer">
+          <div class="shot-badge shot-badge-top-left">Agent</div>
+          <div class="shot-badge shot-badge-bottom-left">Server</div>
+          <div class="shot-badge shot-badge-center">Diff Viewer</div>
+        </figure>
       </article>
 
       <article class="feature-card reveal" style="--delay: 0.2s">

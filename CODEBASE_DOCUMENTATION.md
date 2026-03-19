@@ -372,7 +372,7 @@ site/                              - Concise product/showcase site kept separate
 ├─ llms-full.txt                   - Extended AI-oriented product details for retrieval/chat assistants
 ├─ styles.css                      - Showcase visual system, layout, and motion
 ├─ script.js                       - Small reveal-on-scroll enhancement
-├─ assets/                         - Favicon, provider logos, generated Open Graph preview, and real UI screenshot
+├─ assets/                         - Favicon, provider logos, generated Open Graph preview, and real UI screenshots (home page, diff viewer, projects, ports, tabs)
 └─ README.md                       - Local preview and future publishing notes
 ```
 

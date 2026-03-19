@@ -50,6 +50,12 @@ Agent Workspace is a local-first orchestration layer for CLI coding agents.
 
 ![Agent and server windows](site/assets/server-run-windows.png)
 
+### Diff Viewer + Review Console
+
+Review diffs with the agent pane, server pane, and in-app diff viewer visible in one workflow, then jump straight to the GitHub PR or diff when needed.
+
+![Diff viewer review console](site/assets/diff-viewer-windows.png)
+
 ### Projects Board
 
 ![Projects board](site/assets/projects-board-windows.png)
