@@ -246,6 +246,7 @@ async function collectDiagnostics() {
     });
   }
 
+  const isBundledNode = String(process.execPath || '').includes('.app/Contents/Resources/');
   const nodeCandidates = uniqueCommandCandidates([
     { command: 'node', args: ['--version'] },
     { command: platform === 'win32' ? 'node.exe' : 'node', args: ['--version'] },
@@ -253,7 +254,7 @@ async function collectDiagnostics() {
     platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'nodejs', 'node.exe'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env['ProgramFiles(x86)'] || '', 'nodejs', 'node.exe'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe'), args: ['--version'] } : null,
-    { command: process.execPath || 'node', args: ['--version'] }
+    isBundledNode ? null : { command: process.execPath || 'node', args: ['--version'] }
   ]);
   const nodeCheck = await checkFirstAvailable(nodeCandidates);
   const nodeCommand = String(nodeCheck?.command || '').trim();
