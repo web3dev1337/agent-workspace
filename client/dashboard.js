@@ -3795,52 +3795,12 @@ class Dashboard {
   async openWorkspace(workspaceId) {
     console.log('Opening workspace:', workspaceId);
 
-    // Get recovery settings
-    const recoverySettings = this.orchestrator.userSettings?.global?.sessionRecovery || {};
-    const recoveryEnabled = recoverySettings.enabled !== false;
-    const recoveryMode = recoverySettings.mode || 'ask';
-
-    // Check for recovery state first (if enabled)
-    if (recoveryEnabled) {
-      const recoveryInfo = await this.checkRecoveryState(workspaceId);
-      if (recoveryInfo && recoveryInfo.recoverableSessions > 0) {
-        // If the user previously dismissed this exact snapshot, don't nag again.
-        const savedAt = String(recoveryInfo.savedAt || '').trim();
-        const dismissKey = `orchestrator-recovery-dismissed:${workspaceId}`;
-        let dismissedSnapshot = false;
-        if (savedAt) {
-          try {
-            const dismissedAt = String(localStorage.getItem(dismissKey) || '').trim();
-            if (dismissedAt && dismissedAt === savedAt) {
-              console.log('Skipping recovery dialog - dismissed for this snapshot');
-              dismissedSnapshot = true;
-            } else {
-              // Clear stale dismiss markers when the snapshot changes.
-              if (dismissedAt) localStorage.removeItem(dismissKey);
-            }
-          } catch {
-            // ignore
-          }
-        }
-
-        if (dismissedSnapshot) {
-          // Do nothing: proceed to open workspace with no recovery.
-        } else if (recoveryMode === 'auto') {
-          // Auto-recover all sessions
-          this.pendingRecovery = { workspaceId, mode: 'all', sessions: recoveryInfo.sessions };
-          console.log('Auto-recovering all sessions');
-        } else if (recoveryMode === 'ask') {
-          // Show recovery dialog and wait for user choice
-          const shouldRecover = await this.showRecoveryDialog(workspaceId, recoveryInfo);
-          if (shouldRecover === 'cancel') {
-            return; // User cancelled
-          }
-          this.pendingRecovery = shouldRecover && typeof shouldRecover === 'object'
-            ? { workspaceId, ...shouldRecover }
-            : shouldRecover;
-        }
-        // If mode === 'skip', don't set pendingRecovery
-      }
+    const recoveryPlan = await this.planRecoveryForWorkspace(workspaceId, { interactive: true });
+    if (recoveryPlan?.action === 'cancel') {
+      return;
+    }
+    if (recoveryPlan?.pending) {
+      this.pendingRecovery = recoveryPlan.pending;
     }
 
     // Show loading state
@@ -3864,6 +3824,61 @@ class Dashboard {
 
     // Emit workspace switch event
     this.orchestrator.socket.emit('switch-workspace', { workspaceId });
+  }
+
+  async planRecoveryForWorkspace(workspaceId, { interactive = true } = {}) {
+    const targetWorkspaceId = String(workspaceId || '').trim();
+    if (!targetWorkspaceId) {
+      return { action: 'skip', pending: null };
+    }
+
+    const recoverySettings = this.orchestrator.userSettings?.global?.sessionRecovery || {};
+    const recoveryEnabled = recoverySettings.enabled !== false;
+    const recoveryMode = recoverySettings.mode || 'ask';
+    if (!recoveryEnabled) {
+      return { action: 'skip', pending: null };
+    }
+
+    const recoveryInfo = await this.checkRecoveryState(targetWorkspaceId);
+    if (!(recoveryInfo && recoveryInfo.recoverableSessions > 0)) {
+      return { action: 'skip', pending: null };
+    }
+
+    const savedAt = String(recoveryInfo.savedAt || '').trim();
+    const dismissKey = `orchestrator-recovery-dismissed:${targetWorkspaceId}`;
+    if (savedAt) {
+      try {
+        const dismissedAt = String(localStorage.getItem(dismissKey) || '').trim();
+        if (dismissedAt && dismissedAt === savedAt) {
+          console.log('Skipping recovery dialog - dismissed for this snapshot');
+          return { action: 'dismissed', pending: null };
+        }
+        if (dismissedAt) localStorage.removeItem(dismissKey);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (recoveryMode === 'auto') {
+      console.log('Auto-recovering all sessions');
+      return {
+        action: 'recover',
+        pending: { workspaceId: targetWorkspaceId, mode: 'all', sessions: recoveryInfo.sessions }
+      };
+    }
+
+    if (recoveryMode === 'ask' && interactive) {
+      const shouldRecover = await this.showRecoveryDialog(targetWorkspaceId, recoveryInfo);
+      if (shouldRecover === 'cancel') {
+        return { action: 'cancel', pending: null };
+      }
+      const pending = shouldRecover && typeof shouldRecover === 'object'
+        ? { workspaceId: targetWorkspaceId, ...shouldRecover }
+        : null;
+      return pending ? { action: 'recover', pending } : { action: 'skip', pending: null };
+    }
+
+    return { action: 'skip', pending: null };
   }
 
   showCreateWorkspaceWizard(options = {}) {
