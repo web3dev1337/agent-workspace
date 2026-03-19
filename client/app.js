@@ -1338,171 +1338,7 @@ class ClaudeOrchestrator {
 
       // Handle new worktree sessions being added without destroying existing ones
       this.socket.on('worktree-sessions-added', ({ worktreeId, sessions, startTier, workspaceId }) => {
-        console.log('New worktree sessions added:', worktreeId, sessions);
-
-        const isBackground = this.pendingBackgroundWorktrees?.has?.(worktreeId);
-        if (isBackground) this.pendingBackgroundWorktrees.delete(worktreeId);
-        const resolvedWorkspaceId = String(workspaceId || this.currentWorkspace?.id || '').trim() || null;
-        const targetTab = this.getTabForWorkspaceId(resolvedWorkspaceId);
-        const activeWorkspaceId = String(this.currentWorkspace?.id || '').trim() || null;
-        const shouldApplyToActiveWorkspace = !resolvedWorkspaceId || !activeWorkspaceId || resolvedWorkspaceId === activeWorkspaceId || !this.tabManager;
-
-        // Add the new sessions to our sessions map (don't clear existing!)
-        for (const [sessionId, sessionState] of Object.entries(sessions)) {
-          const sessionData = {
-            sessionId,
-            ...sessionState,
-            workspace: sessionState?.workspace || resolvedWorkspaceId,
-            hasUserInput: false,
-            backgroundLaunch: !!isBackground
-          };
-
-          if (shouldApplyToActiveWorkspace) {
-            this.sessions.set(sessionId, sessionData);
-          }
-
-          // If there's an existing PR, add it to GitHub links
-          if (sessionState.existingPR && shouldApplyToActiveWorkspace) {
-            const links = this.githubLinks.get(sessionId) || {};
-            links.pr = sessionState.existingPR;
-            this.githubLinks.set(sessionId, links);
-          }
-
-          // Mark new sessions as active (active-only filter should treat background work as active too).
-          if (shouldApplyToActiveWorkspace) {
-            this.sessionActivity.set(sessionId, 'active');
-          }
-
-          // Background launches intentionally do not auto-show in Review/Focus.
-          if (!isBackground && shouldApplyToActiveWorkspace) {
-            this.visibleTerminals.add(sessionId);
-          }
-
-          if (targetTab) {
-            targetTab.sessions.set(sessionId, sessionData);
-            targetTab.uiState?.sessionActivity?.set?.(sessionId, 'active');
-            if (!isBackground) {
-              targetTab.uiState?.visibleTerminals?.add?.(sessionId);
-            }
-          }
-        }
-
-        if (shouldApplyToActiveWorkspace) {
-          // Rebuild sidebar to show new worktree
-          this.buildSidebar();
-
-          // Update terminal grid to display new terminals
-          this.updateTerminalGrid();
-        }
-
-        // Apply selected start tier (Quick Work) to new Agent sessions.
-        const tier = Number(startTier);
-        if (shouldApplyToActiveWorkspace && tier >= 1 && tier <= 4) {
-          const sessionIds = Object.keys(sessions || {});
-          this.applyStartTierToNewSessions(sessionIds, tier);
-        }
-
-        // Clear optimistic “starting” reservation now that the sessions exist.
-        try {
-          const sessionStates = Object.values(sessions || {});
-          const sample = sessionStates && sessionStates.length ? sessionStates[0] : null;
-          const repoRoot = this.normalizeWorktreePath(sample?.repositoryRoot || '');
-          if (repoRoot) {
-            this.clearWorktreeReservation(repoRoot, worktreeId);
-          } else {
-            // Fallback: clear any reservation for this worktree id.
-            this.clearWorktreeReservationByWorktreeId(worktreeId);
-          }
-        } catch {
-          // ignore
-        }
-
-        // Show success message
-        const readyMsg = isBackground
-          ? `Worktree ${worktreeId} terminals ready (background)`
-          : `Worktree ${worktreeId} terminals ready!`;
-        this.showTemporaryMessage(readyMsg, 'success');
-        this.refreshWorktreeAddModals();
-
-        // Auto-start Claude after a delay to let terminals initialize.
-        // Background launches intentionally skip this.
-        if (shouldApplyToActiveWorkspace && !isBackground) {
-          setTimeout(() => {
-            this.checkAndApplyAutoStart();
-          }, 2000);
-        }
-
-        // If this worktree was launched from a task card, start agent + auto-send prompt (best-effort).
-        const pending = shouldApplyToActiveWorkspace ? this.pendingWorktreeLaunches.get(worktreeId) : null;
-        if (pending) {
-          this.pendingWorktreeLaunches.delete(worktreeId);
-          const sessionIds = Object.keys(sessions || {});
-          const agentSessionId =
-            sessionIds.find(id => id.endsWith('-claude'))
-            || sessionIds.find(id => !id.endsWith('-server'))
-            || null;
-
-          if (agentSessionId && pending.agentConfig) {
-            this.startAgentWithConfig(agentSessionId, pending.agentConfig);
-          }
-
-	          if (agentSessionId && pending.ticket && typeof pending.ticket === 'object') {
-	            const ticketProvider = String(pending.ticket.provider || '').trim().toLowerCase();
-	            const ticketBoardId = String(pending.ticket.boardId || '').trim();
-	            const ticketCardId = String(pending.ticket.cardId || '').trim();
-	            const ticketCardUrl = String(pending.ticket.cardUrl || '').trim();
-	            const ticketTitle = String(pending.ticket.title || '').trim();
-	            if (ticketProvider && ticketCardId) {
-	              const ticketPatch = {
-	                ticketProvider,
-	                ticketCardId,
-	                ticketCardUrl: ticketCardUrl || null,
-	                ticketBoardId: ticketBoardId || null,
-	                ticketTitle: ticketTitle || null
-	              };
-
-	              const sessionIdsToUpdate = sessionIds.slice();
-	              const sessionRecordId = `session:${agentSessionId}`;
-	              const session = this.sessions.get(agentSessionId);
-	              const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
-	              const worktreeRecordId = worktreePath ? `worktree:${worktreePath}` : null;
-
-	              const upserts = [
-	                this.upsertTaskRecord(sessionRecordId, ticketPatch)
-	                  .then((rec) => {
-	                    if (rec) this.taskRecords.set(sessionRecordId, rec);
-	                  })
-	                  .catch(() => {})
-	              ];
-
-	              if (worktreeRecordId) {
-	                upserts.push(
-	                  this.upsertTaskRecord(worktreeRecordId, ticketPatch)
-	                    .then((rec) => {
-	                      if (rec) this.taskRecords.set(worktreeRecordId, rec);
-	                    })
-	                    .catch(() => {})
-	                );
-	              }
-
-		              Promise.all(upserts).finally(() => {
-		                for (const sid of sessionIdsToUpdate) {
-		                  this.updateTerminalControls(sid);
-		                  this.updateTerminalTicketLabel(sid);
-		                }
-		              });
-		            }
-		          }
-
-          if (agentSessionId && pending.autoSendPrompt && String(pending.promptText || '').trim()) {
-            this.pendingAutoPrompts.set(agentSessionId, {
-              text: String(pending.promptText || ''),
-              createdAt: Date.now(),
-              sentAt: null,
-              agentId: String(pending?.agentConfig?.agentId || 'claude').trim().toLowerCase()
-            });
-          }
-        }
+        this.applyWorktreeSessionsAddedPayload({ worktreeId, sessions, startTier, workspaceId });
       });
 
       this.socket.on('claude-started', ({ sessionId }) => {
@@ -32086,6 +31922,7 @@ class ClaudeOrchestrator {
         const prevText = quickRemoteAddBtn.textContent;
         try {
           quickRemoteAddBtn.disabled = true;
+          quickRemoteAddBtn.classList.add('is-starting');
           quickRemoteAddBtn.textContent = 'Cloning…';
           await this.cloneQuickRemoteRepoAndStartWorktree({
             remoteRepo,
@@ -32097,6 +31934,7 @@ class ClaudeOrchestrator {
           this.showToast(String(error?.message || error), 'error');
         } finally {
           quickRemoteAddBtn.disabled = false;
+          quickRemoteAddBtn.classList.remove('is-starting');
           quickRemoteAddBtn.textContent = prevText;
         }
       });
@@ -32613,6 +32451,7 @@ class ClaudeOrchestrator {
       parentPath: this.sanitizeQuickRemoteParentPath(defaults.parentPath || ''),
       repositoryType: defaults.repositoryType,
       worktreeId: String(worktreeId || 'work1'),
+      socketId: this.socket?.id || null,
       startTier: (() => {
         const startTier = Number(this.quickWorktreeStartTier);
         return (startTier >= 1 && startTier <= 4) ? startTier : undefined;
@@ -32630,6 +32469,17 @@ class ClaudeOrchestrator {
     if (!response.ok || data?.ok === false) {
       const message = String(data?.error || `Clone failed (HTTP ${response.status})`);
       throw new Error(message);
+    }
+
+    const responseSessions = data?.sessions && typeof data.sessions === 'object' ? data.sessions : {};
+    const responseSessionIds = Object.keys(responseSessions);
+    if (responseSessionIds.some((sessionId) => !this.sessions.has(sessionId))) {
+      this.applyWorktreeSessionsAddedPayload({
+        worktreeId: data?.worktree?.id || payload.worktreeId,
+        sessions: responseSessions,
+        startTier: payload.startTier,
+        workspaceId: this.currentWorkspace.id
+      }, { silent: true });
     }
 
     const cloned = data?.repo?.alreadyCloned === false;
@@ -34753,6 +34603,168 @@ class ClaudeOrchestrator {
     return best;
   }
 
+  applyWorktreeSessionsAddedPayload({ worktreeId, sessions, startTier, workspaceId } = {}, { silent = false } = {}) {
+    const resolvedWorktreeId = String(worktreeId || '').trim();
+    const sessionMap = sessions && typeof sessions === 'object' ? sessions : {};
+    console.log('New worktree sessions added:', resolvedWorktreeId, sessionMap);
+
+    const isBackground = this.pendingBackgroundWorktrees?.has?.(resolvedWorktreeId);
+    if (isBackground) this.pendingBackgroundWorktrees.delete(resolvedWorktreeId);
+
+    const resolvedWorkspaceId = String(workspaceId || this.currentWorkspace?.id || '').trim() || null;
+    const targetTab = this.getTabForWorkspaceId(resolvedWorkspaceId);
+    const activeWorkspaceId = String(this.currentWorkspace?.id || '').trim() || null;
+    const shouldApplyToActiveWorkspace = !resolvedWorkspaceId || !activeWorkspaceId || resolvedWorkspaceId === activeWorkspaceId || !this.tabManager;
+
+    let activeWorkspaceChanged = false;
+    let activeVisibilityChanged = false;
+    const sessionIds = Object.keys(sessionMap);
+
+    for (const [sessionId, sessionState] of Object.entries(sessionMap)) {
+      const sessionData = {
+        sessionId,
+        ...sessionState,
+        workspace: sessionState?.workspace || resolvedWorkspaceId,
+        hasUserInput: false,
+        backgroundLaunch: !!isBackground
+      };
+
+      if (shouldApplyToActiveWorkspace) {
+        const alreadyTracked = this.sessions.has(sessionId);
+        const alreadyVisible = this.visibleTerminals.has(sessionId);
+        this.sessions.set(sessionId, sessionData);
+        if (!alreadyTracked) activeWorkspaceChanged = true;
+
+        if (sessionState.existingPR) {
+          const links = this.githubLinks.get(sessionId) || {};
+          links.pr = sessionState.existingPR;
+          this.githubLinks.set(sessionId, links);
+        }
+
+        this.sessionActivity.set(sessionId, 'active');
+        if (!isBackground && !alreadyVisible) {
+          this.visibleTerminals.add(sessionId);
+          activeVisibilityChanged = true;
+        }
+      }
+
+      if (targetTab) {
+        targetTab.sessions.set(sessionId, sessionData);
+        targetTab.uiState?.sessionActivity?.set?.(sessionId, 'active');
+        if (!isBackground) {
+          targetTab.uiState?.visibleTerminals?.add?.(sessionId);
+        }
+      }
+    }
+
+    if (shouldApplyToActiveWorkspace && (activeWorkspaceChanged || activeVisibilityChanged)) {
+      this.buildSidebar();
+      this.updateTerminalGrid();
+    }
+
+    const tier = Number(startTier);
+    if (shouldApplyToActiveWorkspace && tier >= 1 && tier <= 4 && (activeWorkspaceChanged || activeVisibilityChanged)) {
+      this.applyStartTierToNewSessions(sessionIds, tier);
+    }
+
+    try {
+      const sessionStates = Object.values(sessionMap || {});
+      const sample = sessionStates.length ? sessionStates[0] : null;
+      const repoRoot = this.normalizeWorktreePath(sample?.repositoryRoot || '');
+      if (repoRoot) {
+        this.clearWorktreeReservation(repoRoot, resolvedWorktreeId);
+      } else {
+        this.clearWorktreeReservationByWorktreeId(resolvedWorktreeId);
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!silent && (activeWorkspaceChanged || activeVisibilityChanged)) {
+      const readyMsg = isBackground
+        ? `Worktree ${resolvedWorktreeId} terminals ready (background)`
+        : `Worktree ${resolvedWorktreeId} terminals ready!`;
+      this.showTemporaryMessage(readyMsg, 'success');
+    }
+    this.refreshWorktreeAddModals();
+
+    if (shouldApplyToActiveWorkspace && !isBackground && activeWorkspaceChanged) {
+      setTimeout(() => {
+        this.checkAndApplyAutoStart();
+      }, 2000);
+    }
+
+    const pending = shouldApplyToActiveWorkspace ? this.pendingWorktreeLaunches.get(resolvedWorktreeId) : null;
+    if (!pending || !(activeWorkspaceChanged || activeVisibilityChanged)) return;
+
+    this.pendingWorktreeLaunches.delete(resolvedWorktreeId);
+    const agentSessionId =
+      sessionIds.find((id) => id.endsWith('-claude'))
+      || sessionIds.find((id) => !id.endsWith('-server'))
+      || null;
+
+    if (agentSessionId && pending.agentConfig) {
+      this.startAgentWithConfig(agentSessionId, pending.agentConfig);
+    }
+
+    if (agentSessionId && pending.ticket && typeof pending.ticket === 'object') {
+      const ticketProvider = String(pending.ticket.provider || '').trim().toLowerCase();
+      const ticketBoardId = String(pending.ticket.boardId || '').trim();
+      const ticketCardId = String(pending.ticket.cardId || '').trim();
+      const ticketCardUrl = String(pending.ticket.cardUrl || '').trim();
+      const ticketTitle = String(pending.ticket.title || '').trim();
+      if (ticketProvider && ticketCardId) {
+        const ticketPatch = {
+          ticketProvider,
+          ticketCardId,
+          ticketCardUrl: ticketCardUrl || null,
+          ticketBoardId: ticketBoardId || null,
+          ticketTitle: ticketTitle || null
+        };
+
+        const sessionIdsToUpdate = sessionIds.slice();
+        const sessionRecordId = `session:${agentSessionId}`;
+        const session = this.sessions.get(agentSessionId);
+        const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
+        const worktreeRecordId = worktreePath ? `worktree:${worktreePath}` : null;
+
+        const upserts = [
+          this.upsertTaskRecord(sessionRecordId, ticketPatch)
+            .then((rec) => {
+              if (rec) this.taskRecords.set(sessionRecordId, rec);
+            })
+            .catch(() => {})
+        ];
+
+        if (worktreeRecordId) {
+          upserts.push(
+            this.upsertTaskRecord(worktreeRecordId, ticketPatch)
+              .then((rec) => {
+                if (rec) this.taskRecords.set(worktreeRecordId, rec);
+              })
+              .catch(() => {})
+          );
+        }
+
+        Promise.all(upserts).finally(() => {
+          for (const sid of sessionIdsToUpdate) {
+            this.updateTerminalControls(sid);
+            this.updateTerminalTicketLabel(sid);
+          }
+        });
+      }
+    }
+
+    if (agentSessionId && pending.autoSendPrompt && String(pending.promptText || '').trim()) {
+      this.pendingAutoPrompts.set(agentSessionId, {
+        text: String(pending.promptText || ''),
+        createdAt: Date.now(),
+        sentAt: null,
+        agentId: String(pending?.agentConfig?.agentId || 'claude').trim().toLowerCase()
+      });
+    }
+  }
+
   async quickStartWorktree({ repoPath, repoType, repoName, worktreeId, worktreePath, repositoryRoot, keepOpen = false, explicitSelection = false }) {
     if (!this.socket) {
       this.showTemporaryMessage('Socket not connected', 'error');
@@ -34931,6 +34943,16 @@ class ClaudeOrchestrator {
       const data = await response.json().catch(() => ({}));
       if (response.ok || response.status === 409) {
         const alreadyExists = response.status === 409 ? true : !!data?.alreadyExists;
+        const responseSessions = data?.sessions && typeof data.sessions === 'object' ? data.sessions : {};
+        const responseSessionIds = Object.keys(responseSessions);
+        if (responseSessionIds.some((sessionId) => !this.sessions.has(sessionId))) {
+          this.applyWorktreeSessionsAddedPayload({
+            worktreeId: data?.worktreeId || worktreeId,
+            sessions: responseSessions,
+            startTier: data?.startTier,
+            workspaceId: this.currentWorkspace.id
+          }, { silent: true });
+        }
         this.showTemporaryMessage(
           alreadyExists ? `${repoName} ${worktreeId} is already in this workspace` : `Added ${repoName} ${worktreeId} to workspace!`,
           'success'

@@ -306,6 +306,7 @@ class GitHubCloneWorktreeService {
     parentPath,
     repositoryType,
     worktreeId,
+    socketId,
     startTier,
     createFolders = true,
     ensureWorkspaceMixedWorktree
@@ -363,6 +364,7 @@ class GitHubCloneWorktreeService {
       repositoryType: resolvedRepositoryType,
       repositoryName: parsedRepo.repo,
       worktreeId: normalizedWorktreeId,
+      socketId: String(socketId || '').trim() || null,
       startTier: startTierSafe
     });
 
