@@ -6,7 +6,11 @@ Agent Workspace helps teams run agent sessions, server processes, reviews, and t
 ## Key Facts
 - Runs locally: sessions, workspaces, and orchestration run on your machine.
 - Models by provider: inference runs through the provider CLIs and accounts you configure.
+- Plan-friendly: works with Claude Code on Claude Max and Codex CLI on ChatGPT/Codex plans, so many users do not need separate API keys for day-to-day use.
+- Cost-saving: plan-backed CLI usage can reduce API spend because users can work through their existing Claude Max or Codex plan instead of per-token API billing.
 - Multi-repo and multi-worktree: one workspace can include one or many repositories with parallel worktrees.
+- Focus and attention: keeps multiple agents, worktrees, server processes, and review surfaces visible in one place to reduce human context switching.
+- Task control: tiering and review flows help users stay focused while still managing several active threads of work.
 - Review workflow: in-app review with direct links to GitHub pull requests and diffs.
 
 ## Primary Pages

@@ -8,6 +8,13 @@ Agent Workspace is an open-source, local-first orchestration layer for CLI codin
 - **Who it is for:** Developers running parallel coding tasks, reviews, and runtime checks across worktrees.
 - **Core model:** Keep execution and orchestration local; use your own provider/CLI accounts for inference.
 
+## Plan-Based Value
+
+- **Claude Max + Codex plans:** Agent Workspace works with Claude Code on Claude Max and Codex CLI on ChatGPT/Codex plans.
+- **No API keys required for many users:** For those plan-backed CLI workflows, separate API keys are often unnecessary.
+- **Lower cost path:** That can reduce API spend because usage can stay on the user's existing plan instead of moving to per-token API billing.
+- **Still flexible:** Users can still bring API keys and other CLI tools when they want broader provider coverage.
+
 ## Core Capabilities
 
 1. **Workspaces + Worktrees**
@@ -25,12 +32,20 @@ Agent Workspace is an open-source, local-first orchestration layer for CLI codin
 5. **Ports and Runtime Visibility**
    - Track active services and assigned local ports.
 
+## Why Developers Use It
+
+- **Reduce human context switching:** Keep multiple agents, worktrees, servers, reviews, and diffs visible in one place instead of jumping between terminals and browser tabs.
+- **Protect focus:** Tiered work, review surfaces, and side-by-side runtime panes help users stay locked onto the task that matters while still supervising parallel work.
+- **Manage multiple threads safely:** Users can run focused work, background work, reviews, and runtime checks without losing track of what each agent is doing.
+
 ## Quick Answers
 
 - **Does Agent Workspace run locally?**
   Yes. Sessions, workspaces, and orchestration run locally.
 - **Where do model requests run?**
   Through the provider CLIs and accounts selected by the user.
+- **Do users need API keys?**
+  Not always. Users running Claude Code on Claude Max or Codex CLI on ChatGPT/Codex plans can often work without separate API keys.
 - **Can it run more than one repository at once?**
   Yes, via mixed-repository workspace configuration.
 - **Can users jump directly to GitHub PRs and diffs?**
