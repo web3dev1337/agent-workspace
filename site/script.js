@@ -18,9 +18,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 0c. Auto-detect platform and pre-select tabs
+  // 0c. Auto-detect platform and pre-select tabs + hero download button
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
   const isLinux = /Linux/.test(navigator.userAgent) && !(/Android/.test(navigator.userAgent));
+  if (isMac) {
+    document.querySelectorAll('.download-windows').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.download-mac').forEach(el => el.style.display = '');
+  } else if (isLinux) {
+    document.querySelectorAll('.download-windows').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.download-linux').forEach(el => el.style.display = '');
+  }
   if (isMac || isLinux) {
     const tabSuffix = isMac ? 'mac' : 'linux';
     document.querySelectorAll('.install-section').forEach(section => {
