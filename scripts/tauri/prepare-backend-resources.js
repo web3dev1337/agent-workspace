@@ -412,6 +412,25 @@ function main() {
     }
   }
 
+  // Patch node-pty windowsPtyAgent.js: the JS wrapper passes 7 args to
+  // conptyNative.startProcess() but the native conpty.node only accepts 6.
+  // Remove the 7th arg (useConptyDll) to fix PTY spawn on Windows.
+  const ptyAgentPath = path.join(nodeModulesPath, 'node-pty', 'lib', 'windowsPtyAgent.js');
+  if (fs.existsSync(ptyAgentPath)) {
+    let ptyAgent = fs.readFileSync(ptyAgentPath, 'utf8');
+    const broken = 'conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor, this._useConptyDll)';
+    const fixed = 'conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor)';
+    if (ptyAgent.includes(broken)) {
+      ptyAgent = ptyAgent.replace(broken, fixed);
+      fs.writeFileSync(ptyAgentPath, ptyAgent);
+      console.log('[tauri] Patched node-pty windowsPtyAgent.js (removed useConptyDll arg)');
+    } else if (ptyAgent.includes(fixed)) {
+      console.log('[tauri] node-pty windowsPtyAgent.js already patched');
+    } else {
+      console.warn('[tauri] WARNING: Could not find expected startProcess call in windowsPtyAgent.js — PTY may fail on Windows');
+    }
+  }
+
   const marker = path.join(outDir, 'server', 'index.js');
   if (!fs.existsSync(marker)) {
     throw new Error(`Expected backend entry not found: ${marker}`);
