@@ -49,6 +49,38 @@ function resolveWindowsCacheRoot(env) {
   return path.win32.join(os.homedir(), 'AppData', 'Local');
 }
 
+function readOsRelease({ fsImpl = fs } = {}) {
+  const osReleasePath = '/etc/os-release';
+  if (!fsImpl.existsSync(osReleasePath)) {
+    return {};
+  }
+
+  const content = fsImpl.readFileSync(osReleasePath, 'utf8');
+  const result = {};
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const separator = trimmed.indexOf('=');
+    if (separator <= 0) continue;
+    const key = trimmed.slice(0, separator);
+    const value = trimmed.slice(separator + 1).replace(/^"+|"+$/g, '');
+    result[key] = value;
+  }
+  return result;
+}
+
+function isArchBasedLinux({ env = process.env, platform = process.platform } = {}) {
+  if (platform !== 'linux') {
+    return false;
+  }
+
+  const distroHint = String(env.ORCHESTRATOR_LINUX_DISTRO || '').trim().toLowerCase();
+  const osRelease = readOsRelease();
+  const id = distroHint || String(osRelease.ID || '').trim().toLowerCase();
+  const idLike = String(osRelease.ID_LIKE || '').trim().toLowerCase();
+  return id === 'arch' || idLike.split(/\s+/).includes('arch');
+}
+
 function defaultLocalWindowsFastTargetDir(env) {
   return path.win32.join(resolveWindowsCacheRoot(env), 'AgentWorkspaceBuildCache', 'tauri-target');
 }
@@ -105,6 +137,13 @@ function resolveBundleTargets({
     return {
       bundleTargets: ['nsis'],
       reason: 'local-windows-fast-installer'
+    };
+  }
+
+  if (platform === 'linux' && profile === 'fast' && !env.CI && isArchBasedLinux({ env, platform })) {
+    return {
+      bundleTargets: ['deb'],
+      reason: 'local-arch-fast-skip-appimage'
     };
   }
 
@@ -221,6 +260,8 @@ module.exports = {
   defaultLocalWindowsFastTargetDir,
   parseArgs,
   parseBundleList,
+  isArchBasedLinux,
+  readOsRelease,
   resolveBundleTargets,
   resolveCargoTargetDir,
   resolveTargetRoot

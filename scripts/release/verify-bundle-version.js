@@ -5,6 +5,9 @@ const path = require('path');
 const { getProjectRoot, readPackageVersion } = require('./version-utils');
 
 const BUNDLE_FILE_RULES = {
+  appimage: { directory: 'appimage', extensions: ['.AppImage'] },
+  deb: { directory: 'deb', extensions: ['.deb'] },
+  rpm: { directory: 'rpm', extensions: ['.rpm'] },
   nsis: { directory: 'nsis', extensions: ['.exe'] },
   msi: { directory: 'msi', extensions: ['.msi'] },
   dmg: { directory: 'dmg', extensions: ['.dmg'] }

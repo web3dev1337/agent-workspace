@@ -124,6 +124,7 @@ scripts/tauri/run-tauri-build.js    - Shared local/CI Tauri build launcher
 ├─ Profiles: dispatches `release` vs `fast` builds from one script instead of duplicating shell commands
 ├─ Windows fast-cache pinning: local non-CI `fast` builds use a stable `%LOCALAPPDATA%\\AgentWorkspaceBuildCache\\tauri-target` root so repo renames/worktree moves do not discard Cargo incremental state
 ├─ Local installer trim: local non-CI Windows `fast` builds default to `nsis` instead of building both Windows installer formats
+├─ Arch Linux fast-build guard: local non-CI Linux `fast` builds on Arch-family distros default to `deb`, avoiding the known linuxdeploy AppImage strip failure on `.relr.dyn` system libraries and keeping local desktop smoke-test builds reliable
 ├─ Version guardrails: syncs Tauri/Cargo metadata from `package.json`, runs release consistency checks, and clears stale bundle output before each build
 ├─ Artifact verification: blocks CI/local release builds if installer filenames in `bundle/` do not include the expected version
 └─ Overrides: respects explicit `CARGO_TARGET_DIR` / `ORCHESTRATOR_TAURI_TARGET_DIR` when callers want a custom target root
