@@ -5951,8 +5951,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dependency-setup-badge.level-optional {
-  color: var(--accent-warning);
-  border-color: rgba(245, 158, 11, 0.45);
+  color: #c4b5fd;
+  border-color: rgba(167, 139, 250, 0.45);
 }
 
 .dependency-setup-item-desc {
@@ -14522,6 +14522,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .onboarding-inline-status.status-ok { color: #3fb950; }
 .onboarding-inline-status.status-missing { color: #f85149; }
+.onboarding-inline-status.status-warning { color: #fbbf24; }
 .onboarding-inline-status.status-pending { color: #58a6ff; }
 
 .onboarding-step-actions {
@@ -14878,6 +14879,20 @@ body.dependency-onboarding-active #dependency-setup-modal {
   text-decoration: none;
 }
 
+.onboarding-legal-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.onboarding-legal-loading .spinner {
+  margin: 0;
+}
+
 .onboarding-stepper-row {
   width: 100%;
   margin-bottom: 0;
@@ -14950,9 +14965,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .onboarding-step-badge.level-optional {
-  border-color: rgba(251, 191, 36, 0.34);
-  background: rgba(245, 158, 11, 0.14);
-  color: #fde68a;
+  border-color: rgba(167, 139, 250, 0.34);
+  background: rgba(139, 92, 246, 0.14);
+  color: #ddd6fe;
 }
 
 .onboarding-step-count {

@@ -10292,16 +10292,17 @@ class ClaudeOrchestrator {
 	        const id = String(action?.id || '').trim();
 	        const level = getActionLevel(id);
 	        const done = isActionComplete(id, toolsMap);
+	        const optional = action?.optional === true || level === 'optional';
 	        return {
 	          ...action,
 	          id,
 	          level,
-	          optional: action?.optional === true || level === 'optional',
+	          optional,
 	          done,
 	          levelText: getActionLevelText(level),
 	          levelClass: getActionLevelClass(level),
 	          statusText: getActionStatusText(id, done),
-	          statusClass: done ? 'status-ok' : 'status-missing',
+	          statusClass: done ? 'status-ok' : (optional ? 'status-warning' : 'status-missing'),
 	          runSupported: action?.runSupported !== false
 	        };
 	      });
@@ -10412,8 +10413,8 @@ class ClaudeOrchestrator {
 	              <li>The software is provided "as is," subject to rights that cannot be excluded under applicable law.</li>
 	            </ul>
 	            <div class="onboarding-legal-links">
-	              <a class="onboarding-btn-secondary" href="https://agent-workspace.ai/terms.html" target="_blank" rel="noopener">Terms of Use</a>
-	              <a class="onboarding-btn-secondary" href="https://agent-workspace.ai/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+	              <a class="onboarding-btn-secondary" href="https://agent-workspace.ai/terms.html" target="_blank" rel="noopener noreferrer" data-setup-open-url="https://agent-workspace.ai/terms.html">Terms of Use</a>
+	              <a class="onboarding-btn-secondary" href="https://agent-workspace.ai/privacy.html" target="_blank" rel="noopener noreferrer" data-setup-open-url="https://agent-workspace.ai/privacy.html">Privacy Policy</a>
 	            </div>
 	            <div class="onboarding-nav-row onboarding-welcome-actions">
 	              <button class="onboarding-btn-secondary" type="button" data-setup-exit-legal="true">Exit</button>
@@ -11291,11 +11292,55 @@ class ClaudeOrchestrator {
 	    };
 
 	    listEl.addEventListener('click', async (event) => {
+	      const openUrlBtn = event.target.closest('[data-setup-open-url]');
+	      if (openUrlBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        const url = String(
+	          openUrlBtn.getAttribute('data-setup-open-url')
+	            || openUrlBtn.getAttribute('href')
+	            || ''
+	        ).trim();
+	        if (!url) return;
+	        const label = String(openUrlBtn.textContent || 'Link').trim();
+	        try {
+	          const res = await fetch('/api/setup-actions/open-url', {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ url })
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok || data?.ok === false) {
+	            throw new Error(String(data?.error || `HTTP ${res.status}`));
+	          }
+	          this.showToast(`Opened ${label} in your browser.`, 'info');
+	        } catch (err) {
+	          try {
+	            window.open(url, '_blank', 'noreferrer');
+	          } catch {
+	            // ignore
+	          }
+	          this.showToast(`Could not open ${label}: ${String(err?.message || err)}`, 'error');
+	        }
+	        return;
+	      }
+
 	      const acceptLegalBtn = event.target.closest('[data-setup-accept-legal]');
 	      if (acceptLegalBtn) {
 	        writeLegalAccepted(true);
 	        this.showToast('Terms acknowledged.', 'success');
 	        state.showWelcome = true;
+	        titleEl.textContent = 'Preparing setup...';
+	        summaryEl.textContent = '';
+	        listEl.innerHTML = `
+	          <div class="onboarding-legal-card">
+	            <span class="onboarding-legal-kicker">Preparing setup</span>
+	            <div class="onboarding-legal-loading">
+	              <div class="spinner"></div>
+	              <h3 class="onboarding-welcome-title">Checking your tools...</h3>
+	              <p class="onboarding-welcome-copy">Detecting installed dependencies and loading the next step.</p>
+	            </div>
+	          </div>`;
 	        await loadAndRender({ open: true, forceAutoShow: true });
 	        return;
 	      }
