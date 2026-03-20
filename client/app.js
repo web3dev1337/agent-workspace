@@ -1015,6 +1015,9 @@ class ClaudeOrchestrator {
 
   async init() {
 	    try {
+	      // Install auth-aware fetch shim before any UI components make API calls.
+	      this.installAuthFetchShim();
+
 	      // Initialize managers
 	      this.terminalManager = new TerminalManager(this);
 	      this.terminalManager.autosuggestEnabled = false;
@@ -1152,7 +1155,6 @@ class ClaudeOrchestrator {
 	      this.applyTheme();
 	      this.syncSettingsUI();
 	      this.applySimpleModeConfig();
-	      this.installAuthFetchShim();
 
 	      // Connect to server
       await this.connectToServer();
@@ -1728,7 +1730,15 @@ class ClaudeOrchestrator {
 	    const optionalElementIds = new Set([
 	      // Claude startup modal elements only exist when the modal is open.
 	      'start-claude',
-	      'cancel-claude-startup'
+	      'cancel-claude-startup',
+
+	      // Legacy/conditional settings + update elements that may not exist in newer layouts.
+	      'reset-to-defaults',
+	      'save-as-default',
+	      'check-updates',
+	      'pull-updates',
+	      'dismiss-settings-notification',
+	      'dismiss-git-notification'
 	    ]);
 
 	    // Check all elements exist
@@ -11325,6 +11335,32 @@ class ClaudeOrchestrator {
 	        ).trim();
 	        if (!url) return;
 	        const label = String(openUrlBtn.textContent || 'Link').trim();
+	        let targetUrl = url;
+	        try {
+	          const parsed = new URL(url);
+	          const proto = String(parsed.protocol || '').toLowerCase();
+	          if (!['http:', 'https:'].includes(proto)) {
+	            throw new Error('Only http/https URLs are supported');
+	          }
+	          targetUrl = parsed.toString();
+	        } catch (err) {
+	          this.showToast(`Could not open ${label}: ${String(err?.message || err)}`, 'error');
+	          return;
+	        }
+
+	        const openErrors = [];
+
+	        // Desktop builds: prefer native open to avoid server-side PATH issues.
+	        if (this.isTauriRuntime()) {
+	          try {
+	            await window.__TAURI__.invoke('open_external', { url: targetUrl });
+	            this.showToast(`Opened ${label} in your browser.`, 'info');
+	            return;
+	          } catch (err) {
+	            openErrors.push(`desktop: ${String(err?.message || err)}`);
+	          }
+	        }
+
 	        try {
 	          const headers = { 'Content-Type': 'application/json' };
 	          try {
@@ -11336,21 +11372,28 @@ class ClaudeOrchestrator {
 	          const res = await fetch('/api/setup-actions/open-url', {
 	            method: 'POST',
 	            headers,
-	            body: JSON.stringify({ url })
+	            body: JSON.stringify({ url: targetUrl })
 	          });
 	          const data = await res.json().catch(() => ({}));
 	          if (!res.ok || data?.ok === false) {
 	            throw new Error(String(data?.error || `HTTP ${res.status}`));
 	          }
 	          this.showToast(`Opened ${label} in your browser.`, 'info');
+	          return;
 	        } catch (err) {
-	          try {
-	            window.open(url, '_blank', 'noreferrer');
-	          } catch {
-	            // ignore
-	          }
-	          this.showToast(`Could not open ${label}: ${String(err?.message || err)}`, 'error');
+	          openErrors.push(`server: ${String(err?.message || err)}`);
 	        }
+
+	        try {
+	          window.open(targetUrl, '_blank', 'noreferrer');
+	          this.showToast(`Opened ${label} in your browser.`, 'info');
+	          return;
+	        } catch (err) {
+	          openErrors.push(`window: ${String(err?.message || err)}`);
+	        }
+
+	        const tail = openErrors.length ? ` (${openErrors.join('; ')})` : '';
+	        this.showToast(`Could not open ${label}${tail}`, 'error');
 	        return;
 	      }
 
@@ -15375,20 +15418,37 @@ class ClaudeOrchestrator {
     const tokenFromUrl = urlParams.get('token');
 
     if (tokenFromUrl) {
-      // Save to localStorage for future use
-      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, tokenFromUrl);
-      // Remove from URL for security
-      window.history.replaceState({}, document.title, window.location.pathname);
+      // Save for future use (storage may be blocked in some WebView/Tracking Prevention modes).
+      this._authTokenMemory = tokenFromUrl;
+      try {
+        localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, tokenFromUrl);
+      } catch {
+        // ignore
+      }
+      // Remove from URL for security (preserve other query params).
+      try {
+        urlParams.delete('token');
+        const nextSearch = urlParams.toString();
+        const nextUrl = nextSearch ? `${window.location.pathname}?${nextSearch}` : window.location.pathname;
+        window.history.replaceState({}, document.title, nextUrl);
+      } catch {
+        // ignore
+      }
       return tokenFromUrl;
     }
 
 	    // Check localStorage
-    const storedToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
-      || localStorage.getItem(LEGACY_AUTH_TOKEN_STORAGE_KEY);
-    if (storedToken && !localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)) {
-      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, storedToken);
+    try {
+      const storedToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
+        || localStorage.getItem(LEGACY_AUTH_TOKEN_STORAGE_KEY);
+      if (storedToken && !localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)) {
+        localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, storedToken);
+      }
+      if (storedToken) this._authTokenMemory = storedToken;
+      return storedToken || this._authTokenMemory || null;
+    } catch {
+      return this._authTokenMemory || null;
     }
-    return storedToken;
   }
 
   async refreshLicenseStatus() {
@@ -34795,6 +34855,27 @@ class ClaudeOrchestrator {
     let activeWorkspaceChanged = false;
     let activeVisibilityChanged = false;
     const sessionIds = Object.keys(sessionMap);
+
+    if (!sessionIds.length) {
+      try {
+        this.clearWorktreeReservationByWorktreeId(resolvedWorktreeId);
+      } catch {
+        // ignore
+      }
+      try {
+        if (shouldApplyToActiveWorkspace) this.pendingWorktreeLaunches.delete(resolvedWorktreeId);
+      } catch {
+        // ignore
+      }
+      if (!silent) {
+        const msg = isBackground
+          ? `Worktree ${resolvedWorktreeId} terminals failed to start (background)`
+          : `Worktree ${resolvedWorktreeId} terminals failed to start`;
+        this.showTemporaryMessage(msg, 'error');
+      }
+      this.refreshWorktreeAddModals();
+      return;
+    }
 
     for (const [sessionId, sessionState] of Object.entries(sessionMap)) {
       const sessionData = {

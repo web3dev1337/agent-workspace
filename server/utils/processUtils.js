@@ -41,8 +41,15 @@ function getCommonWindowsPathEntries(env = process.env) {
   const localAppData = String(env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local')).trim();
   const programFiles = String(env.ProgramFiles || 'C:\\Program Files').trim();
   const programFilesX86 = String(env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)').trim();
+  const systemRoot = String(env.SystemRoot || env.WINDIR || 'C:\\Windows').trim();
+  const system32 = systemRoot ? path.join(systemRoot, 'System32') : '';
 
   return [
+    systemRoot,
+    system32,
+    system32 ? path.join(system32, 'WindowsPowerShell', 'v1.0') : '',
+    system32 ? path.join(system32, 'Wbem') : '',
+    system32 ? path.join(system32, 'OpenSSH') : '',
     appData ? path.join(appData, 'npm') : '',
     localAppData ? path.join(localAppData, 'Microsoft', 'WinGet', 'Links') : '',
     localAppData ? path.join(localAppData, 'Programs', 'GitHub CLI') : '',
