@@ -1,0 +1,6 @@
+- [x] Investigate root cause (orphaned node.exe holding file lock)
+- [x] Research Tauri v2 NSIS hook API
+- [x] Create src-tauri/windows/hooks.nsh with PREINSTALL + PREUNINSTALL hooks
+- [x] Add installerHooks config to tauri.conf.json
+- [ ] Commit and push
+- [ ] Create PR
