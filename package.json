@@ -12,6 +12,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "node scripts/tauri/run-tauri-build.js --profile release",
     "tauri:build:fast": "node scripts/tauri/run-tauri-build.js --profile fast",
+    "tauri:build:arch": "node scripts/tauri/run-tauri-build.js --profile fast --bundles pacman",
     "release:sync-version": "node scripts/tauri/sync-tauri-version.js",
     "release:check-version": "node scripts/release/check-version-consistency.js",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",

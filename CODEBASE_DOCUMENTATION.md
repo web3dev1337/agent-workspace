@@ -23,6 +23,7 @@ PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resourc
             scripts/tauri/run-tauri-build.js          - Centralized Tauri build entrypoint (local Windows fast-cache pinning + profile dispatch)
             scripts/tauri/get-release-version.js     - Extracts the release version (tag or package.json) and exports it for CI jobs.
             scripts/tauri/sync-tauri-version.js      - Mirrors the release version into `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` before packaging.
+            scripts/release/build-arch-package.js    - Generates a pacman-installable `pkg.tar.zst` from the Tauri Debian staging tree for native Arch Linux installs.
             scripts/release/check-version-consistency.js - Fails builds/tags when package/Tauri/Cargo/tag versions drift.
             scripts/release/verify-bundle-version.js - Rejects stale bundle filenames before GitHub release upload.
 DIFF:       diff-viewer/                             - Advanced diff viewer component
@@ -125,14 +126,21 @@ scripts/tauri/run-tauri-build.js    - Shared local/CI Tauri build launcher
 ├─ Profiles: dispatches `release` vs `fast` builds from one script instead of duplicating shell commands
 ├─ Windows fast-cache pinning: local non-CI `fast` builds use a stable `%LOCALAPPDATA%\\AgentWorkspaceBuildCache\\tauri-target` root so repo renames/worktree moves do not discard Cargo incremental state
 ├─ Local installer trim: local non-CI Windows `fast` builds default to `nsis` instead of building both Windows installer formats
+├─ Arch Linux fast-build guard: local non-CI Linux `fast` builds on Arch-family distros default to a native `pacman` package target instead of AppImage
+├─ Post-process bundles: pseudo-targets like `pacman` are generated after Tauri finishes its native bundles, reusing the staged `/usr` install tree from the Debian bundle
 ├─ Version guardrails: syncs Tauri/Cargo metadata from `package.json`, runs release consistency checks, and clears stale bundle output before each build
 ├─ Artifact verification: blocks CI/local release builds if installer filenames in `bundle/` do not include the expected version
 └─ Overrides: respects explicit `CARGO_TARGET_DIR` / `ORCHESTRATOR_TAURI_TARGET_DIR` when callers want a custom target root
+scripts/release/build-arch-package.js - Native Arch package generator
+├─ Input: reuses the extracted Tauri `deb` bundle payload under `src-tauri/target/<profile>/bundle/deb/*/data`
+├─ Output: writes `bundle/pacman/agent-workspace-<version>-1-x86_64.pkg.tar.zst`
+├─ Metadata: emits pacman `.PKGINFO` with runtime deps (`gtk3`, `webkit2gtk-4.1`, `libayatana-appindicator`, `hicolor-icon-theme`)
+└─ Install flow: resulting artifact is suitable for `sudo pacman -U ...pkg.tar.zst`
 scripts/release/check-version-consistency.js - Release metadata guardrail
 ├─ Validates: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and the active Git tag (when present)
 └─ CI usage: runs in PR/main workflows so version drift cannot merge silently
 scripts/release/verify-bundle-version.js - Bundle filename verifier
-├─ Validates: Windows `.exe`/`.msi` and macOS `.dmg` filenames include the expected release version
+├─ Validates: Windows `.exe`/`.msi`, macOS `.dmg`, Linux `.deb`/`.rpm`/`.AppImage`, and Arch `.pkg.tar.zst` filenames include the expected release version
 └─ Failure mode: catches stale cached artifacts that wildcard GitHub release uploads would otherwise attach
 scripts/release/setup-macos-signing.sh - GitHub Actions helper that imports the Developer ID certificate into a temp keychain, resolves the signing identity, and exports notarization credentials for Tauri builds
 scripts/release/verify-macos-bundle.sh - GitHub Actions helper that verifies macOS release bundles with `codesign`, `spctl`, and `xcrun stapler validate` before tag uploads
@@ -540,6 +548,7 @@ npm run dev:client       - Start client dev server
 npm run tauri:dev        - Start native app development
 npm run tauri:build      - Release build (slow, optimized — for distribution)
 npm run tauri:build:fast - Fast build (~3-5x faster — for local testing)
+npm run tauri:build:arch - Fast native Arch package build (`pkg.tar.zst`) for install testing via `pacman -U`
 npm run dev:all          - Start all services concurrently
 
 # Diff viewer specific

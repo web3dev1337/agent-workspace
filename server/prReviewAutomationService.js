@@ -7,7 +7,7 @@ const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
   transports: [
-    new winston.transports.File({ filename: path.join(__dirname, '..', 'logs', 'pr-review-automation.log'), maxsize: 5_000_000, maxFiles: 3 })
+    new winston.transports.File({ filename: path.join(process.cwd(), 'logs', 'pr-review-automation.log'), maxsize: 5_000_000, maxFiles: 3 })
   ]
 });
 

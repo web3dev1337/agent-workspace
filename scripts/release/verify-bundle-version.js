@@ -5,6 +5,10 @@ const path = require('path');
 const { getProjectRoot, readPackageVersion } = require('./version-utils');
 
 const BUNDLE_FILE_RULES = {
+  appimage: { directory: 'appimage', extensions: ['.AppImage'] },
+  deb: { directory: 'deb', extensions: ['.deb'] },
+  pacman: { directory: 'pacman', extensions: ['.pkg.tar.zst'] },
+  rpm: { directory: 'rpm', extensions: ['.rpm'] },
   nsis: { directory: 'nsis', extensions: ['.exe'] },
   msi: { directory: 'msi', extensions: ['.msi'] },
   dmg: { directory: 'dmg', extensions: ['.dmg'] }
@@ -90,7 +94,7 @@ function listBundleFiles(bundleTypeDir, extensions) {
   }
 
   return fs.readdirSync(bundleTypeDir)
-    .filter((entry) => extensions.includes(path.extname(entry).toLowerCase()))
+    .filter((entry) => extensions.some((extension) => entry.toLowerCase().endsWith(extension.toLowerCase())))
     .map((entry) => path.join(bundleTypeDir, entry));
 }
 

@@ -49,6 +49,38 @@ function resolveWindowsCacheRoot(env) {
   return path.win32.join(os.homedir(), 'AppData', 'Local');
 }
 
+function readOsRelease({ fsImpl = fs } = {}) {
+  const osReleasePath = '/etc/os-release';
+  if (!fsImpl.existsSync(osReleasePath)) {
+    return {};
+  }
+
+  const content = fsImpl.readFileSync(osReleasePath, 'utf8');
+  const result = {};
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const separator = trimmed.indexOf('=');
+    if (separator <= 0) continue;
+    const key = trimmed.slice(0, separator);
+    const value = trimmed.slice(separator + 1).replace(/^"+|"+$/g, '');
+    result[key] = value;
+  }
+  return result;
+}
+
+function isArchBasedLinux({ env = process.env, platform = process.platform } = {}) {
+  if (platform !== 'linux') {
+    return false;
+  }
+
+  const distroHint = String(env.ORCHESTRATOR_LINUX_DISTRO || '').trim().toLowerCase();
+  const osRelease = readOsRelease();
+  const id = distroHint || String(osRelease.ID || '').trim().toLowerCase();
+  const idLike = String(osRelease.ID_LIKE || '').trim().toLowerCase();
+  return id === 'arch' || idLike.split(/\s+/).includes('arch');
+}
+
 function defaultLocalWindowsFastTargetDir(env) {
   return path.win32.join(resolveWindowsCacheRoot(env), 'AgentWorkspaceBuildCache', 'tauri-target');
 }
@@ -80,6 +112,26 @@ function parseBundleList(value) {
     .filter(Boolean);
 }
 
+function splitBundleTargets(bundleTargets) {
+  const normalized = Array.isArray(bundleTargets) ? bundleTargets : [];
+  const postprocessTargets = [];
+  const tauriTargets = [];
+
+  for (const bundleTarget of normalized) {
+    if (bundleTarget === 'pacman') {
+      postprocessTargets.push(bundleTarget);
+      continue;
+    }
+    tauriTargets.push(bundleTarget);
+  }
+
+  if (postprocessTargets.includes('pacman') && !tauriTargets.includes('deb')) {
+    tauriTargets.unshift('deb');
+  }
+
+  return { postprocessTargets, tauriTargets };
+}
+
 function resolveBundleTargets({
   profile,
   explicitBundles,
@@ -105,6 +157,13 @@ function resolveBundleTargets({
     return {
       bundleTargets: ['nsis'],
       reason: 'local-windows-fast-installer'
+    };
+  }
+
+  if (platform === 'linux' && profile === 'fast' && !env.CI && isArchBasedLinux({ env, platform })) {
+    return {
+      bundleTargets: ['pacman'],
+      reason: 'local-arch-fast-native-package'
     };
   }
 
@@ -139,6 +198,7 @@ function main() {
     profile,
     explicitBundles: bundles
   });
+  const { tauriTargets, postprocessTargets } = splitBundleTargets(bundleTargets);
 
   const env = { ...process.env };
   if (targetDir) {
@@ -177,9 +237,16 @@ function main() {
     env
   });
 
+  // Clean stale AppImage bundle dir so previously generated artifacts cannot leak into this build.
+  const appimageBundleDir = path.join(resolveTargetRoot({ repoRoot, targetDir }), profile, 'bundle', 'appimage');
+  if (fs.existsSync(appimageBundleDir)) {
+    fs.rmSync(appimageBundleDir, { recursive: true, force: true });
+    console.log('[tauri] Cleaned stale AppImage bundle cache');
+  }
+
   const tauriArgs = [tauriCliPath, 'build'];
-  if (bundleTargets && bundleTargets.length > 0) {
-    tauriArgs.push('--bundles', bundleTargets.join(','));
+  if (tauriTargets && tauriTargets.length > 0) {
+    tauriArgs.push('--bundles', tauriTargets.join(','));
   }
   tauriArgs.push('--', '--profile', profile);
 
@@ -187,6 +254,19 @@ function main() {
     cwd: repoRoot,
     env
   });
+
+  if (postprocessTargets.includes('pacman')) {
+    run(process.execPath, [
+      path.join(repoRoot, 'scripts', 'release', 'build-arch-package.js'),
+      '--profile',
+      profile,
+      '--target-dir',
+      resolveTargetRoot({ repoRoot, targetDir })
+    ], {
+      cwd: repoRoot,
+      env
+    });
+  }
 
   const verifyArgs = [
     path.join(repoRoot, 'scripts', 'release', 'verify-bundle-version.js'),
@@ -214,6 +294,9 @@ module.exports = {
   defaultLocalWindowsFastTargetDir,
   parseArgs,
   parseBundleList,
+  isArchBasedLinux,
+  readOsRelease,
+  splitBundleTargets,
   resolveBundleTargets,
   resolveCargoTargetDir,
   resolveTargetRoot
