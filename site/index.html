@@ -108,8 +108,8 @@
           <a class="btn-glow download-btn download-windows" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank">
             <span>Download for Windows</span>
           </a>
-          <a class="btn-glow download-btn download-mac" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank" style="display:none">
-            <span>Download for Mac</span>
+          <a class="btn-glow download-btn download-mac" href="#install-mid" style="display:none">
+            <span>Install on Mac</span>
           </a>
           <a class="btn-glow download-btn download-linux" href="#install-mid" style="display:none">
             <span>Install on Linux</span>
@@ -248,20 +248,22 @@
 
         <div class="install-panel" id="tab-mac-mid">
           <div class="install-option">
-            <a class="btn-glow install-download" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank">Download for Mac (Apple Silicon)</a>
+            <span class="btn-outline install-download install-source-label">Run from Source on Mac ↓</span>
           </div>
-          <p class="install-note">Download the <span class="text-cyan">.dmg</span>, open it, and drag Agent Workspace to Applications.</p>
-          <div class="install-option" style="margin-top: 1.5rem">
-            <span class="btn-outline install-download install-source-label">Or run from source ↓</span>
-          </div>
+          <p class="install-note">Packaged macOS downloads are temporarily unavailable while Apple signing and notarization are being configured.</p>
           <div class="install-cmd">
             <code>git clone https://github.com/web3dev1337/agent-workspace.git</code>
             <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/agent-workspace.git">Copy</button>
           </div>
           <div class="install-cmd">
-            <code>cd agent-workspace && npm install && npm start</code>
-            <button class="copy-btn" data-copy="cd agent-workspace && npm install && npm start">Copy</button>
+            <code>cd agent-workspace && npm install</code>
+            <button class="copy-btn" data-copy="cd agent-workspace && npm install">Copy</button>
           </div>
+          <div class="install-cmd">
+            <code>npm start</code>
+            <button class="copy-btn" data-copy="npm start">Copy</button>
+          </div>
+          <p class="install-note">Opens at <span class="text-cyan">http://localhost:9461</span> in your browser.</p>
         </div>
 
         <div class="install-panel" id="tab-linux-mid">
@@ -461,20 +463,22 @@
 
         <div class="install-panel" id="tab-mac">
           <div class="install-option">
-            <a class="btn-glow install-download" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank">Download for Mac (Apple Silicon)</a>
+            <span class="btn-outline install-download install-source-label">Run from Source on Mac ↓</span>
           </div>
-          <p class="install-note">Download the <span class="text-cyan">.dmg</span>, open it, and drag Agent Workspace to Applications.</p>
-          <div class="install-option" style="margin-top: 1.5rem">
-            <span class="btn-outline install-download install-source-label">Or run from source ↓</span>
-          </div>
+          <p class="install-note">Packaged macOS downloads are temporarily unavailable while Apple signing and notarization are being configured.</p>
           <div class="install-cmd">
             <code>git clone https://github.com/web3dev1337/agent-workspace.git</code>
             <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/agent-workspace.git">Copy</button>
           </div>
           <div class="install-cmd">
-            <code>cd agent-workspace && npm install && npm start</code>
-            <button class="copy-btn" data-copy="cd agent-workspace && npm install && npm start">Copy</button>
+            <code>cd agent-workspace && npm install</code>
+            <button class="copy-btn" data-copy="cd agent-workspace && npm install">Copy</button>
           </div>
+          <div class="install-cmd">
+            <code>npm start</code>
+            <button class="copy-btn" data-copy="npm start">Copy</button>
+          </div>
+          <p class="install-note">Opens at <span class="text-cyan">http://localhost:9461</span> in your browser.</p>
         </div>
 
         <div class="install-panel" id="tab-linux">
@@ -511,7 +515,7 @@
       </div>
       <div class="footer-links">
         <a href="https://github.com/web3dev1337/agent-workspace" target="_blank">GitHub</a>
-        <a href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank">Download</a>
+        <a href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank">Releases</a>
         <a href="https://github.com/web3dev1337/agent-workspace" target="_blank">Run from Source</a>
         <a class="footer-sponsor" href="https://github.com/sponsors/web3dev1337" target="_blank">Sponsor</a>
         <a href="terms.html">Terms</a>
