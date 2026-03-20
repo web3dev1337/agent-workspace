@@ -1,7 +1,7 @@
 # Agent Workspace
 
 [![Website](https://img.shields.io/badge/Website-agent--workspace.ai-00d4ff?style=for-the-badge)](https://agent-workspace.ai)
-[![Download](https://img.shields.io/badge/Download-Latest%20Release-00d4ff?style=for-the-badge)](https://github.com/web3dev1337/agent-workspace/releases/latest)
+[![Releases](https://img.shields.io/badge/Releases-Latest-00d4ff?style=for-the-badge)](https://github.com/web3dev1337/agent-workspace/releases/latest)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/web3dev1337)
 [![Follow on X](https://img.shields.io/badge/Follow-%40AIOnlyDeveloper-000000?style=for-the-badge&logo=x)](https://x.com/AIOnlyDeveloper)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
@@ -91,7 +91,7 @@ Compatibility rule: if it can be launched from a terminal command in your worktr
 - **Task Integration** — Pull tasks from Trello and/or use local task records. GitHub Issues and Linear coming soon.
 - **Browser-like Tabs** — Multiple workspaces open simultaneously, each with its own terminals and state.
 - **Runs Locally** — Runs on your hardware. Access through the desktop app or the browser. No publisher-hosted telemetry by default.
-- **Desktop Apps** — Native Tauri builds for Windows and macOS are published on the latest GitHub release.
+- **Desktop Apps** — Windows desktop builds are published on the latest GitHub release. macOS users should run from source until the signed Apple desktop release path is restored.
 
 ## Tier System
 
@@ -119,25 +119,23 @@ Get-AuthenticodeSignature .\downloaded-file.exe
 
 ### macOS
 
-[Download the latest release](https://github.com/web3dev1337/agent-workspace/releases/latest) and grab the `.dmg` build.
-
-Current macOS releases are packaged as Apple Silicon (`aarch64`) disk images. Open the `.dmg`, drag **Agent Workspace** into `Applications`, then launch it from there.
-
-If Gatekeeper blocks the first launch, right-click the app and choose **Open**, or allow it in **System Settings -> Privacy & Security**.
-
-Or run from source:
+Packaged macOS downloads are temporarily unavailable while Apple signing and notarization are being configured. For now, run Agent Workspace from source:
 
 ```bash
 git clone https://github.com/web3dev1337/agent-workspace.git
-cd agent-workspace && npm install
+cd agent-workspace
+npm install
 npm start
 ```
 
-### Mac / Linux / WSL
+Maintainers: see [docs/MACOS_SIGNING_RELEASE_CHECKLIST.md](docs/MACOS_SIGNING_RELEASE_CHECKLIST.md) before publishing the next macOS desktop release.
+
+### Linux / WSL
 
 ```bash
 git clone https://github.com/web3dev1337/agent-workspace.git
-cd agent-workspace && npm install
+cd agent-workspace
+npm install
 npm start
 ```
 
