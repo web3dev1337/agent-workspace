@@ -44,7 +44,15 @@ if (ptyLoadError) {
 
 // Helper function to get the appropriate shell for the platform
 function getDefaultShell() {
-  return process.platform === 'win32' ? 'powershell.exe' : 'bash';
+  if (process.platform !== 'win32') return 'bash';
+  const systemRoot = String(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows').trim() || 'C:\\Windows';
+  const candidate = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  try {
+    if (fs.existsSync(candidate)) return candidate;
+  } catch {
+    // ignore
+  }
+  return 'powershell.exe';
 }
 
 // Helper function to build shell args for executing commands
@@ -1012,7 +1020,8 @@ class SessionManager extends EventEmitter {
     } catch (error) {
       logger.error('Failed to create session', {
         sessionId,
-        error: error.message
+        error: error.message,
+        stack: error.stack
       });
       throw error;
     }
@@ -2338,7 +2347,7 @@ class SessionManager extends EventEmitter {
 	        includeSessionState(claudeSessionId);
 	      }
 	    } catch (error) {
-	      logger.error('Failed to create Claude session for worktree', { worktreeId, error: error.message });
+	      logger.error('Failed to create Claude session for worktree', { worktreeId, error: error.message, stack: error.stack });
 	    }
 
     // Create Server session
@@ -2370,7 +2379,7 @@ class SessionManager extends EventEmitter {
 	        includeSessionState(serverSessionId);
 	      }
 	    } catch (error) {
-	      logger.error('Failed to create server session for worktree', { worktreeId, error: error.message });
+	      logger.error('Failed to create server session for worktree', { worktreeId, error: error.message, stack: error.stack });
 	    }
 
 	    // Update git branch info for the new sessions
@@ -2380,7 +2389,7 @@ class SessionManager extends EventEmitter {
           includeSessionState(claudeSessionId);
           includeSessionState(serverSessionId);
 	      } catch (error) {
-	        logger.error('Failed to update git branch for new worktree', { worktreeId, error: error.message });
+	        logger.error('Failed to update git branch for new worktree', { worktreeId, error: error.message, stack: error.stack });
 	      }
 	    }
 

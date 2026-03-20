@@ -4428,7 +4428,26 @@ app.post('/api/setup-actions/open-url', requirePolicyAction('write'), express.js
     };
 
     if (process.platform === 'win32') {
-      execFile('explorer.exe', [targetUrl], { windowsHide: true }, finish);
+      const path = require('path');
+      const systemRoot = String(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows').trim() || 'C:\\Windows';
+      const explorerPath = path.join(systemRoot, 'explorer.exe');
+      const cmdPath = path.join(systemRoot, 'System32', 'cmd.exe');
+
+      const attempts = [
+        { file: explorerPath, args: [targetUrl] },
+        { file: cmdPath, args: ['/c', 'start', '', targetUrl] }
+      ];
+
+      const tryOpen = (index, lastError) => {
+        const attempt = attempts[index];
+        if (!attempt) return finish(lastError || new Error('Failed to open URL'));
+        execFile(attempt.file, attempt.args, { windowsHide: true }, (error) => {
+          if (!error) return finish(null);
+          tryOpen(index + 1, error);
+        });
+      };
+
+      tryOpen(0, null);
       return;
     }
 

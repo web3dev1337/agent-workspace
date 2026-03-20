@@ -21,7 +21,13 @@ class VoiceControl {
     this.transcriptEl = null;
 
     // Transcription backend: 'google' | 'whisper'
-    this.transcriptionBackend = localStorage.getItem('voiceTranscriptionBackend') || 'google';
+    this.transcriptionBackend = 'google';
+    try {
+      this.transcriptionBackend = localStorage.getItem('voiceTranscriptionBackend') || 'google';
+    } catch {
+      // Storage access can be blocked in some WebView/Tracking Prevention modes.
+      this.transcriptionBackend = 'google';
+    }
 
     // Audio recording for Whisper
     this.mediaRecorder = null;
@@ -29,6 +35,7 @@ class VoiceControl {
 
     // Backend status
     this.whisperAvailable = false;
+    this.commandList = [];
 
     this.init();
   }
@@ -62,12 +69,12 @@ class VoiceControl {
     try {
       // Check Whisper availability
       const whisperRes = await fetch('/api/whisper/status');
-      const whisperStatus = await whisperRes.json();
-      this.whisperAvailable = whisperStatus.available;
+      const whisperStatus = await whisperRes.json().catch(() => ({}));
+      this.whisperAvailable = whisperRes.ok && whisperStatus.available === true;
 
       // Check LLM status
       const llmRes = await fetch('/api/voice/status');
-      const llmStatus = await llmRes.json();
+      const llmStatus = await llmRes.json().catch(() => ({}));
 
       console.log('[Voice] Backends:', {
         transcription: {
@@ -108,7 +115,11 @@ class VoiceControl {
       return false;
     }
     this.transcriptionBackend = backend;
-    localStorage.setItem('voiceTranscriptionBackend', backend);
+    try {
+      localStorage.setItem('voiceTranscriptionBackend', backend);
+    } catch {
+      // ignore
+    }
     this.updateButtonTooltip();
     return true;
   }
@@ -247,7 +258,13 @@ class VoiceControl {
   async loadCommandsTooltip() {
     try {
       const response = await fetch('/api/voice/commands');
-      const commands = await response.json();
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const commands = Array.isArray(payload)
+        ? payload
+        : (Array.isArray(payload?.commands) ? payload.commands : []);
       this.commandList = commands;
       this.updateButtonTooltip();
     } catch (err) {
@@ -258,8 +275,12 @@ class VoiceControl {
   updateButtonTooltip() {
     const backendLabel = this.transcriptionBackend === 'whisper' ? '[Whisper/Local]' : '[Google]';
     let tooltip = `Voice Commands ${backendLabel} (hold V):\n`;
-    if (this.commandList) {
-      tooltip += this.commandList.map(c => '• ' + c.command.replace(/-/g, ' ')).join('\n');
+    if (Array.isArray(this.commandList) && this.commandList.length) {
+      tooltip += this.commandList
+        .map((c) => String(c?.command || '').trim())
+        .filter(Boolean)
+        .map((command) => '• ' + command.replace(/-/g, ' '))
+        .join('\n');
     }
     tooltip += '\n\nRight-click to switch backend';
     if (this.button) {

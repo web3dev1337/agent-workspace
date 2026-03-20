@@ -14526,8 +14526,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .onboarding-inline-status.status-ok { color: #3fb950; }
-.onboarding-inline-status.status-missing { color: #f85149; }
-.onboarding-inline-status.status-warning { color: #fbbf24; }
+.onboarding-inline-status.status-missing { color: #fbbf24; }
+.onboarding-inline-status.status-warning { color: #c4b5fd; }
 .onboarding-inline-status.status-pending { color: #58a6ff; }
 
 .onboarding-step-actions {

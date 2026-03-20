@@ -142,7 +142,17 @@ class CommanderService {
 
     try {
       // Detect shell based on platform
-      const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
+      const shell = (() => {
+        if (process.platform !== 'win32') return 'bash';
+        const systemRoot = String(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows').trim() || 'C:\\Windows';
+        const candidate = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+        try {
+          if (fs.existsSync(candidate)) return candidate;
+        } catch {
+          // ignore
+        }
+        return 'powershell.exe';
+      })();
       const shellArgs = process.platform === 'win32'
         ? buildPowerShellArgs(null, { keepOpen: true, hideWindow: false })
         : [];
@@ -233,7 +243,7 @@ class CommanderService {
 
       return { success: true, message: 'Commander terminal started' };
     } catch (error) {
-      logger.error('Failed to start Commander terminal', { error: error.message });
+      logger.error('Failed to start Commander terminal', { error: error.message, stack: error.stack });
       return { success: false, error: error.message };
     }
   }
