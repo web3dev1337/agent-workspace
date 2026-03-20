@@ -129,6 +129,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Agent Workspace ${{ steps.release_version.outputs.value }}
+          # Only one workflow should own generated release notes for a tag.
           generate_release_notes: true
           files: |
             src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/msi/*.msi
