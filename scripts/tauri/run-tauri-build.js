@@ -112,6 +112,26 @@ function parseBundleList(value) {
     .filter(Boolean);
 }
 
+function splitBundleTargets(bundleTargets) {
+  const normalized = Array.isArray(bundleTargets) ? bundleTargets : [];
+  const postprocessTargets = [];
+  const tauriTargets = [];
+
+  for (const bundleTarget of normalized) {
+    if (bundleTarget === 'pacman') {
+      postprocessTargets.push(bundleTarget);
+      continue;
+    }
+    tauriTargets.push(bundleTarget);
+  }
+
+  if (postprocessTargets.includes('pacman') && !tauriTargets.includes('deb')) {
+    tauriTargets.unshift('deb');
+  }
+
+  return { postprocessTargets, tauriTargets };
+}
+
 function resolveBundleTargets({
   profile,
   explicitBundles,
@@ -142,8 +162,8 @@ function resolveBundleTargets({
 
   if (platform === 'linux' && profile === 'fast' && !env.CI && isArchBasedLinux({ env, platform })) {
     return {
-      bundleTargets: ['deb'],
-      reason: 'local-arch-fast-skip-appimage'
+      bundleTargets: ['pacman'],
+      reason: 'local-arch-fast-native-package'
     };
   }
 
@@ -178,6 +198,7 @@ function main() {
     profile,
     explicitBundles: bundles
   });
+  const { tauriTargets, postprocessTargets } = splitBundleTargets(bundleTargets);
 
   const env = { ...process.env };
   if (targetDir) {
@@ -224,8 +245,8 @@ function main() {
   }
 
   const tauriArgs = [tauriCliPath, 'build'];
-  if (bundleTargets && bundleTargets.length > 0) {
-    tauriArgs.push('--bundles', bundleTargets.join(','));
+  if (tauriTargets && tauriTargets.length > 0) {
+    tauriArgs.push('--bundles', tauriTargets.join(','));
   }
   tauriArgs.push('--', '--profile', profile);
 
@@ -233,6 +254,19 @@ function main() {
     cwd: repoRoot,
     env
   });
+
+  if (postprocessTargets.includes('pacman')) {
+    run(process.execPath, [
+      path.join(repoRoot, 'scripts', 'release', 'build-arch-package.js'),
+      '--profile',
+      profile,
+      '--target-dir',
+      resolveTargetRoot({ repoRoot, targetDir })
+    ], {
+      cwd: repoRoot,
+      env
+    });
+  }
 
   const verifyArgs = [
     path.join(repoRoot, 'scripts', 'release', 'verify-bundle-version.js'),
@@ -262,6 +296,7 @@ module.exports = {
   parseBundleList,
   isArchBasedLinux,
   readOsRelease,
+  splitBundleTargets,
   resolveBundleTargets,
   resolveCargoTargetDir,
   resolveTargetRoot
