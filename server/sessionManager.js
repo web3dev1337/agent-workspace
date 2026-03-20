@@ -1,10 +1,3 @@
-let pty = null;
-let ptyLoadError = null;
-try {
-  pty = require('node-pty');
-} catch (error) {
-  ptyLoadError = error;
-}
 const { EventEmitter } = require('events');
 const winston = require('winston');
 const fs = require('fs');
@@ -22,7 +15,7 @@ const {
   buildShellCommand,
   resolveCwd
 } = require('./utils/shellCommand');
-const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
+const { augmentProcessEnv, buildPowerShellArgs, loadNodePtyWithCompatibility } = require('./utils/processUtils');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -35,8 +28,23 @@ const logger = winston.createLogger({
     new winston.transports.Console({ format: winston.format.simple() })
   ]
 });
+const { pty, loadError: ptyLoadError, patchResult: ptyPatchResult } = loadNodePtyWithCompatibility();
+
+if (process.platform === 'win32') {
+  if (ptyPatchResult?.status === 'patched') {
+    logger.info('Patched node-pty Windows startProcess compatibility wrapper', {
+      agentPath: ptyPatchResult.agentPath
+    });
+  } else if (ptyPatchResult?.status === 'unexpected-agent-shape') {
+    logger.warn('node-pty Windows compatibility wrapper has unexpected shape; PTY startup may fail', {
+      agentPath: ptyPatchResult.agentPath
+    });
+  }
+}
+
 if (ptyLoadError) {
   logger.error('node-pty failed to load', {
+    patchStatus: ptyPatchResult?.status || null,
     error: ptyLoadError.message,
     stack: ptyLoadError.stack
   });
@@ -798,7 +806,7 @@ class SessionManager extends EventEmitter {
     try {
       if (!pty) {
         logger.error('Cannot create session - node-pty unavailable', { sessionId, type: config.type });
-        throw new Error('node-pty unavailable');
+        throw new Error(ptyLoadError ? `node-pty unavailable: ${ptyLoadError.message}` : 'node-pty unavailable');
       }
       const homeDir = process.env.HOME || os.homedir();
       const env = {

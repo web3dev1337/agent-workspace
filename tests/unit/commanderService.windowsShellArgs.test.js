@@ -1,12 +1,30 @@
 const { EventEmitter } = require('events');
 
+jest.mock('winston', () => ({
+  createLogger: jest.fn(() => ({
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn()
+  })),
+  format: {
+    combine: jest.fn(() => ({})),
+    timestamp: jest.fn(() => ({})),
+    json: jest.fn(() => ({})),
+    simple: jest.fn(() => ({}))
+  },
+  transports: {
+    File: jest.fn(),
+    Console: jest.fn()
+  }
+}), { virtual: true });
+
 describe('CommanderService Windows shell args', () => {
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
 
   afterEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
-    jest.dontMock('node-pty');
     Object.defineProperty(process, 'platform', platformDescriptor);
   });
 
@@ -22,7 +40,7 @@ describe('CommanderService Windows shell args', () => {
       pty.kill = jest.fn();
       return pty;
     });
-    jest.doMock('node-pty', () => ({ spawn }));
+    jest.doMock('node-pty', () => ({ spawn }), { virtual: true });
 
     const { CommanderService } = require('../../server/commanderService');
     CommanderService.instance = null;

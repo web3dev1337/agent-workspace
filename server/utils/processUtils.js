@@ -1,7 +1,10 @@
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
 const CREATE_NO_WINDOW = 0x08000000;
+const BROKEN_NODE_PTY_START_PROCESS_CALL = 'conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor, this._useConptyDll)';
+const FIXED_NODE_PTY_START_PROCESS_CALL = 'conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor)';
 
 function isWindows(platform = process.platform) {
   return platform === 'win32';
@@ -140,10 +143,69 @@ function buildPowerShellArgs(command, {
   return args;
 }
 
+function patchNodePtyStartProcessCompat(packageRoot) {
+  const root = String(packageRoot || '').trim();
+  if (!root) {
+    return { status: 'missing-package-root' };
+  }
+
+  const agentPath = path.join(root, 'lib', 'windowsPtyAgent.js');
+  if (!fs.existsSync(agentPath)) {
+    return { status: 'missing-agent', agentPath };
+  }
+
+  const source = fs.readFileSync(agentPath, 'utf8');
+  if (source.includes(FIXED_NODE_PTY_START_PROCESS_CALL)) {
+    return { status: 'already-patched', agentPath };
+  }
+  if (!source.includes(BROKEN_NODE_PTY_START_PROCESS_CALL)) {
+    return { status: 'unexpected-agent-shape', agentPath };
+  }
+
+  const patched = source.replace(BROKEN_NODE_PTY_START_PROCESS_CALL, FIXED_NODE_PTY_START_PROCESS_CALL);
+  fs.writeFileSync(agentPath, patched, 'utf8');
+  return { status: 'patched', agentPath };
+}
+
+function resolveNodePtyPackageRoot() {
+  try {
+    const pkgPath = require.resolve('node-pty/package.json');
+    return path.dirname(pkgPath);
+  } catch {
+    return null;
+  }
+}
+
+function loadNodePtyWithCompatibility({ platform = process.platform } = {}) {
+  let patchResult = { status: 'skipped' };
+
+  if (isWindows(platform)) {
+    patchResult = patchNodePtyStartProcessCompat(resolveNodePtyPackageRoot());
+  }
+
+  try {
+    return {
+      pty: require('node-pty'),
+      loadError: null,
+      patchResult
+    };
+  } catch (error) {
+    return {
+      pty: null,
+      loadError: error,
+      patchResult
+    };
+  }
+}
+
 module.exports = {
+  BROKEN_NODE_PTY_START_PROCESS_CALL,
   CREATE_NO_WINDOW,
+  FIXED_NODE_PTY_START_PROCESS_CALL,
   isWindows,
   getHiddenProcessOptions,
   augmentProcessEnv,
-  buildPowerShellArgs
+  buildPowerShellArgs,
+  loadNodePtyWithCompatibility,
+  patchNodePtyStartProcessCompat
 };

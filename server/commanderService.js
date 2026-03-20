@@ -6,12 +6,11 @@
  * worktree terminals work - they're all Claude Code instances.
  */
 
-const pty = require('node-pty');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const winston = require('winston');
-const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
+const { augmentProcessEnv, buildPowerShellArgs, loadNodePtyWithCompatibility } = require('./utils/processUtils');
 
 const HOME_DIR = process.env.HOME || os.homedir();
 
@@ -26,6 +25,26 @@ const logger = winston.createLogger({
     new winston.transports.Console({ format: winston.format.simple() })
   ]
 });
+const { pty, loadError: ptyLoadError, patchResult: ptyPatchResult } = loadNodePtyWithCompatibility();
+
+if (process.platform === 'win32') {
+  if (ptyPatchResult?.status === 'patched') {
+    logger.info('Patched node-pty Windows startProcess compatibility wrapper for Commander', {
+      agentPath: ptyPatchResult.agentPath
+    });
+  } else if (ptyPatchResult?.status === 'unexpected-agent-shape') {
+    logger.warn('node-pty Windows compatibility wrapper has unexpected shape; Commander PTY startup may fail', {
+      agentPath: ptyPatchResult.agentPath
+    });
+  }
+}
+if (ptyLoadError) {
+  logger.error('node-pty failed to load for Commander', {
+    patchStatus: ptyPatchResult?.status || null,
+    error: ptyLoadError.message,
+    stack: ptyLoadError.stack
+  });
+}
 
 // Commander runs from the orchestrator's own directory so it picks up CLAUDE.md
 // Override with COMMANDER_CWD env var if needed
@@ -141,6 +160,10 @@ class CommanderService {
     logger.info('Starting Commander terminal', { cwd: COMMANDER_CWD });
 
     try {
+      if (!pty) {
+        throw new Error(ptyLoadError ? `node-pty unavailable: ${ptyLoadError.message}` : 'node-pty unavailable');
+      }
+
       // Detect shell based on platform
       const shell = (() => {
         if (process.platform !== 'win32') return 'bash';
