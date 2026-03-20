@@ -9,6 +9,8 @@ class CommanderPanel {
     this.orchestrator = orchestrator;
     this.isVisible = false;
     this.isRunning = false;
+    this.isStarting = false;
+    this.startCommanderPromise = null;
     // Always use same-origin API requests; the dev server proxies `/api` to the backend.
     this.serverUrl = window.location.origin;
     this.terminal = null;
@@ -114,7 +116,7 @@ class CommanderPanel {
       <div class="commander-terminal" id="commander-terminal">
         <div class="commander-placeholder">
           <p>Commander is a Claude Code terminal for orchestrating your sessions.</p>
-          <p>Click <strong>▶️ Start</strong> to launch the terminal, then <strong>Start Claude</strong> to begin.</p>
+          <p>Opening Commander starts it automatically. Claude will launch as soon as the terminal is ready.</p>
         </div>
       </div>
     `;
@@ -137,6 +139,29 @@ class CommanderPanel {
     document.body.appendChild(advice);
 
     this.orchestrator?.applyUiVisibility?.();
+  }
+
+  setPlaceholderMessages(lines = []) {
+    if (this.terminal) return;
+
+    const container = document.getElementById('commander-terminal');
+    if (!container) return;
+
+    const messages = Array.isArray(lines) && lines.length
+      ? lines
+      : [
+          'Commander is a Claude Code terminal for orchestrating your sessions.',
+          'Opening Commander starts it automatically. Claude will launch as soon as the terminal is ready.'
+        ];
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'commander-placeholder';
+    messages.forEach((message) => {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = message;
+      placeholder.appendChild(paragraph);
+    });
+    container.replaceChildren(placeholder);
   }
 
   /**
@@ -545,7 +570,10 @@ class CommanderPanel {
   updateStatusBadge() {
     const badge = document.getElementById('commander-status-badge');
     if (badge) {
-      if (this.isRunning) {
+      if (this.isStarting) {
+        badge.textContent = 'Starting';
+        badge.className = 'commander-status starting';
+      } else if (this.isRunning) {
         badge.textContent = 'Running';
         badge.className = 'commander-status online';
       } else {
@@ -581,11 +609,14 @@ class CommanderPanel {
       const status = await this.checkStatus();
 
       if (!status.running) {
-        // Commander terminal not running - start everything
+        this.isStarting = true;
+        this.updateStatusBadge();
+        this.setPlaceholderMessages([
+          'Commander is starting.',
+          'Claude will launch automatically as soon as the terminal is ready.'
+        ]);
+
         await this.startCommander();
-        setTimeout(() => {
-          this.startClaude('fresh');
-        }, 1500);
       } else if (!this.terminal) {
         // Terminal not initialized locally - set it up
         this.initTerminal();
@@ -615,22 +646,50 @@ class CommanderPanel {
    * Start the Commander terminal
    */
   async startCommander() {
-    try {
-      const response = await fetch(`${this.serverUrl}/api/commander/start`, {
-        method: 'POST'
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          this.isRunning = true;
-          this.updateStatusBadge();
-          this.initTerminal();
-        }
-      }
-    } catch (error) {
-      console.error('Failed to start commander:', error);
+    if (this.startCommanderPromise) {
+      return this.startCommanderPromise;
     }
+
+    this.isStarting = true;
+    this.updateStatusBadge();
+
+    this.startCommanderPromise = (async () => {
+      try {
+        const response = await fetch(`${this.serverUrl}/api/commander/start`, {
+          method: 'POST'
+        });
+        const result = response.ok
+          ? await response.json()
+          : { success: false, error: `Request failed (${response.status})` };
+
+        if (result.success || result.error === 'Already running') {
+          this.isRunning = true;
+          this.initTerminal();
+          return result;
+        }
+
+        this.isRunning = false;
+        this.setPlaceholderMessages([
+          'Commander could not be started.',
+          String(result.error || 'Close and reopen the panel to try again.')
+        ]);
+        return result;
+      } catch (error) {
+        console.error('Failed to start commander:', error);
+        this.isRunning = false;
+        this.setPlaceholderMessages([
+          'Commander could not be started.',
+          'Close and reopen the panel to try again.'
+        ]);
+        return { success: false, error: error.message };
+      } finally {
+        this.isStarting = false;
+        this.updateStatusBadge();
+        this.startCommanderPromise = null;
+      }
+    })();
+
+    return this.startCommanderPromise;
   }
 
   /**
