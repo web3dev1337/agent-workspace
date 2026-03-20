@@ -110,8 +110,12 @@ server/githubCloneWorktreeService.js - GitHub import flow for Quick Work (`owner
 server/portRegistry.js             - Port assignment + live service scanner (`/api/ports/scan`)
 ├─ Windows scan path: uses hidden `netstat`/`tasklist` probes so packaged Tauri builds do not flash console windows when Ports/Dashboard panels refresh
 └─ UI metadata: labels orchestrator-assigned ports, known dev servers, and custom user labels
+server/commanderService.js         - Top-level Commander PTY (Claude/Codex) + launch buffering
+├─ Packaged CWD: uses `ORCHESTRATOR_DATA_DIR/commander` so desktop users can edit `CLAUDE.md` / `AGENTS.md` safely
+└─ First-run seed: copies the packaged `docs/COMMANDER_CLAUDE.md` into the Commander data directory when missing
 scripts/tauri/prepare-backend-resources.js - Tauri backend packager
 ├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
+├─ Commander instructions: copies `docs/COMMANDER_CLAUDE.md` into `resources/backend/{COMMANDER_CLAUDE.md,CLAUDE.md,AGENTS.md}` for desktop builds
 ├─ Resource-sync reuse: repeated runs skip recopying server/client/templates/config payloads when the source-tree stamp still matches
 ├─ Prod-deps reuse: repeated `--install-prod` runs skip `npm ci` when package-lock + bundled Node stamp still match
 └─ CI cache: Windows release workflow restores `src-tauri/resources/backend/node_modules` so warm installer builds avoid re-installing backend prod deps
