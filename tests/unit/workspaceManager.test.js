@@ -332,5 +332,48 @@ describe('WorkspaceManager', () => {
         restoreAvailable: false
       });
     });
+
+    it('permanently deletes an archived workspace entry', async () => {
+      const repoPath = path.join(tempDir, 'repo');
+      fs.mkdirSync(repoPath, { recursive: true });
+      const manager = await createManager();
+      const workspace = buildWorkspace(repoPath);
+
+      await manager.createWorkspace(workspace);
+      const deleted = await manager.deleteWorkspace(workspace.id);
+
+      const removed = await manager.permanentlyDeleteDeletedWorkspace(deleted.deletedId);
+      expect(removed).toMatchObject({
+        deletedId: deleted.deletedId,
+        workspace
+      });
+      expect(fs.existsSync(path.join(manager.deletedWorkspacesPath, `${deleted.deletedId}.json`))).toBe(false);
+      await expect(manager.listDeletedWorkspaces()).resolves.toHaveLength(0);
+    });
+
+    it('permanently deletes all archived workspace entries', async () => {
+      const repoOnePath = path.join(tempDir, 'repo-one');
+      const repoTwoPath = path.join(tempDir, 'repo-two');
+      fs.mkdirSync(repoOnePath, { recursive: true });
+      fs.mkdirSync(repoTwoPath, { recursive: true });
+      const manager = await createManager();
+
+      await manager.createWorkspace(buildWorkspace(repoOnePath, {
+        id: 'workspace-one',
+        name: 'Workspace One'
+      }));
+      await manager.createWorkspace(buildWorkspace(repoTwoPath, {
+        id: 'workspace-two',
+        name: 'Workspace Two'
+      }));
+
+      await manager.deleteWorkspace('workspace-one');
+      await manager.deleteWorkspace('workspace-two');
+
+      const result = await manager.permanentlyDeleteAllDeletedWorkspaces();
+      expect(result.deletedCount).toBe(2);
+      expect(result.deletedWorkspaces).toHaveLength(2);
+      await expect(manager.listDeletedWorkspaces()).resolves.toHaveLength(0);
+    });
   });
 });
