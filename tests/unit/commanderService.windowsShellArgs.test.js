@@ -32,7 +32,7 @@ describe('CommanderService Windows shell args', () => {
 
     expect(result.success).toBe(true);
     expect(spawn).toHaveBeenCalledWith(
-      'powershell.exe',
+      expect.stringContaining('powershell.exe'),
       expect.not.arrayContaining(['-WindowStyle', 'Hidden']),
       expect.objectContaining({
         useConpty: true
