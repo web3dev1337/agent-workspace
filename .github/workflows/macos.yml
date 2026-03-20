@@ -81,7 +81,7 @@ jobs:
 
       - name: Configure macOS signing + notarization
         env:
-          REQUIRE_MACOS_SIGNING: ${{ startsWith(github.ref, 'refs/tags/') }}
+          REQUIRE_MACOS_SIGNING: ${{ startsWith(github.ref, 'refs/tags/') && env.MACOS_RELEASE_UPLOAD_ENABLED == 'true' }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
