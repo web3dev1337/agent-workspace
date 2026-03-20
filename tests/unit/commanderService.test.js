@@ -100,7 +100,7 @@ describe('CommanderService', () => {
       expect(service.sendInput('ship it\n')).toBe(true);
       expect(writes).toEqual([]);
 
-      service.handleClaudeLaunchOutput('Quick safety check: Is this a project you created or one you trust?\n1. Yes, I trust this folder');
+      service.handleClaudeLaunchOutput('Quick safety check: Is this a project you created or one you trust?\n1. I trust this folder');
       expect(writes).toEqual(['1\r']);
 
       service.handleClaudeLaunchOutput('Welcome to Claude Code!\n? for shortcuts');

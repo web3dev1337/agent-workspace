@@ -482,10 +482,12 @@ class CommanderService {
   }
 
   matchesClaudeTrustPrompt(text) {
-    const normalized = String(text || '');
-    return normalized.includes('quick safety check')
-      && normalized.includes('trust this folder')
-      && normalized.includes('yes, i trust this folder');
+    const normalized = String(text || '').toLowerCase();
+    if (!normalized.includes('quick safety check')) return false;
+    return normalized.includes('trust this folder')
+      || normalized.includes('trust this directory')
+      || normalized.includes('trust this workspace')
+      || normalized.includes('trust this project');
   }
 
   matchesClaudeReadyPrompt(text) {
