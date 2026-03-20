@@ -167,37 +167,6 @@ function patchNodePtyStartProcessCompat(packageRoot) {
   return { status: 'patched', agentPath };
 }
 
-function resolveNodePtyPackageRoot() {
-  try {
-    const pkgPath = require.resolve('node-pty/package.json');
-    return path.dirname(pkgPath);
-  } catch {
-    return null;
-  }
-}
-
-function loadNodePtyWithCompatibility({ platform = process.platform } = {}) {
-  let patchResult = { status: 'skipped' };
-
-  if (isWindows(platform)) {
-    patchResult = patchNodePtyStartProcessCompat(resolveNodePtyPackageRoot());
-  }
-
-  try {
-    return {
-      pty: require('node-pty'),
-      loadError: null,
-      patchResult
-    };
-  } catch (error) {
-    return {
-      pty: null,
-      loadError: error,
-      patchResult
-    };
-  }
-}
-
 module.exports = {
   BROKEN_NODE_PTY_START_PROCESS_CALL,
   CREATE_NO_WINDOW,
@@ -206,6 +175,5 @@ module.exports = {
   getHiddenProcessOptions,
   augmentProcessEnv,
   buildPowerShellArgs,
-  loadNodePtyWithCompatibility,
   patchNodePtyStartProcessCompat
 };
