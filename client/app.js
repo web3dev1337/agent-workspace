@@ -9891,7 +9891,7 @@ class ClaudeOrchestrator {
 	    if (!modal || !titleEl || !summaryEl || !listEl) return;
 	    const body = document.body;
 	    const legalAcceptedKey = 'orchestrator-legal-accepted-v1';
-	    const readLegalAccepted = () => {
+	    const readLegacyLegalAccepted = () => {
 	      try {
 	        return localStorage.getItem(legalAcceptedKey) === 'true';
 	      } catch {
@@ -9985,6 +9985,7 @@ class ClaudeOrchestrator {
 	      const skippedActionIds = Array.isArray(value?.skippedActionIds) ? value.skippedActionIds : [];
 	      const seen = new Set();
 	      return {
+	        legalAccepted: value?.legalAccepted === true,
 	        dismissed: value?.dismissed === true,
 	        completed: value?.completed === true,
 	        currentStep: Number.isFinite(currentStepRaw) && currentStepRaw >= 0 ? currentStepRaw : 0,
@@ -10007,6 +10008,7 @@ class ClaudeOrchestrator {
 	        // ignore and fall back to legacy/local state
 	      }
 	      return normalizeSetupState({
+	        legalAccepted: readLegacyLegalAccepted(),
 	        dismissed: readLegacyBool(dismissKey),
 	        completed: readLegacyBool(completedKey),
 	        currentStep: readLegacyStep(),
@@ -10022,6 +10024,8 @@ class ClaudeOrchestrator {
 	    const syncLegacySetupState = () => {
 	      const current = persistedSetupState.current || normalizeSetupState({});
 	      try {
+	        if (current.legalAccepted) localStorage.setItem(legalAcceptedKey, 'true');
+	        else localStorage.removeItem(legalAcceptedKey);
 	        if (current.dismissed) localStorage.setItem(dismissKey, 'true');
 	        else localStorage.removeItem(dismissKey);
 	        if (current.completed) localStorage.setItem(completedKey, 'true');
@@ -10055,7 +10059,15 @@ class ClaudeOrchestrator {
 	          const res = await fetch(setupStateUrl);
 	          const data = await res.json().catch(() => ({}));
 	          if (res.ok && data?.ok !== false) {
-	            applyPersistedSetupState(data?.state || {});
+	            const nextState = normalizeSetupState(data?.state || {});
+	            const shouldMigrateLegalAccepted = persistedSetupState.current?.legalAccepted === true && nextState.legalAccepted !== true;
+	            applyPersistedSetupState({
+	              ...nextState,
+	              legalAccepted: nextState.legalAccepted === true || persistedSetupState.current?.legalAccepted === true
+	            });
+	            if (shouldMigrateLegalAccepted) {
+	              void savePersistedSetupState({ legalAccepted: true });
+	            }
 	          }
 	        } catch {
 	          // ignore and keep local fallback state
@@ -10100,7 +10112,7 @@ class ClaudeOrchestrator {
 	      currentStep: 0,
 	      hydratedPersistedStep: false,
 	      showWelcome: true,
-	      legalAccepted: readLegalAccepted(),
+	      legalAccepted: getPersistedSetupState().legalAccepted === true,
 	      skippedActionIds: new Set(),
 	      actionRuns: new Map(),
 	      actionRunPollers: new Map(),
@@ -10142,6 +10154,7 @@ class ClaudeOrchestrator {
 	      if (state.legalAccepted === next) return;
 	      state.legalAccepted = next;
 	      persistLegalAccepted(next);
+	      void savePersistedSetupState({ legalAccepted: next });
 	    };
 
 	    const readSavedStep = () => Math.max(0, Number(getPersistedSetupState().currentStep) || 0);

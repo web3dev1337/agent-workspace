@@ -17,6 +17,7 @@ describe('OnboardingStateService', () => {
     const service = new OnboardingStateService({ logger, storePath });
 
     expect(service.getDependencySetupState()).toEqual({
+      legalAccepted: false,
       completed: false,
       dismissed: false,
       currentStep: 0,
@@ -30,6 +31,7 @@ describe('OnboardingStateService', () => {
     const service = new OnboardingStateService({ logger, storePath });
 
     const updated = service.updateDependencySetupState({
+      legalAccepted: true,
       completed: true,
       dismissed: false,
       currentStep: '4',
@@ -37,6 +39,7 @@ describe('OnboardingStateService', () => {
     });
 
     expect(updated).toEqual({
+      legalAccepted: true,
       completed: true,
       dismissed: false,
       currentStep: 4,
@@ -53,6 +56,7 @@ describe('OnboardingStateService', () => {
     const service = new OnboardingStateService({ logger, storePath });
 
     service.updateDependencySetupState({
+      legalAccepted: true,
       completed: true,
       currentStep: 3,
       skippedActionIds: ['install-gh']
@@ -63,10 +67,35 @@ describe('OnboardingStateService', () => {
     });
 
     expect(updated).toEqual({
+      legalAccepted: true,
       completed: true,
       dismissed: true,
       currentStep: 3,
       skippedActionIds: ['install-gh']
+    });
+  });
+
+  test('normalizes legal acceptance to false when persisted value is invalid', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onboarding-state-legal-'));
+    const storePath = path.join(tempDir, 'onboarding-state.json');
+    fs.writeFileSync(storePath, JSON.stringify({
+      dependencySetup: {
+        legalAccepted: 'yes',
+        completed: true,
+        dismissed: false,
+        currentStep: 2,
+        skippedActionIds: []
+      }
+    }));
+
+    const service = new OnboardingStateService({ logger, storePath });
+
+    expect(service.getDependencySetupState()).toEqual({
+      legalAccepted: false,
+      completed: true,
+      dismissed: false,
+      currentStep: 2,
+      skippedActionIds: []
     });
   });
 });
