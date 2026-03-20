@@ -616,8 +616,16 @@ fn main() {
     let (output_tx, mut output_rx) = mpsc::unbounded_channel::<TerminalOutput>();
     let (file_event_tx, mut file_event_rx) = mpsc::unbounded_channel::<FileEvent>();
 
-    // Enable GPU acceleration
-    std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "0");
+    // Linux desktop sessions can show a blank/white window when WebKit compositing
+    // is forced on under some Wayland/XWayland setups. Respect any explicit user
+    // override and otherwise prefer the safer default on Linux.
+    if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+        #[cfg(target_os = "linux")]
+        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+
+        #[cfg(not(target_os = "linux"))]
+        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "0");
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
