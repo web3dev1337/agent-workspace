@@ -59,6 +59,27 @@ github.com
           user: null
         }));
     });
+
+    it('does not treat "Active account: true" as the username', () => {
+      expect(parseGitHubAuthOutput('', `
+github.com
+  - Active account: true
+      `)).toEqual(expect.objectContaining({
+        authenticated: true,
+        user: null
+      }));
+    });
+
+    it('still parses explicit account lines without matching active-account metadata', () => {
+      expect(parseGitHubAuthOutput('', `
+github.com
+  account: octocat
+  - Active account: true
+      `)).toEqual(expect.objectContaining({
+        authenticated: true,
+        user: 'octocat'
+      }));
+    });
   });
 
   describe('parseGitHubHostsFile', () => {

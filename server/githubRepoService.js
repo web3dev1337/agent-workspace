@@ -132,8 +132,8 @@ function parseGitHubAuthOutput(stdout = '', stderr = '') {
   }
 
   const userMatch = combined.match(/Logged in to github\.com(?:[^\n]*?)account\s+([^\s(]+)/i)
-    || combined.match(/account:\s*([^\s(]+)/i)
-    || combined.match(/user:\s*([^\s(]+)/i);
+    || combined.match(/^\s*account:\s*([^\s(]+)/im)
+    || combined.match(/^\s*user:\s*([^\s(]+)/im);
   const user = userMatch?.[1] || null;
 
   if (/Logged in to github\.com/i.test(combined) || /Active account:\s*true/i.test(combined)) {
