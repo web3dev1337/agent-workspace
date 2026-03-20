@@ -177,6 +177,13 @@ function main() {
     env
   });
 
+  // Clean stale AppImage bundle dir so previously generated artifacts cannot leak into this build.
+  const appimageBundleDir = path.join(resolveTargetRoot({ repoRoot, targetDir }), profile, 'bundle', 'appimage');
+  if (fs.existsSync(appimageBundleDir)) {
+    fs.rmSync(appimageBundleDir, { recursive: true, force: true });
+    console.log('[tauri] Cleaned stale AppImage bundle cache');
+  }
+
   const tauriArgs = [tauriCliPath, 'build'];
   if (bundleTargets && bundleTargets.length > 0) {
     tauriArgs.push('--bundles', bundleTargets.join(','));
