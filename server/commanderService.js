@@ -69,7 +69,7 @@ function seedCommanderInstructionsIfNeeded() {
     'You are Commander (Claude or Codex). Control the Orchestrator via its HTTP APIs.',
     '',
     'Base URL:',
-    '  http://${ORCHESTRATOR_HOST:-127.0.0.1}:${ORCHESTRATOR_PORT:-3000}',
+    '  http://${ORCHESTRATOR_HOST:-127.0.0.1}:${ORCHESTRATOR_PORT:-9460}',
     '',
     'If AUTH_TOKEN is set, include:',
     '  -H "X-Auth-Token: $AUTH_TOKEN"',
@@ -286,7 +286,7 @@ class CommanderService {
         if (hasLocalInstructions) return;
 
         const host = process.env.ORCHESTRATOR_HOST || '127.0.0.1';
-        const port = process.env.ORCHESTRATOR_PORT || 3000;
+        const port = process.env.ORCHESTRATOR_PORT || 9460;
         const baseUrl = `http://${host}:${port}`;
         const authHint = process.env.AUTH_TOKEN
           ? ' -H "X-Auth-Token: $AUTH_TOKEN"'
@@ -313,7 +313,7 @@ class CommanderService {
     try {
       const http = require('http');
       const host = process.env.ORCHESTRATOR_HOST || '127.0.0.1';
-      const port = process.env.ORCHESTRATOR_PORT || 3000;
+      const port = process.env.ORCHESTRATOR_PORT || 9460;
       const authToken = String(process.env.AUTH_TOKEN || '').trim();
 
       return new Promise((resolve) => {
