@@ -163,6 +163,48 @@ function firstNonEmptyLine(text) {
     .find(Boolean) || '';
 }
 
+function buildMacNpmInstallCommand({ packageName, binaryName }) {
+  const pkg = String(packageName || '').trim();
+  if (!pkg) return '';
+  const bin = String(binaryName || '').trim();
+
+  return [
+    'export NO_COLOR=1',
+    'if ! command -v npm >/dev/null 2>&1; then',
+    '  echo "npm was not found. Install Node.js first, then run this step again."',
+    '  exit 1',
+    'fi',
+    `PACKAGE=${JSON.stringify(pkg)}`,
+    `BIN=${JSON.stringify(bin)}`,
+    'USER_PREFIX="$HOME/.local"',
+    'GLOBAL_PREFIX="$(npm config get prefix 2>/dev/null || true)"',
+    'if [ -z "$GLOBAL_PREFIX" ] || [ "$GLOBAL_PREFIX" = "undefined" ]; then',
+    '  GLOBAL_PREFIX="/usr/local"',
+    'fi',
+    'GLOBAL_LIB="$GLOBAL_PREFIX/lib/node_modules"',
+    'GLOBAL_BIN="$GLOBAL_PREFIX/bin"',
+    'mkdir -p "$GLOBAL_LIB" "$GLOBAL_BIN" 2>/dev/null || true',
+    'if [ -w "$GLOBAL_LIB" ] && [ -w "$GLOBAL_BIN" ]; then',
+    '  npm install -g "$PACKAGE"',
+    '  if [ -n "$BIN" ] && command -v "$BIN" >/dev/null 2>&1; then',
+    '    "$BIN" --version || true',
+    '  fi',
+    '  exit 0',
+    'fi',
+    'echo "npm global install is blocked (no write access to $GLOBAL_PREFIX)."',
+    'echo "Installing $PACKAGE to $USER_PREFIX instead..."',
+    'mkdir -p "$USER_PREFIX"',
+    'npm install -g --prefix "$USER_PREFIX" "$PACKAGE"',
+    'if [ -n "$BIN" ] && [ -x "$USER_PREFIX/bin/$BIN" ]; then',
+    '  "$USER_PREFIX/bin/$BIN" --version || true',
+    'fi',
+    'echo ""',
+    'echo "Agent Workspace automatically adds $USER_PREFIX/bin to PATH for sessions it launches."',
+    'echo "To use this CLI in your own Terminal too, add this to ~/.zprofile (zsh) or ~/.bash_profile (bash):"',
+    'echo "  export PATH=\\"$USER_PREFIX/bin:$PATH\\""'
+  ].join('\n');
+}
+
 function getMacSetupActions() {
   return [
     {
@@ -260,8 +302,8 @@ function getMacSetupActions() {
     {
       id: 'install-claude',
       title: 'Claude Code CLI',
-      description: 'Primary AI agent powered by Anthropic.',
-      command: 'npm install -g @anthropic-ai/claude-code',
+      description: 'Primary AI agent powered by Anthropic. Uses a user install fallback when npm global permissions are restricted.',
+      command: buildMacNpmInstallCommand({ packageName: '@anthropic-ai/claude-code', binaryName: 'claude' }),
       docsUrl: 'https://docs.claude.com/en/docs/claude-code/setup',
       required: false,
       optional: true,
@@ -270,8 +312,8 @@ function getMacSetupActions() {
     {
       id: 'install-codex',
       title: 'Codex CLI',
-      description: 'Alternative AI agent tool for development.',
-      command: 'npm install -g @openai/codex',
+      description: 'Alternative AI agent tool for development. Uses a user install fallback when npm global permissions are restricted.',
+      command: buildMacNpmInstallCommand({ packageName: '@openai/codex', binaryName: 'codex' }),
       docsUrl: 'https://developers.openai.com/codex/cli',
       required: false,
       runSupported: true
@@ -600,9 +642,10 @@ function launchShellCommand(action) {
     const homeBrewLocal = path.join(os.homedir(), '.homebrew', 'bin');
     const brewPrefix = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
     const pathEnv = `${homeBrewLocal}:${brewPrefix}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
+    const localBin = path.join(os.homedir(), '.local', 'bin');
     const npmGlobalBin = path.join(os.homedir(), '.npm-global', 'bin');
     const nPrefix = path.join(os.homedir(), '.nvm', 'versions', 'node');
-    let fullPath = `${npmGlobalBin}:${homeBrewLocal}:${brewPrefix}:${pathEnv}`;
+    let fullPath = `${localBin}:${npmGlobalBin}:${homeBrewLocal}:${brewPrefix}:${pathEnv}`;
     try {
       const nvmVersions = fs.readdirSync(nPrefix);
       if (nvmVersions.length > 0) {

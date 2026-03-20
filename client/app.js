@@ -11428,7 +11428,11 @@ class ClaudeOrchestrator {
 	    }
 
 	    modal.addEventListener('click', (event) => {
-	      if (event.target === modal) closeModal();
+	      // Backdrop clicks should never skip onboarding. Only explicit controls may dismiss it.
+	      if (event.target === modal) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	      }
 	    });
 
 	    document.addEventListener('keydown', (event) => {

@@ -33,7 +33,7 @@ describe('SessionManager Claude trust prompt handling', () => {
     sessionManager.beginClaudeLaunch(session, { expectTrustPrompt: true });
     sessionManager.maybeHandleClaudeTrustPrompt(
       session,
-      'Quick safety check: Is this a project you created or one you trust?\n1. Yes, I trust this folder'
+      'Quick safety check: Is this a project you created or one you trust?\n1. I trust this folder'
     );
 
     expect(write).toHaveBeenCalledWith('1\r');

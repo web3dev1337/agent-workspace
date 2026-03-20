@@ -7,6 +7,7 @@
  */
 
 const pty = require('node-pty');
+const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const winston = require('winston');
@@ -28,12 +29,84 @@ const logger = winston.createLogger({
 
 // Commander runs from the orchestrator's own directory so it picks up CLAUDE.md
 // Override with COMMANDER_CWD env var if needed
-// In packaged mode (__dirname is inside resources/backend/server), fall back to user's home
+// In packaged mode (__dirname is inside resources/backend/server), use ORCHESTRATOR_DATA_DIR so
+// desktop users can edit their Commander CLAUDE.md / AGENTS.md without touching app resources.
 const defaultCwd = path.resolve(__dirname, '..');
 const isPackaged = defaultCwd.includes('resources') && defaultCwd.includes('backend');
-const COMMANDER_CWD = process.env.COMMANDER_CWD || (isPackaged ? (process.env.HOME || process.env.USERPROFILE || defaultCwd) : defaultCwd);
+const packagedDataDirRaw = String(process.env.ORCHESTRATOR_DATA_DIR || '').trim();
+const packagedDataDir = (() => {
+  if (!packagedDataDirRaw) return null;
+  try { return path.resolve(packagedDataDirRaw); } catch { return packagedDataDirRaw; }
+})();
+const packagedCommanderDir = packagedDataDir ? path.join(packagedDataDir, 'commander') : null;
+const COMMANDER_CWD = process.env.COMMANDER_CWD || (isPackaged ? (packagedCommanderDir || (process.env.HOME || process.env.USERPROFILE || defaultCwd)) : defaultCwd);
 const TRUST_PROMPT_BUFFER_CHARS = 6000;
 const TRUST_PROMPT_MAX_WAIT_MS = 15000;
+
+function seedCommanderInstructionsIfNeeded() {
+  if (!isPackaged) return;
+  if (process.env.COMMANDER_CWD) return;
+  if (!packagedCommanderDir) return;
+
+  try {
+    fs.mkdirSync(packagedCommanderDir, { recursive: true });
+  } catch {
+    return;
+  }
+
+  const templateCandidates = [
+    path.join(defaultCwd, 'COMMANDER_CLAUDE.md'),
+    path.join(defaultCwd, 'CLAUDE.md'),
+    path.join(defaultCwd, 'AGENTS.md')
+  ];
+  const templatePath = templateCandidates.find((candidate) => {
+    try { return fs.existsSync(candidate); } catch { return false; }
+  });
+
+  const fallback = [
+    '# Commander',
+    '',
+    'You are Commander (Claude or Codex). Control the Orchestrator via its HTTP APIs.',
+    '',
+    'Base URL:',
+    '  http://${ORCHESTRATOR_HOST:-127.0.0.1}:${ORCHESTRATOR_PORT:-9460}',
+    '',
+    'If AUTH_TOKEN is set, include:',
+    '  -H "X-Auth-Token: $AUTH_TOKEN"',
+    '',
+    'Self-updating help prompt:',
+    '  GET /api/commander/prompt',
+    ''
+  ].join('\n');
+
+  const writeFromTemplateOrFallback = (filename) => {
+    const destPath = path.join(packagedCommanderDir, filename);
+    try {
+      if (fs.existsSync(destPath)) return;
+    } catch {
+      return;
+    }
+
+    if (templatePath) {
+      try {
+        fs.copyFileSync(templatePath, destPath);
+        return;
+      } catch {
+        // fall back to inline content
+      }
+    }
+
+    try {
+      fs.writeFileSync(destPath, fallback, 'utf8');
+    } catch {
+      // ignore
+    }
+  };
+
+  writeFromTemplateOrFallback('COMMANDER_CLAUDE.md');
+  writeFromTemplateOrFallback('CLAUDE.md');
+  writeFromTemplateOrFallback('AGENTS.md');
+}
 
 class CommanderService {
   constructor(options = {}) {
@@ -64,6 +137,7 @@ class CommanderService {
       return { success: false, error: 'Already running' };
     }
 
+    seedCommanderInstructionsIfNeeded();
     logger.info('Starting Commander terminal', { cwd: COMMANDER_CWD });
 
     try {
@@ -201,18 +275,28 @@ class CommanderService {
     const success = this.sendInput(cmd + '\n', { bypassLaunchQueue: true });
     logger.info('Sent claude command', { success, cmd });
 
-    // Always provide a stable, self-updating control surface pointer so Commander
-    // never needs manual prompt edits when new commands are added.
+    // If Commander has no local instructions file, provide a stable, self-updating control surface pointer
+    // so it can recover without manual prompt edits when new commands are added.
     setTimeout(() => {
       try {
-        const port = process.env.ORCHESTRATOR_PORT || 3000;
-        const baseUrl = `http://localhost:${port}`;
+        const hasLocalInstructions =
+          fs.existsSync(path.join(COMMANDER_CWD, 'CLAUDE.md'))
+          || fs.existsSync(path.join(COMMANDER_CWD, 'AGENTS.md'))
+          || fs.existsSync(path.join(COMMANDER_CWD, 'COMMANDER_CLAUDE.md'));
+        if (hasLocalInstructions) return;
+
+        const host = process.env.ORCHESTRATOR_HOST || '127.0.0.1';
+        const port = process.env.ORCHESTRATOR_PORT || 9460;
+        const baseUrl = `http://${host}:${port}`;
+        const authHint = process.env.AUTH_TOKEN
+          ? ' -H "X-Auth-Token: $AUTH_TOKEN"'
+          : '';
         this.sendInput(
           `\n# Orchestrator control (self-updating)\n` +
-          `# - Commands: curl -s ${baseUrl}/api/commander/capabilities | jq\n` +
-          `# - Execute:  curl -s ${baseUrl}/api/commander/execute -H 'Content-Type: application/json' -d '{\"command\":\"...\",\"params\":{...}}'\n` +
-          `# - Context:  curl -s ${baseUrl}/api/commander/context | jq\n` +
-          `# - Help:     curl -s ${baseUrl}/api/commander/prompt\n\n`
+          `# - Commands: curl -sS "${baseUrl}/api/commander/capabilities"${authHint} | jq\n` +
+          `# - Execute:  curl -sS "${baseUrl}/api/commander/execute"${authHint} -H "Content-Type: application/json" -d '{\"command\":\"...\",\"params\":{...}}'\n` +
+          `# - Context:  curl -sS "${baseUrl}/api/commander/context"${authHint} | jq\n` +
+          `# - Help:     curl -sS "${baseUrl}/api/commander/prompt"${authHint}\n\n`
         );
       } catch {
         // ignore
@@ -228,10 +312,17 @@ class CommanderService {
   async gatherSessionsInfo() {
     try {
       const http = require('http');
-      const port = process.env.ORCHESTRATOR_PORT || 3000;
+      const host = process.env.ORCHESTRATOR_HOST || '127.0.0.1';
+      const port = process.env.ORCHESTRATOR_PORT || 9460;
+      const authToken = String(process.env.AUTH_TOKEN || '').trim();
 
       return new Promise((resolve) => {
-        const req = http.get(`http://localhost:${port}/api/commander/sessions`, (res) => {
+        const req = http.get({
+          hostname: host,
+          port,
+          path: '/api/commander/sessions',
+          headers: authToken ? { 'X-Auth-Token': authToken } : undefined
+        }, (res) => {
           let data = '';
           res.on('data', chunk => data += chunk);
           res.on('end', () => {
@@ -482,10 +573,12 @@ class CommanderService {
   }
 
   matchesClaudeTrustPrompt(text) {
-    const normalized = String(text || '');
-    return normalized.includes('quick safety check')
-      && normalized.includes('trust this folder')
-      && normalized.includes('yes, i trust this folder');
+    const normalized = String(text || '').toLowerCase();
+    if (!normalized.includes('quick safety check')) return false;
+    return normalized.includes('trust this folder')
+      || normalized.includes('trust this directory')
+      || normalized.includes('trust this workspace')
+      || normalized.includes('trust this project');
   }
 
   matchesClaudeReadyPrompt(text) {
