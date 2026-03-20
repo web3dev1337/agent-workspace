@@ -72,6 +72,7 @@ tests/unit/claudeVersionChecker.spawnOptions.test.js - Verifies Windows-hidden s
 tests/unit/worktreeHelper.spawnOptions.test.js - Verifies Windows-hidden spawn flags for auto-created worktree git commands
 tests/unit/commanderService.test.js - Covers Commander launch buffering, trust-prompt auto-accept, and preserved output history
 tests/unit/sessionManager.trustPrompt.test.js - Verifies auto-accept of Claude folder trust prompts in launched worktree sessions
+tests/unit/sessionManager.agentDetection.test.js - Covers manual Gemini command detection so provider-specific status heuristics receive the correct agent id
 server/utils/processUtils.js       - Shared spawn/env hardening helpers
 ├─ Windows packaging guardrails: applies `windowsHide`/`CREATE_NO_WINDOW`, augments GUI-app PATH with Git/node/npm/common CLI locations, and builds hidden PowerShell argument lists
 └─ Cross-platform behavior: non-Windows platforms pass through unchanged so Linux/macOS launch behavior stays stable
