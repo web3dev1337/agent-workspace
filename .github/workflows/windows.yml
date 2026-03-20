@@ -89,7 +89,7 @@ jobs:
           path: |
             src-tauri/resources/backend/node_modules
             src-tauri/resources/backend/.prod-install-stamp.json
-          key: ${{ runner.os }}-tauri-backend-prod-${{ steps.bundled_node_version.outputs.value }}-${{ hashFiles('.nvmrc', 'package.json', 'package-lock.json', 'scripts/tauri/prepare-backend-resources.js') }}
+          key: ${{ runner.os }}-tauri-backend-prod-v2-${{ steps.bundled_node_version.outputs.value }}-${{ hashFiles('.nvmrc', 'package.json', 'package-lock.json', 'scripts/tauri/prepare-backend-resources.js') }}
 
       - name: Install
         run: npm ci

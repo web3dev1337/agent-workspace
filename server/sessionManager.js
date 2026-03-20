@@ -179,10 +179,6 @@ class SessionManager extends EventEmitter {
       env
     };
 
-    if (process.platform === 'win32') {
-      options.useConpty = true;
-    }
-
     return options;
   }
   

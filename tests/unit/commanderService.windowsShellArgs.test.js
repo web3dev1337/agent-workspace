@@ -35,9 +35,14 @@ describe('CommanderService Windows shell args', () => {
       expect.stringContaining('powershell.exe'),
       expect.not.arrayContaining(['-WindowStyle', 'Hidden']),
       expect.objectContaining({
-        useConpty: true
+        name: 'xterm-color'
       })
     );
+    // useConpty must NOT be set — node-pty 1.2.0-beta.12 ignores it and
+    // ConPTY is already the default on modern Windows.  Passing it caused
+    // native arg-count mismatches with cached conpty.node binaries.
+    const passedOpts = spawn.mock.calls[0][2];
+    expect(passedOpts).not.toHaveProperty('useConpty');
 
     service.stop();
   });

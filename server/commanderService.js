@@ -178,10 +178,6 @@ class CommanderService {
         env
       };
 
-      if (process.platform === 'win32') {
-        ptyOptions.useConpty = true;
-      }
-
       // Spawn Claude Code terminal
       const ptyProcess = pty.spawn(shell, shellArgs, ptyOptions);
 
