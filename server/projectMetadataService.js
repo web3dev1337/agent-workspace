@@ -61,8 +61,9 @@ const mergeProjectMeta = (base, override) => {
 
 class ProjectMetadataService {
   constructor({ basePath, registryPath } = {}) {
-    this.basePath = basePath || path.join(os.homedir(), 'GitHub');
-    this.registryPath = registryPath || path.join(os.homedir(), '.orchestrator', 'project-metadata.json');
+    const { getProjectsRoot, getAgentWorkspaceDir } = require('./utils/pathUtils');
+    this.basePath = basePath || getProjectsRoot();
+    this.registryPath = registryPath || path.join(getAgentWorkspaceDir(), 'project-metadata.json');
     this.cache = new Map();
     this.cacheMs = 60_000;
     this.registryCache = null;
@@ -124,7 +125,8 @@ class ProjectMetadataService {
     let current = base;
     for (const seg of segments) {
       current = path.join(current, seg);
-      const cfgPath = path.join(current, '.orchestrator-config.json');
+      const { resolveRepoConfigPath } = require('./utils/pathUtils');
+      const cfgPath = resolveRepoConfigPath(current);
       try {
         const raw = await fs.readFile(cfgPath, 'utf8');
         const cfg = JSON.parse(raw);

@@ -17,7 +17,8 @@ const logger = winston.createLogger({
   ]
 });
 
-const CONFIG_PATH = path.join(os.homedir(), '.orchestrator', 'recommendations.json');
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
+const CONFIG_PATH = path.join(getAgentWorkspaceDir(), 'recommendations.json');
 
 class RecommendationsService {
   constructor() {

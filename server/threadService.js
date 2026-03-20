@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
 
 class ThreadService {
   constructor({ logger = console } = {}) {
@@ -21,7 +22,7 @@ class ThreadService {
 
   resolveStorePath() {
     const dataDirRaw = String(process.env.ORCHESTRATOR_DATA_DIR || '').trim();
-    const baseDir = dataDirRaw ? path.resolve(dataDirRaw) : path.join(os.homedir(), '.orchestrator');
+    const baseDir = dataDirRaw ? path.resolve(dataDirRaw) : getAgentWorkspaceDir();
     try {
       if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
     } catch {

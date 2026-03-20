@@ -16,7 +16,8 @@ const logger = winston.createLogger({
   ]
 });
 
-const DEFAULT_DIR = path.join(os.homedir(), '.orchestrator');
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
+const DEFAULT_DIR = getAgentWorkspaceDir();
 const DEFAULT_FILE = path.join(DEFAULT_DIR, 'activity.jsonl');
 const DEFAULT_MAX_EVENTS = 500;
 const DEFAULT_LOAD_MAX_BYTES = 1024 * 1024; // 1MB tail read

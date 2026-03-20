@@ -1,6 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
 
 const STATE_VERSION = 1;
 
@@ -19,7 +20,7 @@ class OnboardingStateService {
 
   resolveStorePath() {
     const dataDirRaw = String(process.env.ORCHESTRATOR_DATA_DIR || '').trim();
-    const baseDir = dataDirRaw ? path.resolve(dataDirRaw) : path.join(os.homedir(), '.orchestrator');
+    const baseDir = dataDirRaw ? path.resolve(dataDirRaw) : getAgentWorkspaceDir();
     try {
       if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
     } catch {

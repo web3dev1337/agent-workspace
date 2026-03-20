@@ -23,8 +23,9 @@ const execFileAsync = (command, args = [], options = {}) => new Promise((resolve
   });
 });
 
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
 // Custom port labels file
-const PORT_LABELS_FILE = path.join(process.env.HOME || os.homedir(), '.orchestrator', 'port-labels.json');
+const PORT_LABELS_FILE = path.join(getAgentWorkspaceDir(), 'port-labels.json');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',

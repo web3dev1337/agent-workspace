@@ -26,11 +26,12 @@ const logger = winston.createLogger({
   ]
 });
 
+const { getProjectsRoot } = require('./utils/pathUtils');
 const ORCHESTRATOR_MASTER_PATHS = ['agent-workspace', 'claude-orchestrator'].map((repoDir) => path.resolve(
   os.homedir(),
   `GitHub/tools/automation/${repoDir}/master`
 ));
-const DEFAULT_ALLOWED_ROOT = path.resolve(os.homedir(), 'GitHub');
+const DEFAULT_ALLOWED_ROOT = path.resolve(getProjectsRoot());
 
 // Helper function to get the appropriate shell for the platform
 function getDefaultShell() {

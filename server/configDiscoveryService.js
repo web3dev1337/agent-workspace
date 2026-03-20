@@ -20,7 +20,8 @@ const logger = winston.createLogger({
 
 class ConfigDiscoveryService {
   constructor() {
-    this.basePath = path.join(require('os').homedir(), 'GitHub');
+    const { getProjectsRoot } = require('./utils/pathUtils');
+    this.basePath = getProjectsRoot();
     this.configCache = new Map();
     this.lastScanTime = null;
     this.frameworkTypes = new Map();
@@ -96,7 +97,8 @@ class ConfigDiscoveryService {
    * Load category configuration
    */
   async loadCategoryConfig(categoryPath, categoryName) {
-    const configPath = path.join(categoryPath, '.orchestrator-config.json');
+    const { resolveRepoConfigPath } = require('./utils/pathUtils');
+    const configPath = resolveRepoConfigPath(categoryPath);
 
     // Try to load custom config
     try {
@@ -165,7 +167,8 @@ class ConfigDiscoveryService {
    * Load framework configuration
    */
   async loadFrameworkConfig(frameworkPath, frameworkName) {
-    const configPath = path.join(frameworkPath, '.orchestrator-config.json');
+    const { resolveRepoConfigPath } = require('./utils/pathUtils');
+    const configPath = resolveRepoConfigPath(frameworkPath);
 
     try {
       const configData = await fs.readFile(configPath, 'utf8');
@@ -312,14 +315,15 @@ class ConfigDiscoveryService {
    * Load game configuration
    */
   async loadGameConfig(gamePath, gameName, framework) {
-    // Try multiple locations for config file:
-    // 1. gamePath/.orchestrator-config.json (flat structure)
-    // 2. gamePath/master/.orchestrator-config.json (worktree structure)
-    // 3. gamePath/main/.orchestrator-config.json (worktree structure, main branch)
+    const { resolveRepoConfigPath } = require('./utils/pathUtils');
+    // Try multiple locations for config file (prefers .agent-workspace-config.json, falls back to .orchestrator-config.json):
+    // 1. gamePath (flat structure)
+    // 2. gamePath/master (worktree structure)
+    // 3. gamePath/main (worktree structure, main branch)
     const configPaths = [
-      path.join(gamePath, '.orchestrator-config.json'),
-      path.join(gamePath, 'master', '.orchestrator-config.json'),
-      path.join(gamePath, 'main', '.orchestrator-config.json')
+      resolveRepoConfigPath(gamePath),
+      resolveRepoConfigPath(path.join(gamePath, 'master')),
+      resolveRepoConfigPath(path.join(gamePath, 'main'))
     ];
 
     let config = null;
@@ -509,7 +513,7 @@ class ConfigDiscoveryService {
    * Watch for config file changes and invalidate cache
    */
   startWatching() {
-    // TODO: Implement file watching for .orchestrator-config.json files
+    // TODO: Implement file watching for .agent-workspace-config.json files
     // Invalidate cache when configs change
   }
 }

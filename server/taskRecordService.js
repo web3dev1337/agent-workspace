@@ -23,7 +23,8 @@ const logger = winston.createLogger({
   ]
 });
 
-const DEFAULT_PATH = path.join(os.homedir(), '.orchestrator', 'task-records.json');
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
+const DEFAULT_PATH = path.join(getAgentWorkspaceDir(), 'task-records.json');
 
 const RECORD_POINTER_KEYS = new Set(['recordVisibility', 'recordRepoRoot', 'recordPath']);
 
@@ -50,8 +51,8 @@ const stripRecordPointers = (rec) => {
 const getDefaultRepoTaskRecordPaths = (id) => {
   const sid = safeId(id);
   return {
-    shared: path.join('.orchestrator', 'task-records', `${sid}.json`),
-    encrypted: path.join('.orchestrator', 'task-records', `${sid}.enc.json`)
+    shared: path.join('.agent-workspace', 'task-records', `${sid}.json`),
+    encrypted: path.join('.agent-workspace', 'task-records', `${sid}.enc.json`)
   };
 };
 

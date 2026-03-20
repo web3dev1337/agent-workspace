@@ -17,7 +17,8 @@ const logger = winston.createLogger({
   ]
 });
 
-const DEFAULT_DIR = path.join(os.homedir(), '.orchestrator', 'prompts');
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
+const DEFAULT_DIR = path.join(getAgentWorkspaceDir(), 'prompts');
 
 const safeId = (id) => String(id || '')
   .trim()
@@ -182,8 +183,8 @@ class PromptArtifactService {
   defaultRepoPromptPaths(id) {
     const sid = safeId(id);
     return {
-      shared: path.join('.orchestrator', 'prompts', `${sid}.md`),
-      encrypted: path.join('.orchestrator', 'prompts', `${sid}.enc.json`)
+      shared: path.join('.agent-workspace', 'prompts', `${sid}.md`),
+      encrypted: path.join('.agent-workspace', 'prompts', `${sid}.enc.json`)
     };
   }
 
