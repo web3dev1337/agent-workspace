@@ -5,7 +5,27 @@ jest.mock('node-pty', () => ({
     onExit: jest.fn(),
     kill: jest.fn()
   }))
-}));
+}), { virtual: true });
+
+jest.mock('winston', () => ({
+  createLogger: jest.fn(() => ({
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn()
+  })),
+  format: {
+    combine: jest.fn(() => ({})),
+    timestamp: jest.fn(() => ({})),
+    json: jest.fn(() => ({})),
+    simple: jest.fn(() => ({})),
+    errors: jest.fn(() => ({}))
+  },
+  transports: {
+    File: jest.fn(),
+    Console: jest.fn()
+  }
+}), { virtual: true });
 
 jest.mock('../../server/sessionRecoveryService', () => ({
   clearSession: jest.fn(),
@@ -25,6 +45,9 @@ jest.mock('../../server/sessionRecoveryService', () => ({
 
 const nodePty = require('node-pty');
 const { SessionManager } = require('../../server/sessionManager');
+const fs = require('fs');
+const path = require('path');
+const { patchNodePtyStartProcessCompat } = require('../../server/utils/processUtils');
 
 describe('SessionManager Windows PTY options', () => {
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
@@ -79,5 +102,31 @@ describe('SessionManager Windows PTY options', () => {
     expect(sessionManager.workspaceSessionMaps.has('workspace-2')).toBe(false);
 
     expect(sessionManager.closeSession('workspace-1-server')).toBe(true);
+  });
+
+  it('patches the broken Windows node-pty startProcess wrapper', () => {
+    const existsSpy = jest.spyOn(fs, 'existsSync').mockImplementation((targetPath) => {
+      return targetPath === path.join('C:\\node_modules\\node-pty', 'lib', 'windowsPtyAgent.js');
+    });
+    const readSpy = jest.spyOn(fs, 'readFileSync').mockReturnValue(
+      'before conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor, this._useConptyDll) after'
+    );
+    const writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+
+    const result = patchNodePtyStartProcessCompat('C:\\node_modules\\node-pty');
+
+    expect(result).toEqual({
+      status: 'patched',
+      agentPath: path.join('C:\\node_modules\\node-pty', 'lib', 'windowsPtyAgent.js')
+    });
+    expect(writeSpy).toHaveBeenCalledWith(
+      path.join('C:\\node_modules\\node-pty', 'lib', 'windowsPtyAgent.js'),
+      'before conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor) after',
+      'utf8'
+    );
+
+    writeSpy.mockRestore();
+    readSpy.mockRestore();
+    existsSpy.mockRestore();
   });
 });

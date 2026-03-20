@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
+const { patchNodePtyStartProcessCompat } = require('../../server/utils/processUtils');
 
 function parseArgs(argv) {
   const args = new Set(argv.slice(2));
@@ -412,23 +413,13 @@ function main() {
     }
   }
 
-  // Patch node-pty windowsPtyAgent.js: the JS wrapper passes 7 args to
-  // conptyNative.startProcess() but the native conpty.node only accepts 6.
-  // Remove the 7th arg (useConptyDll) to fix PTY spawn on Windows.
-  const ptyAgentPath = path.join(nodeModulesPath, 'node-pty', 'lib', 'windowsPtyAgent.js');
-  if (fs.existsSync(ptyAgentPath)) {
-    let ptyAgent = fs.readFileSync(ptyAgentPath, 'utf8');
-    const broken = 'conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor, this._useConptyDll)';
-    const fixed = 'conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor)';
-    if (ptyAgent.includes(broken)) {
-      ptyAgent = ptyAgent.replace(broken, fixed);
-      fs.writeFileSync(ptyAgentPath, ptyAgent);
-      console.log('[tauri] Patched node-pty windowsPtyAgent.js (removed useConptyDll arg)');
-    } else if (ptyAgent.includes(fixed)) {
-      console.log('[tauri] node-pty windowsPtyAgent.js already patched');
-    } else {
-      console.warn('[tauri] WARNING: Could not find expected startProcess call in windowsPtyAgent.js — PTY may fail on Windows');
-    }
+  const ptyPatch = patchNodePtyStartProcessCompat(path.join(nodeModulesPath, 'node-pty'));
+  if (ptyPatch.status === 'patched') {
+    console.log('[tauri] Patched node-pty windowsPtyAgent.js (removed useConptyDll arg)');
+  } else if (ptyPatch.status === 'already-patched') {
+    console.log('[tauri] node-pty windowsPtyAgent.js already patched');
+  } else if (ptyPatch.status === 'unexpected-agent-shape') {
+    console.warn('[tauri] WARNING: Could not find expected startProcess call in windowsPtyAgent.js — PTY may fail on Windows');
   }
 
   const marker = path.join(outDir, 'server', 'index.js');
