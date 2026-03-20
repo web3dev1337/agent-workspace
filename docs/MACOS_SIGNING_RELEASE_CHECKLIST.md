@@ -1,6 +1,6 @@
 # macOS Signing Release Checklist
 
-Use this before shipping another macOS desktop build.
+Use this before re-enabling packaged macOS GitHub release assets.
 
 ## Why
 
@@ -9,7 +9,7 @@ Unsigned or un-notarized macOS downloads can be blocked by Gatekeeper with messa
 - `Agent Workspace.app is damaged and can't be opened`
 - `Agent Workspace.app is from an unidentified developer`
 
-The GitHub Actions macOS workflow now expects proper Apple signing and notarization credentials for tag releases.
+The GitHub Actions macOS workflow now expects proper Apple signing and notarization credentials for tag releases. It is currently configured to build a signed/notarized `.app` for CI smoke coverage while packaged macOS release assets stay disabled.
 
 ## GitHub Actions Secrets
 
@@ -66,7 +66,8 @@ Apple ID path:
 3. Push the release tag.
 4. Wait for `.github/workflows/macos.yml` to finish.
 5. Confirm the workflow passes the `Verify signed + notarized macOS bundle` step.
-6. Confirm the uploaded macOS `.app` and `.dmg` came from that signed workflow run.
+6. If you are re-enabling packaged macOS downloads, update `.github/workflows/macos.yml` so `MACOS_BUNDLES` includes `dmg` and `MACOS_RELEASE_UPLOAD_ENABLED` is set to `true`.
+7. Confirm the uploaded macOS `.dmg` came from that signed workflow run.
 
 ## What the Workflow Now Verifies
 
@@ -81,7 +82,7 @@ The release workflow now:
 
 If signing or notarization is not configured on a tag release, the macOS workflow fails before publishing assets.
 
-## After Shipping
+## After Re-Enabling Packaged Downloads
 
 Test the released macOS artifact on a clean machine:
 

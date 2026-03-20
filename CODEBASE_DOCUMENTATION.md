@@ -18,6 +18,7 @@ NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
 GUIDES:     CLAUDE.md, AGENTS.md                     - Repo workflow + release guardrails for contributors/agents
 DOCS:       docs/MACOS_SIGNING_RELEASE_CHECKLIST.md - Maintainer checklist for Apple signing/notarization secrets and macOS desktop releases
+            docs/MACOS_RELEASE_INSTALL_NOTES.md      - Markdown snippet appended to generated GitHub release notes so macOS users see the temporary source-install path
 CI:         .github/workflows/linux.yml             - Ubuntu Tauri packaging workflow that smoke-tests Linux bundles on PR/main and uploads `.deb` + Arch `.pkg.tar.zst` assets on tags
 META:       .github/FUNDING.yml                      - GitHub Sponsors button configuration
 PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resources + reusable packaged prod deps
@@ -140,8 +141,9 @@ scripts/release/build-arch-package.js - Native Arch package generator
 scripts/release/check-version-consistency.js - Release metadata guardrail
 ├─ Validates: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and the active Git tag (when present)
 └─ CI usage: runs in PR/main workflows so version drift cannot merge silently
+scripts/release/append-release-install-notes.js - GitHub Release body updater that appends the repository-tracked macOS install notes after Windows creates generated tag notes
 scripts/release/verify-bundle-version.js - Bundle filename verifier
-├─ Validates: Windows `.exe`/`.msi`, macOS `.dmg`, Linux `.deb`/`.rpm`/`.AppImage`, and Arch `.pkg.tar.zst` filenames include the expected release version
+├─ Validates: Windows `.exe`/`.msi`, macOS `.app`/`.dmg`, Linux `.deb`/`.rpm`/`.AppImage`, and Arch `.pkg.tar.zst` filenames include the expected release version
 └─ Failure mode: catches stale cached artifacts that wildcard GitHub release uploads would otherwise attach
 scripts/release/setup-macos-signing.sh - GitHub Actions helper that imports the Developer ID certificate into a temp keychain, resolves the signing identity, and exports notarization credentials for Tauri builds
 scripts/release/verify-macos-bundle.sh - GitHub Actions helper that verifies macOS release bundles with `codesign`, `spctl`, and `xcrun stapler validate` before tag uploads

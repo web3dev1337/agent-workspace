@@ -11,6 +11,7 @@ const BUNDLE_FILE_RULES = {
   rpm: { directory: 'rpm', extensions: ['.rpm'] },
   nsis: { directory: 'nsis', extensions: ['.exe'] },
   msi: { directory: 'msi', extensions: ['.msi'] },
+  app: { directory: 'macos', extensions: ['.app'] },
   dmg: { directory: 'dmg', extensions: ['.dmg'] }
 };
 
