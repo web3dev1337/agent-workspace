@@ -133,6 +133,8 @@ scripts/release/check-version-consistency.js - Release metadata guardrail
 scripts/release/verify-bundle-version.js - Bundle filename verifier
 ├─ Validates: Windows `.exe`/`.msi` and macOS `.dmg` filenames include the expected release version
 └─ Failure mode: catches stale cached artifacts that wildcard GitHub release uploads would otherwise attach
+scripts/release/setup-macos-signing.sh - GitHub Actions helper that imports the Developer ID certificate into a temp keychain, resolves the signing identity, and exports notarization credentials for Tauri builds
+scripts/release/verify-macos-bundle.sh - GitHub Actions helper that verifies macOS release bundles with `codesign`, `spctl`, and `xcrun stapler validate` before tag uploads
 scripts/debug/                      - Manual debug helpers kept out of the repo root
 ├─ `test-button-merge.js` verifies config merge behavior against `WorkspaceManager`
 └─ `test-cascade-debug.js` prints cascaded config layers for manual inspection

@@ -74,9 +74,39 @@ jobs:
           echo "value=$PROFILE" >> "$GITHUB_OUTPUT"
           if [ "$PROFILE" = "fast" ]; then echo "target_dir=fast" >> "$GITHUB_OUTPUT"; else echo "target_dir=release" >> "$GITHUB_OUTPUT"; fi
 
+      - name: Configure macOS signing + notarization
+        env:
+          REQUIRE_MACOS_SIGNING: ${{ startsWith(github.ref, 'refs/tags/') }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          bash scripts/release/setup-macos-signing.sh
+
       - name: Build macOS app (Tauri)
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ env.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ env.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+          APPLE_ID: ${{ env.APPLE_ID }}
+          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
         run: |
           node scripts/tauri/run-tauri-build.js --profile ${{ steps.build_profile.outputs.value }}
+
+      - name: Verify signed + notarized macOS bundle
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          app_path="$(find "src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/macos" -maxdepth 1 -type d -name '*.app' | head -n 1)"
+          dmg_path="$(find "src-tauri/target/${{ steps.build_profile.outputs.target_dir }}/bundle/dmg" -maxdepth 1 -type f -name '*.dmg' | head -n 1)"
+          bash scripts/release/verify-macos-bundle.sh "$app_path" "$dmg_path"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
