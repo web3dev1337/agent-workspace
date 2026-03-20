@@ -189,6 +189,27 @@ function clearBundleOutputDir({ repoRoot, targetDir, profile }) {
   return bundleOutputDir;
 }
 
+function stripEmptyAppleBuildEnv(env) {
+  const nextEnv = { ...(env || {}) };
+  const keys = [
+    'APPLE_SIGNING_IDENTITY',
+    'APPLE_API_KEY',
+    'APPLE_API_ISSUER',
+    'APPLE_API_KEY_PATH',
+    'APPLE_ID',
+    'APPLE_PASSWORD',
+    'APPLE_TEAM_ID'
+  ];
+
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(nextEnv, key)) continue;
+    if (String(nextEnv[key] || '').trim()) continue;
+    delete nextEnv[key];
+  }
+
+  return nextEnv;
+}
+
 function main() {
   const { profile, bundles, dryRun } = parseArgs(process.argv);
   const repoRoot = resolveRepoRoot();
@@ -200,7 +221,7 @@ function main() {
   });
   const { tauriTargets, postprocessTargets } = splitBundleTargets(bundleTargets);
 
-  const env = { ...process.env };
+  const env = stripEmptyAppleBuildEnv(process.env);
   if (targetDir) {
     fs.mkdirSync(targetDir, { recursive: true });
     env.CARGO_TARGET_DIR = targetDir;
@@ -297,6 +318,7 @@ module.exports = {
   isArchBasedLinux,
   readOsRelease,
   splitBundleTargets,
+  stripEmptyAppleBuildEnv,
   resolveBundleTargets,
   resolveCargoTargetDir,
   resolveTargetRoot
