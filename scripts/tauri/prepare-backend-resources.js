@@ -96,6 +96,7 @@ function buildResourceSyncStamp({
   srcLock,
   srcConfig,
   srcUserDefaults,
+  srcCommanderInstructions,
   srcLicensePublicKey,
   srcUpdaterPublicKey,
   bundledNodePath
@@ -109,6 +110,7 @@ function buildResourceSyncStamp({
       packageLock: statSignature(srcLock),
       configJson: statSignature(srcConfig),
       userSettingsDefaultJson: statSignature(srcUserDefaults),
+      commanderInstructions: statSignature(srcCommanderInstructions),
       createProjectScript: statSignature(path.join(srcScripts, 'create-project.js')),
       licensePublicKey: statSignature(srcLicensePublicKey),
       updaterPublicKey: statSignature(srcUpdaterPublicKey),
@@ -231,6 +233,13 @@ function main() {
   const srcLock = path.join(repoRoot, 'package-lock.json');
   const srcConfig = path.join(repoRoot, 'config.json');
   const srcUserDefaults = path.join(repoRoot, 'user-settings.default.json');
+  const srcCommanderInstructions = (() => {
+    const docsPath = path.join(repoRoot, 'docs', 'COMMANDER_CLAUDE.md');
+    if (fs.existsSync(docsPath)) return docsPath;
+    const rootPath = path.join(repoRoot, 'COMMANDER_CLAUDE.md');
+    if (fs.existsSync(rootPath)) return rootPath;
+    return null;
+  })();
   const srcLicensePublicKey =
     process.env.ORCHESTRATOR_LICENSE_PUBLIC_KEY_PATH
     || process.env.TAURI_LICENSE_PUBLIC_KEY_PATH
@@ -275,6 +284,7 @@ function main() {
     srcLock,
     srcConfig,
     srcUserDefaults,
+    srcCommanderInstructions,
     srcLicensePublicKey,
     srcUpdaterPublicKey,
     bundledNodePath
@@ -286,6 +296,13 @@ function main() {
     path.join(outDir, 'scripts', 'create-project.js'),
     path.join(outDir, 'package.json')
   ];
+  if (srcCommanderInstructions) {
+    requiredResourcePaths.push(
+      path.join(outDir, 'COMMANDER_CLAUDE.md'),
+      path.join(outDir, 'CLAUDE.md'),
+      path.join(outDir, 'AGENTS.md')
+    );
+  }
 
   if (canReuseResourceSync({
     stampPath: resourceSyncStampPath,
@@ -333,6 +350,17 @@ function main() {
       copyFile(srcUserDefaults, path.join(outDir, 'user-settings.default.json'));
     } else {
       removeIfExists(path.join(outDir, 'user-settings.default.json'));
+    }
+    if (srcCommanderInstructions) {
+      // Commander runs from the packaged backend root directory, so include a reduced
+      // CLAUDE.md/AGENTS.md control-surface reference for both Claude Code and Codex CLI.
+      copyFile(srcCommanderInstructions, path.join(outDir, 'COMMANDER_CLAUDE.md'));
+      copyFile(srcCommanderInstructions, path.join(outDir, 'CLAUDE.md'));
+      copyFile(srcCommanderInstructions, path.join(outDir, 'AGENTS.md'));
+    } else {
+      removeIfExists(path.join(outDir, 'COMMANDER_CLAUDE.md'));
+      removeIfExists(path.join(outDir, 'CLAUDE.md'));
+      removeIfExists(path.join(outDir, 'AGENTS.md'));
     }
     if (srcLicensePublicKey && fs.existsSync(srcLicensePublicKey)) {
       copyFile(srcLicensePublicKey, path.join(outDir, 'license-public-key.pem'));
