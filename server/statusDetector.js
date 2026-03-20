@@ -32,7 +32,10 @@ class StatusDetector {
       /Cost: \$[\d.]+/,               // Cost line - MOST RELIABLE done indicator
       /Total cost: \$[\d.]+/,
       /Session cost: \$[\d.]+/,
+      /Total duration \(wall\):/,      // Session summary line
+      /Total code changes:/,           // Session summary line
       /tokens used/i,                  // Token usage line
+      /\d+ input, \d+ output.*cache/,  // Per-model token usage line
     ];
 
     // Patterns indicating active tool usage (Claude is busy)
@@ -47,11 +50,26 @@ class StatusDetector {
       /Grep\(.*\)/,                    // Grep tool
       /Glob\(.*\)/,                    // Glob tool
       /Task\(.*\)/,                    // Task tool
+      /Agent\(.*\)/,                   // Sub-agent tool
+      /WebFetch\(.*\)/,               // Web fetch tool
+      /WebSearch\(.*\)/,              // Web search tool
+      /NotebookEdit\(.*\)/,           // Notebook edit tool
+      /NotebookRead\(.*\)/,           // Notebook read tool
+      /Skill\(.*\)/,                  // Skill execution tool
+      /AskUserQuestion\(.*\)/,        // User question tool
+      /ToolSearch\(.*\)/,             // Tool search tool
+      /TodoWrite\(.*\)/,              // Todo write tool
+      /TaskOutput\(.*\)/,             // Task output tool
+      /TaskStop\(.*\)/,               // Task stop tool
     ];
 
-    // Patterns that suggest Claude is typing (busy) - more conservative
+    // Patterns that suggest Claude is typing/processing (busy)
     this.typingPatterns = [
       /∴ Thinking…/,                   // Thinking indicator
+      /Waiting for permission/,        // Permission prompt pending
+      /Waiting for task/,              // Sub-agent task pending
+      /Running command/,               // Bash tool executing
+      /compacting conversation/i,      // Context compaction in progress
     ];
 
     // Per-session state (StatusDetector is shared across sessions).

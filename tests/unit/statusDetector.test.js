@@ -98,6 +98,81 @@ describe('StatusDetector', () => {
       expect(status).toBe('busy');
     });
 
+    it('should detect busy status for Agent tool', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const buffer = 'Starting sub-agent\n● Agent(explore codebase)';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
+
+    it('should detect busy status for WebSearch tool', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const buffer = 'Searching the web\n● WebSearch("codex cli patterns")';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
+
+    it('should detect busy status for WebFetch tool', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const buffer = 'Fetching page\n● WebFetch("https://example.com")';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
+
+    it('should detect busy status for Skill tool', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const buffer = 'Running skill\n● Skill("commit")';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
+
+    it('should detect busy when "Waiting for permission" is shown', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const buffer = 'Some output\nWaiting for permission\u2026';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
+
+    it('should detect busy when "Waiting for task" is shown', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const buffer = 'Sub-agent running\n     Waiting for task (esc to give additional instructions)';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
+
+    it('should detect busy when "compacting conversation" is shown', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const buffer = 'Long context\ncompacting conversation';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
+
+    it('should detect waiting from per-model token usage line', () => {
+      const buffer = 'Task done\n  1234 input, 567 output, 890 cache read, 0 cache write ($0.05)';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect waiting from Total duration line', () => {
+      const buffer = 'Task done\nTotal duration (wall): 2m 30s';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('waiting');
+    });
+
     it('should not treat bash PS2 > as waiting without Claude context', () => {
       const buffer = 'echo \"hi\"\n> ';
       const status = detector.detectStatus(sessionId, buffer);
