@@ -9,6 +9,7 @@ const {
   parseBundleList,
   resolveBundleTargets,
   resolveCargoTargetDir,
+  stripEmptyAppleBuildEnv,
   resolveTargetRoot
 } = require('../../scripts/tauri/run-tauri-build');
 
@@ -90,6 +91,32 @@ describe('run-tauri-build', () => {
       repoRoot: '/repo/root',
       targetDir: null
     })).toBe(path.resolve('/repo/root', 'src-tauri', 'target'));
+  });
+
+  test('strips blank Apple signing variables before invoking Tauri', () => {
+    expect(stripEmptyAppleBuildEnv({
+      APPLE_SIGNING_IDENTITY: '',
+      APPLE_API_KEY: '   ',
+      APPLE_TEAM_ID: null,
+      APPLE_PASSWORD: undefined,
+      PATH: '/usr/bin',
+      NODE_ENV: 'production'
+    })).toEqual({
+      PATH: '/usr/bin',
+      NODE_ENV: 'production'
+    });
+  });
+
+  test('keeps non-empty Apple signing variables intact', () => {
+    expect(stripEmptyAppleBuildEnv({
+      APPLE_SIGNING_IDENTITY: 'Developer ID Application: Example, Inc.',
+      APPLE_API_KEY_PATH: '/tmp/AuthKey_123.p8',
+      PATH: '/usr/bin'
+    })).toEqual({
+      APPLE_SIGNING_IDENTITY: 'Developer ID Application: Example, Inc.',
+      APPLE_API_KEY_PATH: '/tmp/AuthKey_123.p8',
+      PATH: '/usr/bin'
+    });
   });
 
   test('clears the profile bundle output directory before build', () => {

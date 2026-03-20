@@ -95,14 +95,6 @@ jobs:
           bash scripts/release/setup-macos-signing.sh
 
       - name: Build macOS app (Tauri)
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_KEY: ${{ env.APPLE_API_KEY }}
-          APPLE_API_ISSUER: ${{ env.APPLE_API_ISSUER }}
-          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
-          APPLE_ID: ${{ env.APPLE_ID }}
-          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
         run: |
           node scripts/tauri/run-tauri-build.js --profile ${{ steps.build_profile.outputs.value }} --bundles $MACOS_BUNDLES
 
