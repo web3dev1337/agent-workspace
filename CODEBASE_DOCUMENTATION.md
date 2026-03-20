@@ -18,6 +18,7 @@ NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
 GUIDES:     CLAUDE.md, AGENTS.md                     - Repo workflow + release guardrails for contributors/agents
 DOCS:       docs/MACOS_SIGNING_RELEASE_CHECKLIST.md - Maintainer checklist for Apple signing/notarization secrets and macOS desktop releases
+CI:         .github/workflows/linux.yml             - Ubuntu Tauri packaging workflow that smoke-tests Linux bundles on PR/main and uploads `.deb` + Arch `.pkg.tar.zst` assets on tags
 META:       .github/FUNDING.yml                      - GitHub Sponsors button configuration
 PACKAGING:  scripts/tauri/prepare-backend-resources.js - Bundles backend resources + reusable packaged prod deps
             scripts/tauri/run-tauri-build.js          - Centralized Tauri build entrypoint (local Windows fast-cache pinning + profile dispatch)
