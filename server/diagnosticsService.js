@@ -629,9 +629,9 @@ async function collectFirstRunDiagnostics(options = {}) {
   const data = await collectDiagnostics();
   const homeDir = String(options.homeDir || data?.env?.homeDir || os.homedir() || '').trim();
   const rootDir = String(options.rootDir || path.resolve(__dirname, '..')).trim();
-  const orchestratorDir = getAgentWorkspaceDir();
+  const orchestratorDir = options.homeDir ? path.join(homeDir, '.agent-workspace') : getAgentWorkspaceDir();
   const workspacesDir = path.join(orchestratorDir, 'workspaces');
-  const projectsRoot = getProjectsRoot();
+  const projectsRoot = options.homeDir ? path.join(orchestratorDir, 'projects') : getProjectsRoot();
 
   const git = findToolResult(data, 'git');
   const gh = findToolResult(data, 'gh');
@@ -777,7 +777,7 @@ async function collectFirstRunDiagnostics(options = {}) {
       homeDir,
       orchestratorDir,
       workspacesDir,
-      githubRoot
+      projectsRoot
     },
     summary: {
       ready: blockingCount === 0,
@@ -795,9 +795,9 @@ async function runFirstRunRepair({ action, rootDir, homeDir } = {}) {
   const actionId = String(action || '').trim();
   const resolvedRoot = String(rootDir || path.resolve(__dirname, '..')).trim();
   const resolvedHomeDir = String(homeDir || os.homedir() || '').trim();
-  const orchestratorDir = getAgentWorkspaceDir();
+  const orchestratorDir = homeDir ? path.join(resolvedHomeDir, '.agent-workspace') : getAgentWorkspaceDir();
   const workspacesDir = path.join(orchestratorDir, 'workspaces');
-  const projectsRoot = getProjectsRoot();
+  const projectsRoot = homeDir ? path.join(orchestratorDir, 'projects') : getProjectsRoot();
 
   if (!actionId) {
     throw new Error('repair action is required');
