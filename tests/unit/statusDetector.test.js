@@ -2,6 +2,25 @@
  * Unit tests for StatusDetector
  */
 
+jest.mock('winston', () => ({
+  createLogger: () => ({
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn()
+  }),
+  format: {
+    combine: jest.fn(() => ({})),
+    timestamp: jest.fn(() => ({})),
+    json: jest.fn(() => ({})),
+    simple: jest.fn(() => ({}))
+  },
+  transports: {
+    File: jest.fn(),
+    Console: jest.fn()
+  }
+}), { virtual: true });
+
 const { StatusDetector } = require('../../server/statusDetector');
 
 describe('StatusDetector', () => {
@@ -157,6 +176,53 @@ describe('StatusDetector', () => {
       const status = detector.detectStatus(sessionId, buffer, { agent: 'codex' });
       expect(status).toBe('waiting');
       expect(detector.getState(sessionId).claudeLikely).toBe(false);
+    });
+
+    it('should detect waiting status for Gemini prompt chrome even when the prompt is not the last line', () => {
+      const buffer = [
+        '? for shortcuts',
+        '────────────────────────────────────────────────────────────────────────────────',
+        'Shift+Tab to accept edits                                     1 GEMINI.md file',
+        '>  Type your message or @path/to/file',
+        'workspace (/directory)                sandbox                           /model',
+        '/tmp                                  no sandbox               Auto (Gemini 3)'
+      ].join('\n');
+      const status = detector.detectStatus('work3-claude', buffer, { agent: 'gemini' });
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect waiting status for Gemini authentication flow', () => {
+      const buffer = 'Gemini CLI\n⠋ Waiting for authentication... (Press Esc or Ctrl+C to cancel)';
+      const status = detector.detectStatus('work3-claude', buffer, { agent: 'gemini' });
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect busy status for Gemini responding indicator', () => {
+      const buffer = 'Thinking... Planning the response... (esc to cancel, 3s)';
+      const state = detector.getState('work3-claude');
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const status = detector.detectStatus('work3-claude', buffer, { agent: 'gemini' });
+      expect(status).toBe('busy');
+    });
+
+    it('should not keep Gemini terminals busy after a short quiet window', () => {
+      const geminiSessionId = 'work3-claude';
+      const buffer = 'Thinking... Planning the response... (esc to cancel, 3s)';
+      const state = detector.getState(geminiSessionId);
+      state.lastBufferLength = buffer.length;
+      state.lastOutputTime = Date.now() - 10000;
+      const status = detector.detectStatus(geminiSessionId, buffer, { agent: 'gemini' });
+      expect(status).toBe('idle');
+    });
+
+    it('should detect waiting status for OpenCode prompt chrome', () => {
+      const buffer = [
+        'Ask anything... "What is the tech stack of this project?"',
+        'ctrl+t variants  tab agents  ctrl+p commands'
+      ].join('\n');
+      const status = detector.detectStatus('work4-claude', buffer, { agent: 'opencode' });
+      expect(status).toBe('waiting');
     });
 
     it('should detect idle status from zsh-style prompt', () => {

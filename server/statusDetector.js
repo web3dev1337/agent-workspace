@@ -19,6 +19,10 @@ const logger = winston.createLogger({
 const ASSUME_BUSY_SINCE_OUTPUT_MS = 8000; // 8s
 const ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS = 15000; // 15s
 const ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS = 30000; // 30s
+const ASSUME_BUSY_SINCE_OUTPUT_CODEX_MS = 10000; // 10s
+const ASSUME_BUSY_SINCE_OUTPUT_GEMINI_MS = 6000; // 6s
+const ASSUME_BUSY_SINCE_OUTPUT_OPENCODE_MS = 5000; // 5s
+const ASSUME_BUSY_SINCE_OUTPUT_AIDER_MS = 10000; // 10s
 
 class StatusDetector {
   constructor() {
@@ -91,9 +95,109 @@ class StatusDetector {
     return out;
   }
 
+  normalizeAgent(agent) {
+    const normalized = String(agent || '').trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized === 'gemini-cli') return 'gemini';
+    if (normalized === 'open-code') return 'opencode';
+    return normalized;
+  }
+
+  getAssumeBusyWindowMs({ agent, isAgentTerminal, claudeLikely }) {
+    const normalizedAgent = this.normalizeAgent(agent);
+    if (normalizedAgent === 'codex') return ASSUME_BUSY_SINCE_OUTPUT_CODEX_MS;
+    if (normalizedAgent === 'gemini') return ASSUME_BUSY_SINCE_OUTPUT_GEMINI_MS;
+    if (normalizedAgent === 'opencode') return ASSUME_BUSY_SINCE_OUTPUT_OPENCODE_MS;
+    if (normalizedAgent === 'aider') return ASSUME_BUSY_SINCE_OUTPUT_AIDER_MS;
+    if (claudeLikely) return ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS;
+    if (isAgentTerminal) return ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS;
+    return ASSUME_BUSY_SINCE_OUTPUT_MS;
+  }
+
+  detectProviderStatus(agent, context = {}) {
+    const normalizedAgent = this.normalizeAgent(agent);
+    if (!normalizedAgent || normalizedAgent === 'claude') return null;
+
+    const {
+      recentOutput = '',
+      recentAll = '',
+      trimmedLastNonEmptyLine = '',
+      hasRecentOutput = false,
+    } = context;
+
+    if (normalizedAgent === 'codex') {
+      if (
+        trimmedLastNonEmptyLine === '>' ||
+        /^codex>\s*$/i.test(trimmedLastNonEmptyLine) ||
+        (/OpenAI Codex/i.test(recentOutput) && /\? for shortcuts/i.test(recentOutput)) ||
+        /Choose how you'd like Codex to proceed\./i.test(recentOutput) ||
+        /Use .*press enter to confirm/i.test(recentOutput)
+      ) {
+        return 'waiting';
+      }
+      return null;
+    }
+
+    if (normalizedAgent === 'gemini') {
+      const hasGeminiPrompt = /Type your message or @path\/to\/file/i.test(recentOutput);
+      const hasGeminiChrome = (
+        /\? for shortcuts/i.test(recentOutput)
+        || /Shift\+Tab to accept edits/i.test(recentOutput)
+        || /workspace \(/i.test(recentOutput)
+      );
+
+      if (
+        /Waiting for authentication\.\.\./i.test(recentOutput) ||
+        /Do you trust the files in this folder\?/i.test(recentOutput) ||
+        /Need approval\?/i.test(recentOutput) ||
+        /Use arrow keys to navigate, Enter to confirm, Esc to cancel\./i.test(recentOutput) ||
+        (/Press Ctrl\+[CD] again to exit\./i.test(recentOutput) && hasGeminiPrompt) ||
+        (hasGeminiPrompt && hasGeminiChrome)
+      ) {
+        return 'waiting';
+      }
+
+      if (
+        hasRecentOutput && (
+          /Thinking\.\.\./i.test(recentOutput) ||
+          /\(esc to cancel,\s*[\d:smh]+\)/i.test(recentOutput) ||
+          /Waiting for MCP servers to initialize/i.test(recentAll)
+        )
+      ) {
+        return 'busy';
+      }
+
+      return null;
+    }
+
+    if (normalizedAgent === 'opencode') {
+      const hasOpenCodePrompt = /Ask anything\.\.\./i.test(recentOutput);
+      const hasOpenCodeChrome = (
+        /ctrl\+t\s+variants/i.test(recentOutput)
+        || /ctrl\+p\s+commands/i.test(recentOutput)
+        || /\btab\s+agents\b/i.test(recentOutput)
+      );
+
+      if (hasOpenCodePrompt && hasOpenCodeChrome) {
+        return 'waiting';
+      }
+
+      return null;
+    }
+
+    if (normalizedAgent === 'aider') {
+      if (trimmedLastNonEmptyLine === '>') {
+        return 'waiting';
+      }
+      return null;
+    }
+
+    return null;
+  }
+
   detectStatus(sessionId, buffer, options = {}) {
     const state = this.getState(sessionId);
-    const agent = String(options?.agent || '').trim() || null;
+    const agent = this.normalizeAgent(options?.agent);
     const isNonClaudeAgent = !!(agent && agent !== 'claude');
     if (agent) {
       state.agent = agent;
@@ -109,9 +213,11 @@ class StatusDetector {
     }
     const timeSinceOutput = now - state.lastOutputTime;
     const isAgentTerminal = /-(claude|codex)$/.test(String(sessionId || ''));
-    const assumeBusyWindowMs = (state.claudeLikely || isAgentTerminal)
-      ? (state.claudeLikely ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS : ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS)
-      : ASSUME_BUSY_SINCE_OUTPUT_MS;
+    const assumeBusyWindowMs = this.getAssumeBusyWindowMs({
+      agent,
+      isAgentTerminal,
+      claudeLikely: state.claudeLikely
+    });
     const hasRecentOutput = timeSinceOutput < assumeBusyWindowMs;
 
     // Get recent output for analysis
@@ -121,23 +227,37 @@ class StatusDetector {
     const lastNonEmptyLine = this.getLastNonEmptyLine(lines);
     const trimmedLastNonEmptyLine = lastNonEmptyLine.trim();
     const lastNonEmptyLines = this.getLastNonEmptyLines(lines, 6);
+    const recentAll = lastNonEmptyLines.join('\n');
 
     // If a different agent (e.g. Codex) is running in this terminal, avoid reusing Claude UI heuristics.
     if (isNonClaudeAgent) {
       state.claudeLikely = false;
     }
 
-    // Best-effort Codex interactive prompt detection.
-    // This prevents the ">" prompt from being misclassified as idle (grey) and reduces dot flicker.
-    if (agent === 'codex') {
-      if (trimmedLastNonEmptyLine === '>' || /^codex>\s*$/.test(trimmedLastNonEmptyLine)) {
-        return 'waiting';
+    const providerStatus = this.detectProviderStatus(agent, {
+      recentOutput,
+      recentAll,
+      trimmedLastNonEmptyLine,
+      hasRecentOutput,
+    });
+    if (providerStatus) {
+      return providerStatus;
+    }
+
+    if (isNonClaudeAgent) {
+      if (this.hasExplicitShellIndicator(recentAll, trimmedLastNonEmptyLine)) {
+        return 'idle';
       }
+
+      if (timeSinceOutput < assumeBusyWindowMs && buffer.length > 100) {
+        return 'busy';
+      }
+
+      return 'idle';
     }
 
     // Heuristic: determine whether Claude Code UI is likely active in this session.
     // This is used to avoid misclassifying shell-like prompts that can appear inside output while Claude is working.
-    const recentAll = lastNonEmptyLines.join('\n');
     if (!isNonClaudeAgent) {
       if (/Welcome to Claude Code!/.test(recentAll) || /\? for shortcuts/.test(recentAll)) {
         state.claudeLikely = true;
