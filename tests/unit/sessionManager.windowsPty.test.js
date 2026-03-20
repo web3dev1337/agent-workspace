@@ -56,10 +56,12 @@ describe('SessionManager Windows PTY options', () => {
       'powershell.exe',
       ['-NoExit'],
       expect.objectContaining({
-        cwd: 'C:\\repo',
-        useConpty: true
+        cwd: 'C:\\repo'
       })
     );
+    // useConpty must NOT be passed — it causes native arg-count mismatches
+    const passedOpts = nodePty.spawn.mock.calls[0][2];
+    expect(passedOpts).not.toHaveProperty('useConpty');
 
     const activeSession = sessionManager.getSessionById('workspace-1-server');
     expect(activeSession).toBeTruthy();
