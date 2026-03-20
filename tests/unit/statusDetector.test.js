@@ -225,6 +225,112 @@ describe('StatusDetector', () => {
       expect(status).toBe('waiting');
     });
 
+    // --- Codex busy patterns ---
+    it('should detect busy status for Codex "esc to interrupt" indicator', () => {
+      const sid = 'work1-claude';
+      const buffer = 'Running task...\nesc to interrupt';
+      const state = detector.getState(sid);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const status = detector.detectStatus(sid, buffer, { agent: 'codex' });
+      expect(status).toBe('busy');
+    });
+
+    it('should detect waiting status for Codex "Choose an action" prompt', () => {
+      const buffer = 'Choose an action\n  Approve\n  Reject';
+      const status = detector.detectStatus('work1-claude', buffer, { agent: 'codex' });
+      expect(status).toBe('waiting');
+    });
+
+    // --- Gemini tool confirmation patterns ---
+    it('should detect waiting status for Gemini "Apply this change?" prompt', () => {
+      const buffer = 'Some file edit output\nApply this change?\n  Allow once\n  Allow for this session';
+      const status = detector.detectStatus('work3-claude', buffer, { agent: 'gemini' });
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect waiting status for Gemini "Allow execution of" prompt', () => {
+      const buffer = 'Allow execution of: \'npm test\'?\n  Allow once\n  No, suggest changes (esc)';
+      const status = detector.detectStatus('work3-claude', buffer, { agent: 'gemini' });
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect waiting status for Gemini verification flow', () => {
+      const buffer = 'Gemini CLI\nWaiting for verification... (Press Esc or Ctrl+C to cancel)';
+      const status = detector.detectStatus('work3-claude', buffer, { agent: 'gemini' });
+      expect(status).toBe('waiting');
+    });
+
+    // --- OpenCode busy patterns ---
+    it('should detect busy status for OpenCode "Thinking..." indicator', () => {
+      const sid = 'work4-claude';
+      const buffer = 'Processing request\nThinking...';
+      const state = detector.getState(sid);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const status = detector.detectStatus(sid, buffer, { agent: 'opencode' });
+      expect(status).toBe('busy');
+    });
+
+    it('should detect busy status for OpenCode "Generating..." indicator', () => {
+      const sid = 'work4-claude';
+      const buffer = 'Building response\nGenerating...';
+      const state = detector.getState(sid);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const status = detector.detectStatus(sid, buffer, { agent: 'opencode' });
+      expect(status).toBe('busy');
+    });
+
+    it('should detect busy status for OpenCode "Working..." indicator', () => {
+      const sid = 'work4-claude';
+      const buffer = 'Executing tools\nWorking...';
+      const state = detector.getState(sid);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const status = detector.detectStatus(sid, buffer, { agent: 'opencode' });
+      expect(status).toBe('busy');
+    });
+
+    it('should detect busy status for OpenCode "Waiting for tool response..." indicator', () => {
+      const sid = 'work4-claude';
+      const buffer = 'Running tool\nWaiting for tool response...';
+      const state = detector.getState(sid);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const status = detector.detectStatus(sid, buffer, { agent: 'opencode' });
+      expect(status).toBe('busy');
+    });
+
+    it('should detect waiting for OpenCode "press enter to send" hint', () => {
+      const buffer = 'Some content\npress enter to send the message';
+      const status = detector.detectStatus('work4-claude', buffer, { agent: 'opencode' });
+      expect(status).toBe('waiting');
+    });
+
+    // --- Aider busy/waiting patterns ---
+    it('should detect waiting status for Aider multiline prompt', () => {
+      const buffer = 'Some output\nmulti> ';
+      const status = detector.detectStatus('work5-claude', buffer, { agent: 'aider' });
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect waiting status for Aider named prompt', () => {
+      const buffer = 'Some output\naider> ';
+      const status = detector.detectStatus('work5-claude', buffer, { agent: 'aider' });
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect busy status for Aider "Waiting for LLM" spinner', () => {
+      const sid = 'work5-claude';
+      const buffer = 'Processing edit\nWaiting for Claude LLM';
+      const state = detector.getState(sid);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const status = detector.detectStatus(sid, buffer, { agent: 'aider' });
+      expect(status).toBe('busy');
+    });
+
     it('should detect idle status from zsh-style prompt', () => {
       const buffer = '/home/<user>/GitHub/project %';
       const status = detector.detectStatus(sessionId, buffer);

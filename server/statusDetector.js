@@ -126,14 +126,26 @@ class StatusDetector {
     } = context;
 
     if (normalizedAgent === 'codex') {
+      // Codex waiting: user-facing prompts and approval dialogs
       if (
         trimmedLastNonEmptyLine === '>' ||
         /^codex>\s*$/i.test(trimmedLastNonEmptyLine) ||
         (/OpenAI Codex/i.test(recentOutput) && /\? for shortcuts/i.test(recentOutput)) ||
         /Choose how you'd like Codex to proceed\./i.test(recentOutput) ||
+        /Choose an action/i.test(recentOutput) ||
+        /Select provider\?/i.test(recentOutput) ||
         /Use .*press enter to confirm/i.test(recentOutput)
       ) {
         return 'waiting';
+      }
+      // Codex busy: active processing indicators
+      if (
+        hasRecentOutput && (
+          /esc to interrupt/i.test(recentOutput) ||
+          /tab to add notes/i.test(recentOutput)
+        )
+      ) {
+        return 'busy';
       }
       return null;
     }
@@ -146,10 +158,17 @@ class StatusDetector {
         || /workspace \(/i.test(recentOutput)
       );
 
+      // Gemini waiting: input prompts, auth dialogs, trust dialogs, tool confirmations
       if (
         /Waiting for authentication\.\.\./i.test(recentOutput) ||
+        /Waiting for verification\.\.\./i.test(recentOutput) ||
         /Do you trust the files in this folder\?/i.test(recentOutput) ||
         /Need approval\?/i.test(recentOutput) ||
+        /Apply this change\?/i.test(recentOutput) ||
+        /Allow execution of/i.test(recentOutput) ||
+        /Do you want to proceed\?/i.test(recentOutput) ||
+        /Ready to start implementation\?/i.test(recentOutput) ||
+        /Modify Trust Level/i.test(recentOutput) ||
         /Use arrow keys to navigate, Enter to confirm, Esc to cancel\./i.test(recentOutput) ||
         (/Press Ctrl\+[CD] again to exit\./i.test(recentOutput) && hasGeminiPrompt) ||
         (hasGeminiPrompt && hasGeminiChrome)
@@ -157,10 +176,12 @@ class StatusDetector {
         return 'waiting';
       }
 
+      // Gemini busy: thinking, processing, initializing
       if (
         hasRecentOutput && (
           /Thinking\.\.\./i.test(recentOutput) ||
           /\(esc to cancel,\s*[\d:smh]+\)/i.test(recentOutput) ||
+          /\(press tab to focus\)/i.test(recentOutput) ||
           /Waiting for MCP servers to initialize/i.test(recentAll)
         )
       ) {
@@ -178,16 +199,49 @@ class StatusDetector {
         || /\btab\s+agents\b/i.test(recentOutput)
       );
 
-      if (hasOpenCodePrompt && hasOpenCodeChrome) {
+      // OpenCode waiting: input prompt with chrome, or idle help text
+      if (
+        (hasOpenCodePrompt && hasOpenCodeChrome) ||
+        /press enter to send the message/i.test(recentOutput)
+      ) {
         return 'waiting';
+      }
+
+      // OpenCode busy: thinking, generating, tool calls, working
+      if (
+        hasRecentOutput && (
+          /Thinking\.\.\./i.test(recentOutput) ||
+          /Generating\.\.\./i.test(recentOutput) ||
+          /Working\.\.\./i.test(recentOutput) ||
+          /Waiting for tool response\.\.\./i.test(recentOutput) ||
+          /Building tool call\.\.\./i.test(recentOutput) ||
+          /press esc to exit cancel/i.test(recentOutput)
+        )
+      ) {
+        return 'busy';
       }
 
       return null;
     }
 
     if (normalizedAgent === 'aider') {
-      if (trimmedLastNonEmptyLine === '>') {
+      // Aider waiting: standard prompt or multiline prompt
+      if (
+        trimmedLastNonEmptyLine === '>' ||
+        /^multi>\s*$/i.test(trimmedLastNonEmptyLine) ||
+        /^aider>\s*$/i.test(trimmedLastNonEmptyLine)
+      ) {
         return 'waiting';
+      }
+      // Aider busy: waiting for LLM, thinking
+      if (
+        hasRecentOutput && (
+          /Waiting for .*LLM/i.test(recentOutput) ||
+          /Waiting for .*model/i.test(recentOutput) ||
+          /think tokens/i.test(recentOutput)
+        )
+      ) {
+        return 'busy';
       }
       return null;
     }
