@@ -163,7 +163,7 @@ scripts/windows/allow-node-firewall.ps1 - Adds a Windows firewall rule for the c
 server/workspaceManager.js          - Workspace lifecycle management
 ├─ Manages: Workspace creation, switching, mixed-repo support
 ├─ Features: Dynamic terminal creation, worktree integration
-├─ Deleted workspace archive: deleting a workspace moves its JSON into `~/.orchestrator/deleted-workspaces/` instead of permanently unlinking it
+├─ Deleted workspace archive: deleting a workspace moves its JSON into `~/.orchestrator/deleted-workspaces/` instead of permanently unlinking it, with restore plus permanent single/all-entry purge support
 └─ Storage: JSON-based workspace persistence with dashboard-driven restore via the deleted-workspace archive
 
 server/workspaceSchemas.js          - Workspace configuration validation
@@ -596,6 +596,10 @@ POST /api/workspaces              - Create new workspace
 PUT /api/workspaces/:id           - Update workspace configuration
 DELETE /api/workspaces/:id        - Delete workspace
 POST /api/workspaces/:id/switch   - Switch to workspace
+GET /api/workspaces/deleted       - List Recently Deleted workspace archive entries
+POST /api/workspaces/deleted/:deletedId/restore - Restore a deleted workspace back into the active workspace store
+DELETE /api/workspaces/deleted/:deletedId - Permanently delete one Recently Deleted workspace entry
+DELETE /api/workspaces/deleted    - Permanently delete all Recently Deleted workspace entries
 POST /api/workspaces/remove-worktree - Remove worktree from workspace config (mixed terminal arrays and numeric `terminals.pairs` modes), close linked sessions, prune matching recovery orphans even when config entry is already missing, keep files on disk
 GET /api/threads                  - List project/workspace chats (`workspaceId` required)
 GET /api/thread-projects          - List repository-level chat projects aggregated from threads (optionally `workspaceId` scoped)

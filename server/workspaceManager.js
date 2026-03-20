@@ -1237,6 +1237,83 @@ class WorkspaceManager {
     return restoredWorkspace;
   }
 
+  async permanentlyDeleteDeletedWorkspace(deletedId) {
+    let entry;
+    try {
+      entry = await this.readDeletedWorkspaceEntry(deletedId);
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        const notFound = new Error(`Deleted workspace not found: ${deletedId}`);
+        notFound.statusCode = 404;
+        throw notFound;
+      }
+      throw error;
+    }
+
+    await fs.unlink(entry.filePath).catch((error) => {
+      if (error?.code === 'ENOENT') {
+        const notFound = new Error(`Deleted workspace not found: ${deletedId}`);
+        notFound.statusCode = 404;
+        throw notFound;
+      }
+      throw error;
+    });
+
+    logger.info('Permanently deleted archived workspace', {
+      deletedId: entry.deletedId,
+      workspaceId: entry.workspace.id
+    });
+
+    return {
+      deletedId: entry.deletedId,
+      deletedAt: entry.deletedAt,
+      workspace: entry.workspace
+    };
+  }
+
+  async permanentlyDeleteAllDeletedWorkspaces() {
+    const files = await fs.readdir(this.deletedWorkspacesPath).catch(() => []);
+    const archiveFiles = files.filter((name) => name.endsWith('.json'));
+    const deletedEntries = [];
+
+    for (const file of archiveFiles) {
+      const deletedId = String(file || '').trim().replace(/\.json$/i, '');
+      const filePath = this.getDeletedWorkspaceEntryPath(deletedId);
+
+      try {
+        const entry = await this.readDeletedWorkspaceEntry(deletedId).catch(() => null);
+        if (entry) {
+          deletedEntries.push({
+            deletedId: entry.deletedId,
+            deletedAt: entry.deletedAt,
+            workspace: entry.workspace
+          });
+        }
+
+        await fs.unlink(filePath).catch((error) => {
+          if (error?.code !== 'ENOENT') {
+            throw error;
+          }
+        });
+      } catch (error) {
+        logger.warn('Failed to permanently delete archived workspace entry', {
+          deletedId,
+          error: error.message
+        });
+        throw error;
+      }
+    }
+
+    logger.info('Permanently deleted all archived workspaces', {
+      count: archiveFiles.length
+    });
+
+    return {
+      deletedCount: archiveFiles.length,
+      deletedWorkspaces: deletedEntries
+    };
+  }
+
   getWorkspace(workspaceId) {
     return this.workspaces.get(workspaceId);
   }

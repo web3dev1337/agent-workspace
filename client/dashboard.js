@@ -7,6 +7,7 @@ class Dashboard {
     this.orchestrator = orchestrator;
     this.workspaces = [];
     this.deletedWorkspaces = [];
+    this.deletedWorkspacesExpanded = this.loadDeletedWorkspacesExpandedPreference();
     this.config = {};
     this.isVisible = false;
     this.quickLinks = null;
@@ -343,9 +344,24 @@ class Dashboard {
     ` : '';
 
     const deletedSection = (visibility.workspacesDeleted !== false && deletedWorkspaces.length > 0) ? `
-      <div class="dashboard-bento-section">
-        <h2 class="dashboard-section-title">Recently Deleted</h2>
-        <div class="workspace-grid bento-workspace-grid">
+      <div class="dashboard-bento-section ${this.deletedWorkspacesExpanded ? '' : 'is-collapsed'}" data-dashboard-section="deleted-workspaces">
+        <div class="dashboard-section-header-row">
+          <button
+            class="dashboard-section-toggle"
+            type="button"
+            data-dashboard-toggle="deleted-workspaces"
+            aria-expanded="${this.deletedWorkspacesExpanded ? 'true' : 'false'}"
+            aria-controls="dashboard-deleted-workspaces-content"
+          >
+            <span class="dashboard-section-chevron" aria-hidden="true">▾</span>
+            <span class="dashboard-section-title">Recently Deleted</span>
+            <span class="dashboard-section-count">${deletedWorkspaces.length}</span>
+          </button>
+          <button class="btn-secondary dashboard-deleted-delete-all-btn" type="button" title="Permanently delete all recently deleted workspaces">
+            Permanently Delete All
+          </button>
+        </div>
+        <div class="workspace-grid bento-workspace-grid dashboard-section-content" id="dashboard-deleted-workspaces-content" ${this.deletedWorkspacesExpanded ? '' : 'hidden'}>
           ${deletedWorkspaces.map((workspace) => this.generateDeletedWorkspaceCard(workspace)).join('')}
         </div>
       </div>
@@ -3570,6 +3586,16 @@ class Dashboard {
           <button class="btn-secondary workspace-restore-btn bento-btn-primary" type="button" title="${restoreTitle}" ${restoreDisabled ? 'disabled' : ''}>
             Restore Workspace
           </button>
+          <div class="bento-action-group">
+            <button
+              class="btn-icon workspace-permanent-delete-btn btn-danger-icon"
+              type="button"
+              title="Permanently delete archived workspace"
+              aria-label="Permanently delete archived workspace"
+            >
+              🗑️
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -3712,6 +3738,35 @@ class Dashboard {
         const deletedWorkspaceId = card?.dataset?.deletedWorkspaceId;
         if (!deletedWorkspaceId || btn.disabled) return;
         await this.restoreWorkspace(deletedWorkspaceId);
+      });
+    });
+
+    document.querySelectorAll('.workspace-permanent-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const card = e.target.closest('.deleted-workspace-card');
+        const deletedWorkspaceId = card?.dataset?.deletedWorkspaceId;
+        const workspace = this.deletedWorkspaces.find((entry) => String(entry?.deletedId || '').trim() === String(deletedWorkspaceId || '').trim());
+        if (!workspace) return;
+        await this.confirmPermanentDeleteDeletedWorkspace(workspace);
+      });
+    });
+
+    document.querySelectorAll('.dashboard-section-toggle').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const sectionKey = String(btn.getAttribute('data-dashboard-toggle') || '').trim();
+        if (sectionKey === 'deleted-workspaces') {
+          this.toggleDeletedWorkspacesSection();
+        }
+      });
+    });
+
+    document.querySelectorAll('.dashboard-deleted-delete-all-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await this.confirmPermanentDeleteAllDeletedWorkspaces();
       });
     });
 
@@ -4214,6 +4269,38 @@ class Dashboard {
     }
   }
 
+  loadDeletedWorkspacesExpandedPreference() {
+    try {
+      return localStorage.getItem('dashboard-deleted-workspaces-expanded') !== 'false';
+    } catch {
+      return true;
+    }
+  }
+
+  saveDeletedWorkspacesExpandedPreference() {
+    try {
+      localStorage.setItem('dashboard-deleted-workspaces-expanded', this.deletedWorkspacesExpanded ? 'true' : 'false');
+    } catch {}
+  }
+
+  toggleDeletedWorkspacesSection() {
+    this.deletedWorkspacesExpanded = !this.deletedWorkspacesExpanded;
+    this.saveDeletedWorkspacesExpandedPreference();
+
+    const section = document.querySelector('[data-dashboard-section="deleted-workspaces"]');
+    if (!section) return;
+
+    section.classList.toggle('is-collapsed', !this.deletedWorkspacesExpanded);
+    const toggleBtn = section.querySelector('.dashboard-section-toggle');
+    const content = section.querySelector('.dashboard-section-content');
+    if (toggleBtn) {
+      toggleBtn.setAttribute('aria-expanded', this.deletedWorkspacesExpanded ? 'true' : 'false');
+    }
+    if (content) {
+      content.hidden = !this.deletedWorkspacesExpanded;
+    }
+  }
+
   async deleteWorkspace(workspaceId) {
     try {
       const serverUrl = window.location.origin;
@@ -4253,6 +4340,83 @@ class Dashboard {
     } catch (error) {
       console.error('Error deleting workspace:', error);
       window.orchestrator?.showTemporaryMessage(`Error: ${error.message}`, 'error');
+    }
+  }
+
+  async confirmPermanentDeleteDeletedWorkspace(workspace) {
+    const name = String(workspace?.name || 'this workspace').trim() || 'this workspace';
+    const confirmed = await this.orchestrator.showConfirmationDialog(
+      'Permanently Delete Workspace',
+      `Permanently delete "${name}" from Recently Deleted?\n\nThis cannot be undone.`,
+      'Delete Permanently',
+      'Cancel'
+    );
+
+    if (confirmed) {
+      await this.permanentlyDeleteDeletedWorkspace(String(workspace?.deletedId || '').trim());
+    }
+  }
+
+  async permanentlyDeleteDeletedWorkspace(deletedWorkspaceId) {
+    if (!deletedWorkspaceId) return;
+
+    try {
+      const response = await fetch(`/api/workspaces/deleted/${encodeURIComponent(deletedWorkspaceId)}`, {
+        method: 'DELETE'
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) {
+        throw new Error(String(payload?.error || `Failed to permanently delete workspace (${response.status})`));
+      }
+
+      this.deletedWorkspaces = Array.isArray(this.deletedWorkspaces)
+        ? this.deletedWorkspaces.filter((entry) => String(entry?.deletedId || '').trim() !== deletedWorkspaceId)
+        : [];
+
+      await this.refreshWorkspaceCollections({ refresh: true, render: this.isVisible });
+      this.orchestrator?.showToast?.('Workspace permanently deleted', 'success');
+    } catch (error) {
+      this.orchestrator?.showToast?.(`Permanent delete failed: ${String(error?.message || error)}`, 'error');
+    }
+  }
+
+  async confirmPermanentDeleteAllDeletedWorkspaces() {
+    const deletedCount = Array.isArray(this.deletedWorkspaces) ? this.deletedWorkspaces.length : 0;
+    if (deletedCount <= 0) return;
+
+    const confirmed = await this.orchestrator.showConfirmationDialog(
+      'Permanently Delete All',
+      `Permanently delete all ${deletedCount} recently deleted workspace${deletedCount === 1 ? '' : 's'}?\n\nThis cannot be undone.`,
+      'Delete All Permanently',
+      'Cancel'
+    );
+
+    if (confirmed) {
+      await this.permanentlyDeleteAllDeletedWorkspaces();
+    }
+  }
+
+  async permanentlyDeleteAllDeletedWorkspaces() {
+    try {
+      const response = await fetch('/api/workspaces/deleted', {
+        method: 'DELETE'
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) {
+        throw new Error(String(payload?.error || `Failed to permanently delete all workspaces (${response.status})`));
+      }
+
+      this.deletedWorkspaces = [];
+      await this.refreshWorkspaceCollections({ refresh: true, render: this.isVisible });
+      const deletedCount = Number(payload?.deletedCount || 0);
+      this.orchestrator?.showToast?.(
+        `Permanently deleted ${deletedCount} recently deleted workspace${deletedCount === 1 ? '' : 's'}`,
+        'success'
+      );
+    } catch (error) {
+      this.orchestrator?.showToast?.(`Permanent delete all failed: ${String(error?.message || error)}`, 'error');
     }
   }
 

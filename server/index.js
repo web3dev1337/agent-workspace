@@ -3676,6 +3676,52 @@ app.post('/api/workspaces/deleted/:deletedId/restore', async (req, res) => {
   }
 });
 
+app.delete('/api/workspaces/deleted/:deletedId', async (req, res) => {
+  try {
+    const deletedId = req.params.deletedId;
+    const deletedWorkspace = await workspaceManager.permanentlyDeleteDeletedWorkspace(deletedId);
+    res.json({
+      ok: true,
+      deletedWorkspace: {
+        ...(deletedWorkspace?.workspace || {}),
+        deletedId: deletedWorkspace?.deletedId || null,
+        deletedAt: deletedWorkspace?.deletedAt || null
+      }
+    });
+  } catch (error) {
+    const status = Number(error?.statusCode) || 400;
+    logger.error('Failed to permanently delete archived workspace', {
+      error: error.message,
+      stack: error.stack,
+      deletedId: req.params.deletedId
+    });
+    res.status(status).json({ ok: false, error: error.message, stack: error.stack });
+  }
+});
+
+app.delete('/api/workspaces/deleted', async (req, res) => {
+  try {
+    const result = await workspaceManager.permanentlyDeleteAllDeletedWorkspaces();
+    res.json({
+      ok: true,
+      deletedCount: Number(result?.deletedCount || 0),
+      deletedWorkspaces: Array.isArray(result?.deletedWorkspaces)
+        ? result.deletedWorkspaces.map((entry) => ({
+          ...(entry?.workspace || {}),
+          deletedId: entry?.deletedId || null,
+          deletedAt: entry?.deletedAt || null
+        }))
+        : []
+    });
+  } catch (error) {
+    logger.error('Failed to permanently delete all archived workspaces', {
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ ok: false, error: error.message, stack: error.stack });
+  }
+});
+
 // Delete workspace
 app.delete('/api/workspaces/:id', async (req, res) => {
   try {
