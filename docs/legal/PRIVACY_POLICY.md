@@ -37,8 +37,8 @@ Depending on how you use Agent Workspace, the software may store:
 
 Examples of local storage paths may include:
 
-- `~/.orchestrator/`
-- `~/.trello-credentials`
+- `~/.agent-workspace/`
+- local integration credentials files you choose to create (for example, Trello credentials)
 - desktop-app data directories such as `%APPDATA%\\com.agent.workspace` and `%LOCALAPPDATA%\\com.agent.workspace`
 - browser `localStorage` when you use the web interface or desktop webview
 
