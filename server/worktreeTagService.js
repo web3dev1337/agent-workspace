@@ -16,7 +16,8 @@ const logger = winston.createLogger({
   ]
 });
 
-const DEFAULT_CONFIG_PATH = path.join(os.homedir(), '.orchestrator', 'worktree-tags.json');
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
+const DEFAULT_CONFIG_PATH = path.join(getAgentWorkspaceDir(), 'worktree-tags.json');
 
 class WorktreeTagService {
   constructor({ configPath } = {}) {

@@ -213,7 +213,10 @@ function expandUserPath(input) {
 
 function resolveGitHubRoot() {
   const envRoot = normalizeString(process.env.GREENFIELD_GITHUB_ROOT || process.env.GITHUB_ROOT || '');
-  if (!envRoot) return path.join(os.homedir(), 'GitHub');
+  if (!envRoot) {
+    const { getProjectsRoot } = require('./utils/pathUtils');
+    return getProjectsRoot();
+  }
   return expandUserPath(envRoot);
 }
 

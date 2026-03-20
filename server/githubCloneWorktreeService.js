@@ -110,11 +110,12 @@ class GitHubCloneWorktreeService {
 
   getTaxonomy() {
     if (!this.projectTypeService) {
+      const { getProjectsRoot } = require('./utils/pathUtils');
       const fallbackRoot = process.env.GREENFIELD_GITHUB_ROOT
         || process.env.GITHUB_ROOT
-        || path.join(os.homedir(), 'GitHub');
+        || getProjectsRoot();
       return {
-        gitHubRoot: path.resolve(String(fallbackRoot || path.join(os.homedir(), 'GitHub')).replace(/^~\//, `${os.homedir()}/`)),
+        gitHubRoot: path.resolve(String(fallbackRoot || getProjectsRoot()).replace(/^~\//, `${os.homedir()}/`)),
         categories: [],
         frameworks: [],
         templates: []
@@ -143,7 +144,7 @@ class GitHubCloneWorktreeService {
     return categories[0] || {
       id: 'other',
       name: 'Other',
-      basePathResolved: path.join(os.homedir(), 'GitHub', 'projects'),
+      basePathResolved: require('./utils/pathUtils').getProjectsRoot(),
       defaultRepositoryType: 'generic'
     };
   }
@@ -178,7 +179,7 @@ class GitHubCloneWorktreeService {
     const taxonomy = this.getTaxonomy();
     const category = this.resolveCategory(categoryId, repoName);
 
-    const gitHubRoot = path.resolve(String(taxonomy?.gitHubRoot || path.join(os.homedir(), 'GitHub')).replace(/^~\//, `${os.homedir()}/`));
+    const gitHubRoot = path.resolve(String(taxonomy?.gitHubRoot || require('./utils/pathUtils').getProjectsRoot()).replace(/^~\//, `${os.homedir()}/`));
     const categoryBase = path.resolve(String(category?.basePathResolved || path.join(gitHubRoot, 'projects')).replace(/^~\//, `${os.homedir()}/`));
 
     const segments = splitRelativePath(parentPath || '');

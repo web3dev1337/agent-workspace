@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
+const { getAgentWorkspaceDir, getProjectsRoot } = require('./utils/pathUtils');
 
 const IS_WIN = process.platform === 'win32';
 
@@ -561,19 +562,19 @@ function buildInstallWizardReport(firstRunDiagnostics, baseDiagnostics) {
       help: 'If this fails, the terminal grid cannot attach PTYs reliably.'
     }),
     toInstallWizardStep({
-      check: byId.get('orchestrator-home'),
-      title: 'Create ~/.orchestrator',
+      check: byId.get('agent-workspace-home'),
+      title: 'Create ~/.agent-workspace',
       help: 'Stores workspace/session metadata and local settings.'
     }),
     toInstallWizardStep({
-      check: byId.get('orchestrator-workspaces'),
-      title: 'Create ~/.orchestrator/workspaces',
+      check: byId.get('agent-workspace-workspaces'),
+      title: 'Create ~/.agent-workspace/workspaces',
       help: 'Workspace definitions must be writable to persist tabs/worktrees.'
     }),
     toInstallWizardStep({
-      check: byId.get('repo-scan-root'),
-      title: 'Create ~/GitHub scan root',
-      help: 'Repo discovery uses ~/GitHub by default.'
+      check: byId.get('projects-root'),
+      title: 'Create projects root',
+      help: 'Repo discovery uses the configured projects directory.'
     }),
     toInstallWizardStep({
       check: byId.get('claude-cli'),
@@ -628,9 +629,9 @@ async function collectFirstRunDiagnostics(options = {}) {
   const data = await collectDiagnostics();
   const homeDir = String(options.homeDir || data?.env?.homeDir || os.homedir() || '').trim();
   const rootDir = String(options.rootDir || path.resolve(__dirname, '..')).trim();
-  const orchestratorDir = path.join(homeDir, '.orchestrator');
+  const orchestratorDir = options.homeDir ? path.join(homeDir, '.agent-workspace') : getAgentWorkspaceDir();
   const workspacesDir = path.join(orchestratorDir, 'workspaces');
-  const githubRoot = path.join(homeDir, 'GitHub');
+  const projectsRoot = options.homeDir ? path.join(orchestratorDir, 'projects') : getProjectsRoot();
 
   const git = findToolResult(data, 'git');
   const gh = findToolResult(data, 'gh');
@@ -669,23 +670,23 @@ async function collectFirstRunDiagnostics(options = {}) {
   }));
 
   checks.push(createCheck({
-    id: 'orchestrator-home',
-    name: 'Orchestrator data directory',
+    id: 'agent-workspace-home',
+    name: 'Agent Workspace data directory',
     pass: fs.existsSync(orchestratorDir) && isWritableDirectory(orchestratorDir),
     severity: 'warning',
     passMessage: orchestratorDir,
     failMessage: `Missing or not writable: ${orchestratorDir}`,
     repairActions: [
       {
-        id: 'ensure-orchestrator-home',
-        label: 'Create ~/.orchestrator',
+        id: 'ensure-agent-workspace-home',
+        label: `Create ${orchestratorDir}`,
         kind: 'safe'
       }
     ]
   }));
 
   checks.push(createCheck({
-    id: 'orchestrator-workspaces',
+    id: 'agent-workspace-workspaces',
     name: 'Workspace store directory',
     pass: fs.existsSync(workspacesDir) && isWritableDirectory(workspacesDir),
     severity: 'warning',
@@ -694,23 +695,23 @@ async function collectFirstRunDiagnostics(options = {}) {
     repairActions: [
       {
         id: 'ensure-workspaces-dir',
-        label: 'Create ~/.orchestrator/workspaces',
+        label: `Create ${workspacesDir}`,
         kind: 'safe'
       }
     ]
   }));
 
   checks.push(createCheck({
-    id: 'repo-scan-root',
-    name: 'Repo scan root (~/GitHub)',
-    pass: fs.existsSync(githubRoot) && isWritableDirectory(githubRoot),
+    id: 'projects-root',
+    name: 'Projects directory',
+    pass: fs.existsSync(projectsRoot) && isWritableDirectory(projectsRoot),
     severity: 'warning',
-    passMessage: githubRoot,
-    failMessage: `Repo root missing or not writable: ${githubRoot}`,
+    passMessage: projectsRoot,
+    failMessage: `Projects root missing or not writable: ${projectsRoot}`,
     repairActions: [
       {
-        id: 'ensure-github-root',
-        label: 'Create ~/GitHub',
+        id: 'ensure-projects-root',
+        label: `Create ${projectsRoot}`,
         kind: 'safe'
       }
     ]
@@ -776,7 +777,7 @@ async function collectFirstRunDiagnostics(options = {}) {
       homeDir,
       orchestratorDir,
       workspacesDir,
-      githubRoot
+      projectsRoot
     },
     summary: {
       ready: blockingCount === 0,
@@ -794,15 +795,15 @@ async function runFirstRunRepair({ action, rootDir, homeDir } = {}) {
   const actionId = String(action || '').trim();
   const resolvedRoot = String(rootDir || path.resolve(__dirname, '..')).trim();
   const resolvedHomeDir = String(homeDir || os.homedir() || '').trim();
-  const orchestratorDir = path.join(resolvedHomeDir, '.orchestrator');
+  const orchestratorDir = homeDir ? path.join(resolvedHomeDir, '.agent-workspace') : getAgentWorkspaceDir();
   const workspacesDir = path.join(orchestratorDir, 'workspaces');
-  const githubRoot = path.join(resolvedHomeDir, 'GitHub');
+  const projectsRoot = homeDir ? path.join(orchestratorDir, 'projects') : getProjectsRoot();
 
   if (!actionId) {
     throw new Error('repair action is required');
   }
 
-  if (actionId === 'ensure-orchestrator-home') {
+  if (actionId === 'ensure-agent-workspace-home') {
     fs.mkdirSync(orchestratorDir, { recursive: true });
     return { ok: true, action: actionId, message: `Created ${orchestratorDir}` };
   }
@@ -812,9 +813,9 @@ async function runFirstRunRepair({ action, rootDir, homeDir } = {}) {
     return { ok: true, action: actionId, message: `Created ${workspacesDir}` };
   }
 
-  if (actionId === 'ensure-github-root') {
-    fs.mkdirSync(githubRoot, { recursive: true });
-    return { ok: true, action: actionId, message: `Created ${githubRoot}` };
+  if (actionId === 'ensure-projects-root') {
+    fs.mkdirSync(projectsRoot, { recursive: true });
+    return { ok: true, action: actionId, message: `Created ${projectsRoot}` };
   }
 
   if (actionId === 'rebuild-node-pty') {

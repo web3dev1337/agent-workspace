@@ -2,16 +2,17 @@
  * Session Recovery Service
  * Tracks terminal state (CWD, conversation ID, last command) for recovery after crashes
  *
- * Stores state locally per-workspace in ~/.orchestrator/session-recovery/
+ * Stores state locally per-workspace in ~/.agent-workspace/session-recovery/
  */
 
 const fs = require('fs').promises;
 const os = require('os');
 const path = require('path');
 const winston = require('winston');
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
 
 const HOME_DIR = process.env.HOME || os.homedir();
-const RECOVERY_DIR = path.join(HOME_DIR, '.orchestrator', 'session-recovery');
+const RECOVERY_DIR = path.join(getAgentWorkspaceDir(), 'session-recovery');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',

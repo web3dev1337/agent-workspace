@@ -5,7 +5,8 @@ const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
 
-const DEFAULT_DIR = path.join(os.homedir(), '.orchestrator', 'telemetry-snapshots');
+const { getAgentWorkspaceDir } = require('./utils/pathUtils');
+const DEFAULT_DIR = path.join(getAgentWorkspaceDir(), 'telemetry-snapshots');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',

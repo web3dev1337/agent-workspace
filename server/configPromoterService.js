@@ -5,8 +5,8 @@ const crypto = require('crypto');
 const { encryptObject, decryptObject, DEFAULT_SECRET_ENV } = require('./encryptedStore');
 const { normalizeServiceManifest, getWorkspaceServiceManifest, mergeServiceManifests } = require('./workspaceServiceStackService');
 
-const DEFAULT_SHARED_REL_PATH = '.orchestrator/service-stack/team-baseline.json';
-const DEFAULT_ENCRYPTED_REL_PATH = '.orchestrator/service-stack/team-baseline.enc.json';
+const DEFAULT_SHARED_REL_PATH = '.agent-workspace/service-stack/team-baseline.json';
+const DEFAULT_ENCRYPTED_REL_PATH = '.agent-workspace/service-stack/team-baseline.enc.json';
 const SIGNING_SECRET_ENV = 'ORCHESTRATOR_SHARED_CONFIG_SIGNING_SECRET';
 
 class ConfigPromoterService {

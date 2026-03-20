@@ -125,11 +125,11 @@ describe('diagnosticsService platform smoke', () => {
 
     const checkIds = new Set(data.checks.map((c) => c.id));
     expect(checkIds.has('node-pty-loaded')).toBe(true);
-    expect(checkIds.has('orchestrator-home')).toBe(true);
+    expect(checkIds.has('agent-workspace-home')).toBe(true);
     expect(checkIds.has('gh-auth')).toBe(true);
 
     const actionIds = new Set((data.repairActions || []).map((a) => a.id));
-    expect(actionIds.has('ensure-orchestrator-home')).toBe(true);
+    expect(actionIds.has('ensure-agent-workspace-home')).toBe(true);
     expect(actionIds.has('ensure-workspaces-dir')).toBe(true);
     expect(actionIds.has('gh-auth-login')).toBe(true);
   });
@@ -147,13 +147,13 @@ describe('diagnosticsService platform smoke', () => {
     const { runFirstRunRepair } = require('../../server/diagnosticsService');
 
     try {
-      const result1 = await runFirstRunRepair({ action: 'ensure-orchestrator-home', homeDir: tmpHome });
+      const result1 = await runFirstRunRepair({ action: 'ensure-agent-workspace-home', homeDir: tmpHome });
       expect(result1.ok).toBe(true);
-      expect(fs.existsSync(path.join(tmpHome, '.orchestrator'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpHome, '.agent-workspace'))).toBe(true);
 
       const result2 = await runFirstRunRepair({ action: 'ensure-workspaces-dir', homeDir: tmpHome });
       expect(result2.ok).toBe(true);
-      expect(fs.existsSync(path.join(tmpHome, '.orchestrator', 'workspaces'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpHome, '.agent-workspace', 'workspaces'))).toBe(true);
 
       const manual = await runFirstRunRepair({ action: 'gh-auth-login', homeDir: tmpHome });
       expect(manual.ok).toBe(false);
@@ -180,8 +180,8 @@ describe('diagnosticsService platform smoke', () => {
     expect(result.attemptedCount).toBeGreaterThan(0);
     expect(result.appliedCount).toBeGreaterThan(0);
     expect(Array.isArray(result.results)).toBe(true);
-    expect(fs.existsSync(path.join(tmpHome, '.orchestrator'))).toBe(true);
-    expect(fs.existsSync(path.join(tmpHome, '.orchestrator', 'workspaces'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpHome, '.agent-workspace'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpHome, '.agent-workspace', 'workspaces'))).toBe(true);
     expect(result.skippedManualCount).toBeGreaterThan(0);
     expect(result.diagnostics?.summary).toBeTruthy();
   });
@@ -207,6 +207,9 @@ describe('diagnosticsService platform smoke', () => {
     expect(stepIds.has('git-installed')).toBe(true);
     expect(stepIds.has('gh-auth')).toBe(true);
     expect(stepIds.has('node-pty-loaded')).toBe(true);
+    expect(stepIds.has('agent-workspace-home')).toBe(true);
+    expect(stepIds.has('agent-workspace-workspaces')).toBe(true);
+    expect(stepIds.has('projects-root')).toBe(true);
 
     const ghAuth = data.steps.find((step) => step.id === 'gh-auth');
     expect(ghAuth).toBeTruthy();

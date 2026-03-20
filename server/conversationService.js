@@ -16,7 +16,7 @@ const { exec } = require('child_process');
 const util = require('util');
 const os = require('os');
 const winston = require('winston');
-const { splitPathSegments } = require('./utils/pathUtils');
+const { splitPathSegments, getAgentWorkspaceDir } = require('./utils/pathUtils');
 
 const execAsync = util.promisify(exec);
 
@@ -35,7 +35,7 @@ const logger = winston.createLogger({
 const HOME_DIR = process.env.HOME || os.homedir();
 const CLAUDE_PROJECTS_DIR = path.join(HOME_DIR, '.claude', 'projects');
 const CODEX_SESSIONS_DIR = path.join(HOME_DIR, '.codex', 'sessions');
-const INDEX_CACHE_FILE = path.join(HOME_DIR, '.orchestrator', 'conversation-index.json');
+const INDEX_CACHE_FILE = path.join(getAgentWorkspaceDir(), 'conversation-index.json');
 const INDEX_CACHE_VERSION = 3;
 
 class ConversationService {

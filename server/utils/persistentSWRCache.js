@@ -11,7 +11,8 @@ class PersistentSWRCache {
     maxEntries = 500,
     persistDebounceMs = 750
   } = {}) {
-    this.filePath = filePath || path.join(os.homedir(), '.orchestrator', 'cache', 'tasks-swr-cache.json');
+    const { getAgentWorkspaceDir } = require('./pathUtils');
+    this.filePath = filePath || path.join(getAgentWorkspaceDir(), 'cache', 'tasks-swr-cache.json');
     this.defaultTtlMs = defaultTtlMs;
     this.staleWhileRevalidateMs = staleWhileRevalidateMs;
     this.maxEntries = maxEntries;

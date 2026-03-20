@@ -8,6 +8,10 @@ const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
 const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
+const { migrateFromOrchestratorDir, bootstrapProjectsRoot } = require('./utils/pathUtils');
+
+const migratedDataDir = migrateFromOrchestratorDir();
+const projectsRootBootstrap = bootstrapProjectsRoot();
 
 // Ensure log directory exists early (some services create file transports at require-time).
 try {
@@ -42,6 +46,15 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+if (migratedDataDir) {
+  logger.info('Migrated data directory from ~/.orchestrator to ~/.agent-workspace');
+}
+if (projectsRootBootstrap.usingLegacyProjectsRoot) {
+  logger.info('Using legacy ~/GitHub as the projects root until ~/.agent-workspace/projects is populated', {
+    projectsDir: projectsRootBootstrap.projectsDir
+  });
+}
 
 // Import services
 const { SessionManager } = require('./sessionManager');
@@ -1321,7 +1334,7 @@ app.post('/api/workspaces/:id/cleanup-terminals', async (req, res) => {
     const ws = workspaceManager.getWorkspace(workspaceId);
     if (!ws) return res.status(404).json({ ok: false, error: 'Workspace not found' });
 
-    const filePath = require('path').join(require('os').homedir(), '.orchestrator', 'workspaces', `${workspaceId}.json`);
+    const filePath = require('path').join(require('./utils/pathUtils').getAgentWorkspaceDir(), 'workspaces', `${workspaceId}.json`);
     const sanitize = workspaceManager.sanitizeWorkspaceTerminals(ws);
     if (sanitize.changed) {
       try {
@@ -2027,7 +2040,8 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
     const projects = [];
     const projectIndexByKey = new Map();
     const worktreeGroups = new Map();
-    const gitHubPath = path.join(require('os').homedir(), 'GitHub');
+    const { getProjectsRoot } = require('./utils/pathUtils');
+    const gitHubPath = getProjectsRoot();
 
     // Deep scan function
     async function scanDirectory(dirPath, depth = 0, maxDepth = scanMaxDepth) {
@@ -2261,8 +2275,28 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
       return matchCount === 1 ? matchIndex : null;
     }
 
-    // Start deep scan
+    // Start deep scan of primary projects directory
     await scanDirectory(gitHubPath);
+
+    // Legacy: also scan ~/GitHub if LEGACY_GITHUB_SCAN=1 is set
+    const legacyScan = String(process.env.LEGACY_GITHUB_SCAN || '').trim();
+    if (legacyScan === '1' || legacyScan === 'true') {
+      const legacyGitHubPath = path.join(require('os').homedir(), 'GitHub');
+      if (legacyGitHubPath !== gitHubPath) {
+        try {
+          await require('fs').promises.access(legacyGitHubPath);
+          const beforeCount = projects.length;
+          await scanDirectory(legacyGitHubPath);
+          // Mark legacy-scanned projects so the UI can distinguish them
+          for (let i = beforeCount; i < projects.length; i++) {
+            projects[i].source = 'legacy-github';
+          }
+          logger.info(`Legacy scan found ${projects.length - beforeCount} additional projects in ~/GitHub`);
+        } catch {
+          // ~/GitHub doesn't exist, skip
+        }
+      }
+    }
 
     // Attach sibling worktree groups to base repos or create synthetic repos
     for (const [key, group] of worktreeGroups.entries()) {

@@ -39,8 +39,9 @@ function expandUserPath(p) {
 
 function resolveGitHubRoot() {
   const envRoot = process.env.GREENFIELD_GITHUB_ROOT || process.env.GITHUB_ROOT || '';
-  const root = envRoot ? expandUserPath(envRoot) : path.join(os.homedir(), 'GitHub');
-  return root;
+  if (envRoot) return expandUserPath(envRoot);
+  const { getProjectsRoot } = require('./utils/pathUtils');
+  return getProjectsRoot();
 }
 
 function joinGitHubRoot(...parts) {

@@ -7,6 +7,7 @@ const { validateWorkspace, getWorkspaceTypeInfo, getDefaultWorkspaceConfig } = r
 const { ConfigDiscoveryService } = require('./configDiscoveryService');
 const { GitHubRepoService } = require('./githubRepoService');
 const { createProject } = require('../scripts/create-project');
+const { getAgentWorkspaceDir, getProjectsRoot } = require('./utils/pathUtils');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -26,7 +27,7 @@ class WorkspaceManager {
     this.workspaces = new Map();
     this.activeWorkspace = null;
     this.workspaceHealth = new Map();
-    this.configPath = path.join(os.homedir(), '.orchestrator');
+    this.configPath = getAgentWorkspaceDir();
     this.workspacesPath = path.join(this.configPath, 'workspaces');
     this.deletedWorkspacesPath = path.join(this.configPath, 'deleted-workspaces');
     this.templatesPath = path.join(this.configPath, 'templates');
@@ -114,7 +115,8 @@ class WorkspaceManager {
     const baseConfigCopy = JSON.parse(JSON.stringify(baseConfig));
 
     // Load worktree-specific config
-    const worktreeConfigPath = path.join(worktreePath, '.orchestrator-config.json');
+    const { resolveRepoConfigPath } = require('./utils/pathUtils');
+    const worktreeConfigPath = resolveRepoConfigPath(worktreePath);
     try {
       const configData = await fs.readFile(worktreeConfigPath, 'utf8');
       const worktreeConfig = JSON.parse(configData);
@@ -149,7 +151,7 @@ class WorkspaceManager {
     let mergedConfig = {};
 
     // Layer 1: Global config (if exists)
-    // TODO: Load from ~/GitHub/.orchestrator-config.json when it exists
+    // TODO: Load from projects root .agent-workspace-config.json when it exists
     const globalConfig = {};
     mergedConfig = this.mergeConfigs(mergedConfig, globalConfig);
 
@@ -262,8 +264,9 @@ class WorkspaceManager {
         continue;
       }
 
-      // Check for .orchestrator-config.json in repository path
-      const configPath = path.join(terminal.repository.path, '.orchestrator-config.json');
+      // Check for .agent-workspace-config.json in repository path (falls back to .orchestrator-config.json)
+      const { resolveRepoConfigPath: _resolveRepoConfigPath } = require('./utils/pathUtils');
+      const configPath = _resolveRepoConfigPath(terminal.repository.path);
       try {
         if (fsSync.existsSync(configPath)) {
           // Use the discovered game ID format: {gamename}-game
@@ -653,9 +656,7 @@ class WorkspaceManager {
       workspaceDirectory: this.workspacesPath,
       discovery: {
         scanPaths: [
-          path.join(os.homedir(), 'GitHub', 'games'),
-          path.join(os.homedir(), 'GitHub', 'website'),
-          path.join(os.homedir(), 'GitHub', 'tools')
+          getProjectsRoot()
         ],
         exclude: ['node_modules', '.git', 'dist', 'build', 'target']
       },
