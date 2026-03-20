@@ -206,6 +206,11 @@
           "modeSelect": false
         }
       },
+      "desktop": {
+        "devtools": {
+          "enabled": false
+        }
+      },
       "simpleMode": {
         "enabled": true,
         "startupOpen": false,

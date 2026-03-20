@@ -268,12 +268,28 @@
                             </div>
                         </div>
 
-	            <div class="setting-section" data-section-id="workspace" data-section-title="Workspace">
-	                <h4>Workspace</h4>
-	                <div class="setting-group">
-	                    <button id="rename-workspace-btn" class="header-btn" style="width:auto">Rename current workspace</button>
-	                </div>
-	            </div>
+                        <div id="desktop-settings-section" class="setting-section hidden" data-section-id="desktop"
+                            data-section-title="Desktop App">
+                            <h4>Desktop App</h4>
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="desktop-devtools-enabled" />
+                                    Enable DevTools hotkeys (F12 / Ctrl+Shift+I)
+                                </label>
+                                <p class="setting-description">Only applies to the Tauri desktop app.</p>
+                            </div>
+                            <div class="setting-group">
+                                <button class="btn-secondary" id="desktop-open-devtools" type="button">Open DevTools</button>
+                                <p class="setting-description">Opens the WebView inspector for this window.</p>
+                            </div>
+                        </div>
+
+		            <div class="setting-section" data-section-id="workspace" data-section-title="Workspace">
+		                <h4>Workspace</h4>
+		                <div class="setting-group">
+		                    <button id="rename-workspace-btn" class="header-btn" style="width:auto">Rename current workspace</button>
+		                </div>
+		            </div>
 
 	            <div class="setting-section" data-section-id="review-console" data-section-title="Review Console">
 	                <h4>Review Console</h4>

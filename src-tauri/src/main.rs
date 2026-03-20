@@ -424,15 +424,16 @@ fn show_notification(title: String, body: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn toggle_devtools(window: tauri::WebviewWindow) {
-    // Devtools are available in debug builds only
-    #[cfg(debug_assertions)]
+fn toggle_devtools(window: tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(any(debug_assertions, windows))]
     {
         window.open_devtools();
+        return Ok(());
     }
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(any(debug_assertions, windows)))]
     {
         let _ = window;
+        return Err("DevTools are disabled in this build.".to_string());
     }
 }
 

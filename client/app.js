@@ -57,6 +57,7 @@ class ClaudeOrchestrator {
     this.settings = this.loadSettings();
     this.userSettings = null; // Will be loaded from server
     this.simpleModeStartupTriggered = false;
+    this.desktopDevtoolsKeydownHandler = null;
     this.currentLayout = '2x4';
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
@@ -1364,15 +1365,16 @@ class ClaudeOrchestrator {
         this.showClaudeUpdateRequired(updateInfo);
       });
 
-      this.socket.on('user-settings-updated', (settings) => {
-        console.log('User settings updated:', settings);
-        this.userSettings = settings;
-        this.syncUserSettingsUI();
-        this.applyThemeFromUserSettings();
-        this.applySimpleModeConfig();
-        this.maybeAutoOpenSimpleMode();
-        this.applyUiVisibility();
-      });
+	      this.socket.on('user-settings-updated', (settings) => {
+	        console.log('User settings updated:', settings);
+	        this.userSettings = settings;
+	        this.syncUserSettingsUI();
+	        this.applyThemeFromUserSettings();
+	        this.applySimpleModeConfig();
+	        this.applyDesktopDevtoolsConfig();
+	        this.maybeAutoOpenSimpleMode();
+	        this.applyUiVisibility();
+	      });
 
       // Workspace events
       this.socket.on('workspace-info', async ({ active, available, config, workspaceTypes, frameworks, cascadedConfigs }) => {
@@ -2282,15 +2284,32 @@ class ClaudeOrchestrator {
           this.installDesktopAppUpdate();
         });
       }
-    } else if (pullUpdatesBtn) {
-      pullUpdatesBtn.addEventListener('click', () => {
-        this.pullLatestChanges();
-      });
-    }
+	    } else if (pullUpdatesBtn) {
+	      pullUpdatesBtn.addEventListener('click', () => {
+	        this.pullLatestChanges();
+	      });
+	    }
 
-    // Notification dismiss buttons
-	    const dismissSettingsNotificationBtn = document.getElementById('dismiss-settings-notification');
-	    if (dismissSettingsNotificationBtn) {
+	    // Desktop DevTools (Tauri only)
+	    const desktopDevtoolsEnabled = document.getElementById('desktop-devtools-enabled');
+	    if (desktopDevtoolsEnabled) {
+	      desktopDevtoolsEnabled.addEventListener('change', async (e) => {
+	        await this.updateGlobalUserSetting('ui.desktop.devtools.enabled', !!e.target.checked);
+	        this.applyDesktopDevtoolsConfig();
+	      });
+	    }
+	    const desktopOpenDevtoolsBtn = document.getElementById('desktop-open-devtools');
+	    if (desktopOpenDevtoolsBtn) {
+	      desktopOpenDevtoolsBtn.addEventListener('click', () => {
+	        this.openDesktopDevtools().catch((error) => {
+	          this.showToast?.(String(error?.message || error), 'error');
+	        });
+	      });
+	    }
+
+	    // Notification dismiss buttons
+		    const dismissSettingsNotificationBtn = document.getElementById('dismiss-settings-notification');
+		    if (dismissSettingsNotificationBtn) {
 	      dismissSettingsNotificationBtn.addEventListener('click', () => {
 	        document.getElementById('settings-update-notification')?.classList.add('hidden');
 	      });
@@ -11304,9 +11323,16 @@ class ClaudeOrchestrator {
 	        if (!url) return;
 	        const label = String(openUrlBtn.textContent || 'Link').trim();
 	        try {
+	          const headers = { 'Content-Type': 'application/json' };
+	          try {
+	            const token = this.getAuthToken?.();
+	            if (token) headers['X-Auth-Token'] = token;
+	          } catch {
+	            // ignore
+	          }
 	          const res = await fetch('/api/setup-actions/open-url', {
 	            method: 'POST',
-	            headers: { 'Content-Type': 'application/json' },
+	            headers,
 	            body: JSON.stringify({ url })
 	          });
 	          const data = await res.json().catch(() => ({}));
@@ -11435,9 +11461,16 @@ class ClaudeOrchestrator {
 	        const link = String(openGhLoginBtn.getAttribute('data-setup-open-gh-login') || '').trim();
 	        if (!link) return;
 	        try {
+	          const headers = { 'Content-Type': 'application/json' };
+	          try {
+	            const token = this.getAuthToken?.();
+	            if (token) headers['X-Auth-Token'] = token;
+	          } catch {
+	            // ignore
+	          }
 	          const res = await fetch('/api/setup-actions/open-url', {
 	            method: 'POST',
-	            headers: { 'Content-Type': 'application/json' },
+	            headers,
 	            body: JSON.stringify({ url: link })
 	          });
 	          const data = await res.json().catch(() => ({}));
@@ -17491,14 +17524,15 @@ class ClaudeOrchestrator {
       const response = await fetch('/api/user-settings');
       if (response.ok) {
         this.userSettings = await response.json();
-        console.log('User settings loaded:', this.userSettings);
-        this.syncUserSettingsUI();
-        this.applyThemeFromUserSettings();
-        this.applySimpleModeConfig();
-        this.maybeAutoOpenSimpleMode();
-        this.applyUiVisibility();
-        this.refreshBranchLabels();
-        this.updateTierFilterButtons();
+	        console.log('User settings loaded:', this.userSettings);
+	        this.syncUserSettingsUI();
+	        this.applyThemeFromUserSettings();
+	        this.applySimpleModeConfig();
+	        this.applyDesktopDevtoolsConfig();
+	        this.maybeAutoOpenSimpleMode();
+	        this.applyUiVisibility();
+	        this.refreshBranchLabels();
+	        this.updateTierFilterButtons();
       } else {
         console.error('Failed to load user settings:', response.statusText);
       }
@@ -17803,15 +17837,21 @@ class ClaudeOrchestrator {
     if (simpleModeHotkeys) {
       simpleModeHotkeys.checked = this.userSettings.global?.ui?.simpleMode?.hotkeys !== false;
     }
-    const simpleModeShowHints = document.getElementById('simple-mode-show-hints');
-    if (simpleModeShowHints) {
-      simpleModeShowHints.checked = this.userSettings.global?.ui?.simpleMode?.showHints !== false;
-    }
-    this.applySimpleModeConfig();
+	    const simpleModeShowHints = document.getElementById('simple-mode-show-hints');
+	    if (simpleModeShowHints) {
+	      simpleModeShowHints.checked = this.userSettings.global?.ui?.simpleMode?.showHints !== false;
+	    }
+	    this.applySimpleModeConfig();
 
-    const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
-    if (discordAutoEnsure) {
-      const cfg = this.userSettings.global?.ui?.discord || {};
+	    const desktopDevtoolsEnabled = document.getElementById('desktop-devtools-enabled');
+	    if (desktopDevtoolsEnabled) {
+	      desktopDevtoolsEnabled.checked = this.userSettings.global?.ui?.desktop?.devtools?.enabled === true;
+	    }
+	    this.applyDesktopDevtoolsConfig();
+
+	    const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
+	    if (discordAutoEnsure) {
+	      const cfg = this.userSettings.global?.ui?.discord || {};
       discordAutoEnsure.checked = cfg.autoEnsureServicesAtStartup === true;
     }
 
@@ -18258,6 +18298,90 @@ class ClaudeOrchestrator {
     return typeof window !== 'undefined' &&
       !!window.__TAURI__ &&
       typeof window.__TAURI__.invoke === 'function';
+  }
+
+  getDesktopDevtoolsConfig() {
+    const cfg = this.userSettings?.global?.ui?.desktop?.devtools;
+    return {
+      enabled: cfg?.enabled === true
+    };
+  }
+
+  applyDesktopDevtoolsConfig() {
+    const section = document.getElementById('desktop-settings-section');
+    const isTauri = this.isTauriRuntime();
+
+    if (section) {
+      if (isTauri) section.classList.remove('hidden');
+      else section.classList.add('hidden');
+    }
+
+    const { enabled } = this.getDesktopDevtoolsConfig();
+    const effectiveEnabled = isTauri && enabled;
+
+    const enabledInput = document.getElementById('desktop-devtools-enabled');
+    if (enabledInput) {
+      enabledInput.disabled = !isTauri;
+    }
+    const openBtn = document.getElementById('desktop-open-devtools');
+    if (openBtn) {
+      openBtn.disabled = !effectiveEnabled;
+      openBtn.title = effectiveEnabled
+        ? 'Open DevTools'
+        : (isTauri ? 'Enable DevTools hotkeys first' : 'Desktop app only');
+    }
+
+    if (!isTauri) {
+      if (this.desktopDevtoolsKeydownHandler) {
+        document.removeEventListener('keydown', this.desktopDevtoolsKeydownHandler, true);
+        this.desktopDevtoolsKeydownHandler = null;
+      }
+      return;
+    }
+
+    if (effectiveEnabled) {
+      if (this.desktopDevtoolsKeydownHandler) return;
+      this.desktopDevtoolsKeydownHandler = (event) => {
+        try {
+          const key = String(event?.key || '').toLowerCase();
+          const code = String(event?.code || '');
+          const isF12 = key === 'f12' || code === 'F12';
+          const isCtrlShiftI = !!event?.ctrlKey && !!event?.shiftKey && (code === 'KeyI' || key === 'i');
+          const isCmdAltI = !!event?.metaKey && !!event?.altKey && (code === 'KeyI' || key === 'i');
+          if (!isF12 && !isCtrlShiftI && !isCmdAltI) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void this.openDesktopDevtools();
+        } catch {
+          // ignore
+        }
+      };
+      document.addEventListener('keydown', this.desktopDevtoolsKeydownHandler, true);
+      return;
+    }
+
+    if (this.desktopDevtoolsKeydownHandler) {
+      document.removeEventListener('keydown', this.desktopDevtoolsKeydownHandler, true);
+      this.desktopDevtoolsKeydownHandler = null;
+    }
+  }
+
+  async openDesktopDevtools() {
+    if (!this.isTauriRuntime()) {
+      this.showToast?.('DevTools are only available in the desktop app.', 'warning');
+      return;
+    }
+    const { enabled } = this.getDesktopDevtoolsConfig();
+    if (!enabled) {
+      this.showToast?.('Enable DevTools hotkeys in Settings first.', 'warning');
+      return;
+    }
+    try {
+      await window.__TAURI__.invoke('toggle_devtools');
+    } catch (error) {
+      this.showToast?.(`Failed to open DevTools: ${String(error?.message || error)}`, 'error');
+      throw error;
+    }
   }
 
   normalizeDesktopUpdateResult(result) {

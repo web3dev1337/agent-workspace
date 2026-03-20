@@ -261,6 +261,11 @@ class UserSettingsService {
               modeSelect: false
             }
           },
+          desktop: {
+            devtools: {
+              enabled: false
+            }
+          },
           simpleMode: {
             // Codex-style top-level project/chat shell controls.
             enabled: false,
