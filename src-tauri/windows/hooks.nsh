@@ -1,24 +1,22 @@
 ; Agent Workspace NSIS installer hooks
-; Kills orphaned node.exe and Agent Workspace processes before install/update
-; to prevent "Error opening file for writing" on bundled node.exe
+; Kills ONLY the node.exe spawned by Agent Workspace (path-filtered),
+; not the user's other Node.js processes.
 
 !macro NSIS_HOOK_PREINSTALL
-  ; Kill any running Agent Workspace instance (the Tauri app itself)
+  ; Kill any running Agent Workspace instance (safe — it's our app)
   nsExec::ExecToLog 'taskkill /IM "Agent Workspace.exe" /F'
 
-  ; Kill orphaned node.exe that was spawned by the app's backend server.
-  ; The bundled node.exe lives under AppData\Local\agent-workspace and holds
-  ; a file lock on itself while running - the installer cannot overwrite it.
-  ; We use /F (force) because node may not respond to graceful shutdown.
-  nsExec::ExecToLog 'taskkill /IM node.exe /F'
+  ; Kill ONLY node.exe running from the agent-workspace install directory.
+  ; Uses PowerShell path filter so we never touch the user's other Node processes.
+  ; -ErrorAction SilentlyContinue: no error if nothing to kill.
+  nsExec::ExecToLog "powershell -NoProfile -Command $\"Get-Process -Name node -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*agent-workspace*' } | Stop-Process -Force -ErrorAction SilentlyContinue$\""
 
-  ; Brief pause to let Windows release file handles after process termination
+  ; Let Windows release file handles
   Sleep 1000
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
-  ; Same cleanup before uninstall to ensure clean file removal
   nsExec::ExecToLog 'taskkill /IM "Agent Workspace.exe" /F'
-  nsExec::ExecToLog 'taskkill /IM node.exe /F'
+  nsExec::ExecToLog "powershell -NoProfile -Command $\"Get-Process -Name node -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*agent-workspace*' } | Stop-Process -Force -ErrorAction SilentlyContinue$\""
   Sleep 1000
 !macroend
