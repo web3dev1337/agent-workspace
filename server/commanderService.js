@@ -6,12 +6,12 @@
  * worktree terminals work - they're all Claude Code instances.
  */
 
-const pty = require('node-pty');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const winston = require('winston');
 const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
+const { loadNodePty } = require('./utils/nodePtyCompat');
 
 const HOME_DIR = process.env.HOME || os.homedir();
 
@@ -26,6 +26,8 @@ const logger = winston.createLogger({
     new winston.transports.Console({ format: winston.format.simple() })
   ]
 });
+
+const pty = loadNodePty({ logger });
 
 // Commander runs from the orchestrator's own directory so it picks up CLAUDE.md
 // Override with COMMANDER_CWD env var if needed

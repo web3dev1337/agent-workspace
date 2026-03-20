@@ -1,10 +1,5 @@
 let pty = null;
 let ptyLoadError = null;
-try {
-  pty = require('node-pty');
-} catch (error) {
-  ptyLoadError = error;
-}
 const { EventEmitter } = require('events');
 const winston = require('winston');
 const fs = require('fs');
@@ -23,6 +18,7 @@ const {
   resolveCwd
 } = require('./utils/shellCommand');
 const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
+const { loadNodePty } = require('./utils/nodePtyCompat');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -35,6 +31,11 @@ const logger = winston.createLogger({
     new winston.transports.Console({ format: winston.format.simple() })
   ]
 });
+try {
+  pty = loadNodePty({ logger });
+} catch (error) {
+  ptyLoadError = error;
+}
 if (ptyLoadError) {
   logger.error('node-pty failed to load', {
     error: ptyLoadError.message,
