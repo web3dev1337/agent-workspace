@@ -22,6 +22,10 @@ function getProjectsRoot() {
   return path.join(getAgentWorkspaceDir(), 'projects');
 }
 
+function getLegacyProjectsRoot() {
+  return path.join(os.homedir(), 'GitHub');
+}
+
 /**
  * Migrate ~/.orchestrator to ~/.agent-workspace if the old directory exists
  * and the new one doesn't. Safe to call multiple times (idempotent).
@@ -54,6 +58,45 @@ function migrateFromOrchestratorDir() {
     process.env.AGENT_WORKSPACE_DIR = oldDir;
     return false;
   }
+}
+
+function hasVisibleEntries(dirPath) {
+  const fs = require('fs');
+  try {
+    return fs.readdirSync(dirPath).some((entry) => !String(entry || '').startsWith('.'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Preserve existing ~/GitHub installs unless the new projects root is already populated
+ * or the user explicitly chose AGENT_WORKSPACE_PROJECTS_DIR.
+ */
+function bootstrapProjectsRoot() {
+  const fs = require('fs');
+  const envPath = String(process.env.AGENT_WORKSPACE_PROJECTS_DIR || '').trim();
+  const projectsDir = getProjectsRoot();
+  const legacyDir = getLegacyProjectsRoot();
+
+  if (envPath) {
+    return { usingLegacyProjectsRoot: false, projectsDir };
+  }
+
+  if (!fs.existsSync(legacyDir) || !hasVisibleEntries(legacyDir)) {
+    return { usingLegacyProjectsRoot: false, projectsDir };
+  }
+
+  if (fs.existsSync(projectsDir) && hasVisibleEntries(projectsDir)) {
+    return { usingLegacyProjectsRoot: false, projectsDir };
+  }
+
+  process.env.AGENT_WORKSPACE_PROJECTS_DIR = legacyDir;
+  return {
+    usingLegacyProjectsRoot: true,
+    projectsDir: legacyDir,
+    legacyDir
+  };
 }
 
 /**
@@ -98,7 +141,9 @@ module.exports = {
   getTrailingPathLabel,
   getAgentWorkspaceDir,
   getProjectsRoot,
+  getLegacyProjectsRoot,
   migrateFromOrchestratorDir,
+  bootstrapProjectsRoot,
   resolveRepoConfigPath,
   REPO_CONFIG_NAME,
   LEGACY_REPO_CONFIG_NAME

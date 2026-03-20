@@ -7,7 +7,7 @@ const { validateWorkspace, getWorkspaceTypeInfo, getDefaultWorkspaceConfig } = r
 const { ConfigDiscoveryService } = require('./configDiscoveryService');
 const { GitHubRepoService } = require('./githubRepoService');
 const { createProject } = require('../scripts/create-project');
-const { getAgentWorkspaceDir } = require('./utils/pathUtils');
+const { getAgentWorkspaceDir, getProjectsRoot } = require('./utils/pathUtils');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -656,7 +656,7 @@ class WorkspaceManager {
       workspaceDirectory: this.workspacesPath,
       discovery: {
         scanPaths: [
-          path.join(getAgentWorkspaceDir(), 'projects')
+          getProjectsRoot()
         ],
         exclude: ['node_modules', '.git', 'dist', 'build', 'target']
       },

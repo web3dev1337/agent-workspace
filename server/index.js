@@ -8,6 +8,10 @@ const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
 const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
+const { migrateFromOrchestratorDir, bootstrapProjectsRoot } = require('./utils/pathUtils');
+
+const migratedDataDir = migrateFromOrchestratorDir();
+const projectsRootBootstrap = bootstrapProjectsRoot();
 
 // Ensure log directory exists early (some services create file transports at require-time).
 try {
@@ -42,6 +46,15 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+if (migratedDataDir) {
+  logger.info('Migrated data directory from ~/.orchestrator to ~/.agent-workspace');
+}
+if (projectsRootBootstrap.usingLegacyProjectsRoot) {
+  logger.info('Using legacy ~/GitHub as the projects root until ~/.agent-workspace/projects is populated', {
+    projectsDir: projectsRootBootstrap.projectsDir
+  });
+}
 
 // Import services
 const { SessionManager } = require('./sessionManager');
@@ -8317,13 +8330,6 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
     res.status(500).send('Error loading replay viewer');
   }
 });
-
-// Migrate ~/.orchestrator → ~/.agent-workspace on first run
-const { migrateFromOrchestratorDir } = require('./utils/pathUtils');
-const migrated = migrateFromOrchestratorDir();
-if (migrated) {
-  logger.info('Migrated data directory from ~/.orchestrator to ~/.agent-workspace');
-}
 
 // Start server
 const DESIRED_PORT = Number(process.env.ORCHESTRATOR_PORT || 9460);

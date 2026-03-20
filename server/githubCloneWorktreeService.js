@@ -144,7 +144,7 @@ class GitHubCloneWorktreeService {
     return categories[0] || {
       id: 'other',
       name: 'Other',
-      basePathResolved: path.join(require('./utils/pathUtils').getProjectsRoot(), 'projects'),
+      basePathResolved: require('./utils/pathUtils').getProjectsRoot(),
       defaultRepositoryType: 'generic'
     };
   }

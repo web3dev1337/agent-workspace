@@ -207,6 +207,9 @@ describe('diagnosticsService platform smoke', () => {
     expect(stepIds.has('git-installed')).toBe(true);
     expect(stepIds.has('gh-auth')).toBe(true);
     expect(stepIds.has('node-pty-loaded')).toBe(true);
+    expect(stepIds.has('agent-workspace-home')).toBe(true);
+    expect(stepIds.has('agent-workspace-workspaces')).toBe(true);
+    expect(stepIds.has('projects-root')).toBe(true);
 
     const ghAuth = data.steps.find((step) => step.id === 'gh-auth');
     expect(ghAuth).toBeTruthy();

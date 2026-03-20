@@ -9570,9 +9570,12 @@ class ClaudeOrchestrator {
 	      const ghAuthTool = toolMap.get('ghAuth') || null;
 	      const claudeTool = toolMap.get('claude') || null;
 	      const codexTool = toolMap.get('codex') || null;
-	      const storageChecks = ['orchestrator-home', 'orchestrator-workspaces', 'repo-scan-root']
+	      const storageChecks = ['agent-workspace-home', 'agent-workspace-workspaces', 'projects-root']
 	        .map((id) => checkMap.get(id))
 	        .filter(Boolean);
+	      const storagePaths = (firstRun.paths && typeof firstRun.paths === 'object') ? firstRun.paths : {};
+	      const workspaceDirLabel = String(storagePaths.orchestratorDir || '~/.agent-workspace').trim() || '~/.agent-workspace';
+	      const projectsDirLabel = String(storagePaths.projectsRoot || 'projects directory').trim() || 'projects directory';
 	      const runtimeReady = !!shellCheck?.ok && !!nodePty?.ok;
 	      const githubReady = !!ghTool?.ok && !!ghAuthTool?.ok;
 	      const storageReady = storageChecks.length > 0 && storageChecks.every((check) => String(check?.status || '').trim().toLowerCase() === 'pass');
@@ -9604,7 +9607,7 @@ class ClaudeOrchestrator {
 	          title: 'Workspace storage',
 	          value: storageReady ? 'Ready' : 'Needs attention',
 	          copy: storageReady
-	            ? '~/.orchestrator and ~/GitHub are writable.'
+	            ? `${workspaceDirLabel} and ${projectsDirLabel} are writable.`
 	            : String(storageChecks.find((check) => String(check?.status || '').trim().toLowerCase() !== 'pass')?.message || 'Local workspace storage needs attention.'),
 	          tone: storageReady ? 'is-good' : 'is-warning'
 	        },

@@ -562,19 +562,19 @@ function buildInstallWizardReport(firstRunDiagnostics, baseDiagnostics) {
       help: 'If this fails, the terminal grid cannot attach PTYs reliably.'
     }),
     toInstallWizardStep({
-      check: byId.get('orchestrator-home'),
-      title: 'Create ~/.orchestrator',
+      check: byId.get('agent-workspace-home'),
+      title: 'Create ~/.agent-workspace',
       help: 'Stores workspace/session metadata and local settings.'
     }),
     toInstallWizardStep({
-      check: byId.get('orchestrator-workspaces'),
-      title: 'Create ~/.orchestrator/workspaces',
+      check: byId.get('agent-workspace-workspaces'),
+      title: 'Create ~/.agent-workspace/workspaces',
       help: 'Workspace definitions must be writable to persist tabs/worktrees.'
     }),
     toInstallWizardStep({
-      check: byId.get('repo-scan-root'),
-      title: 'Create ~/GitHub scan root',
-      help: 'Repo discovery uses ~/GitHub by default.'
+      check: byId.get('projects-root'),
+      title: 'Create projects root',
+      help: 'Repo discovery uses the configured projects directory.'
     }),
     toInstallWizardStep({
       check: byId.get('claude-cli'),
