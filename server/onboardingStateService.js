@@ -34,6 +34,7 @@ class OnboardingStateService {
       version: STATE_VERSION,
       updatedAt: null,
       dependencySetup: {
+        legalAccepted: false,
         completed: false,
         dismissed: false,
         currentStep: 0,
@@ -59,6 +60,7 @@ class OnboardingStateService {
     const next = (value && typeof value === 'object') ? value : {};
     const currentStepRaw = Number.parseInt(String(next.currentStep ?? 0), 10);
     return {
+      legalAccepted: next.legalAccepted === true,
       completed: next.completed === true,
       dismissed: next.dismissed === true,
       currentStep: Number.isFinite(currentStepRaw) && currentStepRaw >= 0 ? currentStepRaw : 0,
