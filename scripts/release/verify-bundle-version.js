@@ -99,6 +99,17 @@ function listBundleFiles(bundleTypeDir, extensions) {
     .map((entry) => path.join(bundleTypeDir, entry));
 }
 
+function readMacOSAppBundleVersion(appPath) {
+  const plistPath = path.join(appPath, 'Contents', 'Info.plist');
+  try {
+    const content = fs.readFileSync(plistPath, 'utf8');
+    const match = content.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/);
+    return match ? match[1].trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 function verifyBundleVersion({ targetDir, profile, expectedVersion, platform, bundles }) {
   const normalizedPlatform = normalizePlatform(platform);
   const bundleTypes = resolveBundleTypes({ bundles, platform: normalizedPlatform });
@@ -132,6 +143,22 @@ function verifyBundleVersion({ targetDir, profile, expectedVersion, platform, bu
     const files = listBundleFiles(bundleTypeDir, rule.extensions);
     if (files.length === 0) {
       errors.push(`No ${bundleType} artifacts found in ${bundleTypeDir}`);
+      continue;
+    }
+
+    // macOS .app bundles don't include version in filename — check Info.plist
+    if (bundleType === 'app') {
+      for (const filePath of files) {
+        const plistVersion = readMacOSAppBundleVersion(filePath);
+        if (plistVersion && plistVersion === expectedVersion) {
+          continue;
+        }
+        if (!plistVersion) {
+          errors.push(`Could not read version from ${path.basename(filePath)}/Contents/Info.plist`);
+        } else if (plistVersion !== expectedVersion) {
+          errors.push(`${path.basename(filePath)} has version ${plistVersion}, expected ${expectedVersion}`);
+        }
+      }
       continue;
     }
 
