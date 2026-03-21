@@ -1,6 +1,139 @@
 const path = require('path');
 const os = require('os');
 
+function getDefaultAgentWorkspaceDir() {
+  return path.join(os.homedir(), '.agent-workspace');
+}
+
+function getLegacyAgentWorkspaceDir() {
+  return path.join(os.homedir(), '.orchestrator');
+}
+
+function pathsResolveToSameLocation(a, b) {
+  const fs = require('fs');
+  try {
+    return fs.realpathSync(a) === fs.realpathSync(b);
+  } catch {
+    return false;
+  }
+}
+
+function countVisibleEntries(dirPath) {
+  const fs = require('fs');
+  try {
+    return fs.readdirSync(dirPath).filter((entry) => !String(entry || '').startsWith('.')).length;
+  } catch {
+    return 0;
+  }
+}
+
+function getWorkspaceEntryCount(baseDir) {
+  return countVisibleEntries(path.join(baseDir, 'workspaces'));
+}
+
+function getLegacyCompatibilityState() {
+  const fs = require('fs');
+  const newDir = getDefaultAgentWorkspaceDir();
+  const oldDir = getLegacyAgentWorkspaceDir();
+
+  if (!fs.existsSync(oldDir)) {
+    return {
+      shouldUseLegacyDir: false,
+      newDir,
+      oldDir,
+      reason: 'legacy-missing'
+    };
+  }
+
+  if (pathsResolveToSameLocation(newDir, oldDir)) {
+    return {
+      shouldUseLegacyDir: false,
+      newDir,
+      oldDir,
+      reason: 'already-linked'
+    };
+  }
+
+  if (!fs.existsSync(newDir)) {
+    return {
+      shouldUseLegacyDir: false,
+      newDir,
+      oldDir,
+      reason: 'new-missing'
+    };
+  }
+
+  const oldWorkspaceCount = getWorkspaceEntryCount(oldDir);
+  const newWorkspaceCount = getWorkspaceEntryCount(newDir);
+  const oldRootCount = countVisibleEntries(oldDir);
+  const newRootCount = countVisibleEntries(newDir);
+  const oldHasUserData = oldWorkspaceCount > 0 || oldRootCount > 0;
+  const newHasUserData = newWorkspaceCount > 0 || newRootCount > 0;
+
+  if (!oldHasUserData) {
+    return {
+      shouldUseLegacyDir: false,
+      newDir,
+      oldDir,
+      reason: 'legacy-empty',
+      oldWorkspaceCount,
+      newWorkspaceCount,
+      oldRootCount,
+      newRootCount
+    };
+  }
+
+  if (!newHasUserData) {
+    return {
+      shouldUseLegacyDir: true,
+      newDir,
+      oldDir,
+      reason: 'new-empty',
+      oldWorkspaceCount,
+      newWorkspaceCount,
+      oldRootCount,
+      newRootCount
+    };
+  }
+
+  if (oldWorkspaceCount > newWorkspaceCount) {
+    return {
+      shouldUseLegacyDir: true,
+      newDir,
+      oldDir,
+      reason: 'legacy-has-more-workspaces',
+      oldWorkspaceCount,
+      newWorkspaceCount,
+      oldRootCount,
+      newRootCount
+    };
+  }
+
+  if (oldWorkspaceCount === newWorkspaceCount && oldRootCount > newRootCount) {
+    return {
+      shouldUseLegacyDir: true,
+      newDir,
+      oldDir,
+      reason: 'legacy-has-more-state',
+      oldWorkspaceCount,
+      newWorkspaceCount,
+      oldRootCount,
+      newRootCount
+    };
+  }
+
+  return {
+    shouldUseLegacyDir: false,
+    newDir,
+    oldDir,
+    reason: 'prefer-new',
+    oldWorkspaceCount,
+    newWorkspaceCount,
+    oldRootCount,
+    newRootCount
+  };
+}
+
 /**
  * Root directory for Agent Workspace data (workspaces, configs, etc.).
  * Configurable via AGENT_WORKSPACE_DIR env var; defaults to ~/.agent-workspace
@@ -8,7 +141,11 @@ const os = require('os');
 function getAgentWorkspaceDir() {
   const envPath = String(process.env.AGENT_WORKSPACE_DIR || '').trim();
   if (envPath) return path.resolve(envPath);
-  return path.join(os.homedir(), '.agent-workspace');
+  const compatibility = getLegacyCompatibilityState();
+  if (compatibility.shouldUseLegacyDir) {
+    return compatibility.oldDir;
+  }
+  return compatibility.newDir;
 }
 
 /**
@@ -33,8 +170,8 @@ function getLegacyProjectsRoot() {
  */
 function migrateFromOrchestratorDir() {
   const fs = require('fs');
-  const newDir = getAgentWorkspaceDir();
-  const oldDir = path.join(os.homedir(), '.orchestrator');
+  const newDir = getDefaultAgentWorkspaceDir();
+  const oldDir = getLegacyAgentWorkspaceDir();
 
   // Skip if env override is set (user chose a custom path)
   if (String(process.env.AGENT_WORKSPACE_DIR || '').trim()) return false;
@@ -61,12 +198,7 @@ function migrateFromOrchestratorDir() {
 }
 
 function hasVisibleEntries(dirPath) {
-  const fs = require('fs');
-  try {
-    return fs.readdirSync(dirPath).some((entry) => !String(entry || '').startsWith('.'));
-  } catch {
-    return false;
-  }
+  return countVisibleEntries(dirPath) > 0;
 }
 
 /**
@@ -140,6 +272,9 @@ module.exports = {
   getPathBasename,
   getTrailingPathLabel,
   getAgentWorkspaceDir,
+  getDefaultAgentWorkspaceDir,
+  getLegacyAgentWorkspaceDir,
+  getLegacyCompatibilityState,
   getProjectsRoot,
   getLegacyProjectsRoot,
   migrateFromOrchestratorDir,

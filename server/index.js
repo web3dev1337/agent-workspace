@@ -8,9 +8,16 @@ const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
 const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
-const { migrateFromOrchestratorDir, bootstrapProjectsRoot } = require('./utils/pathUtils');
+const {
+  migrateFromOrchestratorDir,
+  bootstrapProjectsRoot,
+  getAgentWorkspaceDir,
+  getLegacyCompatibilityState
+} = require('./utils/pathUtils');
 
 const migratedDataDir = migrateFromOrchestratorDir();
+const legacyCompatibilityState = getLegacyCompatibilityState();
+const resolvedDataDir = getAgentWorkspaceDir();
 const projectsRootBootstrap = bootstrapProjectsRoot();
 
 // Ensure log directory exists early (some services create file transports at require-time).
@@ -49,6 +56,14 @@ const logger = winston.createLogger({
 
 if (migratedDataDir) {
   logger.info('Migrated data directory from ~/.orchestrator to ~/.agent-workspace');
+}
+if (legacyCompatibilityState.shouldUseLegacyDir) {
+  logger.warn('Using legacy ~/.orchestrator data directory for backward compatibility', {
+    reason: legacyCompatibilityState.reason,
+    resolvedDataDir,
+    oldWorkspaceCount: legacyCompatibilityState.oldWorkspaceCount,
+    newWorkspaceCount: legacyCompatibilityState.newWorkspaceCount
+  });
 }
 if (projectsRootBootstrap.usingLegacyProjectsRoot) {
   logger.info('Using legacy ~/GitHub as the projects root until ~/.agent-workspace/projects is populated', {

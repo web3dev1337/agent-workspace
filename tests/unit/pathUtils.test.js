@@ -81,4 +81,49 @@ describe('pathUtils', () => {
     expect(getProjectsRoot()).not.toBe(getLegacyProjectsRoot());
     expect(process.env.AGENT_WORKSPACE_PROJECTS_DIR).toBeUndefined();
   });
+
+  test('getAgentWorkspaceDir falls back to legacy data when legacy has more workspaces', () => {
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'path-utils-home-'));
+    fs.mkdirSync(path.join(tmpHome, '.agent-workspace', 'workspaces'), { recursive: true });
+    fs.mkdirSync(path.join(tmpHome, '.orchestrator', 'workspaces'), { recursive: true });
+    fs.writeFileSync(path.join(tmpHome, '.agent-workspace', 'workspaces', 'workspace-1.json'), '{}');
+    fs.writeFileSync(path.join(tmpHome, '.orchestrator', 'workspaces', 'workspace-1.json'), '{}');
+    fs.writeFileSync(path.join(tmpHome, '.orchestrator', 'workspaces', 'workspace-2.json'), '{}');
+    fs.writeFileSync(path.join(tmpHome, '.orchestrator', 'quick-links.json'), '{}');
+
+    const {
+      getAgentWorkspaceDir,
+      getLegacyCompatibilityState
+    } = loadPathUtils(tmpHome);
+
+    expect(getAgentWorkspaceDir()).toBe(path.join(tmpHome, '.orchestrator'));
+    expect(getLegacyCompatibilityState()).toMatchObject({
+      shouldUseLegacyDir: true,
+      reason: 'legacy-has-more-workspaces',
+      oldWorkspaceCount: 2,
+      newWorkspaceCount: 1
+    });
+  });
+
+  test('getAgentWorkspaceDir keeps the new data dir when it is richer than legacy', () => {
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'path-utils-home-'));
+    fs.mkdirSync(path.join(tmpHome, '.agent-workspace', 'workspaces'), { recursive: true });
+    fs.mkdirSync(path.join(tmpHome, '.orchestrator', 'workspaces'), { recursive: true });
+    fs.writeFileSync(path.join(tmpHome, '.agent-workspace', 'workspaces', 'workspace-1.json'), '{}');
+    fs.writeFileSync(path.join(tmpHome, '.agent-workspace', 'workspaces', 'workspace-2.json'), '{}');
+    fs.writeFileSync(path.join(tmpHome, '.orchestrator', 'workspaces', 'workspace-1.json'), '{}');
+
+    const {
+      getAgentWorkspaceDir,
+      getLegacyCompatibilityState
+    } = loadPathUtils(tmpHome);
+
+    expect(getAgentWorkspaceDir()).toBe(path.join(tmpHome, '.agent-workspace'));
+    expect(getLegacyCompatibilityState()).toMatchObject({
+      shouldUseLegacyDir: false,
+      reason: 'prefer-new',
+      oldWorkspaceCount: 1,
+      newWorkspaceCount: 2
+    });
+  });
 });

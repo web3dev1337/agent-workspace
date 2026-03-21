@@ -83,8 +83,8 @@ server/utils/processUtils.js       - Shared spawn/env hardening helpers
 └─ Cross-platform behavior: non-Windows platforms pass through unchanged so Linux/macOS launch behavior stays stable
 server/utils/nodePtyCompat.js      - Runtime compatibility shim for the bundled `node-pty` Windows ConPTY loader
 └─ Windows PTY guard: wraps the known-bad `node-pty@1.2.0-beta.12` `conpty.startProcess()` call in memory so packaged installs survive read-only app-resource layouts
-server/utils/pathUtils.js          - Shared slash-normalization helpers for repo/worktree labels
-└─ Used by server-side workspace/conversation flows to keep Windows backslash paths compatible with Linux-style UI labels
+server/utils/pathUtils.js          - Shared slash-normalization + data-directory compatibility helpers for repo/worktree labels
+└─ Legacy fallback: prefers `~/.orchestrator` over `~/.agent-workspace` when the renamed directory looks sparse but the legacy directory still contains the richer user workspace state
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
