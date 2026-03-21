@@ -61,7 +61,7 @@
       position: fixed;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%) translateY(60px) scale(0.9);
-      font-size: clamp(4.5rem, 10vw, 10rem);
+      font-size: clamp(5.5rem, 12vw, 13rem);
       font-weight: 900;
       letter-spacing: -0.03em;
       text-align: center;
@@ -69,9 +69,9 @@
       white-space: nowrap;
       opacity: 0;
       filter: blur(10px);
-      transition: opacity 1.5s cubic-bezier(0.16, 1, 0.3, 1),
-                  transform 1.5s cubic-bezier(0.16, 1, 0.3, 1),
-                  filter 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                  filter 0.8s cubic-bezier(0.16, 1, 0.3, 1);
       z-index: 2;
     }
     .mega-title.visible {
@@ -125,7 +125,7 @@
       position: fixed;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%) translateY(40px) scale(0.9);
-      font-size: clamp(3.5rem, 7vw, 7.5rem);
+      font-size: clamp(4rem, 8vw, 9rem);
       font-weight: 700;
       letter-spacing: -0.02em;
       text-align: center;
@@ -189,7 +189,7 @@
       position: absolute;
       top: 0; left: 0;
       width: 100%;
-      transition: transform 3.5s cubic-bezier(0.25, 0, 0.2, 1);
+      transition: transform 7s cubic-bezier(0.25, 0, 0.2, 1);
     }
     .site-scroll-content.scrolling {
       transform: translateY(var(--scroll-distance));
@@ -258,16 +258,72 @@
       flex-shrink: 0;
     }
     .brand-finale .finale-orb {
-      width: 120px;
-      height: 120px;
+      width: 150px;
+      height: 150px;
       border-radius: 50%;
       background: conic-gradient(from 180deg at 50% 50%, var(--cyan) 0deg, var(--blue-deep) 180deg, var(--cyan) 360deg);
       box-shadow: 0 0 30px var(--cyan), 0 0 60px rgba(0, 229, 255, 0.4);
       animation: orbSpin 4s linear infinite;
     }
     @keyframes orbSpin { to { transform: rotate(360deg); } }
+
+    /* Play button */
+    .play-btn {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 200;
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.05);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease, transform 0.3s ease;
+      backdrop-filter: blur(4px);
+    }
+    .play-btn:hover { transform: translate(-50%, -50%) scale(1.1); border-color: var(--cyan); }
+    .play-btn::after {
+      content: '';
+      display: block;
+      width: 0; height: 0;
+      border-style: solid;
+      border-width: 20px 0 20px 35px;
+      border-color: transparent transparent transparent #fff;
+      margin-left: 5px;
+    }
+    .play-btn.hidden { opacity: 0; pointer-events: none; }
+
+    /* Countdown */
+    .countdown {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 200;
+      font-size: 8rem;
+      font-weight: 900;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .countdown.visible { opacity: 1; }
+
+    /* Fade to black at end */
+    .fade-to-black {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: #000;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 2s ease;
+    }
+    .fade-to-black.visible { opacity: 1; }
+
     .brand-finale .finale-text {
-      font-size: 7rem;
+      font-size: 9rem;
       font-weight: 900;
       letter-spacing: -0.03em;
       white-space: nowrap;
@@ -281,6 +337,66 @@
       opacity: 1;
       margin-left: 2rem;
     }
+    .finale-subtitle {
+      position: fixed;
+      left: 50%;
+      top: 62%;
+      transform: translateX(-50%);
+      z-index: 100;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 1.2s ease, transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateX(-50%) translateY(20px);
+    }
+    .finale-subtitle.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .finale-subtitle .sub-text {
+      font-size: 4rem;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #fff 20%, var(--cyan) 40%, #ec4899 60%, #2563eb 80%, #fff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      background-size: 200% 100%;
+      animation: subtleShimmer 3s ease-in-out infinite alternate;
+      filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.3));
+    }
+    @keyframes subtleShimmer {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
+    }
+    .finale-subtitle .sub-link {
+      display: block;
+      margin-top: 1rem;
+      font-size: 3rem;
+      font-weight: 900;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #00e5ff, #2563eb, #ec4899, #fff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      background-size: 300% 100%;
+      animation: linkPulse 2s ease-in-out infinite alternate;
+    }
+    @keyframes linkPulse {
+      0% { background-position: 0% 50%; filter: brightness(1); }
+      100% { background-position: 100% 50%; filter: brightness(1.3); }
+    }
+    .finale-subtitle .sub-arrow {
+      display: block;
+      margin-top: 1.5rem;
+      font-size: 4.5rem;
+      animation: bounceDown 1s ease-in-out infinite;
+      filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.5));
+    }
+    @keyframes bounceDown {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(15px); }
+    }
   </style>
 </head>
 <body>
@@ -290,6 +406,9 @@
     <div class="light blue-deep"></div>
     <div class="light indigo"></div>
   </div>
+  <div class="play-btn" id="play-btn"></div>
+  <div class="countdown" id="countdown"></div>
+  <div class="fade-to-black" id="fade-to-black"></div>
   <h1 class="mega-title" id="title">All your <span class="gradient-text multi-color">Agents</span>.<br>One <span class="gradient-text multi-color">Workspace</span>.</h1>
   <img src="assets/Claude_AI_symbol.svg" class="float-logo" id="claude-logo" alt="">
   <img src="assets/openai_logo_icon_248315.png" class="float-logo" id="openai-logo" alt="">
@@ -297,6 +416,11 @@
   <div class="brand-finale" id="brand-finale">
     <div class="finale-orb-wrap"><div class="finale-orb"></div></div>
     <span class="finale-text">Agent Workspace</span>
+  </div>
+  <div class="finale-subtitle" id="finale-subtitle">
+    <span class="sub-text">Free & Open Source</span>
+    <span class="sub-link">Link Below</span>
+    <span class="sub-arrow">👇</span>
   </div>
   <div class="site-viewport" id="site-viewport">
     <div class="site-scroll-content" id="site-content">
@@ -313,97 +437,144 @@
     const title = document.getElementById('title');
     const trailer = document.getElementById('trailer');
     const endcard = document.getElementById('endcard');
-
-    // Music - click anywhere to start everything
     const music = new Audio('assets/trailer-music.mp3');
     music.volume = 0.7;
-    let started = false;
-    document.addEventListener('click', () => {
-      if (started) return;
-      started = true;
-      music.play();
-      // 3s: title fades in
-      setTimeout(() => title.classList.add('visible'), 3000);
 
-    // 5s: title fades out
-    setTimeout(() => {
-      title.classList.remove('visible');
-      title.classList.add('fade-out');
-    }, 5000);
+    // Play button → 3s countdown → trailer starts
+    document.getElementById('play-btn').addEventListener('click', () => {
+      const btn = document.getElementById('play-btn');
+      const cd = document.getElementById('countdown');
+      btn.classList.add('hidden');
 
-    // 6s: video fades in
-    setTimeout(() => {
-      trailer.classList.add('visible');
-      trailer.play();
-    }, 6000);
-
-    // Corner zoom sequence - smoothly slides transform-origin between corners
-    const origins = ['top left', 'top right', 'bottom left', 'bottom right'];
-    let lastZoomIndex = -1;
-
-    trailer.addEventListener('timeupdate', () => {
-      const t = trailer.currentTime;
-      let zoomIndex = -1;
-      if (t >= 0 && t < 0.7) zoomIndex = 0;
-      else if (t >= 0.7 && t < 1.4) zoomIndex = 1;
-      else if (t >= 1.4 && t < 2.1) zoomIndex = 2;
-      else if (t >= 2.1 && t < 2.8) zoomIndex = 3;
-
-      if (zoomIndex !== lastZoomIndex) {
-        lastZoomIndex = zoomIndex;
-        if (zoomIndex >= 0) {
-          trailer.classList.add('zoomed');
-          trailer.style.transformOrigin = origins[zoomIndex];
+      // 3-2-1 countdown
+      let count = 8;
+      cd.textContent = count;
+      cd.classList.add('visible');
+      const countInterval = setInterval(() => {
+        count--;
+        if (count > 0) {
+          cd.textContent = count;
         } else {
-          trailer.classList.remove('zoomed');
-          trailer.style.transformOrigin = 'center center';
+          clearInterval(countInterval);
+          cd.classList.remove('visible');
+          startTrailer();
         }
-      }
+      }, 1000);
     });
 
-    // After last zoom (2.8s into video) + 0.5s = 3.3s into video: fade out and show end card
-    let endTriggered = false;
-    trailer.addEventListener('timeupdate', () => {
-      if (!endTriggered && trailer.currentTime >= 3.3) {
-        endTriggered = true;
-        trailer.classList.remove('visible', 'zoomed');
-        trailer.style.transformOrigin = 'center center';
-        setTimeout(() => {
-          endcard.classList.add('visible');
-          document.querySelectorAll('.multi-color-end').forEach(el => el.classList.add('sweep'));
-          document.getElementById('claude-logo').classList.add('claude-drift');
-          document.getElementById('openai-logo').classList.add('openai-drift');
+    function startTrailer() {
+      // Music + ambient lights pulse immediately
+      music.play();
+      document.querySelectorAll('.light').forEach(l => {
+        l.style.opacity = '0.3';
+        l.style.transition = 'opacity 1s ease';
+      });
+      setTimeout(() => {
+        document.querySelectorAll('.light').forEach(l => l.style.opacity = '0.15');
+      }, 1000);
 
-          // After 3.5s, show real website and slide it up
+      // 0.8s: title fades in
+      setTimeout(() => title.classList.add('visible'), 800);
+
+      // 2.5s: title fades out
+      setTimeout(() => {
+        title.classList.remove('visible');
+        title.classList.add('fade-out');
+      }, 2500);
+
+      // 3.5s: video fades in
+      setTimeout(() => {
+        trailer.classList.add('visible');
+        trailer.play();
+      }, 3500);
+
+      // Corner zoom sequence
+      const origins = ['top left', 'top right', 'bottom left', 'bottom right'];
+      let lastZoomIndex = -1;
+      trailer.addEventListener('timeupdate', () => {
+        const t = trailer.currentTime;
+        let zoomIndex = -1;
+        if (t >= 0 && t < 0.7) zoomIndex = 0;
+        else if (t >= 0.7 && t < 1.4) zoomIndex = 1;
+        else if (t >= 1.4 && t < 2.1) zoomIndex = 2;
+        else if (t >= 2.1 && t < 2.8) zoomIndex = 3;
+
+        if (zoomIndex !== lastZoomIndex) {
+          lastZoomIndex = zoomIndex;
+          if (zoomIndex >= 0) {
+            trailer.classList.add('zoomed');
+            trailer.style.transformOrigin = origins[zoomIndex];
+          } else {
+            trailer.classList.remove('zoomed');
+            trailer.style.transformOrigin = 'center center';
+          }
+        }
+      });
+
+      // After last zoom: fade out video, show end card
+      let endTriggered = false;
+      trailer.addEventListener('timeupdate', () => {
+        if (!endTriggered && trailer.currentTime >= 3.3) {
+          endTriggered = true;
+          trailer.classList.remove('visible', 'zoomed');
+          trailer.style.transformOrigin = 'center center';
           setTimeout(() => {
-            endcard.style.transition = 'opacity 1s ease';
-            endcard.style.opacity = '0';
+            endcard.classList.add('visible');
+            document.querySelectorAll('.multi-color-end').forEach(el => el.classList.add('sweep'));
+            document.getElementById('claude-logo').classList.add('claude-drift');
+            document.getElementById('openai-logo').classList.add('openai-drift');
 
-            const viewport = document.getElementById('site-viewport');
-            const content = document.getElementById('site-content');
-            viewport.classList.add('visible');
-
-            // Start scrolling right away (adjusted for 1.3x scale)
+            // After end card, show website
             setTimeout(() => {
-              content.style.setProperty('--scroll-distance', '-2500px');
-              content.classList.add('scrolling');
-              // After scroll finishes (8s), fade out site and show brand
+              endcard.style.transition = 'opacity 1s ease';
+              endcard.style.opacity = '0';
+
+              const viewport = document.getElementById('site-viewport');
+              const content = document.getElementById('site-content');
+              viewport.classList.add('visible');
+
               setTimeout(() => {
-                viewport.style.transition = 'opacity 0.8s ease';
-                viewport.style.opacity = '0';
+                content.style.setProperty('--scroll-distance', '-2500px');
+                content.classList.add('scrolling');
+
+                // After scroll (7s), fade out site and show brand
                 setTimeout(() => {
-                  document.getElementById('brand-finale').classList.add('visible');
+                  viewport.style.transition = 'opacity 0.8s ease';
+                  viewport.style.opacity = '0';
                   setTimeout(() => {
-                    document.getElementById('brand-finale').classList.add('expanded');
+                    document.getElementById('brand-finale').classList.add('visible');
+                    setTimeout(() => {
+                      document.getElementById('brand-finale').classList.add('expanded');
+
+                      // Show subtitle after brand expands
+                      setTimeout(() => {
+                        document.getElementById('finale-subtitle').classList.add('visible');
+                      }, 1200);
+
+                      // Fade to black + music fade after brand holds
+                      setTimeout(() => {
+                        document.getElementById('fade-to-black').classList.add('visible');
+                        // Fade music
+                        let vol = music.volume;
+                        const fadeMusic = setInterval(() => {
+                          vol -= 0.05;
+                          if (vol <= 0) {
+                            clearInterval(fadeMusic);
+                            music.pause();
+                          } else {
+                            music.volume = vol;
+                          }
+                        }, 100);
+                      }, 4000);
+                    }, 800);
                   }, 800);
-                }, 800);
-              }, 4000);
-            }, 500);
-          }, 3100);
-        }, 600);
-      }
-    });
-    }); // end click handler
+                }, 7500);
+              }, 500);
+            }, 3100);
+          }, 600);
+        }
+      });
+    }
   </script>
 </body>
 </html>
