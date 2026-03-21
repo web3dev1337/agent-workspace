@@ -1,67 +1,93 @@
-jest.mock('node-pty', () => ({
-  spawn: jest.fn(() => ({
-    pid: 1234,
-    onData: jest.fn(),
-    onExit: jest.fn(),
-    kill: jest.fn()
-  }))
-}), { virtual: true });
-
-jest.mock('winston', () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
-  })),
-  format: {
-    combine: jest.fn(() => ({})),
-    timestamp: jest.fn(() => ({})),
-    json: jest.fn(() => ({})),
-    simple: jest.fn(() => ({})),
-    errors: jest.fn(() => ({}))
-  },
-  transports: {
-    File: jest.fn(),
-    Console: jest.fn()
-  }
-}), { virtual: true });
-
-jest.mock('../../server/sessionRecoveryService', () => ({
-  clearSession: jest.fn(),
-  updateSession: jest.fn(),
-  updateAgent: jest.fn(),
-  updateCwd: jest.fn(),
-  updateConversation: jest.fn(),
-  updateServer: jest.fn(),
-  getSession: jest.fn(),
-  getAllSessions: jest.fn(),
-  init: jest.fn(),
-  loadWorkspaceState: jest.fn(),
-  getRecoveryInfo: jest.fn(),
-  clearWorkspace: jest.fn(),
-  markAgentInactive: jest.fn()
-}));
-
-const nodePty = require('node-pty');
-const { SessionManager } = require('../../server/sessionManager');
 const fs = require('fs');
 const path = require('path');
 const { patchNodePtyStartProcessCompat } = require('../../server/utils/processUtils');
 
-describe('SessionManager Windows PTY options', () => {
-  const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+function createNodePtyMock() {
+  return {
+    spawn: jest.fn(() => ({
+      pid: 1234,
+      onData: jest.fn(),
+      onExit: jest.fn(),
+      kill: jest.fn()
+    }))
+  };
+}
+
+function mockWinston() {
+  return {
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn()
+    })),
+    format: {
+      combine: jest.fn(() => ({})),
+      timestamp: jest.fn(() => ({})),
+      json: jest.fn(() => ({})),
+      simple: jest.fn(() => ({})),
+      errors: jest.fn(() => ({}))
+    },
+    transports: {
+      File: jest.fn(),
+      Console: jest.fn()
+    }
+  };
+}
+
+function mockSessionRecoveryService() {
+  return {
+    clearSession: jest.fn(),
+    updateSession: jest.fn(),
+    updateAgent: jest.fn(),
+    updateCwd: jest.fn(),
+    updateConversation: jest.fn(),
+    updateServer: jest.fn(),
+    getSession: jest.fn(),
+    getAllSessions: jest.fn(),
+    init: jest.fn(),
+    loadWorkspaceState: jest.fn(),
+    getRecoveryInfo: jest.fn(),
+    clearWorkspace: jest.fn(),
+    markAgentInactive: jest.fn()
+  };
+}
+
+function loadSessionManagerForWindows() {
+  jest.resetModules();
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' });
+
+  let nodePty = null;
+  let SessionManager = null;
+
+  jest.doMock('node-pty', () => {
+    nodePty = createNodePtyMock();
+    return nodePty;
+  });
+  jest.doMock('winston', () => mockWinston(), { virtual: true });
+  jest.doMock('../../server/sessionRecoveryService', () => mockSessionRecoveryService());
+
+  jest.isolateModules(() => {
+    ({ SessionManager } = require('../../server/sessionManager'));
   });
 
+  return {
+    SessionManager,
+    nodePty
+  };
+}
+
+describe('SessionManager Windows PTY options', () => {
   afterEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
     Object.defineProperty(process, 'platform', platformDescriptor);
   });
 
   it('enables ConPTY for Windows sessions and cleans up workspace-specific sessions', () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const { SessionManager, nodePty } = loadSessionManagerForWindows();
 
     const io = { emit: jest.fn() };
     const sessionManager = new SessionManager(io, null);
@@ -82,7 +108,6 @@ describe('SessionManager Windows PTY options', () => {
         cwd: 'C:\\repo'
       })
     );
-    // useConpty must NOT be passed — it causes native arg-count mismatches
     const passedOpts = nodePty.spawn.mock.calls[0][2];
     expect(passedOpts).not.toHaveProperty('useConpty');
 
@@ -105,9 +130,9 @@ describe('SessionManager Windows PTY options', () => {
   });
 
   it('patches the broken Windows node-pty startProcess wrapper', () => {
-    const existsSpy = jest.spyOn(fs, 'existsSync').mockImplementation((targetPath) => {
-      return targetPath === path.join('C:\\node_modules\\node-pty', 'lib', 'windowsPtyAgent.js');
-    });
+    const existsSpy = jest.spyOn(fs, 'existsSync').mockImplementation((targetPath) => (
+      targetPath === path.join('C:\\node_modules\\node-pty', 'lib', 'windowsPtyAgent.js')
+    ));
     const readSpy = jest.spyOn(fs, 'readFileSync').mockReturnValue(
       'before conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor, this._useConptyDll) after'
     );
