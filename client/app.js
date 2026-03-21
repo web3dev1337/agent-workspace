@@ -55,6 +55,7 @@ class ClaudeOrchestrator {
     this.notificationManager = null;
     this.agentModalManager = null; // Agent modal manager
     this.settings = this.loadSettings();
+    this.appInfo = null;
     this.userSettings = null; // Will be loaded from server
     this.simpleModeStartupTriggered = false;
     this.desktopDevtoolsKeydownHandler = null;
@@ -220,6 +221,47 @@ class ClaudeOrchestrator {
       .replace(/^origin\//, '')
       .replace(/^remotes\/origin\//, '');
     return cleaned === 'main' || cleaned === 'master' || cleaned === 'trunk' || cleaned === 'default';
+  }
+
+  renderAppVersion() {
+    const displayVersion = String(this.appInfo?.displayVersion || '').trim();
+    const name = String(this.appInfo?.name || 'Agent Workspace').trim();
+    document.querySelectorAll('[data-app-version-slot]').forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      if (!displayVersion) {
+        node.hidden = true;
+        node.textContent = '';
+        node.removeAttribute('title');
+        return;
+      }
+      node.hidden = false;
+      node.textContent = displayVersion;
+      node.title = `${name} ${displayVersion}`;
+    });
+  }
+
+  async loadAppInfo() {
+    try {
+      const response = await fetch('/api/app-info');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      this.appInfo = {
+        name: String(payload?.name || 'Agent Workspace').trim() || 'Agent Workspace',
+        version: String(payload?.version || '').trim() || null,
+        displayVersion: String(payload?.displayVersion || '').trim() || null
+      };
+    } catch (error) {
+      console.warn('Failed to load app info', error);
+      this.appInfo = {
+        name: 'Agent Workspace',
+        version: null,
+        displayVersion: null
+      };
+    }
+
+    this.renderAppVersion();
   }
 
   getDefaultVisibilityConfig() {
@@ -1017,6 +1059,7 @@ class ClaudeOrchestrator {
 	    try {
 	      // Install auth-aware fetch shim before any UI components make API calls.
 	      this.installAuthFetchShim();
+          await this.loadAppInfo();
 
 	      // Initialize managers
 	      this.terminalManager = new TerminalManager(this);
