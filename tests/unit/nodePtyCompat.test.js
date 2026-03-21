@@ -64,6 +64,39 @@ describe('nodePtyCompat', () => {
     );
   });
 
+  test('wrapConptyStartProcess retries with an appended boolean when native expects 7 args but JS sends 6', () => {
+    const originalStartProcess = jest.fn((...args) => {
+      if (args.length < 7) {
+        throw new Error('Usage: pty.startProcess(file, cols, rows, debug, pipeName, inheritCursor, useConptyDll)');
+      }
+      return { pty: 789 };
+    });
+    const nativeModule = { startProcess: originalStartProcess };
+
+    expect(wrapConptyStartProcess(nativeModule)).toBe(true);
+
+    expect(nativeModule.startProcess('powershell.exe', 120, 40, false, 'pipe-1', true)).toEqual({ pty: 789 });
+    expect(originalStartProcess).toHaveBeenNthCalledWith(
+      1,
+      'powershell.exe',
+      120,
+      40,
+      false,
+      'pipe-1',
+      true
+    );
+    expect(originalStartProcess).toHaveBeenNthCalledWith(
+      2,
+      'powershell.exe',
+      120,
+      40,
+      false,
+      'pipe-1',
+      true,
+      false
+    );
+  });
+
   test('wrapConptyConnect retries without useConptyDll on the native usage error', () => {
     const exitCallback = jest.fn();
     const originalConnect = jest.fn((...args) => {
@@ -92,6 +125,38 @@ describe('nodePtyCompat', () => {
       'powershell.exe',
       'C:\\repo',
       { PATH: 'x' },
+      exitCallback
+    );
+  });
+
+  test('wrapConptyConnect retries with inserted useConptyDll when native expects 6 args but JS sends 5', () => {
+    const exitCallback = jest.fn();
+    const originalConnect = jest.fn((...args) => {
+      if (args.length < 6) {
+        throw new Error('Usage: pty.connect(id, cmdline, cwd, env, useConptyDll, exitCallback)');
+      }
+      return { pid: 555 };
+    });
+    const nativeModule = { connect: originalConnect };
+
+    expect(wrapConptyConnect(nativeModule)).toBe(true);
+
+    expect(nativeModule.connect(7, 'powershell.exe', 'C:\\repo', { PATH: 'x' }, exitCallback)).toEqual({ pid: 555 });
+    expect(originalConnect).toHaveBeenNthCalledWith(
+      1,
+      7,
+      'powershell.exe',
+      'C:\\repo',
+      { PATH: 'x' },
+      exitCallback
+    );
+    expect(originalConnect).toHaveBeenNthCalledWith(
+      2,
+      7,
+      'powershell.exe',
+      'C:\\repo',
+      { PATH: 'x' },
+      false,
       exitCallback
     );
   });
@@ -138,6 +203,53 @@ describe('nodePtyCompat', () => {
     expect(originalResize).toHaveBeenCalledTimes(2);
     expect(originalClear).toHaveBeenCalledTimes(2);
     expect(originalKill).toHaveBeenCalledTimes(2);
+  });
+
+  test('wrapConptyCompatMethods adapts trailing boolean calls when native expects MORE args', () => {
+    const originalResize = jest.fn((...args) => {
+      if (args.length < 4) {
+        throw new Error('Usage: pty.resize(id, cols, rows, useConptyDll)');
+      }
+      return undefined;
+    });
+    const originalClear = jest.fn((...args) => {
+      if (args.length < 2) {
+        throw new Error('Usage: pty.clear(id, useConptyDll)');
+      }
+      return undefined;
+    });
+    const originalKill = jest.fn((...args) => {
+      if (args.length < 2) {
+        throw new Error('Usage: pty.kill(id, useConptyDll)');
+      }
+      return undefined;
+    });
+    const nativeModule = {
+      startProcess: jest.fn(() => ({ pty: 1 })),
+      connect: jest.fn(() => ({ pid: 2 })),
+      resize: originalResize,
+      clear: originalClear,
+      kill: originalKill
+    };
+
+    expect(wrapConptyCompatMethods(nativeModule)).toEqual([
+      'startProcess',
+      'connect',
+      'resize',
+      'clear',
+      'kill'
+    ]);
+
+    nativeModule.resize(1, 120, 40);
+    nativeModule.clear(1);
+    nativeModule.kill(1);
+
+    expect(originalResize).toHaveBeenCalledTimes(2);
+    expect(originalResize).toHaveBeenNthCalledWith(2, 1, 120, 40, false);
+    expect(originalClear).toHaveBeenCalledTimes(2);
+    expect(originalClear).toHaveBeenNthCalledWith(2, 1, false);
+    expect(originalKill).toHaveBeenCalledTimes(2);
+    expect(originalKill).toHaveBeenNthCalledWith(2, 1, false);
   });
 
   test('ensureWindowsNodePtyCompat wraps loadNativeModule for the affected Windows build', () => {
