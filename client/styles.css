@@ -1138,11 +1138,6 @@ body {
   gap: var(--space-sm);
 }
 
-.sidebar-meta-row {
-  display: flex;
-  justify-content: center;
-}
-
 .app-version-chip {
   display: inline-flex;
   align-items: center;
