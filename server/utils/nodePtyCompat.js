@@ -63,8 +63,13 @@ function wrapConptyStartProcess(nativeModule) {
     methodName: 'startProcess',
     patchFlag: START_PROCESS_PATCH_FLAG,
     retry: ({ args, error }) => {
-      if (args.length >= 7 && isStartProcessUsageError(error)) {
-        return args.slice(0, 6);
+      if (isStartProcessUsageError(error)) {
+        if (args.length >= 7) {
+          return args.slice(0, 6);
+        }
+        if (args.length === 6) {
+          return [...args, false];
+        }
       }
       return null;
     }
@@ -76,12 +81,23 @@ function wrapConptyConnect(nativeModule) {
     methodName: 'connect',
     patchFlag: CONNECT_PATCH_FLAG,
     retry: ({ args, error }) => {
-      if (args.length >= 6 && isConnectUsageError(error)) {
-        return [args[0], args[1], args[2], args[3], args[5]];
+      if (isConnectUsageError(error)) {
+        if (args.length >= 6) {
+          return [args[0], args[1], args[2], args[3], args[5]];
+        }
+        if (args.length === 5) {
+          return [args[0], args[1], args[2], args[3], false, args[4]];
+        }
       }
       return null;
     }
   });
+}
+
+function parseExpectedArgCount(error) {
+  const match = String(error?.message || '').match(/\(([^)]*)\)/);
+  if (!match) return 0;
+  return match[1].split(',').filter(Boolean).length;
 }
 
 function wrapConptyTrailingBooleanArg(nativeModule, methodName, patchFlag) {
@@ -89,8 +105,19 @@ function wrapConptyTrailingBooleanArg(nativeModule, methodName, patchFlag) {
     methodName,
     patchFlag,
     retry: ({ args, error }) => {
-      if (args.length >= 2 && isConptyUsageError(error, methodName)) {
-        return args.slice(0, -1);
+      if (isConptyUsageError(error, methodName)) {
+        const expected = parseExpectedArgCount(error);
+        if (expected > 0 && args.length > expected) {
+          return args.slice(0, expected);
+        }
+        if (expected > 0 && args.length < expected) {
+          const padded = [...args];
+          while (padded.length < expected) padded.push(false);
+          return padded;
+        }
+        if (args.length >= 2) {
+          return args.slice(0, -1);
+        }
       }
       return null;
     }

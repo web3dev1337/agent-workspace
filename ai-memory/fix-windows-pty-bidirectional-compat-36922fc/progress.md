@@ -1,0 +1,7 @@
+- [x] Analyze the problem: runtime compat only handles too-many-args, not too-few-args
+- [x] Fix wrapConptyStartProcess: handle 6→7 (append false) in addition to 7→6
+- [x] Fix wrapConptyConnect: handle 5→6 (insert false before callback) in addition to 6→5
+- [x] Fix wrapConptyTrailingBooleanArg: parse expected arg count from usage error, handle both directions
+- [x] Add tests for all too-few-args scenarios
+- [x] All 545 tests pass
+- [ ] Commit, push, create PR
