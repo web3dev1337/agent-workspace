@@ -58,11 +58,15 @@ Agent Workspace is an open-source, local-first orchestration layer for CLI codin
 ### Windows (recommended)
 - Download: <https://github.com/web3dev1337/agent-workspace/releases/latest>
 
+### Linux
+- Native Linux desktop builds are published on the latest GitHub release.
+- Download the `.deb` or `.pkg.tar.zst` package for your distro.
+
 ### macOS
 - Packaged macOS downloads are temporarily unavailable while Apple signing and notarization are being configured.
 - Use the source install flow below for now.
 
-### Source
+### Source (macOS or WSL)
 ```bash
 git clone https://github.com/web3dev1337/agent-workspace.git
 cd agent-workspace

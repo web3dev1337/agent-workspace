@@ -91,7 +91,7 @@ Compatibility rule: if it can be launched from a terminal command in your worktr
 - **Task Integration** — Pull tasks from Trello and/or use local task records. GitHub Issues and Linear coming soon.
 - **Browser-like Tabs** — Multiple workspaces open simultaneously, each with its own terminals and state.
 - **Runs Locally** — Runs on your hardware. Access through the desktop app or the browser. No publisher-hosted telemetry by default.
-- **Desktop Apps** — Windows desktop builds are published on the latest GitHub release. macOS users should run from source until the signed Apple desktop release path is restored.
+- **Desktop Apps** — Windows and native Linux desktop builds are published on the latest GitHub release. macOS users should run from source until the signed Apple desktop release path is restored.
 
 ## Tier System
 
@@ -131,6 +131,8 @@ npm start
 Maintainers: see [docs/MACOS_SIGNING_RELEASE_CHECKLIST.md](docs/MACOS_SIGNING_RELEASE_CHECKLIST.md) before publishing the next macOS desktop release.
 
 ### Linux / WSL
+
+Native Linux desktop builds are published on the latest GitHub release. Download the `.deb` or `.pkg.tar.zst` package for your distro. If you are using WSL or prefer the browser workflow, run Agent Workspace from source:
 
 ```bash
 git clone https://github.com/web3dev1337/agent-workspace.git
