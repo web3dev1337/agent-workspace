@@ -56,7 +56,69 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;900&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-  <style>html::-webkit-scrollbar { display: none; } html { scrollbar-width: none; overflow-y: auto; }</style>
+  <style>
+    html::-webkit-scrollbar { display: none; }
+    html { scrollbar-width: none; overflow-y: auto; }
+    .hero-fluid { min-height: auto; padding-top: 5rem; }
+    .fluid-nav { position: relative; }
+    .cli-compat-rule, .cli-compat-list { margin-bottom: 0; padding-bottom: 0; }
+    .integration-fluid { padding-bottom: 0; }
+    #install-mid { padding-top: 2vh; }
+    #install-mid .section-title {
+      font-size: 4.5rem;
+      font-weight: 900;
+      color: #fff;
+      text-shadow:
+        0 0 10px #00e5ff,
+        0 0 20px #00e5ff,
+        0 0 40px rgba(0, 229, 255, 0.6),
+        0 0 80px rgba(0, 229, 255, 0.3);
+    }
+
+    /* Install click interaction */
+
+    /* Brand finale */
+    .brand-finale {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      opacity: 0;
+      transition: opacity 1s ease;
+    .brand-finale .finale-orb {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: conic-gradient(from 180deg at 50% 50%, var(--cyan) 0deg, var(--blue-deep) 180deg, var(--cyan) 360deg);
+      box-shadow: 0 0 30px var(--cyan), 0 0 60px rgba(0, 229, 255, 0.4);
+      animation: spin 4s linear infinite;
+      flex-shrink: 0;
+      transition: transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .brand-finale.expanded .finale-orb {
+      transform: translateX(-30px);
+    }
+    .brand-finale .finale-text {
+      font-size: 5rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      white-space: nowrap;
+      overflow: hidden;
+      max-width: 0;
+      opacity: 0;
+      transition: max-width 1.2s cubic-bezier(0.16, 1, 0.3, 1),
+                  opacity 0.8s ease;
+    }
+    .brand-finale.expanded .finale-text {
+      max-width: 800px;
+      opacity: 1;
+      margin-left: 1.5rem;
+    }
+  </style>
 </head>
 <body>
   <!-- Dynamic Background -->
@@ -513,5 +575,9 @@
   </footer>
 
   <script src="script.js"></script>
+  <script>
+    // no longer needed - handled by parent
+
+  </script>
 </body>
 </html>

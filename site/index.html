@@ -125,7 +125,7 @@
       position: fixed;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%) translateY(40px) scale(0.9);
-      font-size: clamp(2rem, 4vw, 4rem);
+      font-size: clamp(3.5rem, 7vw, 7.5rem);
       font-weight: 700;
       letter-spacing: -0.02em;
       text-align: center;
@@ -189,7 +189,7 @@
       position: absolute;
       top: 0; left: 0;
       width: 100%;
-      transition: transform 8s cubic-bezier(0.25, 0, 0.2, 1);
+      transition: transform 3.5s cubic-bezier(0.25, 0, 0.2, 1);
     }
     .site-scroll-content.scrolling {
       transform: translateY(var(--scroll-distance));
@@ -210,24 +210,26 @@
       left: -10%;
       top: 50%;
       opacity: 1;
-      animation: driftClaude 6s linear forwards, spin 3s linear infinite;
+      animation: driftClaude 3.1s linear forwards, spin 3s linear infinite;
     }
     .float-logo.openai-drift {
       left: 110%;
       top: 50%;
       opacity: 1;
       filter: brightness(0) invert(1);
-      animation: driftOpenAI 6s linear forwards, spinReverse 2.5s linear infinite;
+      animation: driftOpenAI 3.1s linear forwards, spinReverse 2.5s linear infinite;
     }
 
     @keyframes driftClaude {
       0%   { left: -10%; top: 50%; opacity: 1; }
-      100% { left: 37%; top: -10%; opacity: 0; }
+      80%  { opacity: 1; }
+      100% { left: 30%; top: 10%; opacity: 0; }
     }
 
     @keyframes driftOpenAI {
       0%   { left: 110%; top: 50%; opacity: 1; }
-      100% { left: 63%; top: 110%; opacity: 0; }
+      80%  { opacity: 1; }
+      100% { left: 70%; top: 90%; opacity: 0; }
     }
 
     @keyframes spin {
@@ -238,6 +240,46 @@
     @keyframes spinReverse {
       from { transform: translate(-50%, -50%) rotate(0deg); }
       to   { transform: translate(-50%, -50%) rotate(-360deg); }
+    }
+
+    /* Brand finale */
+    .brand-finale {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+    .brand-finale.visible { opacity: 1; }
+    .finale-orb-wrap {
+      flex-shrink: 0;
+    }
+    .brand-finale .finale-orb {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: conic-gradient(from 180deg at 50% 50%, var(--cyan) 0deg, var(--blue-deep) 180deg, var(--cyan) 360deg);
+      box-shadow: 0 0 30px var(--cyan), 0 0 60px rgba(0, 229, 255, 0.4);
+      animation: orbSpin 4s linear infinite;
+    }
+    @keyframes orbSpin { to { transform: rotate(360deg); } }
+    .brand-finale .finale-text {
+      font-size: 7rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      white-space: nowrap;
+      overflow: hidden;
+      max-width: 0;
+      opacity: 0;
+      transition: max-width 1.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.8s ease;
+    }
+    .brand-finale.expanded .finale-text {
+      max-width: 1200px;
+      opacity: 1;
+      margin-left: 2rem;
     }
   </style>
 </head>
@@ -252,9 +294,13 @@
   <img src="assets/Claude_AI_symbol.svg" class="float-logo" id="claude-logo" alt="">
   <img src="assets/openai_logo_icon_248315.png" class="float-logo" id="openai-logo" alt="">
   <h2 class="end-card" id="endcard">100% <span class="gradient-text multi-color-end">Claude Code</span> and <span class="gradient-text multi-color-end">Codex</span> plan compatible</h2>
+  <div class="brand-finale" id="brand-finale">
+    <div class="finale-orb-wrap"><div class="finale-orb"></div></div>
+    <span class="finale-text">Agent Workspace</span>
+  </div>
   <div class="site-viewport" id="site-viewport">
     <div class="site-scroll-content" id="site-content">
-      <iframe src="index-full.html" style="width:76.9vw;height:6150px;border:none;pointer-events:none;transform:scale(1.3);transform-origin:top left;"></iframe>
+      <iframe src="index-full.html" id="site-iframe" style="width:76.9vw;height:6150px;border:none;pointer-events:none;transform:scale(1.3);transform-origin:top left;"></iframe>
     </div>
   </div>
   <div class="trailer-container">
@@ -268,20 +314,28 @@
     const trailer = document.getElementById('trailer');
     const endcard = document.getElementById('endcard');
 
-    // 3s: title fades in
-    setTimeout(() => title.classList.add('visible'), 3000);
+    // Music - click anywhere to start everything
+    const music = new Audio('assets/trailer-music.mp3');
+    music.volume = 0.7;
+    let started = false;
+    document.addEventListener('click', () => {
+      if (started) return;
+      started = true;
+      music.play();
+      // 3s: title fades in
+      setTimeout(() => title.classList.add('visible'), 3000);
 
-    // 5.5s: title fades out
+    // 5s: title fades out
     setTimeout(() => {
       title.classList.remove('visible');
       title.classList.add('fade-out');
-    }, 5500);
+    }, 5000);
 
-    // 6.5s: video fades in
+    // 6s: video fades in
     setTimeout(() => {
       trailer.classList.add('visible');
       trailer.play();
-    }, 6500);
+    }, 6000);
 
     // Corner zoom sequence - smoothly slides transform-origin between corners
     const origins = ['top left', 'top right', 'bottom left', 'bottom right'];
@@ -320,7 +374,7 @@
           document.getElementById('claude-logo').classList.add('claude-drift');
           document.getElementById('openai-logo').classList.add('openai-drift');
 
-          // After 4.7s, show real website and slide it up
+          // After 3.5s, show real website and slide it up
           setTimeout(() => {
             endcard.style.transition = 'opacity 1s ease';
             endcard.style.opacity = '0';
@@ -331,13 +385,25 @@
 
             // Start scrolling right away (adjusted for 1.3x scale)
             setTimeout(() => {
-              content.style.setProperty('--scroll-distance', '-3600px');
+              content.style.setProperty('--scroll-distance', '-2500px');
               content.classList.add('scrolling');
+              // After scroll finishes (8s), fade out site and show brand
+              setTimeout(() => {
+                viewport.style.transition = 'opacity 0.8s ease';
+                viewport.style.opacity = '0';
+                setTimeout(() => {
+                  document.getElementById('brand-finale').classList.add('visible');
+                  setTimeout(() => {
+                    document.getElementById('brand-finale').classList.add('expanded');
+                  }, 800);
+                }, 800);
+              }, 4000);
             }, 500);
-          }, 4700);
+          }, 3100);
         }, 600);
       }
     });
+    }); // end click handler
   </script>
 </body>
 </html>
