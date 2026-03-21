@@ -5,6 +5,10 @@ const CONNECT_PATCH_FLAG = '__agentWorkspaceConptyConnectPatched';
 const RESIZE_PATCH_FLAG = '__agentWorkspaceConptyResizePatched';
 const CLEAR_PATCH_FLAG = '__agentWorkspaceConptyClearPatched';
 const KILL_PATCH_FLAG = '__agentWorkspaceConptyKillPatched';
+const DIRECT_CONPTY_NATIVE_CANDIDATES = [
+  'node-pty/build/Release/conpty.node',
+  'node-pty/build/Debug/conpty.node'
+];
 
 function isConptyUsageError(error, methodName) {
   const message = String(error?.message || '').trim();
@@ -115,6 +119,33 @@ function wrapConptyCompatMethods(nativeModule) {
   return patchedMethods;
 }
 
+function patchConptyNativeModuleDirectly({
+  requireModule = require
+} = {}) {
+  let lastError = null;
+
+  for (const candidate of DIRECT_CONPTY_NATIVE_CANDIDATES) {
+    try {
+      const nativeModule = requireModule(candidate);
+      const patchedMethods = wrapConptyCompatMethods(nativeModule);
+      return {
+        applied: patchedMethods.length > 0,
+        reason: patchedMethods.length > 0 ? 'patched-direct-conpty-native' : 'already-patched',
+        patchedMethods,
+        candidate
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  return {
+    applied: false,
+    reason: 'missing-conpty-native-module',
+    error: lastError
+  };
+}
+
 function ensureWindowsNodePtyCompat({
   platform = process.platform,
   utilsModule = null,
@@ -129,75 +160,59 @@ function ensureWindowsNodePtyCompat({
   if (!resolvedPackageInfo) {
     try {
       resolvedPackageInfo = requireModule('node-pty/package.json');
-    } catch (error) {
-      return {
-        applied: false,
-        reason: 'missing-package-info',
-        error: error
-      };
+    } catch {
+      resolvedPackageInfo = null;
     }
   }
 
-  const version = String(resolvedPackageInfo?.version || '').trim();
-  if (version !== KNOWN_BROKEN_NODE_PTY_VERSION) {
-    return {
-      applied: false,
-      reason: 'version-not-affected',
-      version
-    };
-  }
+  const version = String(resolvedPackageInfo?.version || '').trim() || null;
 
   let utils = utilsModule;
   if (!utils) {
     try {
       utils = requireModule('node-pty/lib/utils');
-    } catch (error) {
+    } catch {
+      utils = null;
+    }
+  }
+
+  if (utils && typeof utils.loadNativeModule === 'function') {
+    if (utils.loadNativeModule[LOAD_NATIVE_MODULE_PATCH_FLAG]) {
       return {
         applied: false,
-        reason: 'missing-utils-module',
-        version,
-        error
+        reason: 'already-patched',
+        version
       };
     }
-  }
 
-  if (!utils || typeof utils.loadNativeModule !== 'function') {
-    return {
-      applied: false,
-      reason: 'missing-utils-module',
-      version
-    };
-  }
-
-  if (utils.loadNativeModule[LOAD_NATIVE_MODULE_PATCH_FLAG]) {
-    return {
-      applied: false,
-      reason: 'already-patched',
-      version
-    };
-  }
-
-  const originalLoadNativeModule = utils.loadNativeModule.bind(utils);
-  const wrappedLoadNativeModule = function loadNativeModuleCompat(name) {
-    const result = originalLoadNativeModule(name);
-    if (name === 'conpty' && result?.module) {
-      const patchedMethods = wrapConptyCompatMethods(result.module);
-      if (patchedMethods.length > 0) {
-        result.compatPatchedMethods = patchedMethods;
+    const originalLoadNativeModule = utils.loadNativeModule.bind(utils);
+    const wrappedLoadNativeModule = function loadNativeModuleCompat(name) {
+      const result = originalLoadNativeModule(name);
+      if (name === 'conpty' && result?.module) {
+        const patchedMethods = wrapConptyCompatMethods(result.module);
+        if (patchedMethods.length > 0) {
+          result.compatPatchedMethods = patchedMethods;
+        }
       }
-    }
-    return result;
-  };
+      return result;
+    };
 
-  Object.defineProperty(wrappedLoadNativeModule, LOAD_NATIVE_MODULE_PATCH_FLAG, {
-    value: true,
-    enumerable: false
-  });
+    Object.defineProperty(wrappedLoadNativeModule, LOAD_NATIVE_MODULE_PATCH_FLAG, {
+      value: true,
+      enumerable: false
+    });
 
-  utils.loadNativeModule = wrappedLoadNativeModule;
+    utils.loadNativeModule = wrappedLoadNativeModule;
+    return {
+      applied: true,
+      reason: 'patched-load-native-module',
+      version
+    };
+  }
+
+  const directPatch = patchConptyNativeModuleDirectly({ requireModule });
   return {
-    applied: true,
-    reason: 'patched-load-native-module',
+    ...directPatch,
     version
   };
 }
@@ -220,8 +235,14 @@ function loadNodePty({
     logger.info('Applied node-pty ConPTY runtime compatibility patch', {
       version: compat.version
     });
-  } else if (platform === 'win32' && compat.reason === 'missing-utils-module' && logger?.warn) {
+  } else if (
+    platform === 'win32'
+    && !compat.applied
+    && !['already-patched'].includes(String(compat.reason || '').trim())
+    && logger?.warn
+  ) {
     logger.warn('Could not apply node-pty ConPTY runtime compatibility patch', {
+      reason: compat.reason || null,
       version: compat.version || null
     });
   }
@@ -236,6 +257,7 @@ module.exports = {
   isConptyUsageError,
   isStartProcessUsageError,
   loadNodePty,
+  patchConptyNativeModuleDirectly,
   wrapConptyCompatMethods,
   wrapConptyConnect,
   wrapConptyStartProcess
