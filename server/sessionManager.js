@@ -15,7 +15,8 @@ const {
   buildShellCommand,
   resolveCwd
 } = require('./utils/shellCommand');
-const { augmentProcessEnv, buildPowerShellArgs, loadNodePtyWithCompatibility } = require('./utils/processUtils');
+const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
+const { loadNodePty } = require('./utils/nodePtyCompat');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -28,23 +29,15 @@ const logger = winston.createLogger({
     new winston.transports.Console({ format: winston.format.simple() })
   ]
 });
-const { pty, loadError: ptyLoadError, patchResult: ptyPatchResult } = loadNodePtyWithCompatibility();
-
-if (process.platform === 'win32') {
-  if (ptyPatchResult?.status === 'patched') {
-    logger.info('Patched node-pty Windows startProcess compatibility wrapper', {
-      agentPath: ptyPatchResult.agentPath
-    });
-  } else if (ptyPatchResult?.status === 'unexpected-agent-shape') {
-    logger.warn('node-pty Windows compatibility wrapper has unexpected shape; PTY startup may fail', {
-      agentPath: ptyPatchResult.agentPath
-    });
-  }
+let pty = null;
+let ptyLoadError = null;
+try {
+  pty = loadNodePty({ logger });
+} catch (error) {
+  ptyLoadError = error;
 }
-
 if (ptyLoadError) {
   logger.error('node-pty failed to load', {
-    patchStatus: ptyPatchResult?.status || null,
     error: ptyLoadError.message,
     stack: ptyLoadError.stack
   });
