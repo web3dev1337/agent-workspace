@@ -5,6 +5,8 @@ const path = require('path');
 const CREATE_NO_WINDOW = 0x08000000;
 const BROKEN_NODE_PTY_START_PROCESS_CALL = 'conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor, this._useConptyDll)';
 const FIXED_NODE_PTY_START_PROCESS_CALL = 'conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor)';
+const BROKEN_NODE_PTY_CONNECT_CALL = 'conptyNative.connect(pty, commandLine, cwd, env, this._useConptyDll, function (c) { return _this._$onProcessExit(c); })';
+const FIXED_NODE_PTY_CONNECT_CALL = 'conptyNative.connect(pty, commandLine, cwd, env, function (c) { return _this._$onProcessExit(c); })';
 
 function isWindows(platform = process.platform) {
   return platform === 'win32';
@@ -155,21 +157,33 @@ function patchNodePtyStartProcessCompat(packageRoot) {
   }
 
   const source = fs.readFileSync(agentPath, 'utf8');
-  if (source.includes(FIXED_NODE_PTY_START_PROCESS_CALL)) {
+  const startProcessAlreadyPatched = source.includes(FIXED_NODE_PTY_START_PROCESS_CALL);
+  const connectAlreadyPatched = source.includes(FIXED_NODE_PTY_CONNECT_CALL);
+  if (startProcessAlreadyPatched && connectAlreadyPatched) {
     return { status: 'already-patched', agentPath };
   }
-  if (!source.includes(BROKEN_NODE_PTY_START_PROCESS_CALL)) {
+  const hasBrokenStartProcess = source.includes(BROKEN_NODE_PTY_START_PROCESS_CALL);
+  const hasBrokenConnect = source.includes(BROKEN_NODE_PTY_CONNECT_CALL);
+  if (!hasBrokenStartProcess && !hasBrokenConnect) {
     return { status: 'unexpected-agent-shape', agentPath };
   }
 
-  const patched = source.replace(BROKEN_NODE_PTY_START_PROCESS_CALL, FIXED_NODE_PTY_START_PROCESS_CALL);
+  let patched = source;
+  if (hasBrokenStartProcess) {
+    patched = patched.replace(BROKEN_NODE_PTY_START_PROCESS_CALL, FIXED_NODE_PTY_START_PROCESS_CALL);
+  }
+  if (hasBrokenConnect) {
+    patched = patched.replace(BROKEN_NODE_PTY_CONNECT_CALL, FIXED_NODE_PTY_CONNECT_CALL);
+  }
   fs.writeFileSync(agentPath, patched, 'utf8');
   return { status: 'patched', agentPath };
 }
 
 module.exports = {
+  BROKEN_NODE_PTY_CONNECT_CALL,
   BROKEN_NODE_PTY_START_PROCESS_CALL,
   CREATE_NO_WINDOW,
+  FIXED_NODE_PTY_CONNECT_CALL,
   FIXED_NODE_PTY_START_PROCESS_CALL,
   isWindows,
   getHiddenProcessOptions,

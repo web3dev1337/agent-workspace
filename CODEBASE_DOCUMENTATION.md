@@ -77,12 +77,12 @@ tests/unit/worktreeHelper.spawnOptions.test.js - Verifies Windows-hidden spawn f
 tests/unit/commanderService.test.js - Covers Commander launch buffering, trust-prompt auto-accept, and preserved output history
 tests/unit/sessionManager.trustPrompt.test.js - Verifies auto-accept of Claude folder trust prompts in launched worktree sessions
 tests/unit/sessionManager.agentDetection.test.js - Covers manual Gemini command detection so provider-specific status heuristics receive the correct agent id
-tests/unit/nodePtyCompat.test.js   - Verifies the Windows `node-pty` runtime compatibility shim drops the incompatible `useConptyDll` startProcess argument without depending on writable app resources
+tests/unit/nodePtyCompat.test.js   - Verifies the Windows `node-pty` runtime compatibility shim adapts stale ConPTY method signatures (`startProcess`, `connect`, and related boolean-tail helpers) without depending on writable app resources
 server/utils/processUtils.js       - Shared spawn/env hardening helpers
 ├─ Windows packaging guardrails: applies `windowsHide`/`CREATE_NO_WINDOW`, augments GUI-app PATH with Git/node/npm/common CLI locations, and builds hidden PowerShell argument lists
 └─ Cross-platform behavior: non-Windows platforms pass through unchanged so Linux/macOS launch behavior stays stable
 server/utils/nodePtyCompat.js      - Runtime compatibility shim for the bundled `node-pty` Windows ConPTY loader
-└─ Windows PTY guard: wraps the known-bad `node-pty@1.2.0-beta.12` `conpty.startProcess()` call in memory so packaged installs survive read-only app-resource layouts
+└─ Windows PTY guard: wraps the known-bad `node-pty@1.2.0-beta.12` ConPTY calls in memory (`startProcess`, `connect`, `resize`, `clear`, `kill`) so packaged installs survive read-only app-resource layouts and stale native bindings
 server/utils/pathUtils.js          - Shared slash-normalization + data-directory compatibility helpers for repo/worktree labels
 └─ Legacy migration: renames `~/.orchestrator` when possible, otherwise merges richer legacy state into `~/.agent-workspace` with conflict backups before falling back to the old directory
 server/tokenCounter.js             - Token usage tracking (if applicable)
