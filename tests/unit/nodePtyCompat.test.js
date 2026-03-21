@@ -1,12 +1,13 @@
 const {
   KNOWN_BROKEN_NODE_PTY_VERSION,
   ensureWindowsNodePtyCompat,
+  isStartProcessUsageError,
   loadNodePty,
   wrapConptyStartProcess
 } = require('../../server/utils/nodePtyCompat');
 
 describe('nodePtyCompat', () => {
-  test('wrapConptyStartProcess truncates the incompatible seventh argument', () => {
+  test('wrapConptyStartProcess preserves the seventh argument when the native binding accepts it', () => {
     const originalStartProcess = jest.fn(() => ({ pty: 123 }));
     const nativeModule = { startProcess: originalStartProcess };
 
@@ -20,13 +21,47 @@ describe('nodePtyCompat', () => {
       40,
       false,
       'pipe-1',
-      true
+      true,
+      'unexpected-extra-flag'
     );
     expect(wrapConptyStartProcess(nativeModule)).toBe(false);
   });
 
+  test('wrapConptyStartProcess retries without the seventh argument on the native usage error', () => {
+    const originalStartProcess = jest.fn((...args) => {
+      if (args.length >= 7) {
+        throw new Error('Usage: pty.startProcess(file, cols, rows, debug, pipeName, inheritCursor)');
+      }
+      return { pty: 456 };
+    });
+    const nativeModule = { startProcess: originalStartProcess };
+
+    expect(wrapConptyStartProcess(nativeModule)).toBe(true);
+
+    expect(nativeModule.startProcess('powershell.exe', 120, 40, false, 'pipe-1', true, 'unexpected-extra-flag')).toEqual({ pty: 456 });
+    expect(originalStartProcess).toHaveBeenNthCalledWith(
+      1,
+      'powershell.exe',
+      120,
+      40,
+      false,
+      'pipe-1',
+      true,
+      'unexpected-extra-flag'
+    );
+    expect(originalStartProcess).toHaveBeenNthCalledWith(
+      2,
+      'powershell.exe',
+      120,
+      40,
+      false,
+      'pipe-1',
+      true
+    );
+  });
+
   test('ensureWindowsNodePtyCompat wraps loadNativeModule for the affected Windows build', () => {
-    const originalStartProcess = jest.fn(() => ({ pty: 456 }));
+    const originalStartProcess = jest.fn(() => ({ pty: 789 }));
     const conptyModule = { startProcess: originalStartProcess };
     const originalLoadNativeModule = jest.fn((name) => ({
       dir: `mock/${name}`,
@@ -58,7 +93,8 @@ describe('nodePtyCompat', () => {
       40,
       false,
       'pipe-2',
-      true
+      true,
+      'unexpected-extra-flag'
     );
 
     expect(ensureWindowsNodePtyCompat({
@@ -122,5 +158,11 @@ describe('nodePtyCompat', () => {
     expect(requireModule).toHaveBeenCalledWith('node-pty');
     expect(logger.info).not.toHaveBeenCalled();
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  test('isStartProcessUsageError only matches the native usage message', () => {
+    expect(isStartProcessUsageError(new Error('Usage: pty.startProcess(file, cols, rows, debug, pipeName, inheritCursor)'))).toBe(true);
+    expect(isStartProcessUsageError(new Error('other failure'))).toBe(false);
+    expect(isStartProcessUsageError(null)).toBe(false);
   });
 });
