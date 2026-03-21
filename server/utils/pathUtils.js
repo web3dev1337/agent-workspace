@@ -325,8 +325,90 @@ function hasVisibleEntries(dirPath) {
 }
 
 /**
- * Preserve existing ~/GitHub installs unless the new projects root is already populated
- * or the user explicitly chose AGENT_WORKSPACE_PROJECTS_DIR.
+ * Check whether a directory looks like a repo using the worktree layout
+ * (has a master/ or main/ subdirectory containing a .git file or folder).
+ */
+function hasWorktreeLayout(dirPath) {
+  const fs = require('fs');
+  for (const name of ['master', 'main']) {
+    const candidate = path.join(dirPath, name);
+    try {
+      const stat = fs.statSync(candidate);
+      if (!stat.isDirectory()) continue;
+      const gitPath = path.join(candidate, '.git');
+      fs.statSync(gitPath);
+      return true;
+    } catch {
+      // not found, try next
+    }
+  }
+  return false;
+}
+
+function isGitRepo(dirPath) {
+  const fs = require('fs');
+  try {
+    fs.statSync(path.join(dirPath, '.git'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const MAX_SCAN_DEPTH = 8;
+
+/**
+ * Recursively scan a directory tree to count repos and how many use
+ * worktree layout. Stops recursing into directories that are repos
+ * (so it never crawls node_modules, .git internals, etc.).
+ * Depth-limited to MAX_SCAN_DEPTH as a safety net.
+ * Returns { total, worktree } counts.
+ */
+function countWorktreeLayoutRepos(dirPath) {
+  const fs = require('fs');
+  let total = 0;
+  let worktree = 0;
+
+  function scan(dir, depth) {
+    if (depth > MAX_SCAN_DEPTH) return;
+
+    let entries;
+    try {
+      entries = fs.readdirSync(dir).filter((e) => !String(e || '').startsWith('.'));
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(dir, entry);
+      try {
+        if (!fs.statSync(entryPath).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+
+      if (hasWorktreeLayout(entryPath)) {
+        total++;
+        worktree++;
+      } else if (isGitRepo(entryPath)) {
+        total++;
+      } else {
+        scan(entryPath, depth + 1);
+      }
+    }
+  }
+
+  scan(dirPath, 0);
+  return { total, worktree };
+}
+
+/**
+ * Preserve existing ~/GitHub installs only when a meaningful portion of its
+ * repos use the worktree layout (master/ or main/ subdirectory with .git).
+ * If the legacy dir is mostly flat clones, skip grandfathering so new repos
+ * get created under ~/.agent-workspace/projects/ with proper layout.
+ *
+ * Configurable via AGENT_WORKSPACE_PROJECTS_DIR env var (explicit override).
  */
 function bootstrapProjectsRoot() {
   const fs = require('fs');
@@ -346,11 +428,24 @@ function bootstrapProjectsRoot() {
     return { usingLegacyProjectsRoot: false, projectsDir };
   }
 
+  // Check if the legacy dir actually uses worktree layout
+  const { total, worktree } = countWorktreeLayoutRepos(legacyDir);
+  if (total > 0 && worktree === 0) {
+    // All flat clones, no worktree layout at all — don't grandfather
+    return { usingLegacyProjectsRoot: false, projectsDir, legacySkipReason: 'no-worktree-layout', total, worktree };
+  }
+  if (total >= 4 && worktree / total < 0.25) {
+    // Very few repos use worktree layout — don't grandfather
+    return { usingLegacyProjectsRoot: false, projectsDir, legacySkipReason: 'insufficient-worktree-layout', total, worktree };
+  }
+
   process.env.AGENT_WORKSPACE_PROJECTS_DIR = legacyDir;
   return {
     usingLegacyProjectsRoot: true,
     projectsDir: legacyDir,
-    legacyDir
+    legacyDir,
+    total,
+    worktree
   };
 }
 
@@ -403,6 +498,8 @@ module.exports = {
   getLegacyProjectsRoot,
   migrateFromOrchestratorDir,
   bootstrapProjectsRoot,
+  hasWorktreeLayout,
+  countWorktreeLayoutRepos,
   resolveRepoConfigPath,
   REPO_CONFIG_NAME,
   LEGACY_REPO_CONFIG_NAME
