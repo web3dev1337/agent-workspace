@@ -134,7 +134,7 @@ describe('SessionManager Windows PTY options', () => {
       targetPath === path.join('C:\\node_modules\\node-pty', 'lib', 'windowsPtyAgent.js')
     ));
     const readSpy = jest.spyOn(fs, 'readFileSync').mockReturnValue(
-      'before conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor, this._useConptyDll) after'
+      'before conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor, this._useConptyDll) middle conptyNative.connect(pty, commandLine, cwd, env, this._useConptyDll, function (c) { return _this._$onProcessExit(c); }) after'
     );
     const writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
 
@@ -146,7 +146,7 @@ describe('SessionManager Windows PTY options', () => {
     });
     expect(writeSpy).toHaveBeenCalledWith(
       path.join('C:\\node_modules\\node-pty', 'lib', 'windowsPtyAgent.js'),
-      'before conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor) after',
+      'before conptyNative.startProcess(file, cols, rows, debug, this._generatePipeName(), conptyInheritCursor) middle conptyNative.connect(pty, commandLine, cwd, env, function (c) { return _this._$onProcessExit(c); }) after',
       'utf8'
     );
 
