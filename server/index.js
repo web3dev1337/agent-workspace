@@ -79,8 +79,16 @@ if (legacyCompatibilityState.shouldUseLegacyDir) {
   });
 }
 if (projectsRootBootstrap.usingLegacyProjectsRoot) {
-  logger.info('Using legacy ~/GitHub as the projects root until ~/.agent-workspace/projects is populated', {
-    projectsDir: projectsRootBootstrap.projectsDir
+  logger.info('Using legacy ~/GitHub as the projects root (worktree layout detected)', {
+    projectsDir: projectsRootBootstrap.projectsDir,
+    total: projectsRootBootstrap.total,
+    worktree: projectsRootBootstrap.worktree
+  });
+} else if (projectsRootBootstrap.legacySkipReason) {
+  logger.info('Skipping legacy ~/GitHub — repos do not use worktree layout', {
+    reason: projectsRootBootstrap.legacySkipReason,
+    total: projectsRootBootstrap.total,
+    worktree: projectsRootBootstrap.worktree
   });
 }
 

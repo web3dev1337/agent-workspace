@@ -1,0 +1,5 @@
+- [x] Add hasWorktreeLayout() and countWorktreeLayoutRepos() helpers
+- [x] Fix bootstrapProjectsRoot() to check worktree layout before grandfathering
+- [x] Add skip logging in server/index.js
+- [x] Add tests (hasWorktreeLayout, countWorktreeLayoutRepos, flat clone skip, worktree grandfather)
+- [x] All 550 tests pass

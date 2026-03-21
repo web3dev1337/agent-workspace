@@ -45,9 +45,11 @@ describe('pathUtils', () => {
     expect(getTrailingPathLabel('/tmp/repo/work2', 1)).toBe('work2');
   });
 
-  test('bootstrapProjectsRoot falls back to legacy GitHub when the new projects root is empty', () => {
+  test('bootstrapProjectsRoot falls back to legacy GitHub when repos use worktree layout', () => {
     const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'path-utils-home-'));
-    fs.mkdirSync(path.join(tmpHome, 'GitHub', 'games'), { recursive: true });
+    // Create repos with worktree layout (master/ with .git)
+    fs.mkdirSync(path.join(tmpHome, 'GitHub', 'repo-a', 'master', '.git'), { recursive: true });
+    fs.mkdirSync(path.join(tmpHome, 'GitHub', 'repo-b', 'master', '.git'), { recursive: true });
 
     const {
       bootstrapProjectsRoot,
@@ -61,6 +63,26 @@ describe('pathUtils', () => {
     expect(result.projectsDir).toBe(getLegacyProjectsRoot());
     expect(getProjectsRoot()).toBe(getLegacyProjectsRoot());
     expect(process.env.AGENT_WORKSPACE_PROJECTS_DIR).toBe(getLegacyProjectsRoot());
+  });
+
+  test('bootstrapProjectsRoot skips legacy GitHub when repos are all flat clones', () => {
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'path-utils-home-'));
+    // Flat clones — no master/ subdirectory, just .git at root
+    fs.mkdirSync(path.join(tmpHome, 'GitHub', 'repo-a', '.git'), { recursive: true });
+    fs.mkdirSync(path.join(tmpHome, 'GitHub', 'repo-b', '.git'), { recursive: true });
+    fs.mkdirSync(path.join(tmpHome, 'GitHub', 'repo-c', '.git'), { recursive: true });
+
+    const {
+      bootstrapProjectsRoot,
+      getProjectsRoot,
+      getLegacyProjectsRoot
+    } = loadPathUtils(tmpHome);
+
+    const result = bootstrapProjectsRoot();
+
+    expect(result.usingLegacyProjectsRoot).toBe(false);
+    expect(result.legacySkipReason).toBe('no-worktree-layout');
+    expect(getProjectsRoot()).not.toBe(getLegacyProjectsRoot());
   });
 
   test('bootstrapProjectsRoot keeps the new projects root when it is already populated', () => {
@@ -80,6 +102,48 @@ describe('pathUtils', () => {
     expect(getProjectsRoot()).toBe(path.join(tmpHome, '.agent-workspace', 'projects'));
     expect(getProjectsRoot()).not.toBe(getLegacyProjectsRoot());
     expect(process.env.AGENT_WORKSPACE_PROJECTS_DIR).toBeUndefined();
+  });
+
+  test('hasWorktreeLayout detects master/ with .git', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-layout-'));
+    fs.mkdirSync(path.join(tmpDir, 'master', '.git'), { recursive: true });
+
+    const { hasWorktreeLayout } = loadPathUtils();
+    expect(hasWorktreeLayout(tmpDir)).toBe(true);
+  });
+
+  test('hasWorktreeLayout detects main/ with .git', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-layout-'));
+    fs.mkdirSync(path.join(tmpDir, 'main', '.git'), { recursive: true });
+
+    const { hasWorktreeLayout } = loadPathUtils();
+    expect(hasWorktreeLayout(tmpDir)).toBe(true);
+  });
+
+  test('hasWorktreeLayout returns false for flat clones', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-layout-'));
+    fs.mkdirSync(path.join(tmpDir, '.git'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+
+    const { hasWorktreeLayout } = loadPathUtils();
+    expect(hasWorktreeLayout(tmpDir)).toBe(false);
+  });
+
+  test('countWorktreeLayoutRepos counts repos at multiple nesting depths', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-count-'));
+    // Depth 1: worktree layout
+    fs.mkdirSync(path.join(tmpDir, 'repo-a', 'master', '.git'), { recursive: true });
+    // Depth 2 (nested category): worktree layout
+    fs.mkdirSync(path.join(tmpDir, 'games', 'zoo-game', 'master', '.git'), { recursive: true });
+    // Depth 2: flat clone
+    fs.mkdirSync(path.join(tmpDir, 'games', 'flat-game', '.git'), { recursive: true });
+    // Depth 4 (deep nesting): worktree layout
+    fs.mkdirSync(path.join(tmpDir, 'games', 'hytopia', 'games', 'hyfire', 'master', '.git'), { recursive: true });
+
+    const { countWorktreeLayoutRepos } = loadPathUtils();
+    const result = countWorktreeLayoutRepos(tmpDir);
+    expect(result.total).toBe(4);
+    expect(result.worktree).toBe(3);
   });
 
   test('getAgentWorkspaceDir falls back to legacy data when legacy has more workspaces', () => {
