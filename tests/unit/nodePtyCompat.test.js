@@ -211,14 +211,77 @@ describe('nodePtyCompat', () => {
     });
   });
 
-  test('loadNodePty skips the patch when node-pty package metadata is unavailable', () => {
+  test('ensureWindowsNodePtyCompat patches the direct conpty native module when loadNativeModule is unavailable', () => {
+    const originalStartProcess = jest.fn((...args) => {
+      if (args.length >= 7) {
+        throw new Error('Usage: pty.startProcess(file, cols, rows, debug, pipeName, inheritCursor)');
+      }
+      return { pty: 654 };
+    });
+    const originalConnect = jest.fn((...args) => {
+      if (args.length >= 6) {
+        throw new Error('Usage: pty.connect(id, cmdline, cwd, env, exitCallback)');
+      }
+      return { pid: 987 };
+    });
+    const nativeModule = {
+      startProcess: originalStartProcess,
+      connect: originalConnect,
+      resize: jest.fn(),
+      clear: jest.fn(),
+      kill: jest.fn()
+    };
+    const requireModule = jest.fn((specifier) => {
+      if (specifier === 'node-pty/lib/utils') {
+        throw new Error('missing utils');
+      }
+      if (specifier === 'node-pty/build/Release/conpty.node') {
+        return nativeModule;
+      }
+      throw new Error(`unexpected module: ${specifier}`);
+    });
+
+    const result = ensureWindowsNodePtyCompat({
+      platform: 'win32',
+      packageInfo: { version: '1.0.0' },
+      requireModule
+    });
+
+    expect(result).toMatchObject({
+      applied: true,
+      reason: 'patched-direct-conpty-native',
+      version: '1.0.0',
+      candidate: 'node-pty/build/Release/conpty.node',
+      patchedMethods: ['startProcess', 'connect', 'resize', 'clear', 'kill']
+    });
+
+    expect(nativeModule.startProcess('powershell.exe', 120, 40, false, 'pipe-2', true, 'unexpected-extra-flag')).toEqual({ pty: 654 });
+    expect(nativeModule.connect(7, 'powershell.exe', 'C:\\repo', { PATH: 'x' }, true, jest.fn())).toEqual({ pid: 987 });
+    expect(originalStartProcess).toHaveBeenCalledTimes(2);
+    expect(originalConnect).toHaveBeenCalledTimes(2);
+  });
+
+  test('loadNodePty applies the direct native patch when node-pty package metadata is unavailable', () => {
     const logger = {
       info: jest.fn(),
       warn: jest.fn()
     };
+    const nativeModule = {
+      startProcess: jest.fn(() => ({ pty: 111 })),
+      connect: jest.fn(() => ({ pid: 222 })),
+      resize: jest.fn(),
+      clear: jest.fn(),
+      kill: jest.fn()
+    };
     const requireModule = jest.fn((specifier) => {
       if (specifier === 'node-pty/package.json') {
         throw new Error('missing package info');
+      }
+      if (specifier === 'node-pty/lib/utils') {
+        throw new Error('missing utils');
+      }
+      if (specifier === 'node-pty/build/Release/conpty.node') {
+        return nativeModule;
       }
       if (specifier === 'node-pty') {
         return { spawn: jest.fn() };
@@ -234,12 +297,19 @@ describe('nodePtyCompat', () => {
 
     expect(pty).toEqual({ spawn: expect.any(Function) });
     expect(requireModule).toHaveBeenCalledWith('node-pty/package.json');
+    expect(requireModule).toHaveBeenCalledWith('node-pty/lib/utils');
+    expect(requireModule).toHaveBeenCalledWith('node-pty/build/Release/conpty.node');
     expect(requireModule).toHaveBeenCalledWith('node-pty');
-    expect(logger.info).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      'Applied node-pty ConPTY runtime compatibility patch',
+      expect.objectContaining({
+        version: null
+      })
+    );
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  test('loadNodePty skips the patch for unaffected versions', () => {
+  test('loadNodePty applies the patch even when node-pty reports an unexpected version string', () => {
     const logger = {
       info: jest.fn(),
       warn: jest.fn()
@@ -253,13 +323,18 @@ describe('nodePtyCompat', () => {
       platform: 'win32',
       logger,
       utilsModule,
-      packageInfo: { version: '1.2.0' },
+      packageInfo: { version: '1.0.0' },
       requireModule
     });
 
     expect(pty).toEqual({ spawn: expect.any(Function) });
     expect(requireModule).toHaveBeenCalledWith('node-pty');
-    expect(logger.info).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      'Applied node-pty ConPTY runtime compatibility patch',
+      expect.objectContaining({
+        version: '1.0.0'
+      })
+    );
     expect(logger.warn).not.toHaveBeenCalled();
   });
 

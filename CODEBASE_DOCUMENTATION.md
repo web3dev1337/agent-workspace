@@ -84,7 +84,7 @@ server/utils/processUtils.js       - Shared spawn/env hardening helpers
 ├─ Windows packaging guardrails: applies `windowsHide`/`CREATE_NO_WINDOW`, augments GUI-app PATH with Git/node/npm/common CLI locations, and builds hidden PowerShell argument lists
 └─ Cross-platform behavior: non-Windows platforms pass through unchanged so Linux/macOS launch behavior stays stable
 server/utils/nodePtyCompat.js      - Runtime compatibility shim for the bundled `node-pty` Windows ConPTY loader
-└─ Windows PTY guard: wraps the known-bad `node-pty@1.2.0-beta.12` ConPTY calls in memory (`startProcess`, `connect`, `resize`, `clear`, `kill`) so packaged installs survive read-only app-resource layouts and stale native bindings
+└─ Windows PTY guard: wraps stale ConPTY calls in memory (`startProcess`, `connect`, `resize`, `clear`, `kill`) via `loadNativeModule` when available or direct `conpty.node` patching when package internals differ, so packaged installs survive read-only app-resource layouts and mixed node-pty variants
 server/utils/pathUtils.js          - Shared slash-normalization + data-directory compatibility helpers for repo/worktree labels
 └─ Legacy migration: renames `~/.orchestrator` when possible, otherwise merges richer legacy state into `~/.agent-workspace` with conflict backups before falling back to the old directory
 server/tokenCounter.js             - Token usage tracking (if applicable)
