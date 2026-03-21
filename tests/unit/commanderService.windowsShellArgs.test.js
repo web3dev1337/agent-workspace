@@ -1,23 +1,39 @@
 const { EventEmitter } = require('events');
 
-jest.mock('winston', () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
-  })),
-  format: {
-    combine: jest.fn(() => ({})),
-    timestamp: jest.fn(() => ({})),
-    json: jest.fn(() => ({})),
-    simple: jest.fn(() => ({}))
-  },
-  transports: {
-    File: jest.fn(),
-    Console: jest.fn()
-  }
-}), { virtual: true });
+function mockWinston() {
+  return {
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn()
+    })),
+    format: {
+      combine: jest.fn(() => ({})),
+      timestamp: jest.fn(() => ({})),
+      json: jest.fn(() => ({})),
+      simple: jest.fn(() => ({}))
+    },
+    transports: {
+      File: jest.fn(),
+      Console: jest.fn()
+    }
+  };
+}
+
+function loadCommanderServiceForWindows(spawn) {
+  jest.resetModules();
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' });
+  jest.doMock('node-pty', () => ({ spawn }));
+  jest.doMock('winston', () => mockWinston(), { virtual: true });
+
+  let CommanderService = null;
+  jest.isolateModules(() => {
+    ({ CommanderService } = require('../../server/commanderService'));
+  });
+  CommanderService.instance = null;
+  return CommanderService;
+}
 
 describe('CommanderService Windows shell args', () => {
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
@@ -29,8 +45,6 @@ describe('CommanderService Windows shell args', () => {
   });
 
   test('does not request a hidden PowerShell window for ConPTY terminals', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' });
-
     const spawn = jest.fn(() => {
       const pty = new EventEmitter();
       pty.onData = jest.fn();
@@ -40,10 +54,8 @@ describe('CommanderService Windows shell args', () => {
       pty.kill = jest.fn();
       return pty;
     });
-    jest.doMock('node-pty', () => ({ spawn }), { virtual: true });
 
-    const { CommanderService } = require('../../server/commanderService');
-    CommanderService.instance = null;
+    const CommanderService = loadCommanderServiceForWindows(spawn);
     const service = CommanderService.getInstance({ io: null, sessionManager: null });
 
     const result = await service.start();

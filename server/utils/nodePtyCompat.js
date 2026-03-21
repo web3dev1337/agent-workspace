@@ -2,6 +2,11 @@ const KNOWN_BROKEN_NODE_PTY_VERSION = '1.2.0-beta.12';
 const LOAD_NATIVE_MODULE_PATCH_FLAG = '__agentWorkspaceConptyCompatPatched';
 const START_PROCESS_PATCH_FLAG = '__agentWorkspaceConptyStartProcessPatched';
 
+function isStartProcessUsageError(error) {
+  const message = String(error?.message || '').trim();
+  return message.includes('Usage: pty.startProcess(');
+}
+
 function wrapConptyStartProcess(nativeModule) {
   if (!nativeModule || typeof nativeModule.startProcess !== 'function') {
     return false;
@@ -12,8 +17,15 @@ function wrapConptyStartProcess(nativeModule) {
   }
 
   const originalStartProcess = nativeModule.startProcess.bind(nativeModule);
-  const wrappedStartProcess = function startProcessCompat(file, cols, rows, debug, pipeName, inheritCursor) {
-    return originalStartProcess(file, cols, rows, debug, pipeName, inheritCursor);
+  const wrappedStartProcess = function startProcessCompat(...args) {
+    try {
+      return originalStartProcess(...args);
+    } catch (error) {
+      if (args.length >= 7 && isStartProcessUsageError(error)) {
+        return originalStartProcess(...args.slice(0, 6));
+      }
+      throw error;
+    }
   };
 
   Object.defineProperty(wrappedStartProcess, START_PROCESS_PATCH_FLAG, {
@@ -139,6 +151,7 @@ function loadNodePty({
 module.exports = {
   KNOWN_BROKEN_NODE_PTY_VERSION,
   ensureWindowsNodePtyCompat,
+  isStartProcessUsageError,
   loadNodePty,
   wrapConptyStartProcess
 };
