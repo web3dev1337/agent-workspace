@@ -70,6 +70,7 @@ server/gitHelper.js                - Git operations wrapper
 ### Services & Utilities
 ```
 server/notificationService.js      - System notification manager
+server/appInfo.js                  - Reads the packaged/repo `package.json` release metadata for UI/API version display
 server/claudeVersionChecker.js     - Claude Code version detection
 tests/unit/claudeVersionChecker.test.js - Coverage for update-banner version fallback messaging
 tests/unit/claudeVersionChecker.spawnOptions.test.js - Verifies Windows-hidden spawn flags for startup Claude version checks
@@ -78,6 +79,7 @@ tests/unit/commanderService.test.js - Covers Commander launch buffering, trust-p
 tests/unit/sessionManager.trustPrompt.test.js - Verifies auto-accept of Claude folder trust prompts in launched worktree sessions
 tests/unit/sessionManager.agentDetection.test.js - Covers manual Gemini command detection so provider-specific status heuristics receive the correct agent id
 tests/unit/nodePtyCompat.test.js   - Verifies the Windows `node-pty` runtime compatibility shim adapts stale ConPTY method signatures (`startProcess`, `connect`, and related boolean-tail helpers) without depending on writable app resources
+tests/unit/appInfo.test.js         - Verifies app version metadata is derived from `package.json` with a safe fallback when metadata is unavailable
 server/utils/processUtils.js       - Shared spawn/env hardening helpers
 ├─ Windows packaging guardrails: applies `windowsHide`/`CREATE_NO_WINDOW`, augments GUI-app PATH with Git/node/npm/common CLI locations, and builds hidden PowerShell argument lists
 └─ Cross-platform behavior: non-Windows platforms pass through unchanged so Linux/macOS launch behavior stays stable

@@ -8,6 +8,7 @@ const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
 const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
+const { readAppInfo } = require('./appInfo');
 const {
   migrateFromOrchestratorDir,
   mergeLegacyDataDir,
@@ -1323,6 +1324,10 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
+});
+
+app.get('/api/app-info', (req, res) => {
+  res.json(readAppInfo());
 });
 
 // Workspace API endpoints

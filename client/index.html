@@ -43,6 +43,9 @@
 	                    <button id="view-servers-only" class="button-secondary">Servers Only</button>
 	                </div>
 	            </div>
+                <div class="sidebar-meta-row">
+                    <span id="sidebar-app-version" class="app-version-chip" data-app-version-slot hidden></span>
+                </div>
 	        </div>
 	        
         <div class="worktree-list" id="worktree-list">
@@ -199,7 +202,10 @@
     <!-- Settings Panel -->
     <div id="settings-panel" class="settings-panel hidden">
         <div class="panel-header">
-            <h3>Settings</h3>
+            <div class="panel-header-copy">
+                <h3>Settings</h3>
+                <span id="settings-app-version" class="app-version-chip app-version-chip-subtle" data-app-version-slot hidden></span>
+            </div>
             <button id="close-settings" class="icon-button">✕</button>
         </div>
         <div class="settings-content">
@@ -480,7 +486,10 @@
         <div class="onboarding-bg-glow onboarding-bg-glow-2"></div>
         <div class="onboarding-container">
             <div class="onboarding-header">
-                <h2 id="dependency-setup-title" class="onboarding-title">Agent Workspace Setup</h2>
+                <div class="onboarding-heading-row">
+                    <h2 id="dependency-setup-title" class="onboarding-title">Agent Workspace Setup</h2>
+                    <span id="onboarding-app-version" class="app-version-chip app-version-chip-subtle" data-app-version-slot hidden></span>
+                </div>
                 <p id="dependency-setup-summary" class="onboarding-summary-text"></p>
             </div>
 
