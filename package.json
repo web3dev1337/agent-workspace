@@ -1,6 +1,6 @@
 {
   "name": "agent-workspace",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Multi-terminal orchestrator for Claude Code sessions",
   "main": "server/index.js",
   "scripts": {
