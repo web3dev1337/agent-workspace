@@ -1,6 +1,6 @@
 [package]
 name = "agent-workspace"
-version = "0.1.16"
+version = "0.1.17"
 description = "A Tauri App for Agent Workspace"
 authors = ["you"]
 license = "MIT"
