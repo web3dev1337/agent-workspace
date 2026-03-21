@@ -31,6 +31,129 @@ function getWorkspaceEntryCount(baseDir) {
   return countVisibleEntries(path.join(baseDir, 'workspaces'));
 }
 
+function isSameFileContent(sourcePath, targetPath) {
+  const fs = require('fs');
+  try {
+    const sourceStat = fs.statSync(sourcePath);
+    const targetStat = fs.statSync(targetPath);
+    if (sourceStat.size !== targetStat.size) return false;
+    const sourceContent = fs.readFileSync(sourcePath);
+    const targetContent = fs.readFileSync(targetPath);
+    return sourceContent.equals(targetContent);
+  } catch {
+    return false;
+  }
+}
+
+function copyTreeSync(sourcePath, targetPath) {
+  const fs = require('fs');
+  const stat = fs.lstatSync(sourcePath);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(targetPath, { recursive: true });
+    for (const entry of fs.readdirSync(sourcePath)) {
+      copyTreeSync(path.join(sourcePath, entry), path.join(targetPath, entry));
+    }
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.copyFileSync(sourcePath, targetPath);
+}
+
+function mergeLegacyDataDir() {
+  const fs = require('fs');
+
+  // Skip if env override is set (user chose a custom path)
+  if (String(process.env.AGENT_WORKSPACE_DIR || '').trim()) {
+    return { merged: false, reason: 'env-override' };
+  }
+
+  const state = getLegacyCompatibilityState();
+  if (!state.shouldUseLegacyDir) {
+    return {
+      merged: false,
+      reason: state.reason,
+      sourceDir: state.oldDir,
+      targetDir: state.newDir
+    };
+  }
+
+  const sourceDir = state.oldDir;
+  const targetDir = state.newDir;
+  const backupRoot = path.join(
+    targetDir,
+    'migration-backups',
+    `from-orchestrator-${new Date().toISOString().replace(/[:.]/g, '-')}`
+  );
+  const report = {
+    merged: false,
+    reason: state.reason,
+    sourceDir,
+    targetDir,
+    backupDir: backupRoot,
+    copied: [],
+    overwritten: []
+  };
+
+  if (!fs.existsSync(sourceDir)) {
+    return { ...report, merged: false, reason: 'legacy-missing' };
+  }
+
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  const mergeEntry = (srcPath, dstPath, relPath = '') => {
+    const srcStat = fs.lstatSync(srcPath);
+    const dstExists = fs.existsSync(dstPath);
+
+    if (srcStat.isDirectory()) {
+      if (!dstExists) {
+        copyTreeSync(srcPath, dstPath);
+        report.copied.push(relPath || path.basename(srcPath));
+        return;
+      }
+
+      const dstStat = fs.lstatSync(dstPath);
+      if (!dstStat.isDirectory()) {
+        const backupPath = path.join(backupRoot, relPath);
+        copyTreeSync(dstPath, backupPath);
+        report.overwritten.push(relPath);
+        fs.rmSync(dstPath, { recursive: true, force: true });
+        copyTreeSync(srcPath, dstPath);
+        return;
+      }
+
+      for (const entry of fs.readdirSync(srcPath)) {
+        const nextRel = relPath ? path.join(relPath, entry) : entry;
+        mergeEntry(path.join(srcPath, entry), path.join(dstPath, entry), nextRel);
+      }
+      return;
+    }
+
+    if (!dstExists) {
+      copyTreeSync(srcPath, dstPath);
+      report.copied.push(relPath || path.basename(srcPath));
+      return;
+    }
+
+    const dstStat = fs.lstatSync(dstPath);
+    if (dstStat.isDirectory() || !isSameFileContent(srcPath, dstPath)) {
+      const backupPath = path.join(backupRoot, relPath);
+      copyTreeSync(dstPath, backupPath);
+      fs.mkdirSync(path.dirname(dstPath), { recursive: true });
+      fs.copyFileSync(srcPath, dstPath);
+      report.overwritten.push(relPath || path.basename(srcPath));
+    }
+  };
+
+  for (const entry of fs.readdirSync(sourceDir)) {
+    if (entry === 'migration-backups') continue;
+    mergeEntry(path.join(sourceDir, entry), path.join(targetDir, entry), entry);
+  }
+
+  report.merged = report.copied.length > 0 || report.overwritten.length > 0;
+  return report;
+}
+
 function getLegacyCompatibilityState() {
   const fs = require('fs');
   const newDir = getDefaultAgentWorkspaceDir();
@@ -275,6 +398,7 @@ module.exports = {
   getDefaultAgentWorkspaceDir,
   getLegacyAgentWorkspaceDir,
   getLegacyCompatibilityState,
+  mergeLegacyDataDir,
   getProjectsRoot,
   getLegacyProjectsRoot,
   migrateFromOrchestratorDir,

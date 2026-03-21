@@ -10,12 +10,14 @@ const winston = require('winston');
 const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
 const {
   migrateFromOrchestratorDir,
+  mergeLegacyDataDir,
   bootstrapProjectsRoot,
   getAgentWorkspaceDir,
   getLegacyCompatibilityState
 } = require('./utils/pathUtils');
 
 const migratedDataDir = migrateFromOrchestratorDir();
+const mergedLegacyDataDir = mergeLegacyDataDir();
 const legacyCompatibilityState = getLegacyCompatibilityState();
 const resolvedDataDir = getAgentWorkspaceDir();
 const projectsRootBootstrap = bootstrapProjectsRoot();
@@ -56,6 +58,16 @@ const logger = winston.createLogger({
 
 if (migratedDataDir) {
   logger.info('Migrated data directory from ~/.orchestrator to ~/.agent-workspace');
+}
+if (mergedLegacyDataDir.merged) {
+  logger.info('Merged legacy ~/.orchestrator data into ~/.agent-workspace', {
+    reason: mergedLegacyDataDir.reason,
+    sourceDir: mergedLegacyDataDir.sourceDir,
+    targetDir: mergedLegacyDataDir.targetDir,
+    backupDir: mergedLegacyDataDir.backupDir,
+    copiedCount: mergedLegacyDataDir.copied.length,
+    overwrittenCount: mergedLegacyDataDir.overwritten.length
+  });
 }
 if (legacyCompatibilityState.shouldUseLegacyDir) {
   logger.warn('Using legacy ~/.orchestrator data directory for backward compatibility', {
