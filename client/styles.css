@@ -1449,7 +1449,7 @@ header {
    Pairs stack top-to-bottom; within each pair terminals sit side-by-side. */
 .terminal-grid {
   padding: var(--space-xs);
-  overflow: hidden;
+  overflow: visible;
   display: grid;
   gap: var(--space-xs);
   grid-template-columns: repeat(var(--grid-cols, 1), minmax(0, 1fr));
@@ -1467,7 +1467,7 @@ header {
   gap: var(--space-xs);
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .terminal-pair > .terminal-wrapper {
@@ -1494,14 +1494,47 @@ header {
 .terminal-wrapper {
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  border: 2px solid var(--border-color);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: 100%;  /* Fill grid cell completely */
+  height: 100%;
   width: 100%;
   position: relative;
-  isolation: isolate;
+  transition: border-color 0.5s ease, box-shadow 0.5s ease, transform 0.5s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.terminal-wrapper.neon-active,
+.terminal-wrapper:hover {
+  border-color: #fff;
+  border-width: 3px;
+  box-shadow:
+    0 0 4px #fff,
+    0 0 8px #fff,
+    inset 0 0 50px rgba(0, 229, 255, 0.25),
+    inset 0 0 100px rgba(0, 229, 255, 0.12);
+}
+
+/* Fixed-position glow overlay that escapes all parent clipping */
+.neon-glow-overlay {
+  position: fixed;
+  pointer-events: none;
+  z-index: 999999;
+  border-radius: 10px;
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0, 0.2, 1);
+  box-shadow:
+    0 0 4px #fff,
+    0 0 10px #fff,
+    0 0 20px #00e5ff,
+    0 0 40px #00e5ff,
+    0 0 70px #00e5ff,
+    0 0 110px rgba(0, 229, 255, 0.9),
+    0 0 180px rgba(0, 229, 255, 0.6),
+    0 0 280px rgba(0, 229, 255, 0.4),
+    0 0 400px rgba(0, 229, 255, 0.25),
+    0 0 550px rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
 }
 
 .terminal-header {

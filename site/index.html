@@ -3,532 +3,293 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Workspace | All Your Agents, One Workspace</title>
-  <meta name="description" content="Run multiple CLI agents in parallel across repos with full local control. Agent Workspace runs locally; model inference runs through the providers and CLIs you choose.">
-  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
-  <link rel="canonical" href="https://agent-workspace.ai/">
-
-  <!-- Open Graph -->
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://agent-workspace.ai">
-  <meta property="og:title" content="Agent Workspace | All Your Agents, One Workspace">
-  <meta property="og:description" content="Run multiple CLI agents in parallel across repos. Agent Workspace runs locally on your machine, while model requests use your selected providers and CLI accounts.">
-  <meta property="og:image" content="https://agent-workspace.ai/assets/og-card.png">
-
-  <!-- Twitter / X -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="https://agent-workspace.ai">
-  <meta name="twitter:title" content="Agent Workspace | All Your Agents, One Workspace">
-  <meta name="twitter:description" content="Run multiple CLI agents in parallel across repos. Agent Workspace runs locally on your machine, while model requests use your selected providers and CLI accounts.">
-  <meta name="twitter:image" content="https://agent-workspace.ai/assets/og-card.png">
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Agent Workspace",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Windows, macOS, Linux, Web",
-    "url": "https://agent-workspace.ai/",
-    "downloadUrl": "https://github.com/web3dev1337/agent-workspace/releases/latest",
-    "description": "Agent Workspace is a local-first control plane for running multiple CLI coding agents across repositories and worktrees.",
-    "isAccessibleForFree": true,
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "Agent Workspace Maintainers",
-      "url": "https://github.com/web3dev1337/agent-workspace"
-    },
-    "sameAs": [
-      "https://github.com/web3dev1337/agent-workspace",
-      "https://github.com/sponsors/web3dev1337"
-    ],
-    "screenshot": "https://agent-workspace.ai/assets/home-page-windows.png"
-  }
-  </script>
-
+  <title>Agent Workspace</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;900&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --base-bg: #030305;
+      --cyan: #00e5ff;
+      --blue-deep: #2563eb;
+      --indigo: #4f46e5;
+      --text-main: #ffffff;
+      --font-sans: 'Outfit', sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { background-color: var(--base-bg); }
+    body {
+      font-family: var(--font-sans);
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #neural-bg {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: -2;
+      pointer-events: none;
+    }
+    .ambient-lights {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .light {
+      position: absolute;
+      width: 800px; height: 800px;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.15;
+      animation: floatLight 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .light.cyan { background: var(--cyan); top: -20%; left: -10%; }
+    .light.blue-deep { background: var(--blue-deep); bottom: -20%; right: -10%; animation-delay: -5s; }
+    .light.indigo { background: var(--indigo); top: 40%; left: 50%; animation-delay: -10s; width: 600px; height: 600px; opacity: 0.1; }
+    @keyframes floatLight {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(10%, 10%) scale(1.2); }
+    }
+
+    /* Title - fixed center */
+    .mega-title {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) translateY(60px) scale(0.9);
+      font-size: clamp(4.5rem, 10vw, 10rem);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      text-align: center;
+      line-height: 1.05;
+      white-space: nowrap;
+      opacity: 0;
+      filter: blur(10px);
+      transition: opacity 1.5s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 1.5s cubic-bezier(0.16, 1, 0.3, 1),
+                  filter 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 2;
+    }
+    .mega-title.visible {
+      opacity: 1;
+      transform: translate(-50%, -50%) translateY(0) scale(1);
+      filter: blur(0);
+    }
+    .mega-title.fade-out {
+      opacity: 0;
+      transform: translate(-50%, -50%) translateY(-30px) scale(0.95);
+      filter: blur(10px);
+      transition-duration: 0.8s;
+    }
+
+    /* Video container - handles centering */
+    .trailer-container {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1;
+      max-width: 85vw;
+      max-height: 80vh;
+    }
+
+    /* Video - handles zoom/fade */
+    .trailer-video {
+      display: block;
+      max-width: 85vw;
+      max-height: 80vh;
+      border-radius: 12px;
+      opacity: 0;
+      filter: blur(5px);
+      transform: scale(0.95);
+      transform-origin: center center;
+      transition: opacity 0.8s ease, transform 1s cubic-bezier(0.16, 1, 0.3, 1), filter 0.8s ease, transform-origin 1s ease;
+      box-shadow: 0 0 80px rgba(0, 0, 0, 0.9);
+    }
+    .trailer-video.visible {
+      opacity: 1;
+      transform: scale(1);
+      filter: blur(0);
+    }
+
+    /* Zoomed state */
+    .trailer-video.zoomed {
+      transform: scale(1.15);
+    }
+
+    /* End card */
+    .end-card {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) translateY(40px) scale(0.9);
+      font-size: clamp(2rem, 4vw, 4rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      text-align: center;
+      line-height: 1.2;
+      opacity: 0;
+      filter: blur(10px);
+      z-index: 3;
+      transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 1s cubic-bezier(0.16, 1, 0.3, 1),
+                  filter 1s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .end-card.visible {
+      opacity: 1;
+      transform: translate(-50%, -50%) translateY(0) scale(1);
+      filter: blur(0);
+    }
+
+    .gradient-text {
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+    .multi-color {
+      background-image: linear-gradient(90deg, var(--cyan), var(--blue-deep), #ec4899, #fff, #fff, #fff);
+      background-size: 400% 100%;
+      background-position: 100% 0%;
+      animation: gradientSwipeLTR 2.5s ease-out 3s forwards;
+    }
+    @keyframes gradientSwipeLTR {
+      0% { background-position: 100% 0%; }
+      100% { background-position: 0% 0%; }
+    }
+    .multi-color-end {
+      background-image: linear-gradient(90deg, var(--cyan), var(--blue-deep), #ec4899, #fff, #fff, #fff);
+      background-size: 400% 100%;
+      background-position: 100% 0%;
+    }
+    .multi-color-end.sweep {
+      animation: gradientSwipeLTR 2.5s ease-out forwards;
+    }
+
+    /* Floating logos */
+    .float-logo {
+      position: fixed;
+      width: 120px;
+      height: 120px;
+      object-fit: contain;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0;
+    }
+
+    .float-logo.claude-drift {
+      left: -10%;
+      top: 50%;
+      opacity: 1;
+      animation: driftClaude 6s linear forwards, spin 3s linear infinite;
+    }
+    .float-logo.openai-drift {
+      left: 110%;
+      top: 50%;
+      opacity: 1;
+      filter: brightness(0) invert(1);
+      animation: driftOpenAI 6s linear forwards, spinReverse 2.5s linear infinite;
+    }
+
+    @keyframes driftClaude {
+      0%   { left: -10%; top: 50%; opacity: 1; }
+      100% { left: 37%; top: -10%; opacity: 0; }
+    }
+
+    @keyframes driftOpenAI {
+      0%   { left: 110%; top: 50%; opacity: 1; }
+      100% { left: 63%; top: 110%; opacity: 0; }
+    }
+
+    @keyframes spin {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to   { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    @keyframes spinReverse {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to   { transform: translate(-50%, -50%) rotate(-360deg); }
+    }
+  </style>
 </head>
 <body>
-  <!-- Dynamic Background -->
   <canvas id="neural-bg"></canvas>
-
   <div class="ambient-lights">
     <div class="light cyan"></div>
     <div class="light blue-deep"></div>
     <div class="light indigo"></div>
   </div>
-
-  <nav class="fluid-nav">
-    <a href="#" class="brand">
-      <div class="brand-orb"></div>
-      <span>Agent Workspace</span>
-    </a>
-    <div class="nav-items">
-      <a href="#features">Features</a>
-      <a href="#projects">Projects</a>
-      <a href="#ports">Ports</a>
-      <a href="#compatibility">Compatibility</a>
-      <a href="https://github.com/sponsors/web3dev1337" class="btn-sponsor" target="_blank" rel="noopener">
-        <span class="btn-sponsor-left">
-          <svg class="sponsor-heart" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 20.3 4.7 13a4.5 4.5 0 0 1 6.4-6.4L12 7.5l.9-.9a4.5 4.5 0 1 1 6.4 6.4L12 20.3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Sponsor</span>
-        </span>
-        <span class="btn-sponsor-right">GitHub Sponsors</span>
-      </a>
-      <a href="https://github.com/web3dev1337/agent-workspace" class="btn-glass" target="_blank"><svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg> Repository <span class="arrow">↗</span></a>
-    </div>
-  </nav>
-
-  <main>
-    <section class="hero-fluid">
-      <div class="hero-content reveal">
-        <div class="status-pill">
-          <span class="ping"></span>
-          Free & Open Source · MIT License
-        </div>
-        <h1 class="mega-title">
-          All your Agents.<br>
-          <span class="gradient-text multi-color">One Workspace.</span>
-        </h1>
-        <p class="hero-lead">
-          Run multiple CLI agents in parallel across repositories from one control plane. Agent Workspace itself runs locally on your hardware; model inference runs through the AI providers and CLIs you choose under your own accounts.
-        </p>
-        <div class="action-row">
-          <a class="btn-glow download-btn download-windows" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank">
-            <span>Download for Windows</span>
-          </a>
-          <a class="btn-glow download-btn download-mac" href="#install-mid" style="display:none">
-            <span>Install on Mac</span>
-          </a>
-          <a class="btn-glow download-btn download-linux" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank" rel="noopener" style="display:none">
-            <span>Download for Linux</span>
-          </a>
-          <a class="btn-outline" href="https://github.com/web3dev1337/agent-workspace" target="_blank">
-            <svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg> <span>View on GitHub</span>
-          </a>
-          <a class="btn-outline btn-sponsor" href="https://github.com/sponsors/web3dev1337" target="_blank">
-            <svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> <span>Sponsor</span>
-          </a>
-        </div>
-        <div class="platform-links">
-          <a href="#install-mid" class="platform-link" data-select-tab="mac-mid"><svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg> Mac</a>
-          <a href="#install-mid" class="platform-link" data-select-tab="linux-mid"><img class="tab-icon" src="assets/tux-mono.svg" alt="Linux"> Linux / WSL</a>
-        </div>
-        <div class="plan-compat">
-          <span class="compat-text">Claude Max plan & Codex plan compatible</span>
-        </div>
-      </div>
-
-      <div class="hero-showcase reveal">
-        <div class="glass-panel main-ui">
-          <div class="panel-body">
-            <img src="assets/home-page-windows.png" alt="Agent Workspace running on Windows with multi-agent terminal grid" class="ui-img">
-            <div class="overlay-scanline"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="integration-fluid" id="compatibility">
-      <div class="integration-content reveal">
-        <h2 class="section-title">A GUI for your TUIs.</h2>
-        <p class="section-desc">Bring your CLIs. <span class="text-cyan">Agent Workspace</span> wraps your preferred terminal tools &mdash; run them side by side in the same workspace with your existing local auth and provider accounts.</p>
-
-        <div class="cli-grid">
-          <div class="cli-card">
-            <div class="cli-card-inner white-bg-prominent">
-              <img src="assets/claude-logo.svg" alt="Claude Code" class="hi-res-logo">
-            </div>
-            <span class="card-name">Claude Code</span>
-          </div>
-
-          <div class="cli-card">
-            <div class="cli-card-inner white-bg-prominent">
-              <img src="assets/codex-logo.png" alt="Codex" class="hi-res-logo">
-            </div>
-            <span class="card-name">Codex</span>
-          </div>
-
-          <div class="cli-card">
-            <div class="cli-card-inner white-bg-prominent">
-              <img src="assets/gemini-icon.svg" alt="Gemini CLI" class="hi-res-logo">
-            </div>
-            <span class="card-name">Gemini CLI</span>
-          </div>
-
-          <div class="cli-card">
-            <div class="cli-card-inner white-bg-prominent">
-              <img src="assets/opencode-logo.svg" alt="OpenCode" class="hi-res-logo">
-            </div>
-            <span class="card-name">OpenCode</span>
-          </div>
-
-          <div class="cli-card">
-            <div class="cli-card-inner white-bg-prominent grok-card">
-              <img src="assets/grok-logo.png" alt="Grok CLI" class="hi-res-logo">
-              <span class="grok-question">?</span>
-            </div>
-            <span class="card-name">Grok CLI?</span>
-            <span class="when-elon">WEN, ELON?</span>
-          </div>
-
-          <div class="cli-card">
-            <div class="cli-card-inner cli-any-agent">
-              <span class="cli-any-text">&gt;_</span>
-            </div>
-            <span class="card-name text-cyan">Any CLI Agent</span>
-          </div>
-        </div>
-
-        <p class="section-desc cli-compat-rule"><strong>Compatibility rule:</strong> if a tool can be launched from a terminal command in your worktree, it can run in Agent Workspace.</p>
-        <ul class="cli-compat-list">
-          <li>Common examples: Claude Code, Codex CLI, Gemini CLI, OpenCode, Grok CLI.</li>
-          <li>Also works with command-driven CLIs and scripts (for example Aider, Goose, or custom repo scripts).</li>
-          <li>If a tool starts with a command, Agent Workspace can host it in a terminal pane.</li>
-        </ul>
-      </div>
-    </section>
-
-    <section class="install-section install-section-mid reveal" id="install-mid">
-      <h2 class="section-title">Install</h2>
-      <p class="section-desc">Get up and running in under a minute.</p>
-
-      <div class="install-tabs" data-group="mid">
-        <button class="install-tab active" data-tab="windows-mid"><svg class="tab-icon" viewBox="0 0 88 88" fill="currentColor"><path d="M0 12.402l35.687-4.86.016 34.423-35.67.203zm35.67 33.529l.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349l-.011 41.34-47.318-6.678-.066-34.739z"/></svg> Windows</button>
-        <button class="install-tab" data-tab="mac-mid"><svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg> Mac</button>
-        <button class="install-tab" data-tab="linux-mid"><img class="tab-icon" src="assets/tux-mono.svg" alt="Linux"> Linux / WSL</button>
-      </div>
-
-      <div class="install-panels">
-        <div class="install-panel active" id="tab-windows-mid">
-          <div class="install-option">
-            <a class="btn-glow install-download" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank" rel="noopener">Download Windows App</a>
-          </div>
-          <div class="install-divider"><span>or run from source</span></div>
-          <div class="install-cmd">
-            <code>git clone https://github.com/web3dev1337/agent-workspace.git</code>
-            <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/agent-workspace.git">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>cd agent-workspace && npm install</code>
-            <button class="copy-btn" data-copy="cd agent-workspace && npm install">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>npm start</code>
-            <button class="copy-btn" data-copy="npm start">Copy</button>
-          </div>
-          <div class="install-verify-card">
-            <p class="install-verify-title">Verify the Windows installer before running it.</p>
-            <ul class="install-verify-list">
-              <li>Compare the SHA-256 digest shown on the GitHub release.</li>
-              <li>If a signature is present, verify it before launching.</li>
-              <li>If verification fails, do not run the file.</li>
-            </ul>
-            <div class="install-cmd">
-              <code>Get-FileHash .\downloaded-file.exe -Algorithm SHA256</code>
-              <button class="copy-btn" data-copy="Get-FileHash .\\downloaded-file.exe -Algorithm SHA256">Copy</button>
-            </div>
-            <div class="install-cmd">
-              <code>Get-AuthenticodeSignature .\downloaded-file.exe</code>
-              <button class="copy-btn" data-copy="Get-AuthenticodeSignature .\\downloaded-file.exe">Copy</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="install-panel" id="tab-mac-mid">
-          <div class="install-option">
-            <span class="btn-outline install-download install-source-label">Run from Source on Mac ↓</span>
-          </div>
-          <p class="install-note">Packaged macOS downloads are temporarily unavailable while Apple signing and notarization are being configured.</p>
-          <div class="install-cmd">
-            <code>git clone https://github.com/web3dev1337/agent-workspace.git</code>
-            <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/agent-workspace.git">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>cd agent-workspace && npm install</code>
-            <button class="copy-btn" data-copy="cd agent-workspace && npm install">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>npm start</code>
-            <button class="copy-btn" data-copy="npm start">Copy</button>
-          </div>
-          <p class="install-note">Opens at <span class="text-cyan">http://localhost:9461</span> in your browser.</p>
-        </div>
-
-        <div class="install-panel" id="tab-linux-mid">
-          <div class="install-option">
-            <a class="btn-glow install-download" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank" rel="noopener">Download Linux Packages</a>
-          </div>
-          <p class="install-note">Native Linux desktop builds are published on GitHub Releases as <span class="text-cyan">.deb</span> and <span class="text-cyan">.pkg.tar.zst</span> packages.</p>
-          <div class="install-divider"><span>or run from source for WSL / browser use</span></div>
-          <div class="install-cmd">
-            <code>git clone https://github.com/web3dev1337/agent-workspace.git</code>
-            <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/agent-workspace.git">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>cd agent-workspace && npm install</code>
-            <button class="copy-btn" data-copy="cd agent-workspace && npm install">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>npm start</code>
-            <button class="copy-btn" data-copy="npm start">Copy</button>
-          </div>
-          <p class="install-note">Opens at <span class="text-cyan">http://localhost:9461</span> in your browser.</p>
-        </div>
-      </div>
-      <p class="install-note install-legal-note">
-        By downloading, installing, or using Agent Workspace, you agree to the
-        <a href="terms.html">Terms of Use</a> and <a href="privacy.html">Privacy Policy</a>.
-      </p>
-    </section>
-
-    <section class="feature-stack" id="features">
-      <article class="feature-card reveal">
-        <div class="feature-copy">
-          <h3 class="feature-title text-cyan">Runs Locally, Models by Provider</h3>
-          <p class="feature-desc">Agent Workspace runs locally on your machine: sessions, workspaces, worktrees, and orchestration stay on your hardware. Model inference happens through the providers and CLIs you explicitly configure, under your own accounts.</p>
-        </div>
-      </article>
-
-      <article class="feature-card reveal" style="--delay: 0.03s">
-        <div class="feature-copy">
-          <h3 class="feature-title">Quick Answers</h3>
-          <p class="feature-desc"><strong>Does Agent Workspace run locally?</strong> Yes. Sessions, workspaces, worktrees, and orchestration run on your machine.</p>
-          <p class="feature-desc"><strong>Where does model inference run?</strong> Through the AI provider CLIs and accounts you configure.</p>
-          <p class="feature-desc"><strong>Can it manage multiple repositories and worktrees?</strong> Yes. You can run one or many repositories with multiple worktrees in the same workspace.</p>
-          <p class="feature-desc"><strong>Can I jump straight to GitHub diffs and PRs?</strong> Yes. The review workflow supports direct links to GitHub diffs and PR pages.</p>
-          <p class="feature-desc"><strong>Does anyone actually use this?</strong> Yes. We built it over a few days in July 2025 and have used it ever since to ship websites and multiple games, with more than half a million plays across those projects. We have not opened an IDE since.</p>
-        </div>
-      </article>
-
-      <article class="feature-card reveal" style="--delay: 0.05s">
-        <div class="feature-copy">
-          <h3 class="feature-title text-blue-deep">Native Terminal Grid + Worktree Sidebar</h3>
-          <p class="feature-desc">Open multiple worktrees inside the same workspace, from one repository or several repositories. The left sidebar tracks worktree status while the main pane runs a 2x2 grid of agents like Claude, Codex, OpenCode, and Gemini CLI.</p>
-        </div>
-        <figure class="feature-shot contain">
-          <img src="assets/workspace2-windows.png" alt="Workspace view with worktree sidebar and a 2x2 terminal agent grid">
-        </figure>
-      </article>
-
-      <article class="feature-card reveal" style="--delay: 0.1s">
-        <div class="feature-copy">
-          <h3 class="feature-title">Agent + Server Windows per Worktree</h3>
-          <p class="feature-desc">Run an agent window and a server window side by side in the same worktree. Keep coding/review in the agent pane while the server pane runs your website, game runtime, tests, or any CLI command from that exact folder.</p>
-        </div>
-        <figure class="feature-shot contain">
-          <img src="assets/server-run-windows.png" alt="Agent and server windows running side by side in the same worktree">
-        </figure>
-      </article>
-
-      <article class="feature-card reveal" style="--delay: 0.15s">
-        <div class="feature-copy">
-          <h3 class="feature-title">Built-in Diff Viewer + Review Console</h3>
-          <p class="feature-desc">Review diffs in-app with agent and server context still visible in the same workflow. Use action buttons to jump directly to the GitHub PR or GitHub diff, re-prompt agents from review context, run verification steps, and merge once checks pass.</p>
-        </div>
-        <figure class="feature-shot contain diff-viewer-shot">
-          <img src="assets/diff-viewer-windows.png" alt="Diff viewer review console with agent and server panes alongside the in-app diff viewer">
-        </figure>
-      </article>
-
-      <article class="feature-card reveal" style="--delay: 0.2s">
-        <div class="feature-copy">
-          <h3 class="feature-title">Commander</h3>
-          <p class="feature-desc">Use a top-level commander terminal to orchestrate the rest of your sessions: launch agents, fan out prompts, re-run commands, and coordinate review or merge flows from one control point.</p>
-        </div>
-        <figure class="feature-shot contain">
-          <img src="assets/commander-windows.png" alt="Commander modal coordinating multiple workspaces and worktrees">
-        </figure>
-      </article>
-
-      <article class="feature-card reveal" style="--delay: 0.25s">
-        <div class="feature-copy">
-          <h3 class="feature-title">Tasks Board</h3>
-          <p class="feature-desc">Manage task flow in one place with board and list views, tier filters (T1-T4), provider toggles, and automation controls so you can route work to the right agent quickly.</p>
-        </div>
-        <figure class="feature-shot contain">
-          <img src="assets/tasks-windows.png" alt="Tasks board with tier filters and agent/provider controls">
-        </figure>
-      </article>
-
-      <article class="feature-card reveal" style="--delay: 0.3s">
-        <div class="feature-copy">
-          <h3 class="feature-title">Tier System</h3>
-          <p class="feature-desc">Keep work organized by priority with a dedicated tier lane (T1-T4), plus quick filters to isolate focus work, reviews, and background tasks from the same worktree sidebar.</p>
-          <ul class="tier-meaning-list">
-            <li><strong>T1 Focus</strong> - Active deep work.</li>
-            <li><strong>T2 Backup</strong> - Runs alongside or when T1 is blocked.</li>
-            <li><strong>T3 Background</strong> - Batch prompt and batch review.</li>
-            <li><strong>T4 Overnight</strong> - Long-running autonomous tasks.</li>
-          </ul>
-        </div>
-        <figure class="feature-shot contain narrow">
-          <img src="assets/tiers-windows.png" alt="Worktree sidebar with tier filters and T1 to T4 assignment badges">
-        </figure>
-      </article>
-
-      <article class="feature-card reveal" id="projects" style="--delay: 0.35s">
-        <div class="feature-copy">
-          <h3 class="feature-title">Projects Board</h3>
-          <p class="feature-desc">Track active and shipped work with the projects board workflow. Keep previous project history visible while new work moves through planning, active implementation, and ship queues.</p>
-        </div>
-        <figure class="feature-shot contain">
-          <img src="assets/projects-board-windows.png" alt="Projects board view with Active, Ship Next, and Done columns">
-        </figure>
-      </article>
-
-      <article class="feature-card reveal" id="ports" style="--delay: 0.4s">
-        <div class="feature-copy">
-          <h3 class="feature-title">Ports Panel</h3>
-          <p class="feature-desc">See the running services list in one place, including assigned ports and owning worktrees. This makes it easy to inspect local stacks, debug collisions, and jump to the right runtime quickly.</p>
-        </div>
-        <figure class="feature-shot contain">
-          <img src="assets/ports-windows.png" alt="Ports panel showing running services and assigned local ports">
-        </figure>
-      </article>
-
-      <article class="feature-card reveal" id="multitab" style="--delay: 0.45s">
-        <div class="feature-copy">
-          <h3 class="feature-title">Multi-Tab Workspaces</h3>
-          <p class="feature-desc">Open multiple workspaces at once in browser-like tabs. Switch contexts without killing sessions, and keep each workspace state isolated while terminals continue running in the background.</p>
-        </div>
-        <div class="feature-visual tabs-visual" aria-hidden="true">
-          <img class="tab-strip-inline" src="assets/workspace-tabs-windows.png" alt="Browser-like tabs showing two active workspaces in Agent Workspace">
-          <div class="tabs-side-by-side">
-            <figure class="tabs-shot">
-              <img src="assets/home-page-windows.png" alt="Workspace 1 with multiple agent terminals and worktree sidebar">
-            </figure>
-            <figure class="tabs-shot">
-              <img src="assets/workspace2-windows.png" alt="Workspace 2 running a separate set of worktrees and agent sessions">
-            </figure>
-          </div>
-        </div>
-      </article>
-    </section>
-
-    <section class="install-section reveal" id="install">
-      <h2 class="section-title">Install</h2>
-      <p class="section-desc">Get up and running in under a minute.</p>
-
-      <div class="install-tabs">
-        <button class="install-tab active" data-tab="windows"><svg class="tab-icon" viewBox="0 0 88 88" fill="currentColor"><path d="M0 12.402l35.687-4.86.016 34.423-35.67.203zm35.67 33.529l.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349l-.011 41.34-47.318-6.678-.066-34.739z"/></svg> Windows</button>
-        <button class="install-tab" data-tab="mac"><svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg> Mac</button>
-        <button class="install-tab" data-tab="linux"><img class="tab-icon" src="assets/tux-mono.svg" alt="Linux"> Linux / WSL</button>
-      </div>
-
-      <div class="install-panels">
-        <div class="install-panel active" id="tab-windows">
-          <div class="install-option">
-            <a class="btn-glow install-download" id="install-main-btn" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank" rel="noopener">Download Windows App</a>
-          </div>
-          <div class="install-divider"><span>or run from source</span></div>
-          <div class="install-cmd">
-            <code>git clone https://github.com/web3dev1337/agent-workspace.git</code>
-            <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/agent-workspace.git">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>cd agent-workspace && npm install</code>
-            <button class="copy-btn" data-copy="cd agent-workspace && npm install">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>npm start</code>
-            <button class="copy-btn" data-copy="npm start">Copy</button>
-          </div>
-          <div class="install-verify-card">
-            <p class="install-verify-title">Verify the Windows installer before running it.</p>
-            <ul class="install-verify-list">
-              <li>Compare the SHA-256 digest shown on the GitHub release.</li>
-              <li>If a signature is present, verify it before launching.</li>
-              <li>If verification fails, do not run the file.</li>
-            </ul>
-            <div class="install-cmd">
-              <code>Get-FileHash .\downloaded-file.exe -Algorithm SHA256</code>
-              <button class="copy-btn" data-copy="Get-FileHash .\\downloaded-file.exe -Algorithm SHA256">Copy</button>
-            </div>
-            <div class="install-cmd">
-              <code>Get-AuthenticodeSignature .\downloaded-file.exe</code>
-              <button class="copy-btn" data-copy="Get-AuthenticodeSignature .\\downloaded-file.exe">Copy</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="install-panel" id="tab-mac">
-          <div class="install-option">
-            <span class="btn-outline install-download install-source-label">Run from Source on Mac ↓</span>
-          </div>
-          <p class="install-note">Packaged macOS downloads are temporarily unavailable while Apple signing and notarization are being configured.</p>
-          <div class="install-cmd">
-            <code>git clone https://github.com/web3dev1337/agent-workspace.git</code>
-            <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/agent-workspace.git">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>cd agent-workspace && npm install</code>
-            <button class="copy-btn" data-copy="cd agent-workspace && npm install">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>npm start</code>
-            <button class="copy-btn" data-copy="npm start">Copy</button>
-          </div>
-          <p class="install-note">Opens at <span class="text-cyan">http://localhost:9461</span> in your browser.</p>
-        </div>
-
-        <div class="install-panel" id="tab-linux">
-          <div class="install-option">
-            <a class="btn-glow install-download" href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank" rel="noopener">Download Linux Packages</a>
-          </div>
-          <p class="install-note">Native Linux desktop builds are published on GitHub Releases as <span class="text-cyan">.deb</span> and <span class="text-cyan">.pkg.tar.zst</span> packages.</p>
-          <div class="install-divider"><span>or run from source for WSL / browser use</span></div>
-          <div class="install-cmd">
-            <code>git clone https://github.com/web3dev1337/agent-workspace.git</code>
-            <button class="copy-btn" data-copy="git clone https://github.com/web3dev1337/agent-workspace.git">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>cd agent-workspace && npm install</code>
-            <button class="copy-btn" data-copy="cd agent-workspace && npm install">Copy</button>
-          </div>
-          <div class="install-cmd">
-            <code>npm start</code>
-            <button class="copy-btn" data-copy="npm start">Copy</button>
-          </div>
-          <p class="install-note">Opens at <span class="text-cyan">http://localhost:9461</span> in your browser.</p>
-        </div>
-      </div>
-      <p class="install-note install-legal-note">
-        By downloading, installing, or using Agent Workspace, you agree to the
-        <a href="terms.html">Terms of Use</a> and <a href="privacy.html">Privacy Policy</a>.
-      </p>
-    </section>
-  </main>
-
-  <footer class="fluid-footer">
-    <div class="footer-content">
-      <div class="brand">
-        <div class="brand-orb small"></div>
-        <span>Agent Workspace</span>
-      </div>
-      <div class="footer-links">
-        <a href="https://github.com/web3dev1337/agent-workspace" target="_blank">GitHub</a>
-        <a href="https://github.com/web3dev1337/agent-workspace/releases/latest" target="_blank">Releases</a>
-        <a href="https://github.com/web3dev1337/agent-workspace" target="_blank">Run from Source</a>
-        <a class="footer-sponsor" href="https://github.com/sponsors/web3dev1337" target="_blank">Sponsor</a>
-        <a href="terms.html">Terms</a>
-        <a href="privacy.html">Privacy</a>
-      </div>
-      <div class="copyright">© <span id="copy-year"></span> <a href="https://github.com/web3dev1337/agent-workspace" target="_blank">Agent Workspace Maintainers</a></div>
-    </div>
-  </footer>
-
+  <h1 class="mega-title" id="title">All your <span class="gradient-text multi-color">Agents</span>.<br>One <span class="gradient-text multi-color">Workspace</span>.</h1>
+  <img src="assets/Claude_AI_symbol.svg" class="float-logo" id="claude-logo" alt="">
+  <img src="assets/openai_logo_icon_248315.png" class="float-logo" id="openai-logo" alt="">
+  <h2 class="end-card" id="endcard">100% <span class="gradient-text multi-color-end">Claude Code</span> and <span class="gradient-text multi-color-end">Codex</span> plan compatible</h2>
+  <div class="trailer-container">
+    <video class="trailer-video" id="trailer" muted playsinline>
+      <source src="assets/trailer.mp4" type="video/mp4">
+    </video>
+  </div>
   <script src="script.js"></script>
+  <script>
+    const title = document.getElementById('title');
+    const trailer = document.getElementById('trailer');
+    const endcard = document.getElementById('endcard');
+
+    // 3s: title fades in
+    setTimeout(() => title.classList.add('visible'), 3000);
+
+    // 5.5s: title fades out
+    setTimeout(() => {
+      title.classList.remove('visible');
+      title.classList.add('fade-out');
+    }, 5500);
+
+    // 6.5s: video fades in
+    setTimeout(() => {
+      trailer.classList.add('visible');
+      trailer.play();
+    }, 6500);
+
+    // Corner zoom sequence - smoothly slides transform-origin between corners
+    const origins = ['top left', 'top right', 'bottom left', 'bottom right'];
+    let lastZoomIndex = -1;
+
+    trailer.addEventListener('timeupdate', () => {
+      const t = trailer.currentTime;
+      let zoomIndex = -1;
+      if (t >= 0 && t < 0.7) zoomIndex = 0;
+      else if (t >= 0.7 && t < 1.4) zoomIndex = 1;
+      else if (t >= 1.4 && t < 2.1) zoomIndex = 2;
+      else if (t >= 2.1 && t < 2.8) zoomIndex = 3;
+
+      if (zoomIndex !== lastZoomIndex) {
+        lastZoomIndex = zoomIndex;
+        if (zoomIndex >= 0) {
+          trailer.classList.add('zoomed');
+          trailer.style.transformOrigin = origins[zoomIndex];
+        } else {
+          trailer.classList.remove('zoomed');
+          trailer.style.transformOrigin = 'center center';
+        }
+      }
+    });
+
+    // After last zoom (2.8s into video) + 0.5s = 3.3s into video: fade out and show end card
+    let endTriggered = false;
+    trailer.addEventListener('timeupdate', () => {
+      if (!endTriggered && trailer.currentTime >= 3.3) {
+        endTriggered = true;
+        trailer.classList.remove('visible', 'zoomed');
+        trailer.style.transformOrigin = 'center center';
+        setTimeout(() => {
+          endcard.classList.add('visible');
+          document.querySelectorAll('.multi-color-end').forEach(el => el.classList.add('sweep'));
+          document.getElementById('claude-logo').classList.add('claude-drift');
+          document.getElementById('openai-logo').classList.add('openai-drift');
+        }, 600);
+      }
+    });
+  </script>
 </body>
 </html>
