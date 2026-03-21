@@ -168,6 +168,33 @@
       animation: gradientSwipeLTR 2.5s ease-out forwards;
     }
 
+    /* Site viewport - clips the content */
+    .site-viewport {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 1.5s ease;
+    }
+    .site-viewport.visible {
+      opacity: 1;
+    }
+
+    /* The actual site content slides up inside the viewport */
+    .site-scroll-content {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      transition: transform 8s cubic-bezier(0.25, 0, 0.2, 1);
+    }
+    .site-scroll-content.scrolling {
+      transform: translateY(var(--scroll-distance));
+    }
+
     /* Floating logos */
     .float-logo {
       position: fixed;
@@ -225,6 +252,11 @@
   <img src="assets/Claude_AI_symbol.svg" class="float-logo" id="claude-logo" alt="">
   <img src="assets/openai_logo_icon_248315.png" class="float-logo" id="openai-logo" alt="">
   <h2 class="end-card" id="endcard">100% <span class="gradient-text multi-color-end">Claude Code</span> and <span class="gradient-text multi-color-end">Codex</span> plan compatible</h2>
+  <div class="site-viewport" id="site-viewport">
+    <div class="site-scroll-content" id="site-content">
+      <iframe src="index-full.html" style="width:76.9vw;height:6150px;border:none;pointer-events:none;transform:scale(1.3);transform-origin:top left;"></iframe>
+    </div>
+  </div>
   <div class="trailer-container">
     <video class="trailer-video" id="trailer" muted playsinline>
       <source src="assets/trailer.mp4" type="video/mp4">
@@ -287,6 +319,22 @@
           document.querySelectorAll('.multi-color-end').forEach(el => el.classList.add('sweep'));
           document.getElementById('claude-logo').classList.add('claude-drift');
           document.getElementById('openai-logo').classList.add('openai-drift');
+
+          // After 4.7s, show real website and slide it up
+          setTimeout(() => {
+            endcard.style.transition = 'opacity 1s ease';
+            endcard.style.opacity = '0';
+
+            const viewport = document.getElementById('site-viewport');
+            const content = document.getElementById('site-content');
+            viewport.classList.add('visible');
+
+            // Start scrolling right away (adjusted for 1.3x scale)
+            setTimeout(() => {
+              content.style.setProperty('--scroll-distance', '-3600px');
+              content.classList.add('scrolling');
+            }, 500);
+          }, 4700);
         }, 600);
       }
     });

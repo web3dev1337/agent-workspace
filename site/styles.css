@@ -1674,13 +1674,16 @@ body.legal-page {
 /* Animations Trigger Classes */
 .reveal {
   opacity: 0;
-  transform: translateY(40px);
-  transition: all 1s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(60px) scale(0.97);
+  filter: blur(4px);
+  transition: all 1.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--delay, 0s);
 }
 
 .reveal.active {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
+  filter: blur(0);
 }
 
 /* Media Queries */
