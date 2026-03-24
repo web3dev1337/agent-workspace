@@ -34,7 +34,34 @@ class WorkspaceTabManager {
     return 'agent-workspace-open-workspace-tabs-v1';
   }
 
+  isTabPersistenceEnabled() {
+    return this.orchestrator?.isWorkspaceSidebarStatePersistenceEnabled?.() === true;
+  }
+
+  buildPersistedTabStateSnapshot() {
+    const openWorkspaceIds = Array.from(this.tabs.values())
+      .map((tab) => String(tab?.workspaceId || '').trim())
+      .filter(Boolean);
+    const activeWorkspaceId = String(this.getActiveTab()?.workspaceId || '').trim();
+    return {
+      openWorkspaceIds: Array.from(new Set(openWorkspaceIds)),
+      activeWorkspaceId
+    };
+  }
+
   loadPersistedTabState() {
+    if (!this.isTabPersistenceEnabled()) {
+      return { workspaceIds: [], activeWorkspaceId: '' };
+    }
+
+    const persistedFromSettings = this.orchestrator?.getPersistedWorkspaceTabState?.();
+    if (persistedFromSettings) {
+      return {
+        workspaceIds: Array.isArray(persistedFromSettings.openWorkspaceIds) ? persistedFromSettings.openWorkspaceIds : [],
+        activeWorkspaceId: String(persistedFromSettings.activeWorkspaceId || '').trim()
+      };
+    }
+
     try {
       const raw = localStorage.getItem(this.getTabPersistenceStorageKey());
       const parsed = raw ? JSON.parse(raw) : null;
@@ -50,17 +77,20 @@ class WorkspaceTabManager {
   }
 
   savePersistedTabState() {
+    const snapshot = this.buildPersistedTabStateSnapshot();
+
     try {
-      const workspaceIds = Array.from(this.tabs.values())
-        .map((tab) => String(tab?.workspaceId || '').trim())
-        .filter(Boolean);
-      const activeWorkspaceId = String(this.getActiveTab()?.workspaceId || '').trim();
-      localStorage.setItem(this.getTabPersistenceStorageKey(), JSON.stringify({
-        workspaceIds,
-        activeWorkspaceId
-      }));
+      if (this.isTabPersistenceEnabled()) {
+        localStorage.setItem(this.getTabPersistenceStorageKey(), JSON.stringify(snapshot));
+      } else {
+        localStorage.removeItem(this.getTabPersistenceStorageKey());
+      }
     } catch {
       // ignore storage failures
+    }
+
+    if (this.isTabPersistenceEnabled()) {
+      this.orchestrator?.queueWorkspaceTabStatePersistence?.({ snapshot });
     }
   }
 

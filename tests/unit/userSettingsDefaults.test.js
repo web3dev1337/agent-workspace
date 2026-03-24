@@ -53,6 +53,9 @@ describe('UserSettingsService defaults', () => {
     expect(experimental.persistWorkspaceSidebarState).toBe(false);
     expect(experimental.workspaceSidebarStateByWorkspace).toBeTruthy();
     expect(typeof experimental.workspaceSidebarStateByWorkspace).toBe('object');
+    expect(experimental.workspaceTabState).toBeTruthy();
+    expect(Array.isArray(experimental.workspaceTabState.openWorkspaceIds)).toBe(true);
+    expect(experimental.workspaceTabState.activeWorkspaceId).toBe('');
   });
 
   test('includes ui.worktrees auto-create defaults', () => {
@@ -153,6 +156,10 @@ describe('UserSettingsService defaults', () => {
                 tierFilter: '3',
                 hiddenWorktreeKeys: ['repo-work4']
               }
+            },
+            workspaceTabState: {
+              openWorkspaceIds: ['alpha', 'beta'],
+              activeWorkspaceId: 'beta'
             }
           },
           workflow: {
@@ -218,6 +225,10 @@ describe('UserSettingsService defaults', () => {
       viewMode: 'claude',
       tierFilter: '3',
       hiddenWorktreeKeys: ['repo-work4']
+    });
+    expect(merged.global.ui.experimental.workspaceTabState).toEqual({
+      openWorkspaceIds: ['alpha', 'beta'],
+      activeWorkspaceId: 'beta'
     });
 
     // Does not drop process.status defaults when only one cap is provided.

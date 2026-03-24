@@ -233,7 +233,7 @@ client/app.js                       - Config pre-fetching & caching
 client/app.js                      - Main client application
 ├─ Manages: UI state, socket connections, terminal grid
 ├─ Features: 16-terminal layout, real-time updates, session switching
-├─ Experimental workspace sidebar persistence: optional per-workspace restore for hidden worktrees plus View/Tier filters across reloads and app restarts
+├─ Experimental workspace UI persistence: optional per-workspace restore for hidden worktrees plus View/Tier filters, and optional restore of the open workspace tab set across reloads and app restarts
 ├─ Command Palette: header `⌘ Commands` button + `Ctrl/Cmd+K` searchable command launcher for command-catalog actions
 ├─ Intent hints: compact "intent haiku" strip above each agent terminal, refreshed from `POST /api/sessions/intent-haiku`
 ├─ Projects + Chats automation: `project-chats-new` Commander/voice action supports explicit workspace + repository targeting

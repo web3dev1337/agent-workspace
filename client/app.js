@@ -60,6 +60,9 @@ class ClaudeOrchestrator {
     this.workspaceSidebarStatePersistTimer = null;
     this.workspaceSidebarStatePersistChain = Promise.resolve();
     this.pendingWorkspaceSidebarStateSaves = new Map();
+    this.workspaceTabStatePersistTimer = null;
+    this.workspaceTabStatePersistChain = Promise.resolve();
+    this.pendingWorkspaceTabStateSave = null;
     this.simpleModeStartupTriggered = false;
     this.desktopDevtoolsKeydownHandler = null;
     this.currentLayout = '2x4';
@@ -526,6 +529,89 @@ class ClaudeOrchestrator {
     return snapshot && typeof snapshot === 'object' ? snapshot : null;
   }
 
+  normalizeWorkspaceTabState(snapshot) {
+    const rawOpenWorkspaceIds = Array.isArray(snapshot?.openWorkspaceIds)
+      ? snapshot.openWorkspaceIds
+      : (Array.isArray(snapshot?.workspaceIds) ? snapshot.workspaceIds : []);
+    const openWorkspaceIds = Array.from(new Set(
+      rawOpenWorkspaceIds.map((value) => String(value || '').trim()).filter(Boolean)
+    ));
+    const activeWorkspaceId = String(snapshot?.activeWorkspaceId || '').trim();
+    return {
+      openWorkspaceIds,
+      activeWorkspaceId
+    };
+  }
+
+  getPersistedWorkspaceTabState() {
+    if (!this.isWorkspaceSidebarStatePersistenceEnabled()) return null;
+    const snapshot = this.userSettings?.global?.ui?.experimental?.workspaceTabState;
+    if (!snapshot || typeof snapshot !== 'object') return null;
+    return this.normalizeWorkspaceTabState(snapshot);
+  }
+
+  captureWorkspaceTabStateSnapshot() {
+    if (!this.tabManager) {
+      return this.normalizeWorkspaceTabState(null);
+    }
+
+    const openWorkspaceIds = Array.from(this.tabManager.tabs.values())
+      .map((tab) => String(tab?.workspaceId || '').trim())
+      .filter(Boolean);
+    const activeWorkspaceId = String(this.tabManager.getActiveTab?.()?.workspaceId || this.currentWorkspace?.id || '').trim();
+    return this.normalizeWorkspaceTabState({
+      openWorkspaceIds,
+      activeWorkspaceId
+    });
+  }
+
+  queueWorkspaceTabStatePersistence({ snapshot = null, immediate = false } = {}) {
+    if (!this.isWorkspaceSidebarStatePersistenceEnabled()) return;
+
+    const nextSnapshot = this.normalizeWorkspaceTabState(snapshot || this.captureWorkspaceTabStateSnapshot());
+    this.pendingWorkspaceTabStateSave = nextSnapshot;
+
+    const flush = () => {
+      if (!this.pendingWorkspaceTabStateSave) return;
+      const queuedSnapshot = this.pendingWorkspaceTabStateSave;
+      this.pendingWorkspaceTabStateSave = null;
+      this.workspaceTabStatePersistChain = this.workspaceTabStatePersistChain
+        .catch(() => {})
+        .then(() => this.persistWorkspaceTabStateSnapshot(queuedSnapshot));
+    };
+
+    if (this.workspaceTabStatePersistTimer) {
+      clearTimeout(this.workspaceTabStatePersistTimer);
+      this.workspaceTabStatePersistTimer = null;
+    }
+
+    if (immediate) {
+      flush();
+      return;
+    }
+
+    this.workspaceTabStatePersistTimer = setTimeout(() => {
+      this.workspaceTabStatePersistTimer = null;
+      flush();
+    }, 150);
+  }
+
+  async persistWorkspaceTabStateSnapshot(snapshot) {
+    if (!this.isWorkspaceSidebarStatePersistenceEnabled()) return;
+
+    const normalizedSnapshot = this.normalizeWorkspaceTabState(snapshot);
+    const existingSnapshot = this.normalizeWorkspaceTabState(this.userSettings?.global?.ui?.experimental?.workspaceTabState);
+    if (JSON.stringify(existingSnapshot) === JSON.stringify(normalizedSnapshot)) {
+      return;
+    }
+
+    if (this.userSettings?.global?.ui?.experimental) {
+      this.userSettings.global.ui.experimental.workspaceTabState = normalizedSnapshot;
+    }
+
+    await this.updateGlobalUserSetting('ui.experimental.workspaceTabState', normalizedSnapshot);
+  }
+
   captureWorkspaceSidebarStateSnapshot({ workspaceId = null } = {}) {
     const workspaceKey = String(workspaceId || this.currentWorkspace?.id || '').trim();
     if (!workspaceKey) return null;
@@ -685,6 +771,29 @@ class ClaudeOrchestrator {
     this.ensureFilterToggleExists();
     this.updateTerminalGrid();
     this.buildSidebar();
+    return true;
+  }
+
+  async restoreWorkspaceTabsFromPersistence() {
+    if (!this.tabManager || !this.currentWorkspace) return false;
+    if (!Array.isArray(this.availableWorkspaces) || this.availableWorkspaces.length === 0) return false;
+    if (!this.isWorkspaceSidebarStatePersistenceEnabled()) return false;
+
+    const persistedTabState = this.getPersistedWorkspaceTabState();
+    if (!persistedTabState || persistedTabState.openWorkspaceIds.length === 0) return false;
+
+    const activeWorkspaceId = persistedTabState.activeWorkspaceId || String(this.currentWorkspace?.id || '').trim();
+    const restoredTabId = this.tabManager.restorePersistedTabs(this.availableWorkspaces, { activeWorkspaceId });
+    if (!restoredTabId) return false;
+
+    const targetTab = this.tabManager.getTab(restoredTabId);
+    if (!targetTab) return false;
+
+    if (this.currentTabId !== restoredTabId || this.tabManager.activeTabId !== restoredTabId) {
+      await this.tabManager.switchTab(restoredTabId);
+    }
+
+    this.currentTabId = restoredTabId;
     return true;
   }
 
@@ -1601,7 +1710,7 @@ class ClaudeOrchestrator {
         this.showClaudeUpdateRequired(updateInfo);
       });
 
-	      this.socket.on('user-settings-updated', (settings) => {
+	      this.socket.on('user-settings-updated', async (settings) => {
 	        console.log('User settings updated:', settings);
 	        this.userSettings = settings;
 	        this.syncUserSettingsUI();
@@ -1610,6 +1719,7 @@ class ClaudeOrchestrator {
 	        this.applyDesktopDevtoolsConfig();
 	        this.maybeAutoOpenSimpleMode();
 	        this.applyUiVisibility();
+	        await this.restoreWorkspaceTabsFromPersistence();
 	      });
 
       // Workspace events
@@ -2780,10 +2890,16 @@ class ClaudeOrchestrator {
             clearTimeout(this.workspaceSidebarStatePersistTimer);
             this.workspaceSidebarStatePersistTimer = null;
           }
+          if (this.workspaceTabStatePersistTimer) {
+            clearTimeout(this.workspaceTabStatePersistTimer);
+            this.workspaceTabStatePersistTimer = null;
+          }
           this.pendingWorkspaceSidebarStateSaves.clear();
+          this.pendingWorkspaceTabStateSave = null;
           return;
         }
         this.queueWorkspaceSidebarStatePersistence({ immediate: true });
+        this.queueWorkspaceTabStatePersistence({ immediate: true });
       });
     }
 
@@ -17877,6 +17993,7 @@ class ClaudeOrchestrator {
 	        this.refreshBranchLabels();
 	        this.updateTierFilterButtons();
         this.restoreCurrentWorkspaceSidebarStateFromPersistence();
+        await this.restoreWorkspaceTabsFromPersistence();
       } else {
         console.error('Failed to load user settings:', response.statusText);
       }

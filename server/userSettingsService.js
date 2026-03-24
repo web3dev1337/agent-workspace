@@ -305,7 +305,11 @@ class UserSettingsService {
           },
           experimental: {
             persistWorkspaceSidebarState: false,
-            workspaceSidebarStateByWorkspace: {}
+            workspaceSidebarStateByWorkspace: {},
+            workspaceTabState: {
+              openWorkspaceIds: [],
+              activeWorkspaceId: ''
+            }
           },
           worktrees: {
             autoCreateExtraWhenBusy: true,
@@ -836,6 +840,10 @@ class UserSettingsService {
             workspaceSidebarStateByWorkspace: {
               ...(defaultsExperimental.workspaceSidebarStateByWorkspace || {}),
               ...(nextExperimental.workspaceSidebarStateByWorkspace || {})
+            },
+            workspaceTabState: {
+              ...(defaultsExperimental.workspaceTabState || {}),
+              ...(nextExperimental.workspaceTabState || {})
             }
           };
         }
@@ -1109,6 +1117,10 @@ class UserSettingsService {
             workspaceSidebarStateByWorkspace: {
               ...(defaultsExperimental.workspaceSidebarStateByWorkspace || {}),
               ...(nextExperimental.workspaceSidebarStateByWorkspace || {})
+            },
+            workspaceTabState: {
+              ...(defaultsExperimental.workspaceTabState || {}),
+              ...(nextExperimental.workspaceTabState || {})
             }
           };
         }
