@@ -1828,6 +1828,7 @@ class ClaudeOrchestrator {
           }
 
           if (existingTab) {
+            const shouldForcePersistedSidebarRestore = existingTab.needsPersistedWorkspaceSidebarRestore === true;
             // Switch to existing tab
             console.log(`Workspace ${nextWorkspace.name} already open, switching to tab`);
             existingTab.workspace = nextWorkspace;
@@ -1855,7 +1856,7 @@ class ClaudeOrchestrator {
             // CRITICAL: Set lastSessionsWorkspaceId BEFORE handleInitialSessions so that
             // it treats this as a same-workspace refresh and preserves the worktree
             // visibility state that was just restored from the tab (fix #786).
-            this.lastSessionsWorkspaceId = nextWorkspace.id;
+            this.lastSessionsWorkspaceId = shouldForcePersistedSidebarRestore ? null : nextWorkspace.id;
 
             await this.maybePlanWorkspaceRecovery(nextWorkspace.id, { interactive: true });
             this.handleInitialSessions(sessions);
@@ -4284,6 +4285,13 @@ class ClaudeOrchestrator {
     }
 
     this.pruneIntentHaikuState(new Set(Object.keys(sessionStates)));
+
+    if (this.tabManager && this.currentTabId) {
+      const currentTab = this.tabManager.getTab(this.currentTabId);
+      if (currentTab) {
+        currentTab.needsPersistedWorkspaceSidebarRestore = false;
+      }
+    }
 
     this.lastSessionsWorkspaceId = currentWorkspaceId;
 

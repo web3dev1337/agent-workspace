@@ -114,7 +114,11 @@ class WorkspaceTabManager {
     orderedWorkspaceIds.forEach((workspaceId) => {
       const workspace = availableById.get(workspaceId);
       if (!workspace) return;
-      this.createTab(workspace, [], { autoActivate: false });
+      const tabId = this.createTab(workspace, [], { autoActivate: false });
+      const tabState = this.getTab(tabId);
+      if (tabState && tabState.sessions.size === 0) {
+        tabState.needsPersistedWorkspaceSidebarRestore = true;
+      }
     });
 
     if (activeWorkspaceId) {
@@ -227,6 +231,7 @@ class WorkspaceTabManager {
 
       // UI/filter state
       uiState: this.createDefaultUIState(),
+      needsPersistedWorkspaceSidebarRestore: false,
 
       // Observer for resize handling
       resizeObserver: null,
