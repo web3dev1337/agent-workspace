@@ -510,6 +510,11 @@ class WorkspaceTabManager {
 
     // Persist UI/filter state (visible terminals, filters, etc.) for later restoration
     this.saveTabUIState(tabState);
+    this.orchestrator.queueWorkspaceSidebarStatePersistence?.({
+      workspaceId: tabWorkspaceId,
+      snapshot: this.orchestrator.captureWorkspaceSidebarStateSnapshot?.({ workspaceId: tabWorkspaceId }),
+      immediate: true
+    });
 
     for (const [sessionId, termData] of Array.from(tabState.terminals.entries())) {
       if (currentSessionIds.has(sessionId)) continue;

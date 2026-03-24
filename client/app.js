@@ -57,6 +57,9 @@ class ClaudeOrchestrator {
     this.settings = this.loadSettings();
     this.appInfo = null;
     this.userSettings = null; // Will be loaded from server
+    this.workspaceSidebarStatePersistTimer = null;
+    this.workspaceSidebarStatePersistChain = Promise.resolve();
+    this.pendingWorkspaceSidebarStateSaves = new Map();
     this.simpleModeStartupTriggered = false;
     this.desktopDevtoolsKeydownHandler = null;
     this.currentLayout = '2x4';
@@ -495,6 +498,179 @@ class ClaudeOrchestrator {
       if (rows.size === 0) this.sessionVisibilityOverridesByWorkspace.delete(workspaceId);
     }
     this.saveSessionVisibilityOverrides();
+  }
+
+  isWorkspaceSidebarStatePersistenceEnabled() {
+    return this.userSettings?.global?.ui?.experimental?.persistWorkspaceSidebarState === true;
+  }
+
+  normalizeWorkspaceSidebarStateViewMode(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return ['all', 'claude', 'server'].includes(normalized) ? normalized : 'all';
+  }
+
+  normalizeWorkspaceSidebarStateTierFilter(value) {
+    const raw = String(value ?? '').trim().toLowerCase();
+    if (!raw || raw === 'all') return 'all';
+    if (raw === 'none') return 'none';
+    const tier = Number.parseInt(raw, 10);
+    return (tier >= 1 && tier <= 4) ? String(tier) : 'all';
+  }
+
+  getPersistedWorkspaceSidebarState(workspaceId = null) {
+    const workspaceKey = String(workspaceId || this.currentWorkspace?.id || '').trim();
+    if (!workspaceKey) return null;
+    const states = this.userSettings?.global?.ui?.experimental?.workspaceSidebarStateByWorkspace;
+    if (!states || typeof states !== 'object') return null;
+    const snapshot = states[workspaceKey];
+    return snapshot && typeof snapshot === 'object' ? snapshot : null;
+  }
+
+  captureWorkspaceSidebarStateSnapshot({ workspaceId = null } = {}) {
+    const workspaceKey = String(workspaceId || this.currentWorkspace?.id || '').trim();
+    if (!workspaceKey) return null;
+
+    const worktreeKeys = new Map();
+    for (const [sessionId, session] of this.sessions) {
+      if (!sessionId || !session) continue;
+      const sessionWorkspaceId = String(session?.workspace || this.currentWorkspace?.id || '').trim();
+      if (workspaceKey && sessionWorkspaceId && sessionWorkspaceId !== workspaceKey) continue;
+      const worktreeKey = this.getSessionWorktreeKey(sessionId, session);
+      if (!worktreeKey) continue;
+      if (!worktreeKeys.has(worktreeKey)) worktreeKeys.set(worktreeKey, []);
+      worktreeKeys.get(worktreeKey).push(String(sessionId));
+    }
+
+    const hiddenWorktreeKeys = Array.from(worktreeKeys.entries())
+      .filter(([, sessionIds]) => sessionIds.every((sessionId) => !this.visibleTerminals.has(sessionId)))
+      .map(([worktreeKey]) => worktreeKey)
+      .sort((a, b) => a.localeCompare(b));
+
+    return {
+      viewMode: this.normalizeWorkspaceSidebarStateViewMode(this.viewMode),
+      tierFilter: this.normalizeWorkspaceSidebarStateTierFilter(this.tierFilter),
+      hiddenWorktreeKeys
+    };
+  }
+
+  queueWorkspaceSidebarStatePersistence({ workspaceId = null, snapshot = null, immediate = false } = {}) {
+    if (!this.isWorkspaceSidebarStatePersistenceEnabled()) return;
+
+    const workspaceKey = String(workspaceId || this.currentWorkspace?.id || '').trim();
+    if (!workspaceKey) return;
+
+    const nextSnapshot = snapshot || this.captureWorkspaceSidebarStateSnapshot({ workspaceId: workspaceKey });
+    if (!nextSnapshot) return;
+
+    this.pendingWorkspaceSidebarStateSaves.set(workspaceKey, nextSnapshot);
+
+    const flush = () => {
+      if (!this.pendingWorkspaceSidebarStateSaves.size) return;
+      const queuedEntries = Array.from(this.pendingWorkspaceSidebarStateSaves.entries());
+      this.pendingWorkspaceSidebarStateSaves.clear();
+      this.workspaceSidebarStatePersistChain = this.workspaceSidebarStatePersistChain
+        .catch(() => {})
+        .then(async () => {
+          for (const [queuedWorkspaceId, queuedSnapshot] of queuedEntries) {
+            await this.persistWorkspaceSidebarStateSnapshot(queuedWorkspaceId, queuedSnapshot);
+          }
+        });
+    };
+
+    if (this.workspaceSidebarStatePersistTimer) {
+      clearTimeout(this.workspaceSidebarStatePersistTimer);
+      this.workspaceSidebarStatePersistTimer = null;
+    }
+
+    if (immediate) {
+      flush();
+      return;
+    }
+
+    this.workspaceSidebarStatePersistTimer = setTimeout(() => {
+      this.workspaceSidebarStatePersistTimer = null;
+      flush();
+    }, 150);
+  }
+
+  async persistWorkspaceSidebarStateSnapshot(workspaceId, snapshot) {
+    const workspaceKey = String(workspaceId || '').trim();
+    if (!workspaceKey || !snapshot || typeof snapshot !== 'object') return;
+    if (!this.isWorkspaceSidebarStatePersistenceEnabled()) return;
+
+    const currentMap = (this.userSettings?.global?.ui?.experimental?.workspaceSidebarStateByWorkspace
+      && typeof this.userSettings.global.ui.experimental.workspaceSidebarStateByWorkspace === 'object')
+      ? this.userSettings.global.ui.experimental.workspaceSidebarStateByWorkspace
+      : {};
+
+    const normalizedSnapshot = {
+      viewMode: this.normalizeWorkspaceSidebarStateViewMode(snapshot.viewMode),
+      tierFilter: this.normalizeWorkspaceSidebarStateTierFilter(snapshot.tierFilter),
+      hiddenWorktreeKeys: Array.isArray(snapshot.hiddenWorktreeKeys)
+        ? Array.from(new Set(snapshot.hiddenWorktreeKeys.map((value) => String(value || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))
+        : []
+    };
+
+    const existing = currentMap[workspaceKey];
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalizedSnapshot)) {
+      return;
+    }
+
+    const nextMap = {
+      ...currentMap,
+      [workspaceKey]: normalizedSnapshot
+    };
+
+    if (this.userSettings?.global?.ui?.experimental) {
+      this.userSettings.global.ui.experimental.workspaceSidebarStateByWorkspace = nextMap;
+    }
+
+    await this.updateGlobalUserSetting('ui.experimental.workspaceSidebarStateByWorkspace', nextMap);
+  }
+
+  applyPersistedWorkspaceSidebarState({ workspaceId = null } = {}) {
+    if (!this.isWorkspaceSidebarStatePersistenceEnabled()) return false;
+
+    const workspaceKey = String(workspaceId || this.currentWorkspace?.id || '').trim();
+    if (!workspaceKey) return false;
+
+    const snapshot = this.getPersistedWorkspaceSidebarState(workspaceKey);
+    if (!snapshot) return false;
+
+    const hiddenWorktreeKeys = new Set(
+      Array.isArray(snapshot.hiddenWorktreeKeys)
+        ? snapshot.hiddenWorktreeKeys.map((value) => String(value || '').trim()).filter(Boolean)
+        : []
+    );
+
+    const nextVisibleTerminals = new Set();
+    let matchedSession = false;
+    for (const [sessionId, session] of this.sessions) {
+      if (!sessionId || !session) continue;
+      const sessionWorkspaceId = String(session?.workspace || this.currentWorkspace?.id || '').trim();
+      if (workspaceKey && sessionWorkspaceId && sessionWorkspaceId !== workspaceKey) continue;
+      const worktreeKey = this.getSessionWorktreeKey(sessionId, session);
+      if (!worktreeKey) {
+        nextVisibleTerminals.add(sessionId);
+        continue;
+      }
+      matchedSession = true;
+      if (!hiddenWorktreeKeys.has(worktreeKey)) {
+        nextVisibleTerminals.add(sessionId);
+      }
+    }
+
+    this.viewMode = this.normalizeWorkspaceSidebarStateViewMode(snapshot.viewMode);
+    const normalizedTier = this.normalizeWorkspaceSidebarStateTierFilter(snapshot.tierFilter);
+    this.tierFilter = normalizedTier === 'all' || normalizedTier === 'none'
+      ? normalizedTier
+      : Number.parseInt(normalizedTier, 10);
+
+    if (matchedSession) {
+      this.visibleTerminals = nextVisibleTerminals;
+    }
+
+    return true;
   }
 
   isSessionVisibleByWorktreeSelection(sessionId, session = null) {
@@ -2580,6 +2756,23 @@ class ClaudeOrchestrator {
       });
     }
 
+    const experimentalPersistSidebarState = document.getElementById('experimental-persist-sidebar-state');
+    if (experimentalPersistSidebarState) {
+      experimentalPersistSidebarState.addEventListener('change', async (e) => {
+        const enabled = !!e.target.checked;
+        await this.updateGlobalUserSetting('ui.experimental.persistWorkspaceSidebarState', enabled);
+        if (!enabled) {
+          if (this.workspaceSidebarStatePersistTimer) {
+            clearTimeout(this.workspaceSidebarStatePersistTimer);
+            this.workspaceSidebarStatePersistTimer = null;
+          }
+          this.pendingWorkspaceSidebarStateSaves.clear();
+          return;
+        }
+        this.queueWorkspaceSidebarStatePersistence({ immediate: true });
+      });
+    }
+
     // Discord services auto-start (server-persisted)
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
 	    if (discordAutoEnsure) {
@@ -2988,7 +3181,11 @@ class ClaudeOrchestrator {
 	    this.updateTerminalGrid();
 
 	    if (persist) {
-	      this.updateGlobalUserSetting('ui.terminals.viewMode', normalized);
+	      if (this.isWorkspaceSidebarStatePersistenceEnabled()) {
+	        this.queueWorkspaceSidebarStatePersistence();
+	      } else {
+	        this.updateGlobalUserSetting('ui.terminals.viewMode', normalized);
+	      }
 	    }
 	  }
 
@@ -3022,7 +3219,11 @@ class ClaudeOrchestrator {
 
     if (persist) {
       const next = (normalized === 'all' || normalized === 'none') ? String(normalized) : String(Number(normalized));
-      this.updateGlobalUserSetting('ui.terminals.tierFilter', next);
+      if (this.isWorkspaceSidebarStatePersistenceEnabled()) {
+        this.queueWorkspaceSidebarStatePersistence();
+      } else {
+        this.updateGlobalUserSetting('ui.terminals.tierFilter', next);
+      }
     }
   }
 
@@ -3950,6 +4151,10 @@ class ClaudeOrchestrator {
     this.pruneIntentHaikuState(new Set(Object.keys(sessionStates)));
 
     this.lastSessionsWorkspaceId = currentWorkspaceId;
+
+    if (!preserveVisibility) {
+      this.applyPersistedWorkspaceSidebarState({ workspaceId: currentWorkspaceId });
+    }
 
     // Hide loading message FIRST
     const loadingMessage = document.getElementById('loading-message');
@@ -5392,6 +5597,7 @@ class ClaudeOrchestrator {
     }
     this.updateTerminalGrid();
     this.buildSidebar();
+    this.queueWorkspaceSidebarStatePersistence();
   }
 
   toggleWorktreeVisibility(worktreeIdOrKey) {
@@ -5463,6 +5669,7 @@ class ClaudeOrchestrator {
     // This will re-render with correct data-visible-count and apply proper CSS grid
     this.updateTerminalGrid();
     this.buildSidebar();
+    this.queueWorkspaceSidebarStatePersistence();
   }
 
   showWorktree(worktreeIdOrKey) {
@@ -5475,6 +5682,7 @@ class ClaudeOrchestrator {
 
     this.updateTerminalGrid();
     this.buildSidebar();
+    this.queueWorkspaceSidebarStatePersistence();
   }
 
   showAllTerminals() {
@@ -5485,6 +5693,7 @@ class ClaudeOrchestrator {
 
     this.updateTerminalGrid();
     this.buildSidebar();
+    this.queueWorkspaceSidebarStatePersistence();
   }
 
   /**
@@ -5787,6 +5996,7 @@ class ClaudeOrchestrator {
     });
     this.updateTerminalGrid();
     this.buildSidebar();
+    this.queueWorkspaceSidebarStatePersistence();
   }
 
   renderTerminals(sessionIds) {
@@ -17961,6 +18171,11 @@ class ClaudeOrchestrator {
 	      simpleModeShowHints.checked = this.userSettings.global?.ui?.simpleMode?.showHints !== false;
 	    }
 	    this.applySimpleModeConfig();
+
+    const experimentalPersistSidebarState = document.getElementById('experimental-persist-sidebar-state');
+    if (experimentalPersistSidebarState) {
+      experimentalPersistSidebarState.checked = this.userSettings.global?.ui?.experimental?.persistWorkspaceSidebarState === true;
+    }
 
 	    const desktopDevtoolsEnabled = document.getElementById('desktop-devtools-enabled');
 	    if (desktopDevtoolsEnabled) {
