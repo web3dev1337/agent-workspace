@@ -3541,6 +3541,10 @@ class ClaudeOrchestrator {
   }
 
   syncTerminalFiltersFromUserSettings() {
+    if (this.isWorkspaceSidebarStatePersistenceEnabled()) {
+      return;
+    }
+
     const t = this.userSettings?.global?.ui?.terminals || {};
     const viewMode = String(t?.viewMode || '').trim().toLowerCase();
     const tierRaw = t?.tierFilter;
