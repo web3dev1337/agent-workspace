@@ -673,6 +673,21 @@ class ClaudeOrchestrator {
     return true;
   }
 
+  restoreCurrentWorkspaceSidebarStateFromPersistence() {
+    const workspaceId = String(this.currentWorkspace?.id || '').trim();
+    if (!workspaceId || this.sessions.size === 0) return false;
+
+    const applied = this.applyPersistedWorkspaceSidebarState({ workspaceId });
+    if (!applied) return false;
+
+    this.updateViewModeButtons();
+    this.updateTierFilterButtons();
+    this.ensureFilterToggleExists();
+    this.updateTerminalGrid();
+    this.buildSidebar();
+    return true;
+  }
+
   isSessionVisibleByWorktreeSelection(sessionId, session = null) {
     const sid = String(sessionId || '').trim();
     if (!sid) return false;
@@ -17862,6 +17877,7 @@ class ClaudeOrchestrator {
 	        this.applyUiVisibility();
 	        this.refreshBranchLabels();
 	        this.updateTierFilterButtons();
+        this.restoreCurrentWorkspaceSidebarStateFromPersistence();
       } else {
         console.error('Failed to load user settings:', response.statusText);
       }
