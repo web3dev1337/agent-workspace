@@ -4206,10 +4206,15 @@ class ClaudeOrchestrator {
     // receive a sessions refresh for the SAME workspace (e.g. after adding a
     // worktree). Never carry visibility between different workspaces.
     const currentWorkspaceId = this.currentWorkspace?.id || null;
-    const previousWorkspaceId = this.lastSessionsWorkspaceId || null;
-    const preserveVisibility = !!(currentWorkspaceId && previousWorkspaceId && currentWorkspaceId === previousWorkspaceId);
     const previousSessionIds = new Set(this.sessions.keys());
     const previousVisibleSessionIds = new Set(this.visibleTerminals);
+    const previousWorkspaceId = this.lastSessionsWorkspaceId || null;
+    const preserveVisibility = !!(
+      currentWorkspaceId
+      && previousWorkspaceId
+      && currentWorkspaceId === previousWorkspaceId
+      && previousSessionIds.size > 0
+    );
     const nextSessionIds = new Set(Object.keys(sessionStates || {}));
     const removedSessionIds = Array.from(previousSessionIds).filter((sessionId) => !nextSessionIds.has(sessionId));
 
