@@ -57,7 +57,6 @@ class ClaudeOrchestrator {
     this.settings = this.loadSettings();
     this.appInfo = null;
     this.userSettings = null; // Will be loaded from server
-    this.hasCompletedStartupRecoveryCheck = false;
     this.workspaceSidebarStatePersistTimer = null;
     this.workspaceSidebarStatePersistChain = Promise.resolve();
     this.pendingWorkspaceSidebarStateSaves = new Map();
@@ -205,13 +204,6 @@ class ClaudeOrchestrator {
     const pendingWorkspaceId = String(this.dashboard?.pendingRecovery?.workspaceId || '').trim();
     if (pendingWorkspaceId && pendingWorkspaceId === targetWorkspaceId) {
       return this.dashboard.pendingRecovery;
-    }
-
-    if (!this.hasCompletedStartupRecoveryCheck) {
-      this.hasCompletedStartupRecoveryCheck = true;
-      if (this.isWorkspaceSidebarStatePersistenceEnabled()) {
-        return null;
-      }
     }
 
     try {
@@ -1698,6 +1690,9 @@ class ClaudeOrchestrator {
         // Hide + persist dismissal so it doesn't resurrect on refresh/worktree-add
         this.hideStartupUI(sessionId);
         this.scheduleAutoPromptFallback(sessionId, 'claude');
+        if (this.isWorkspaceSidebarStatePersistenceEnabled()) {
+          setTimeout(() => this.restoreCurrentWorkspaceSidebarStateFromPersistence(), 0);
+        }
 
         // Enable the start button now that Claude has started
         const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
@@ -1711,6 +1706,9 @@ class ClaudeOrchestrator {
       this.socket.on('agent-started', ({ sessionId, config }) => {
         this.hideStartupUI(sessionId);
         this.scheduleAutoPromptFallback(sessionId, config?.agentId);
+        if (this.isWorkspaceSidebarStatePersistenceEnabled()) {
+          setTimeout(() => this.restoreCurrentWorkspaceSidebarStateFromPersistence(), 0);
+        }
       });
 
       this.socket.on('claude-update-required', (updateInfo) => {
@@ -17067,6 +17065,12 @@ class ClaudeOrchestrator {
         await this.startAgentWithConfig(sessionId, config, { skipLaunchGate: true });
         await new Promise(resolve => setTimeout(resolve, 200));
       }
+    }
+
+    if (this.isWorkspaceSidebarStatePersistenceEnabled()) {
+      setTimeout(() => {
+        this.restoreCurrentWorkspaceSidebarStateFromPersistence();
+      }, 600);
     }
 
     this.showTemporaryMessage(`Recovered ${recovery.sessions.length} session(s)`, 'success');
