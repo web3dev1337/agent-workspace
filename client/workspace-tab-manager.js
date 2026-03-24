@@ -30,6 +30,70 @@ class WorkspaceTabManager {
     this.setupKeyboardShortcuts();
   }
 
+  getTabPersistenceStorageKey() {
+    return 'agent-workspace-open-workspace-tabs-v1';
+  }
+
+  loadPersistedTabState() {
+    try {
+      const raw = localStorage.getItem(this.getTabPersistenceStorageKey());
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (!parsed || typeof parsed !== 'object') return { workspaceIds: [], activeWorkspaceId: '' };
+      const workspaceIds = Array.isArray(parsed.workspaceIds)
+        ? Array.from(new Set(parsed.workspaceIds.map((value) => String(value || '').trim()).filter(Boolean)))
+        : [];
+      const activeWorkspaceId = String(parsed.activeWorkspaceId || '').trim();
+      return { workspaceIds, activeWorkspaceId };
+    } catch {
+      return { workspaceIds: [], activeWorkspaceId: '' };
+    }
+  }
+
+  savePersistedTabState() {
+    try {
+      const workspaceIds = Array.from(this.tabs.values())
+        .map((tab) => String(tab?.workspaceId || '').trim())
+        .filter(Boolean);
+      const activeWorkspaceId = String(this.getActiveTab()?.workspaceId || '').trim();
+      localStorage.setItem(this.getTabPersistenceStorageKey(), JSON.stringify({
+        workspaceIds,
+        activeWorkspaceId
+      }));
+    } catch {
+      // ignore storage failures
+    }
+  }
+
+  restorePersistedTabs(availableWorkspaces = [], { activeWorkspaceId = '' } = {}) {
+    const availableById = new Map(
+      (Array.isArray(availableWorkspaces) ? availableWorkspaces : [])
+        .map((workspace) => [String(workspace?.id || '').trim(), workspace])
+        .filter(([workspaceId, workspace]) => workspaceId && workspace)
+    );
+
+    const persisted = this.loadPersistedTabState();
+    const orderedWorkspaceIds = Array.from(new Set([
+      ...persisted.workspaceIds.filter((workspaceId) => availableById.has(workspaceId)),
+      ...(activeWorkspaceId && availableById.has(activeWorkspaceId) ? [activeWorkspaceId] : [])
+    ]));
+
+    if (!orderedWorkspaceIds.length) {
+      return null;
+    }
+
+    orderedWorkspaceIds.forEach((workspaceId) => {
+      const workspace = availableById.get(workspaceId);
+      if (!workspace) return;
+      this.createTab(workspace, [], { autoActivate: false });
+    });
+
+    if (activeWorkspaceId) {
+      return this.findTabByWorkspaceId(activeWorkspaceId)?.id || null;
+    }
+
+    return this.findTabByWorkspaceId(orderedWorkspaceIds[0])?.id || null;
+  }
+
   createTabBarContainer() {
     const mainContainer = document.querySelector('.main-container');
     if (!mainContainer) {
@@ -97,7 +161,7 @@ class WorkspaceTabManager {
   /**
    * Create a new tab for a workspace
    */
-  createTab(workspace, sessions = []) {
+  createTab(workspace, sessions = [], { autoActivate = null } = {}) {
     // Prevent duplicate tabs for the same workspace
     const existingTab = this.findTabByWorkspaceId(workspace?.id);
     if (existingTab) {
@@ -175,11 +239,13 @@ class WorkspaceTabManager {
 
     // Store tab
     this.tabs.set(tabId, tabState);
+    this.savePersistedTabState();
 
     console.log(`Created tab ${tabId} for workspace ${workspace.name}`);
 
     // If this is the first tab, activate it
-    if (this.tabs.size === 1) {
+    const shouldAutoActivate = autoActivate === null ? this.tabs.size === 1 : !!autoActivate;
+    if (shouldAutoActivate) {
       this.switchTab(tabId);
     }
 
@@ -436,6 +502,7 @@ class WorkspaceTabManager {
 
     // Update active state
     this.activeTabId = tabId;
+    this.savePersistedTabState();
 
     // Update UI
     this.updateTabUI();
@@ -883,6 +950,7 @@ class WorkspaceTabManager {
 
     // Remove from tabs map
     this.tabs.delete(tabId);
+    this.savePersistedTabState();
 
     // If we closed the active tab, switch to another
     if (wasActive) {
@@ -925,6 +993,8 @@ class WorkspaceTabManager {
         this.orchestrator.currentWorkspace = fallbackTab?.workspace || null;
       }
     }
+
+    this.savePersistedTabState();
 
     return tabsToRemove.length;
   }
@@ -1104,6 +1174,7 @@ class WorkspaceTabManager {
 
     // Remove from tabs map
     this.tabs.delete(tabState.id);
+    this.savePersistedTabState();
   }
 
   /**

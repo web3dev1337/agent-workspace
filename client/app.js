@@ -1658,10 +1658,9 @@ class ClaudeOrchestrator {
             if (mainContainer) mainContainer.classList.remove('hidden');
             if (sidebar) sidebar.classList.remove('hidden');
 
-            // Create tab for the active workspace
-            // Note: sessions will come later in the 'sessions' event
-            const tabId = this.tabManager.createTab(active, []);
-            console.log(`Created initial tab ${tabId} for workspace ${active.name}`);
+            const restoredTabId = this.tabManager.restorePersistedTabs(available, { activeWorkspaceId: active.id });
+            const tabId = restoredTabId || this.tabManager.createTab(active, []);
+            console.log(`Created/restored initial tab set, focusing ${tabId} for workspace ${active.name}`);
 
             // Set currentTabId so subsequent sessions event knows which tab to use
             this.currentTabId = tabId;
