@@ -57,6 +57,7 @@ class ClaudeOrchestrator {
     this.settings = this.loadSettings();
     this.appInfo = null;
     this.userSettings = null; // Will be loaded from server
+    this.hasCompletedStartupRecoveryCheck = false;
     this.workspaceSidebarStatePersistTimer = null;
     this.workspaceSidebarStatePersistChain = Promise.resolve();
     this.pendingWorkspaceSidebarStateSaves = new Map();
@@ -204,6 +205,13 @@ class ClaudeOrchestrator {
     const pendingWorkspaceId = String(this.dashboard?.pendingRecovery?.workspaceId || '').trim();
     if (pendingWorkspaceId && pendingWorkspaceId === targetWorkspaceId) {
       return this.dashboard.pendingRecovery;
+    }
+
+    if (!this.hasCompletedStartupRecoveryCheck) {
+      this.hasCompletedStartupRecoveryCheck = true;
+      if (this.isWorkspaceSidebarStatePersistenceEnabled()) {
+        return null;
+      }
     }
 
     try {
@@ -1498,6 +1506,8 @@ class ClaudeOrchestrator {
 	      this.applyTheme();
 	      this.syncSettingsUI();
 	      this.applySimpleModeConfig();
+	      await this.loadUserSettings();
+        this.applySidebarDesktopCollapsedFromPrefs();
 
 	      // Connect to server
       await this.connectToServer();
@@ -1506,9 +1516,6 @@ class ClaudeOrchestrator {
       // Hook panels that depend on socket events
       this.activityFeedPanel?.onSocketConnected?.(this.socket);
 
-	      // Load user settings from server
-	      await this.loadUserSettings();
-        this.applySidebarDesktopCollapsedFromPrefs();
 	      this.refreshLicenseStatus?.().catch(() => {});
 	      this.syncTerminalFiltersFromUserSettings();
 	      this.syncWorkflowModeFromUserSettings();
