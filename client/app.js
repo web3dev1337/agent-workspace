@@ -869,18 +869,31 @@ class ClaudeOrchestrator {
 
   updateSidebarToggleIcon() {
     const toggle = document.getElementById('sidebar-toggle');
-    if (!toggle) return;
+    const mobileToggle = document.getElementById('mobile-sidebar-toggle');
+    if (!toggle && !mobileToggle) return;
 
-    const isCollapsed = this.isMobileLayout()
-      ? !document.body.classList.contains('sidebar-open')
-      : document.body.classList.contains('sidebar-collapsed');
-    const shouldBeExpanded = !isCollapsed;
-    const label = shouldBeExpanded ? 'Collapse sidebar' : 'Expand sidebar';
+    const isMobile = this.isMobileLayout();
+    const isExpanded = isMobile
+      ? document.body.classList.contains('sidebar-open')
+      : !document.body.classList.contains('sidebar-collapsed');
+    const isCollapsed = !isExpanded;
+    const label = isCollapsed
+      ? (isMobile ? 'Show worktrees' : 'Expand sidebar')
+      : (isMobile ? 'Hide worktrees' : 'Collapse sidebar');
 
-    toggle.classList.toggle('is-collapsed', isCollapsed);
-    toggle.title = label;
-    toggle.setAttribute('aria-label', label);
-    toggle.setAttribute('aria-expanded', String(shouldBeExpanded));
+    if (toggle) {
+      toggle.classList.toggle('is-collapsed', isCollapsed);
+      toggle.title = label;
+      toggle.setAttribute('aria-label', label);
+      toggle.setAttribute('aria-expanded', String(isExpanded));
+    }
+
+    if (mobileToggle) {
+      mobileToggle.classList.toggle('is-collapsed', isCollapsed);
+      mobileToggle.title = label;
+      mobileToggle.setAttribute('aria-label', label);
+      mobileToggle.setAttribute('aria-expanded', String(isExpanded));
+    }
   }
 
   getSidebarDesktopCollapsedPref() {
@@ -1884,10 +1897,6 @@ class ClaudeOrchestrator {
 	            this.toggleWorktreeVisibility(worktreeId);
 	          }
 
-	          // On mobile, hide sidebar after selection so the terminals are visible.
-	          if (this.isMobileLayout()) {
-	            this.closeSidebar();
-	          }
 	        }
 	      });
 	    }
@@ -1895,6 +1904,14 @@ class ClaudeOrchestrator {
 	    const sidebarToggle = document.getElementById('sidebar-toggle');
 	    if (sidebarToggle) {
 	      sidebarToggle.addEventListener('click', (e) => {
+	        e.preventDefault();
+	        this.toggleSidebar();
+	      });
+	    }
+
+	    const mobileSidebarToggle = document.getElementById('mobile-sidebar-toggle');
+	    if (mobileSidebarToggle) {
+	      mobileSidebarToggle.addEventListener('click', (e) => {
 	        e.preventDefault();
 	        this.toggleSidebar();
 	      });

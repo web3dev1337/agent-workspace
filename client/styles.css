@@ -1247,6 +1247,10 @@ header {
   will-change: transform;
 }
 
+.mobile-sidebar-toggle {
+  display: none;
+}
+
 .sidebar-toggle.is-collapsed .sidebar-toggle-icon {
   transform: rotate(180deg);
 }
@@ -7359,6 +7363,24 @@ body.dependency-onboarding-active #dependency-setup-modal {
   .projects-chats-shell {
     grid-template-columns: 1fr;
     min-height: 70vh;
+  }
+
+  .mobile-sidebar-toggle {
+    display: inline-flex;
+    width: 36px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+  }
+
+  .mobile-sidebar-toggle:hover {
+    background: var(--bg-primary);
   }
 
   .sidebar-toggle {
