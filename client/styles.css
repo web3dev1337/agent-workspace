@@ -2040,6 +2040,9 @@ header {
 
 .terminal .xterm-viewport {
   overflow-y: auto !important;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Buttons */

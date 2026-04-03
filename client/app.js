@@ -60,6 +60,7 @@ class ClaudeOrchestrator {
     this.simpleModeStartupTriggered = false;
     this.desktopDevtoolsKeydownHandler = null;
     this.currentLayout = '2x4';
+    this._wasMobileLayout = this.isMobileLayout();
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
@@ -161,6 +162,34 @@ class ClaudeOrchestrator {
     } catch {
       return false;
     }
+  }
+
+  syncDesktopMobileLayoutState() {
+    const nowMobile = this.isMobileLayout();
+    const becameMobile = !this._wasMobileLayout && nowMobile;
+    const becameDesktop = this._wasMobileLayout && !nowMobile;
+    if (!becameMobile && !becameDesktop) {
+      this._wasMobileLayout = nowMobile;
+      return;
+    }
+
+    this._wasMobileLayout = nowMobile;
+
+    if (becameMobile) {
+      // On mobile layouts, always start from a closed sidebar state.
+      this.closeSidebar();
+      this.updateSidebarToggleIcon();
+      return;
+    }
+
+    // Desktop cleanup: clear any transient mobile-open class and restore
+    // persisted desktop preferences (instead of inheriting mobile behavior).
+    if (document.body.classList.contains('sidebar-open')) {
+      document.body.classList.remove('sidebar-open');
+    }
+    this.applySidebarDesktopCollapsedFromPrefs();
+    this.syncSidebarBackdrop();
+    this.updateSidebarToggleIcon();
   }
 
   isEditableEventTarget(target) {
@@ -2849,9 +2878,14 @@ class ClaudeOrchestrator {
     // Handle window resize to fix blank terminals
     let resizeTimeout;
 	    window.addEventListener('resize', () => {
+      const prevLayout = this._wasMobileLayout;
+      this.syncDesktopMobileLayoutState();
       this.updateSidebarToggleIcon();
 	      clearTimeout(resizeTimeout);
 	      resizeTimeout = setTimeout(() => {
+          if (this._wasMobileLayout !== prevLayout) {
+            this.updateTerminalGrid();
+          }
 	        // Refit all terminals (not just activeView — covers newly started sessions)
 	        for (const sessionId of this.terminalManager.terminals.keys()) {
           this.terminalManager.fitTerminal(sessionId);
