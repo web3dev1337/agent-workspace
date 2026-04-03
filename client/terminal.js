@@ -24,6 +24,9 @@ class TerminalManager {
     this.terminalScrollStates = new Map();
     this.userScrolling = new Map();
     this.ephemeralLineState = new Map();
+    this.pendingOutput = new Map();
+    this.historyLoading = new Set();
+    this.historyLoaded = new Set();
 
     // Guardrail: never resize the PTY to tiny dimensions (can hard-wrap output irreversibly).
     this.lastGoodPtyDimensions = new Map(); // sessionId -> { cols, rows }
@@ -347,6 +350,26 @@ class TerminalManager {
         // Delayed refit catches cases where xterm renderer hasn't measured char dimensions yet
         setTimeout(() => this.fitTerminal(sessionId), 300);
         setTimeout(() => this.fitTerminal(sessionId), 1000);
+        this.ensureTerminalHistoryLoaded(sessionId, terminal);
+        const viewport = terminalElement.querySelector('.xterm-viewport');
+        if (viewport) {
+          this.terminalScrollStates.set(sessionId, this.terminalScrollStates.get(sessionId) || {});
+          const scrollState = this.terminalScrollStates.get(sessionId);
+          const markScrolling = () => {
+            this.userScrolling.set(sessionId, true);
+            if (scrollState.scrollTimer) clearTimeout(scrollState.scrollTimer);
+            scrollState.scrollTimer = setTimeout(() => this.checkScrollPosition(sessionId), 180);
+          };
+
+          viewport.addEventListener('scroll', markScrolling, { passive: true });
+          viewport.addEventListener('touchstart', markScrolling, { passive: true });
+          viewport.addEventListener('touchmove', markScrolling, { passive: true });
+          viewport.addEventListener('touchend', () => {
+            if (scrollState.scrollTimer) clearTimeout(scrollState.scrollTimer);
+            scrollState.scrollTimer = setTimeout(() => this.checkScrollPosition(sessionId), 180);
+          }, { passive: true });
+          this.terminalScrollStates.set(sessionId, scrollState);
+        }
       });
     });
     
@@ -403,14 +426,19 @@ class TerminalManager {
     });
     
     // Track user scrolling with mouse wheel
-    terminalElement.addEventListener('wheel', (e) => {
+    terminalElement.addEventListener('wheel', () => {
       // User is scrolling, mark as user interaction
+      const scrollState = this.terminalScrollStates.get(sessionId) || {};
+      this.terminalScrollStates.set(sessionId, scrollState);
+
       this.userScrolling.set(sessionId, true);
-      
-      // Clear user scrolling flag after a short delay
-      setTimeout(() => {
+      if (scrollState.scrollTimer) {
+        clearTimeout(scrollState.scrollTimer);
+      }
+      scrollState.scrollTimer = setTimeout(() => {
         this.checkScrollPosition(sessionId);
-      }, 100);
+      }, 180);
+      this.terminalScrollStates.set(sessionId, scrollState);
     });
     
     // Track scrollbar dragging
@@ -867,17 +895,14 @@ class TerminalManager {
   }
   
   handleOutput(sessionId, data) {
+    const safeData = typeof data === 'string' ? data : '';
     const terminal = this.terminals.get(sessionId);
     if (!terminal) {
       // Check if DOM element exists before trying to create terminal
       const terminalElement = this.getTerminalElement(sessionId);
       if (!terminalElement) {
         // Buffer early output instead of ignoring it
-        if (!this.pendingOutput) this.pendingOutput = new Map();
-        if (!this.pendingOutput.has(sessionId)) {
-          this.pendingOutput.set(sessionId, []);
-        }
-        this.pendingOutput.get(sessionId).push(data);
+        this.queuePendingOutput(sessionId, safeData);
 
         // Try again in a short while
         setTimeout(() => this.handleOutput(sessionId, ''), 100);
@@ -887,6 +912,11 @@ class TerminalManager {
       // Create terminal if DOM element exists
       const sessionInfo = this.orchestrator.sessions.get(sessionId) || {};
       this.createTerminal(sessionId, sessionInfo);
+      this.ensureTerminalHistoryLoaded(sessionId, this.terminals.get(sessionId));
+      if (this.historyLoading.has(sessionId)) {
+        this.queuePendingOutput(sessionId, safeData);
+        return;
+      }
 
       // Apply any buffered output
       if (this.pendingOutput && this.pendingOutput.has(sessionId)) {
@@ -901,19 +931,23 @@ class TerminalManager {
 
       // Try again with current data
       const newTerminal = this.terminals.get(sessionId);
-      if (newTerminal && data) {
-        const normalized = this.normalizeOutput(sessionId, data);
+      if (newTerminal && safeData) {
+        const normalized = this.normalizeOutput(sessionId, safeData);
         if (normalized) {
           newTerminal.write(normalized);
         }
       }
       return;
     }
+    if (this.historyLoading.has(sessionId)) {
+      this.queuePendingOutput(sessionId, safeData);
+      return;
+    }
 
     // Check if user is manually scrolling
     const isUserScrolling = this.userScrolling.get(sessionId) || false;
 
-    const normalized = this.normalizeOutput(sessionId, data);
+    const normalized = this.normalizeOutput(sessionId, safeData);
     if (!normalized) {
       return;
     }
@@ -987,6 +1021,72 @@ class TerminalManager {
           container.classList.remove('has-error');
         }, 3000);
       }
+    }
+  }
+
+  queuePendingOutput(sessionId, data) {
+    if (!data) return;
+    if (!this.pendingOutput.has(sessionId)) {
+      this.pendingOutput.set(sessionId, []);
+    }
+    this.pendingOutput.get(sessionId).push(data);
+  }
+
+  flushPendingOutput(sessionId) {
+    const outputs = this.pendingOutput.get(sessionId);
+    if (!outputs || !outputs.length) {
+      return;
+    }
+    this.pendingOutput.delete(sessionId);
+    outputs.forEach((output) => {
+      if (output) {
+        this.handleOutput(sessionId, output);
+      }
+    });
+  }
+
+  async ensureTerminalHistoryLoaded(sessionId, terminal = null) {
+    const normalizedSessionId = String(sessionId || '').trim();
+    if (!normalizedSessionId) {
+      return;
+    }
+    if (this.historyLoaded.has(normalizedSessionId)) {
+      this.flushPendingOutput(normalizedSessionId);
+      return;
+    }
+    if (this.historyLoading.has(normalizedSessionId)) {
+      return;
+    }
+
+    const targetTerminal = terminal || this.terminals.get(normalizedSessionId);
+    if (!targetTerminal) {
+      return;
+    }
+
+    this.historyLoading.add(normalizedSessionId);
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(normalizedSessionId)}/log?tailChars=20000`);
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      const log = typeof payload?.log === 'string' ? payload.log : '';
+      if (log) {
+        const normalizedLog = this.normalizeOutput(normalizedSessionId, log);
+        if (normalizedLog && !targetTerminal._core?.disposed) {
+          targetTerminal.write(normalizedLog);
+          if (this.orchestrator?.settings?.autoScroll !== false) {
+            targetTerminal.scrollToBottom();
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to load terminal history for ${normalizedSessionId}`, error);
+    } finally {
+      this.historyLoading.delete(normalizedSessionId);
+      this.historyLoaded.add(normalizedSessionId);
+      this.flushPendingOutput(normalizedSessionId);
     }
   }
   
@@ -1382,8 +1482,15 @@ class TerminalManager {
     this.suggestTimers.delete(sessionId);
 
     // Clean up scroll state
+    const scrollState = this.terminalScrollStates.get(sessionId);
+    if (scrollState?.scrollTimer) {
+      clearTimeout(scrollState.scrollTimer);
+    }
     this.terminalScrollStates.delete(sessionId);
     this.userScrolling.delete(sessionId);
+    this.historyLoading.delete(sessionId);
+    this.historyLoaded.delete(sessionId);
+    this.pendingOutput.delete(sessionId);
 
     // Clean up addons
     this.fitAddons.delete(sessionId);
