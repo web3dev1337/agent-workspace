@@ -578,6 +578,80 @@
     <script src="terminal.js"></script>
     <script src="notifications.js"></script>
     <script src="agent-modal.js"></script>
+    <script>
+    // Trailer neon cycle with fixed glow overlay
+    (function() {
+      let running = false;
+      let stopped = false;
+      let overlay = null;
+
+      function getOverlay() {
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.className = 'neon-glow-overlay';
+          overlay.style.opacity = '0';
+          document.body.appendChild(overlay);
+        }
+        return overlay;
+      }
+
+      function positionOverlay(el) {
+        const ov = getOverlay();
+        const rect = el.getBoundingClientRect();
+        const pad = 4;
+        ov.style.left = (rect.left - pad) + 'px';
+        ov.style.top = (rect.top - pad) + 'px';
+        ov.style.width = (rect.width + pad * 2) + 'px';
+        ov.style.height = (rect.height + pad * 2) + 'px';
+        ov.style.opacity = '1';
+        ov.style.transform = 'scale(1.03)';
+      }
+
+      function hideOverlay() {
+        const ov = getOverlay();
+        ov.style.opacity = '0';
+        ov.style.transform = 'scale(1)';
+      }
+
+      async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+      async function runCycle() {
+        running = true;
+        while (!stopped) {
+          const wrappers = document.querySelectorAll('.terminal-grid .terminal-wrapper, .terminal-pair .terminal-wrapper');
+          if (!wrappers.length) { await sleep(1000); continue; }
+
+          for (let i = 0; i < wrappers.length; i++) {
+            if (stopped) break;
+            wrappers.forEach(w => w.classList.remove('neon-active'));
+            wrappers[i].classList.add('neon-active');
+            positionOverlay(wrappers[i]);
+            await sleep(700);
+          }
+
+          wrappers.forEach(w => w.classList.remove('neon-active'));
+          hideOverlay();
+          if (!stopped) await sleep(5000);
+        }
+        running = false;
+      }
+
+      function startNeonCycle() {
+        stopped = false;
+        if (!running) runCycle();
+      }
+
+      function stopNeonCycle() {
+        stopped = true;
+        document.querySelectorAll('.terminal-wrapper.neon-active').forEach(w => w.classList.remove('neon-active'));
+        hideOverlay();
+      }
+
+      setTimeout(startNeonCycle, 2000);
+      window.startNeonCycle = startNeonCycle;
+      window.stopNeonCycle = stopNeonCycle;
+    })();
+    </script>
 </body>
 
 </html>
