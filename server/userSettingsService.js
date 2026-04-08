@@ -303,6 +303,14 @@ class UserSettingsService {
             // 'all' | 'none' | '1' | '2' | '3' | '4'
             tierFilter: 'all'
           },
+          experimental: {
+            persistWorkspaceSidebarState: false,
+            workspaceSidebarStateByWorkspace: {},
+            workspaceTabState: {
+              openWorkspaceIds: [],
+              activeWorkspaceId: ''
+            }
+          },
           worktrees: {
             autoCreateExtraWhenBusy: true,
             autoCreateMinNumber: 9,
@@ -806,10 +814,10 @@ class UserSettingsService {
 	          };
 	        }
 
-	        if (ui.workflow) {
-	          const defaultsWorkflow = (uiDefaults.workflow || {});
-	          const wf = ui.workflow || {};
-	          merged.global.ui.workflow = {
+        if (ui.workflow) {
+          const defaultsWorkflow = (uiDefaults.workflow || {});
+          const wf = ui.workflow || {};
+          merged.global.ui.workflow = {
             ...defaultsWorkflow,
             ...wf,
             focus: {
@@ -819,6 +827,23 @@ class UserSettingsService {
             notifications: {
               ...(defaultsWorkflow.notifications || {}),
               ...(wf.notifications || {})
+            }
+          };
+        }
+
+        if (ui.experimental && typeof ui.experimental === 'object') {
+          const defaultsExperimental = (uiDefaults.experimental || {});
+          const nextExperimental = ui.experimental || {};
+          merged.global.ui.experimental = {
+            ...defaultsExperimental,
+            ...nextExperimental,
+            workspaceSidebarStateByWorkspace: {
+              ...(defaultsExperimental.workspaceSidebarStateByWorkspace || {}),
+              ...(nextExperimental.workspaceSidebarStateByWorkspace || {})
+            },
+            workspaceTabState: {
+              ...(defaultsExperimental.workspaceTabState || {}),
+              ...(nextExperimental.workspaceTabState || {})
             }
           };
         }
@@ -1081,6 +1106,22 @@ class UserSettingsService {
           this.settings.global.ui.diffViewer = {
             ...this.getDefaultSettings().global.ui.diffViewer,
             ...newGlobal.ui.diffViewer
+          };
+        }
+        if (newGlobal.ui.experimental) {
+          const defaultsExperimental = this.getDefaultSettings().global.ui.experimental || {};
+          const nextExperimental = newGlobal.ui.experimental || {};
+          this.settings.global.ui.experimental = {
+            ...defaultsExperimental,
+            ...nextExperimental,
+            workspaceSidebarStateByWorkspace: {
+              ...(defaultsExperimental.workspaceSidebarStateByWorkspace || {}),
+              ...(nextExperimental.workspaceSidebarStateByWorkspace || {})
+            },
+            workspaceTabState: {
+              ...(defaultsExperimental.workspaceTabState || {}),
+              ...(nextExperimental.workspaceTabState || {})
+            }
           };
         }
       }

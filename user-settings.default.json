@@ -226,6 +226,10 @@
         "viewMode": "all",
         "tierFilter": "all"
       },
+      "experimental": {
+        "persistWorkspaceSidebarState": false,
+        "workspaceSidebarStateByWorkspace": {}
+      },
       "worktrees": {
         "autoCreateExtraWhenBusy": true,
         "autoCreateMinNumber": 9,

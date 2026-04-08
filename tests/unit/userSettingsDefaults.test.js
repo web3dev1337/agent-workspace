@@ -46,6 +46,18 @@ describe('UserSettingsService defaults', () => {
     expect(defaults.global.ui.workflow.notifications.mode).toBeTruthy();
   });
 
+  test('includes ui.experimental workspace sidebar persistence defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const experimental = defaults?.global?.ui?.experimental;
+    expect(experimental).toBeTruthy();
+    expect(experimental.persistWorkspaceSidebarState).toBe(false);
+    expect(experimental.workspaceSidebarStateByWorkspace).toBeTruthy();
+    expect(typeof experimental.workspaceSidebarStateByWorkspace).toBe('object');
+    expect(experimental.workspaceTabState).toBeTruthy();
+    expect(Array.isArray(experimental.workspaceTabState.openWorkspaceIds)).toBe(true);
+    expect(experimental.workspaceTabState.activeWorkspaceId).toBe('');
+  });
+
   test('includes ui.worktrees auto-create defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     expect(defaults?.global?.ui?.worktrees).toBeTruthy();
@@ -137,6 +149,19 @@ describe('UserSettingsService defaults', () => {
           simpleMode: {
             startupOpen: true
           },
+          experimental: {
+            workspaceSidebarStateByWorkspace: {
+              alpha: {
+                viewMode: 'claude',
+                tierFilter: '3',
+                hiddenWorktreeKeys: ['repo-work4']
+              }
+            },
+            workspaceTabState: {
+              openWorkspaceIds: ['alpha', 'beta'],
+              activeWorkspaceId: 'beta'
+            }
+          },
           workflow: {
             mode: 'focus'
           },
@@ -193,6 +218,18 @@ describe('UserSettingsService defaults', () => {
     expect(merged.global.ui.simpleMode.startupOpen).toBe(true);
     expect(merged.global.ui.simpleMode.enabled).toBe(false);
     expect(merged.global.ui.simpleMode.hotkeys).toBe(true);
+    // Keeps experimental defaults while allowing workspace-scoped sidebar state overrides.
+    expect(merged.global.ui.experimental).toBeTruthy();
+    expect(merged.global.ui.experimental.persistWorkspaceSidebarState).toBe(false);
+    expect(merged.global.ui.experimental.workspaceSidebarStateByWorkspace.alpha).toEqual({
+      viewMode: 'claude',
+      tierFilter: '3',
+      hiddenWorktreeKeys: ['repo-work4']
+    });
+    expect(merged.global.ui.experimental.workspaceTabState).toEqual({
+      openWorkspaceIds: ['alpha', 'beta'],
+      activeWorkspaceId: 'beta'
+    });
 
     // Does not drop process.status defaults when only one cap is provided.
     expect(merged.global.process.status.lookbackHours).toBeTruthy();
