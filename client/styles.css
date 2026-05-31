@@ -5819,8 +5819,23 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: max(env(safe-area-inset-top), 24px) max(env(safe-area-inset-right), 24px) max(env(safe-area-inset-bottom), 24px) max(env(safe-area-inset-left), 24px);
   z-index: 4500;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+@media (max-height: 800px) {
+  body.dependency-onboarding-active #dependency-setup-modal {
+    align-items: flex-start;
+    padding: max(env(safe-area-inset-top), 16px) max(env(safe-area-inset-right), 16px) max(env(safe-area-inset-bottom), 16px) max(env(safe-area-inset-left), 16px);
+  }
+}
+
+@media (max-height: 600px) {
+  body.dependency-onboarding-active #dependency-setup-modal {
+    padding: max(env(safe-area-inset-top), 8px) max(env(safe-area-inset-right), 8px) max(env(safe-area-inset-bottom), 8px) max(env(safe-area-inset-left), 8px);
+  }
 }
 
 .dependency-setup-content {
@@ -6260,7 +6275,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 @media (max-width: 700px) {
   body.dependency-onboarding-active #dependency-setup-modal {
-    padding: 14px;
+    padding: max(env(safe-area-inset-top), 14px) max(env(safe-area-inset-right), 14px) max(env(safe-area-inset-bottom), 14px) max(env(safe-area-inset-left), 14px);
   }
 
   .dependency-setup-content {
@@ -14302,12 +14317,14 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: max(env(safe-area-inset-top), 24px) max(env(safe-area-inset-right), 24px) max(env(safe-area-inset-bottom), 24px) max(env(safe-area-inset-left), 24px);
   background:
     radial-gradient(90% 60% at 8% 12%, rgba(31, 111, 235, 0.22), transparent 75%),
     radial-gradient(78% 55% at 92% 88%, rgba(0, 195, 255, 0.14), transparent 80%),
     rgba(5, 8, 15, 0.86);
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   transition: opacity 0.18s ease-out, visibility 0.18s linear;
 }
 
@@ -14806,7 +14823,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .onboarding-container {
   position: relative;
   width: min(920px, 100%);
-  max-height: min(860px, calc(100vh - 48px));
+  max-height: min(860px, calc(100dvh - 48px));
   padding: 32px 32px 26px;
   border-radius: 28px;
   border: 1px solid rgba(148, 163, 184, 0.18);
@@ -14820,7 +14837,10 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 22px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .onboarding-title {
@@ -15183,11 +15203,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 @media (max-width: 800px) {
   .onboarding-overlay {
-    padding: 12px;
+    padding: max(env(safe-area-inset-top), 12px) max(env(safe-area-inset-right), 12px) max(env(safe-area-inset-bottom), 12px) max(env(safe-area-inset-left), 12px);
   }
 
   .onboarding-container {
-    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
     padding: 22px 20px 18px;
   }
 
@@ -15234,6 +15254,110 @@ body.dependency-onboarding-active #dependency-setup-modal {
   .onboarding-btn-primary,
   .onboarding-btn-skip {
     width: 100%;
+  }
+}
+
+/* Short-viewport reachability: ensure action buttons (I Agree, Start setup,
+   Install, Next) are always scrollable into view on small screens.
+   Without this, the decorative `min-height` on the inner cards pushes
+   the action row past the bottom of the viewport with no way to scroll. */
+@media (max-height: 800px) {
+  .onboarding-welcome-card,
+  .onboarding-legal-card,
+  .onboarding-step-card {
+    min-height: 0;
+  }
+
+  .onboarding-overlay {
+    align-items: flex-start;
+  }
+
+  .onboarding-container {
+    max-height: calc(100dvh - 24px);
+    padding: 22px 26px 18px;
+    gap: 16px;
+  }
+
+  .onboarding-stepper-row {
+    padding: 4px 2px 22px;
+  }
+
+  .onboarding-step-body {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .onboarding-welcome-card {
+    padding: 26px;
+    gap: 14px;
+  }
+
+  .onboarding-legal-card {
+    padding: 26px;
+    gap: 14px;
+  }
+
+  .onboarding-step-card {
+    padding: 22px;
+  }
+}
+
+@media (max-height: 600px) {
+  .onboarding-overlay {
+    padding: max(env(safe-area-inset-top), 8px) max(env(safe-area-inset-right), 8px) max(env(safe-area-inset-bottom), 8px) max(env(safe-area-inset-left), 8px);
+    align-items: flex-start;
+  }
+
+  .onboarding-container {
+    max-height: calc(100dvh - 16px);
+    padding: 16px 18px 14px;
+    border-radius: 16px;
+    gap: 12px;
+  }
+
+  .onboarding-welcome-card,
+  .onboarding-legal-card {
+    padding: 18px;
+    gap: 10px;
+    border-radius: 14px;
+  }
+
+  .onboarding-step-card {
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .onboarding-stepper-row {
+    padding: 0 2px 14px;
+    margin-bottom: 0;
+  }
+
+  .onboarding-summary-text {
+    font-size: 0.85rem;
+    margin: 4px auto 0;
+  }
+
+  .onboarding-welcome-title {
+    font-size: clamp(1.15rem, 4vw, 1.5rem);
+  }
+
+  .onboarding-step-title {
+    font-size: clamp(1.1rem, 3.5vw, 1.4rem);
+  }
+
+  .onboarding-step-icon {
+    width: 36px;
+    height: 36px;
+    margin-bottom: 0;
+  }
+
+  .onboarding-step-icon-svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .onboarding-legal-list li + li {
+    margin-top: 0.25rem;
   }
 }
 
