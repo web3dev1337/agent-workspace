@@ -7782,6 +7782,30 @@ app.post('/api/commander/input', (req, res) => {
   }
 });
 
+// Resize Commander terminal so the PTY matches the panel's visible grid
+app.post('/api/commander/resize', (req, res) => {
+  try {
+    const MIN_TERMINAL_CELLS = 2;
+    const MAX_TERMINAL_CELLS = 500;
+    const cols = Math.floor(Number(req.body?.cols));
+    const rows = Math.floor(Number(req.body?.rows));
+    const isValidCellCount = (value) =>
+      Number.isFinite(value) && value >= MIN_TERMINAL_CELLS && value <= MAX_TERMINAL_CELLS;
+
+    if (!isValidCellCount(cols) || !isValidCellCount(rows)) {
+      return res.status(400).json({
+        error: `cols and rows must be numbers between ${MIN_TERMINAL_CELLS} and ${MAX_TERMINAL_CELLS}`
+      });
+    }
+
+    const success = commanderService.resize(cols, rows);
+    res.json({ success, cols, rows });
+  } catch (error) {
+    logger.error('Commander resize failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Stop Commander terminal
 app.post('/api/commander/stop', (req, res) => {
   try {
