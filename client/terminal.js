@@ -30,6 +30,21 @@ class TerminalManager {
     this.minPtyCols = 40;
     this.minPtyRows = 5;
 
+    // Auto-heal: terminal-resize messages are fire-and-forget, so a dropped one
+    // (socket reconnecting, session still spawning) leaves the PTY and the rendered
+    // grid disagreeing — the classic garbled-TUI state that a manual window resize
+    // fixes. Re-assert the fit automatically: on window focus, when the tab becomes
+    // visible again, and on a slow background sweep. The server skips same-size
+    // resizes, so sweeps with nothing to heal are no-ops.
+    this.autoHealIntervalMs = 15_000;
+    window.addEventListener('focus', () => this.healAllTerminals());
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) this.healAllTerminals();
+    });
+    setInterval(() => {
+      if (!document.hidden) this.healAllTerminals();
+    }, this.autoHealIntervalMs);
+
     // Terminal fit logging (reduce console noise during layout transitions).
     this.fitLogLastAt = new Map(); // `${sessionId}:${key}` -> epoch ms
     this.fitLogCooldownMs = 2_000;
@@ -861,6 +876,15 @@ class TerminalManager {
 
   fitAllTerminals() {
     console.log('Fitting all active terminals...');
+    for (const sessionId of this.terminals.keys()) {
+      this.fitTerminal(sessionId);
+    }
+  }
+
+  // Quiet fitAllTerminals used by the auto-heal sweep. fitTerminal() already skips
+  // hidden terminals, re-sends the PTY size (healing a previously dropped resize),
+  // and refreshes the renderer after fitting.
+  healAllTerminals() {
     for (const sessionId of this.terminals.keys()) {
       this.fitTerminal(sessionId);
     }
