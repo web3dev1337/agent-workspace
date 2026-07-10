@@ -1169,7 +1169,7 @@ class VoiceCommandService {
   /**
    * Parse voice command using rules first, then LLM fallback
    */
-  async parseCommand(transcript) {
+  async parseCommand(transcript, options = {}) {
     // Clean up transcript
     const text = transcript.toLowerCase().trim();
 
@@ -1180,6 +1180,17 @@ class VoiceCommandService {
         success: true,
         method: 'rules',
         ...ruleResult
+      };
+    }
+
+    // Typed input (e.g. Commander panel slash commands) wants a fast,
+    // deterministic answer so unrecognized text can fall through to the
+    // agent instead of being guessed at by an LLM.
+    if (options && options.rulesOnly === true) {
+      return {
+        success: false,
+        error: 'Command not recognized',
+        transcript: text
       };
     }
 

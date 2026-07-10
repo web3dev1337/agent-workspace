@@ -7911,7 +7911,7 @@ app.post('/api/commander/execute', async (req, res) => {
 // Execute a command from free text (shared parsing pipeline with Voice: rules -> LLM fallback)
 app.post('/api/commander/execute-text', async (req, res) => {
   try {
-    const { text, dryRun } = req.body || {};
+    const { text, dryRun, rulesOnly } = req.body || {};
     const input = String(text || '').trim();
     if (!input) {
       return res.status(400).json({ ok: false, error: 'text is required' });
@@ -7919,6 +7919,7 @@ app.post('/api/commander/execute-text', async (req, res) => {
     if (input.length > 2000) {
       return res.status(400).json({ ok: false, error: 'text too long' });
     }
+    const rulesOnlyRequested = rulesOnly === true || String(rulesOnly).toLowerCase() === 'true';
 
     // Keep the parser context in sync with Commander's current UI state.
     try {
@@ -7928,7 +7929,7 @@ app.post('/api/commander/execute-text', async (req, res) => {
       // ignore
     }
 
-    const parsed = await voiceCommandService.parseCommand(input);
+    const parsed = await voiceCommandService.parseCommand(input, { rulesOnly: rulesOnlyRequested });
     if (!parsed || parsed.success !== true) {
       return res.status(200).json({ ok: false, parsed });
     }
