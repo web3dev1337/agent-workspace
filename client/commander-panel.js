@@ -669,6 +669,9 @@ class CommanderPanel {
 
       // Fit and focus terminal
       if (this.fitAddon && this.terminal) {
+        // The PTY size can drift while the panel is closed (e.g. a restart
+        // or an API caller resized it), so always re-sync on open.
+        this.lastSyncedSize = null;
         this.fitTerminalSoon();
       }
     }
