@@ -99,6 +99,18 @@ class SessionRecoveryService {
   }
 
   /**
+   * Claude Code stores conversations under ~/.claude/projects/<sanitized-cwd>,
+   * sanitizing EVERY character outside [a-zA-Z0-9-] to '-'
+   * ('C:\Users\x\.app' -> 'C--Users-x--app', '/home/x/.app' -> '-home-x--app').
+   * Replacing only slashes leaves ':' and '.' behind, so conversation lookups
+   * never matched and recovery silently downgraded "resume conversation" to
+   * "start fresh".
+   */
+  claudeProjectFolderName(targetPath) {
+    return String(targetPath || '').replace(/[^a-zA-Z0-9-]/g, '-');
+  }
+
+  /**
    * Load recovery state for a workspace
    */
   async loadWorkspaceState(workspaceId) {
@@ -332,7 +344,7 @@ class SessionRecoveryService {
           ...(s.worktreePath ? candidateRoots(s.worktreePath) : [])
         ])];
         for (const root of roots) {
-          const folderName = String(root || '').replace(/[\\/]/g, '-');
+          const folderName = this.claudeProjectFolderName(root);
           const convPath = path.join(
             HOME_DIR, '.claude', 'projects', folderName,
             `${s.lastConversationId}.jsonl`
@@ -350,13 +362,26 @@ class SessionRecoveryService {
         }
       }
 
-      const safeConversationId = (s.lastAgent === 'claude' && conversationValid)
-        ? s.lastConversationId
+      // Stored ids go stale quickly: Claude Code writes a NEW session file on every
+      // resume, so the exact id often no longer exists. Fall back to the newest
+      // conversation in the worktree's project folder instead of dropping to fresh.
+      let fallbackConversationId = null;
+      if (s.lastAgent === 'claude' && !conversationValid && conversationCwd) {
+        const latest = this.getLatestConversation(conversationCwd);
+        if (latest && latest.conversationId) {
+          fallbackConversationId = latest.conversationId;
+          conversationCwd = latest.actualCwd || conversationCwd;
+        }
+      }
+
+      const safeConversationId = (s.lastAgent === 'claude')
+        ? (conversationValid ? s.lastConversationId : fallbackConversationId)
         : null;
       if (s.lastAgent === 'claude' && !conversationValid) {
-        logger.debug('Recovery session missing valid conversation, falling back to continue', {
+        logger.debug('Recovery session conversation id stale', {
           sessionId: s.sessionId,
-          conversationId: s.lastConversationId
+          conversationId: s.lastConversationId,
+          fallbackConversationId
         });
       }
 
@@ -397,8 +422,8 @@ class SessionRecoveryService {
     let bestMtime = 0;
 
     for (const checkPath of pathsToCheck) {
-      // Convert path to Claude's folder format: $HOME/foo → -home-user-foo
-      const folderName = String(checkPath || '').replace(/[\\/]/g, '-');
+      // Convert path to Claude's folder format (see claudeProjectFolderName)
+      const folderName = this.claudeProjectFolderName(checkPath);
       const projectsDir = path.join(HOME_DIR, '.claude', 'projects', folderName);
 
       try {
