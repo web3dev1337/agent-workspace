@@ -649,6 +649,7 @@ class CommanderPanel {
       panel.classList.remove('hidden');
       backdrop?.classList.remove('hidden');
       this.isVisible = true;
+      this.pinPanelPosition(panel);
 
       // Check Commander status from server
       const status = await this.checkStatus();
@@ -675,6 +676,20 @@ class CommanderPanel {
         this.fitTerminalSoon();
       }
     }
+  }
+
+  /**
+   * Convert the centered transform position into fixed left/top pixels so
+   * the native CSS resize handle tracks the cursor instead of growing the
+   * panel from its center.
+   */
+  pinPanelPosition(panel) {
+    if (!panel || panel.style.left) return;
+    const rect = panel.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    panel.style.left = `${rect.left}px`;
+    panel.style.top = `${rect.top}px`;
+    panel.style.transform = 'none';
   }
 
   /**

@@ -10446,10 +10446,14 @@ body.dependency-onboarding-active #dependency-setup-modal {
   top: 10%;
   left: 50%;
   transform: translateX(-50%);
-  width: 80%;
-  max-width: 900px;
-  height: 70vh;
-  max-height: 700px;
+  width: min(80%, 900px);
+  height: min(70vh, 700px);
+  min-width: 480px;
+  min-height: 320px;
+  max-width: 98vw;
+  max-height: 96vh;
+  resize: both;
+  overflow: hidden;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
