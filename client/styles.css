@@ -1746,7 +1746,8 @@ header {
 
 .terminal-header.controls-expanded .terminal-branch,
 .terminal-header.controls-expanded .terminal-branch-refresh,
-.terminal-header.controls-expanded .terminal-ticket {
+.terminal-header.controls-expanded .terminal-ticket,
+.terminal-header.controls-expanded .terminal-model-badge {
   display: none;
 }
 
@@ -1773,6 +1774,41 @@ header {
 .terminal-ticket:hover {
   border-color: var(--accent-primary);
   color: var(--text-primary);
+}
+
+.terminal-model-badge {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  margin-left: var(--space-sm);
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  max-width: min(280px, 30vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  cursor: help;
+}
+
+/* Expensive effort levels stand out so token burn is visible at a glance. */
+.terminal-model-badge[data-effort="xhigh"],
+.terminal-model-badge[data-effort="max"] {
+  color: var(--accent-warning);
+  border-color: color-mix(in srgb, var(--accent-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--accent-warning) 10%, transparent);
+}
+
+.terminal-model-badge[data-effort="low"],
+.terminal-model-badge[data-effort="minimal"] {
+  color: var(--accent-success);
+  border-color: color-mix(in srgb, var(--accent-success) 40%, transparent);
+  background: color-mix(in srgb, var(--accent-success) 8%, transparent);
 }
 
 .tier-dropdown {

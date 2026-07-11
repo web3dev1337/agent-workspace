@@ -1,0 +1,141 @@
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { AgentModelConfigService } = require('../../server/agentModelConfigService');
+
+describe('AgentModelConfigService', () => {
+  let homeDir;
+  let worktreeDir;
+
+  const writeFileInside = (baseDir, segments, content) => {
+    const file = path.join(baseDir, ...segments);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, content);
+    return file;
+  };
+
+  const writeClaudeSettings = (baseDir, fileName, settings) =>
+    writeFileInside(baseDir, ['.claude', fileName], JSON.stringify(settings));
+
+  const createService = (options = {}) =>
+    new AgentModelConfigService({ homeDir, logger: { debug: () => {} }, ...options });
+
+  beforeEach(() => {
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-model-home-'));
+    worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-model-worktree-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+    fs.rmSync(worktreeDir, { recursive: true, force: true });
+  });
+
+  test('falls back to user settings when the worktree has none', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.model).toBe('claude-fable-5[1m]');
+    expect(resolved.effortLevel).toBe('high');
+    expect(resolved.modelSource.label).toBe('user settings (global)');
+    expect(resolved.effortSource.label).toBe('user settings (global)');
+  });
+
+  test('worktree local settings win over project and user settings', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+    writeClaudeSettings(worktreeDir, 'settings.json', { effortLevel: 'medium' });
+    writeClaudeSettings(worktreeDir, 'settings.local.json', { effortLevel: 'xhigh' });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.effortLevel).toBe('xhigh');
+    expect(resolved.effortSource.label).toBe('local settings');
+    // model is not set locally, so it still comes from the user layer
+    expect(resolved.model).toBe('claude-fable-5[1m]');
+    expect(resolved.modelSource.label).toBe('user settings (global)');
+  });
+
+  test('project settings win over user settings', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+    writeClaudeSettings(worktreeDir, 'settings.json', { model: 'claude-opus-4-8', effortLevel: 'low' });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.model).toBe('claude-opus-4-8');
+    expect(resolved.effortLevel).toBe('low');
+    expect(resolved.modelSource.label).toBe('project settings');
+  });
+
+  test('ignores malformed settings files and keeps cascading', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+    writeFileInside(worktreeDir, ['.claude', 'settings.local.json'], '{not json');
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.model).toBe('claude-fable-5[1m]');
+    expect(resolved.effortLevel).toBe('high');
+  });
+
+  test('returns nulls when no settings exist anywhere', () => {
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved).toEqual({
+      agent: 'claude',
+      model: null,
+      effortLevel: null,
+      modelSource: null,
+      effortSource: null
+    });
+  });
+
+  test('handles a missing worktree directory by using user settings only', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { effortLevel: 'medium' });
+
+    const resolved = createService().resolveClaudeConfig('');
+
+    expect(resolved.effortLevel).toBe('medium');
+    expect(resolved.model).toBeNull();
+  });
+
+  test('reads codex model and reasoning effort from top-level config.toml keys', () => {
+    writeFileInside(homeDir, ['.codex', 'config.toml'], [
+      'model = "gpt-5.3-codex"',
+      'model_reasoning_effort = "XHIGH"',
+      '',
+      '[profiles.other]',
+      'model = "ignored-model"'
+    ].join('\n'));
+
+    const resolved = createService().resolveCodexConfig();
+
+    expect(resolved.model).toBe('gpt-5.3-codex');
+    expect(resolved.effortLevel).toBe('xhigh');
+    expect(resolved.modelSource.label).toBe('codex config (global)');
+  });
+
+  test('returns nulls when codex config is missing', () => {
+    const resolved = createService().resolveCodexConfig();
+
+    expect(resolved.model).toBeNull();
+    expect(resolved.effortLevel).toBeNull();
+  });
+
+  test('caches file reads within the TTL window', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { effortLevel: 'high' });
+    let reads = 0;
+    const countingFs = {
+      readFileSync: (...args) => {
+        reads += 1;
+        return fs.readFileSync(...args);
+      }
+    };
+    const service = createService({ fsImpl: countingFs });
+
+    service.resolveClaudeConfig(worktreeDir);
+    const readsAfterFirst = reads;
+    service.resolveClaudeConfig(worktreeDir);
+
+    expect(readsAfterFirst).toBeGreaterThan(0);
+    expect(reads).toBe(readsAfterFirst);
+  });
+});
