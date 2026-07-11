@@ -1796,6 +1796,11 @@ header {
   cursor: help;
 }
 
+/* Dashed border = session-only /model pick ('s'), reverts when the agent restarts. */
+.terminal-model-badge[data-session-override="true"] {
+  border-style: dashed;
+}
+
 /* Expensive effort levels stand out so token burn is visible at a glance. */
 .terminal-model-badge[data-effort="xhigh"],
 .terminal-model-badge[data-effort="max"] {

@@ -126,6 +126,8 @@ class ClaudeOrchestrator {
     this.modelConfigOutputThrottleMs = 2500; // min gap between refreshes triggered by terminal output
     this.modelConfigTrailingRefreshMs = 2000; // one refresh after activity settles (catches /model,/effort file writes)
     this.modelBadgeTrailingTimer = null;
+    this.sessionModelOverrides = new Map(); // sessionId -> { model } from a session-only /model pick ('s')
+    this.modelOutputTailBySession = new Map(); // sessionId -> recent output tail for split-chunk matching
     this.sessionVisibilityOverridesByWorkspace = this.loadSessionVisibilityOverrides();
 
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
@@ -752,6 +754,46 @@ class ClaudeOrchestrator {
     }
   }
 
+  // A session-only /model pick ('s') is never written to settings files, so the only
+  // way to show it on the badge is to read Claude Code's own confirmation line.
+  detectModelChangeFromOutput(sessionId, data) {
+    if (!this.isModelBadgeEnabled()) return;
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+
+    const tail = this.modelOutputTailBySession.get(sid) || '';
+    const plain = (tail + String(data || '')).replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '');
+
+    const confirmation = /Set model to\s+([^\r\n]+?)\s+(for this session only|and saved as your default)/g;
+    let match;
+    let lastMatch = null;
+    while ((match = confirmation.exec(plain))) lastMatch = match;
+
+    if (!lastMatch) {
+      this.modelOutputTailBySession.set(sid, plain.slice(-300));
+      return;
+    }
+    // Keep only text after the newest confirmation so a stale one can't re-match later.
+    this.modelOutputTailBySession.set(sid, plain.slice(lastMatch.index + lastMatch[0].length).slice(-300));
+
+    if (lastMatch[2] === 'for this session only') {
+      const model = lastMatch[1].replace(/\s*\(default\)\s*$/i, '').trim();
+      if (model) this.sessionModelOverrides.set(sid, { model });
+    } else {
+      // Saved as default: the settings file now holds the truth; trailing refresh re-reads it.
+      this.sessionModelOverrides.delete(sid);
+    }
+    this.renderSessionModelBadge(sid);
+  }
+
+  clearSessionModelOverride(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid || !this.sessionModelOverrides.has(sid)) return;
+    this.sessionModelOverrides.delete(sid);
+    this.modelOutputTailBySession.delete(sid);
+    this.renderSessionModelBadge(sid);
+  }
+
   scheduleTrailingModelBadgeRefresh() {
     if (!this.isModelBadgeEnabled()) return;
     clearTimeout(this.modelBadgeTrailingTimer);
@@ -774,6 +816,7 @@ class ClaudeOrchestrator {
     el.textContent = `🧠 ${meta.text}`;
     el.title = meta.tooltip;
     el.dataset.effort = meta.effortLevel;
+    el.dataset.sessionOverride = meta.sessionOverride ? 'true' : 'false';
   }
 
   getSessionModelBadgeMeta(sessionId) {
@@ -783,21 +826,26 @@ class ClaudeOrchestrator {
     const sessionType = String(session?.type || '').trim().toLowerCase();
     const isCodex = runningAgent === 'codex' || (!runningAgent && sessionType === 'codex');
     const config = isCodex ? this.modelConfigCodex : this.modelConfigBySession.get(sid)?.claude;
-    if (!config || (!config.model && !config.effortLevel)) return null;
+    const override = isCodex ? null : this.sessionModelOverrides.get(sid);
+    if (!override && (!config || (!config.model && !config.effortLevel))) return null;
 
-    const modelLabel = String(config.model || '').replace(/^claude-/i, '');
-    const effortLevel = String(config.effortLevel || '').trim().toLowerCase();
+    const modelLabel = override
+      ? String(override.model || '')
+      : String(config?.model || '').replace(/^claude-/i, '');
+    const effortLevel = String(config?.effortLevel || '').trim().toLowerCase();
     // Effort first: it stays readable even when a narrow header truncates the chip.
     const text = [effortLevel.toUpperCase(), modelLabel].filter(Boolean).join(' · ');
 
     const tooltipLines = ['Model & effort agent launches in this worktree will use.'];
-    if (config.model) {
+    if (override) {
+      tooltipLines.push(`Model: ${override.model} — set with /model for THIS session only (not saved as default)`);
+    } else if (config?.model) {
       tooltipLines.push(`Model: ${config.model} — from ${config.modelSource?.label || 'unknown'} (${config.modelSource?.file || '?'})`);
     }
     if (effortLevel) {
-      tooltipLines.push(`Effort: ${effortLevel} — from ${config.effortSource?.label || 'unknown'} (${config.effortSource?.file || '?'})`);
+      tooltipLines.push(`Effort: ${effortLevel} — from ${config?.effortSource?.label || 'unknown'} (${config?.effortSource?.file || '?'})`);
     }
-    return { text, tooltip: tooltipLines.join('\n'), effortLevel };
+    return { text, tooltip: tooltipLines.join('\n'), effortLevel, sessionOverride: !!override };
   }
 
   hashStringToBase36(value) {
@@ -1423,6 +1471,8 @@ class ClaudeOrchestrator {
           // ...and once more after output settles, to catch the settings-file write that
           // lands just after a /model or /effort confirmation (which the throttle can miss).
           this.scheduleTrailingModelBadgeRefresh();
+          // Session-only ('s') model picks never touch settings files — read them from the confirmation line.
+          this.detectModelChangeFromOutput(sessionId, data);
         }
 
         // Fast-path branch refresh when git reports a branch change in output.
@@ -6450,6 +6500,7 @@ class ClaudeOrchestrator {
       session.status = status;
       if (status === 'idle' && /-(claude|codex)$/.test(String(sessionId || ''))) {
         session.agent = null;
+        this.clearSessionModelOverride(sessionId); // session-only /model pick dies with the agent
       }
       this.refreshTier1Busy();
 
@@ -8166,6 +8217,7 @@ class ClaudeOrchestrator {
         session.agent = null;
         session.hasUserInput = false;
       }
+      this.clearSessionModelOverride(sessionId);
       const isClaudeRunning = session && session.status !== 'idle';
 
       // Only show startup UI if Claude is NOT running
@@ -17396,6 +17448,8 @@ class ClaudeOrchestrator {
     this.intentHaikuInFlight.delete(sid);
     this.intentHaikuLastFetchedAt.delete(sid);
     this.intentHaikuPolicyBySession.delete(sid);
+    this.sessionModelOverrides.delete(sid);
+    this.modelOutputTailBySession.delete(sid);
     if (targetWorkspaceId) {
       this.setSessionVisibilityOverride(sid, null, { workspaceId: targetWorkspaceId });
     } else {

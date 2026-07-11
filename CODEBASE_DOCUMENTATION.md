@@ -237,7 +237,7 @@ client/app.js                      - Main client application
 ├─ Features: 16-terminal layout, real-time updates, session switching
 ├─ Command Palette: header `⌘ Commands` button + `Ctrl/Cmd+K` searchable command launcher for command-catalog actions
 ├─ Intent hints: compact "intent haiku" strip above each agent terminal, refreshed from `POST /api/sessions/intent-haiku`
-├─ Model badge: terminal-header chip showing the model + reasoning effort each worktree's agent launches use (`GET /api/sessions/model-config`, toggle via `ui.visibility.terminal.modelBadge`)
+├─ Model badge: terminal-header chip showing the model + reasoning effort each worktree's agent launches use (`GET /api/sessions/model-config`, toggle via `ui.visibility.terminal.modelBadge`); session-only `/model` picks are read live from the terminal's confirmation line and shown with a dashed border until the agent restarts
 ├─ Projects + Chats automation: `project-chats-new` Commander/voice action supports explicit workspace + repository targeting
 ├─ Projects + Chats list: repository-first aggregation (project-centric view) while preserving workspace context for mixed workspaces
 ├─ Projects + Chats data source: prefers server-aggregated repository projects from `GET /api/thread-projects` with client fallback aggregation
