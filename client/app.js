@@ -4058,7 +4058,8 @@ class ClaudeOrchestrator {
     this.updateTerminalGrid();
     // On load, fill missing intent hints once and rely on milestone refreshes afterward.
     this.refreshIntentHaikusForAgentSessions({ delayMs: this.intentHaikuInitialRefreshDelayMs, force: false, onlyMissing: true });
-    this.refreshSessionModelBadges({ force: true });
+    // Throttled: new terminals trigger their own forced fetch in createTerminalElement.
+    this.refreshSessionModelBadges();
 
     // Check for auto-start after a delay to let terminals initialize
     setTimeout(() => {
