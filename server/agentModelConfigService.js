@@ -3,8 +3,9 @@ const os = require('os');
 const path = require('path');
 
 // Claude Code re-reads these files on every launch, so a short cache keeps
-// badge refreshes cheap without showing stale values for long.
-const FILE_CACHE_TTL_MS = 5000;
+// badge refreshes cheap (and dedupes the shared user-global file across sessions
+// within one request) without showing stale values for long.
+const FILE_CACHE_TTL_MS = 1500;
 
 // Claude Code settings precedence (highest first) for the keys we care about:
 // CLI args > .claude/settings.local.json > .claude/settings.json > ~/.claude/settings.json

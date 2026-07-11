@@ -122,7 +122,8 @@ class ClaudeOrchestrator {
     this.modelConfigCodex = null; // global codex config from /api/sessions/model-config
     this.modelConfigInFlight = false;
     this.modelConfigLastFetchedAt = 0;
-    this.modelConfigRefreshMs = 60000;
+    this.modelConfigRefreshMs = 20000; // fallback poll for idle terminals; activity refreshes sooner
+    this.modelConfigOutputThrottleMs = 2500; // min gap between refreshes triggered by terminal output
     this.sessionVisibilityOverridesByWorkspace = this.loadSessionVisibilityOverrides();
 
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
@@ -722,12 +723,13 @@ class ClaudeOrchestrator {
     return this.getTerminalVisibilityConfig().modelBadge !== false;
   }
 
-  async refreshSessionModelBadges({ force = false } = {}) {
+  async refreshSessionModelBadges({ force = false, minGap = null } = {}) {
     if (!this.isModelBadgeEnabled()) return;
     if (this.modelConfigInFlight) return;
 
     const now = Date.now();
-    if (!force && (now - this.modelConfigLastFetchedAt) < this.modelConfigRefreshMs) return;
+    const throttleMs = (minGap == null) ? this.modelConfigRefreshMs : minGap;
+    if (!force && (now - this.modelConfigLastFetchedAt) < throttleMs) return;
 
     this.modelConfigInFlight = true;
     this.modelConfigLastFetchedAt = now;
@@ -1406,6 +1408,8 @@ class ClaudeOrchestrator {
         if (/-claude$|-codex$/.test(String(sessionId || ''))) {
           this.detectGitHubLinks(sessionId, data);
           this.maybeScheduleLongSessionIntentRefresh(sessionId);
+          // Terminal activity (e.g. running /model) may have changed the model/effort — refresh soon, throttled.
+          this.refreshSessionModelBadges({ minGap: this.modelConfigOutputThrottleMs });
         }
 
         // Fast-path branch refresh when git reports a branch change in output.
