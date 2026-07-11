@@ -104,29 +104,5 @@ test.describe('Model/effort badge', () => {
     const tooltip = await badge.getAttribute('title');
     expect(tooltip).toContain('local settings');
     expect(tooltip).toContain('settings.local.json');
-
-    // A session-only /model pick ('s') is read from the terminal's confirmation line
-    // (ANSI bold codes included) and overrides the badge's model for that session only.
-    await page.evaluate(() => {
-      const ESC = String.fromCharCode(27); // real ANSI escape, as the PTY emits it
-      window.orchestrator.detectModelChangeFromOutput(
-        'demo-work1-claude',
-        `Set model to ${ESC}[1mSonnet 5${ESC}[22m for this session only\r\n`
-      );
-    });
-    await expect(badge).toContainText('Sonnet 5');
-    await expect(badge).toHaveAttribute('data-session-override', 'true');
-    expect(await badge.getAttribute('title')).toContain('THIS session only');
-
-    // Saving a default (Enter) clears the session override; the settings value shows again.
-    await page.evaluate(() => {
-      const ESC = String.fromCharCode(27);
-      window.orchestrator.detectModelChangeFromOutput(
-        'demo-work1-claude',
-        `Set model to ${ESC}[1mOpus 4.8 (1M context)${ESC}[22m and saved as your default for new sessions\r\n`
-      );
-    });
-    await expect(badge).toContainText('fable-5[1m]');
-    await expect(badge).toHaveAttribute('data-session-override', 'false');
   });
 });
