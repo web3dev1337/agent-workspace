@@ -55,6 +55,9 @@ const packagedCommanderDir = packagedDataDir ? path.join(packagedDataDir, 'comma
 const COMMANDER_CWD = process.env.COMMANDER_CWD || (isPackaged ? (packagedCommanderDir || (process.env.HOME || process.env.USERPROFILE || defaultCwd)) : defaultCwd);
 const TRUST_PROMPT_BUFFER_CHARS = 6000;
 const TRUST_PROMPT_MAX_WAIT_MS = 15000;
+// Claude's banner can appear before a pending trust prompt; wait this long
+// for the prompt before deciding it isn't coming (already-trusted folder).
+const READY_WITHOUT_TRUST_GRACE_MS = 2000;
 
 function seedCommanderInstructionsIfNeeded() {
   if (!isPackaged) return;
@@ -475,7 +478,19 @@ class CommanderService {
    */
   resize(cols, rows) {
     if (this.session && this.session.pty) {
-      this.session.pty.resize(cols, rows);
+      const nextCols = Number(cols);
+      const nextRows = Number(rows);
+      if (!Number.isInteger(nextCols) || !Number.isInteger(nextRows) || nextCols <= 0 || nextRows <= 0) {
+        return false;
+      }
+      const last = this.session.lastSize;
+      if (last && last.cols === nextCols && last.rows === nextRows) {
+        // Skip no-op resizes: ConPTY repaints the whole screen on every
+        // resize, which flickers each time the panel reopens.
+        return true;
+      }
+      this.session.pty.resize(nextCols, nextRows);
+      this.session.lastSize = { cols: nextCols, rows: nextRows };
       return true;
     }
     return false;
@@ -584,14 +599,29 @@ class CommanderService {
     ) {
       launch.trustPromptAccepted = true;
       this.writeRawInput('1\r');
+      if (launch.readyFlushTimer) {
+        clearTimeout(launch.readyFlushTimer);
+      }
       launch.readyFlushTimer = setTimeout(() => {
         this.flushQueuedLaunchInputs();
       }, 1200);
       return;
     }
 
-    if ((!launch.expectTrustPrompt || launch.trustPromptAccepted) && this.matchesClaudeReadyPrompt(launch.recentOutput)) {
+    if (!this.matchesClaudeReadyPrompt(launch.recentOutput)) return;
+
+    if (!launch.expectTrustPrompt || launch.trustPromptAccepted) {
       this.flushQueuedLaunchInputs();
+      return;
+    }
+
+    // Claude is up but the expected trust prompt hasn't shown. On an
+    // already-trusted folder it never will, so flush after a short grace
+    // window that the trust-prompt branch above can still preempt.
+    if (!launch.readyFlushTimer) {
+      launch.readyFlushTimer = setTimeout(() => {
+        this.flushQueuedLaunchInputs();
+      }, READY_WITHOUT_TRUST_GRACE_MS);
     }
   }
 
@@ -605,9 +635,13 @@ class CommanderService {
   }
 
   matchesClaudeReadyPrompt(text) {
-    const normalized = String(text || '');
-    return normalized.includes('welcome to claude code')
-      && normalized.includes('? for shortcuts');
+    const normalized = String(text || '').toLowerCase();
+    // Claude Code v1 banner
+    if (normalized.includes('welcome to claude code') && normalized.includes('? for shortcuts')) {
+      return true;
+    }
+    // Claude Code v2 banner: "Claude Code v2.x.y"
+    return /claude code v\d/.test(normalized);
   }
 
   flushQueuedLaunchInputs() {
