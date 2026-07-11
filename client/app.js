@@ -124,6 +124,8 @@ class ClaudeOrchestrator {
     this.modelConfigLastFetchedAt = 0;
     this.modelConfigRefreshMs = 20000; // fallback poll for idle terminals; activity refreshes sooner
     this.modelConfigOutputThrottleMs = 2500; // min gap between refreshes triggered by terminal output
+    this.modelConfigTrailingRefreshMs = 2000; // one refresh after activity settles (catches /model,/effort file writes)
+    this.modelBadgeTrailingTimer = null;
     this.sessionVisibilityOverridesByWorkspace = this.loadSessionVisibilityOverrides();
 
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
@@ -748,6 +750,14 @@ class ClaudeOrchestrator {
     } finally {
       this.modelConfigInFlight = false;
     }
+  }
+
+  scheduleTrailingModelBadgeRefresh() {
+    if (!this.isModelBadgeEnabled()) return;
+    clearTimeout(this.modelBadgeTrailingTimer);
+    this.modelBadgeTrailingTimer = setTimeout(() => {
+      this.refreshSessionModelBadges({ force: true });
+    }, this.modelConfigTrailingRefreshMs);
   }
 
   renderSessionModelBadge(sessionId, root = null) {
@@ -1410,6 +1420,9 @@ class ClaudeOrchestrator {
           this.maybeScheduleLongSessionIntentRefresh(sessionId);
           // Terminal activity (e.g. running /model) may have changed the model/effort — refresh soon, throttled.
           this.refreshSessionModelBadges({ minGap: this.modelConfigOutputThrottleMs });
+          // ...and once more after output settles, to catch the settings-file write that
+          // lands just after a /model or /effort confirmation (which the throttle can miss).
+          this.scheduleTrailingModelBadgeRefresh();
         }
 
         // Fast-path branch refresh when git reports a branch change in output.
