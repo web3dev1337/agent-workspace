@@ -118,6 +118,14 @@ class ClaudeOrchestrator {
     this.intentHaikuPostPromptDelayMs = 30000;
     this.intentHaikuLongRefreshMs = 3 * 60 * 60 * 1000;
     this.intentHaikuPolicyBySession = new Map(); // sessionId -> milestone refresh state
+    this.modelConfigBySession = new Map(); // sessionId -> { cwd, claude: {model, effortLevel, ...} }
+    this.modelConfigCodex = null; // global codex config from /api/sessions/model-config
+    this.modelConfigInFlight = false;
+    this.modelConfigLastFetchedAt = 0;
+    this.modelConfigRefreshMs = 20000; // fallback poll for idle terminals; activity refreshes sooner
+    this.modelConfigOutputThrottleMs = 2500; // min gap between refreshes triggered by terminal output
+    this.modelConfigTrailingRefreshMs = 2000; // one refresh after activity settles (catches /model,/effort file writes)
+    this.modelBadgeTrailingTimer = null;
     this.sessionVisibilityOverridesByWorkspace = this.loadSessionVisibilityOverrides();
 
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
@@ -303,6 +311,7 @@ class ClaudeOrchestrator {
       },
       terminal: {
         intentHints: false,
+        modelBadge: true,
         branchRefresh: false,
         closeProcess: false,
         removeWorktree: false,
@@ -710,6 +719,85 @@ class ClaudeOrchestrator {
     } finally {
       this.intentHaikuInFlight.delete(sid);
     }
+  }
+
+  isModelBadgeEnabled() {
+    return this.getTerminalVisibilityConfig().modelBadge !== false;
+  }
+
+  async refreshSessionModelBadges({ force = false, minGap = null } = {}) {
+    if (!this.isModelBadgeEnabled()) return;
+    if (this.modelConfigInFlight) return;
+
+    const now = Date.now();
+    const throttleMs = (minGap == null) ? this.modelConfigRefreshMs : minGap;
+    if (!force && (now - this.modelConfigLastFetchedAt) < throttleMs) return;
+
+    this.modelConfigInFlight = true;
+    this.modelConfigLastFetchedAt = now;
+    try {
+      const response = await fetch('/api/sessions/model-config');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.ok === false) return;
+
+      this.modelConfigCodex = payload?.codex || null;
+      this.modelConfigBySession = new Map(Object.entries(payload?.sessions || {}));
+      for (const sessionId of this.sessions.keys()) {
+        this.renderSessionModelBadge(sessionId);
+      }
+    } catch {
+      // Keep showing the last known values on transient fetch errors.
+    } finally {
+      this.modelConfigInFlight = false;
+    }
+  }
+
+  scheduleTrailingModelBadgeRefresh() {
+    if (!this.isModelBadgeEnabled()) return;
+    clearTimeout(this.modelBadgeTrailingTimer);
+    this.modelBadgeTrailingTimer = setTimeout(() => {
+      this.refreshSessionModelBadges({ force: true });
+    }, this.modelConfigTrailingRefreshMs);
+  }
+
+  renderSessionModelBadge(sessionId, root = null) {
+    // Accept a root element so freshly built (not yet attached) wrappers can render too.
+    const scope = root || document;
+    const el = scope.querySelector(`#${this.cssEscape(this.getSessionDomId('model-badge', sessionId))}`);
+    if (!el) return;
+    const meta = this.getSessionModelBadgeMeta(sessionId);
+    if (!meta) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    el.textContent = `🧠 ${meta.text}`;
+    el.title = meta.tooltip;
+    el.dataset.effort = meta.effortLevel;
+  }
+
+  getSessionModelBadgeMeta(sessionId) {
+    const sid = String(sessionId || '').trim();
+    const session = this.sessions.get(sid) || this.sessions.get(sessionId);
+    const runningAgent = String(session?.agent || '').trim().toLowerCase();
+    const sessionType = String(session?.type || '').trim().toLowerCase();
+    const isCodex = runningAgent === 'codex' || (!runningAgent && sessionType === 'codex');
+    const config = isCodex ? this.modelConfigCodex : this.modelConfigBySession.get(sid)?.claude;
+    if (!config || (!config.model && !config.effortLevel)) return null;
+
+    const modelLabel = String(config.model || '').replace(/^claude-/i, '');
+    const effortLevel = String(config.effortLevel || '').trim().toLowerCase();
+    // Effort first: it stays readable even when a narrow header truncates the chip.
+    const text = [effortLevel.toUpperCase(), modelLabel].filter(Boolean).join(' · ');
+
+    const tooltipLines = ['Model & effort agent launches in this worktree will use.'];
+    if (config.model) {
+      tooltipLines.push(`Model: ${config.model} — from ${config.modelSource?.label || 'unknown'} (${config.modelSource?.file || '?'})`);
+    }
+    if (effortLevel) {
+      tooltipLines.push(`Effort: ${effortLevel} — from ${config.effortSource?.label || 'unknown'} (${config.effortSource?.file || '?'})`);
+    }
+    return { text, tooltip: tooltipLines.join('\n'), effortLevel };
   }
 
   hashStringToBase36(value) {
@@ -1205,6 +1293,7 @@ class ClaudeOrchestrator {
       // Initialize sidebar ports and set up auto-refresh
       this.refreshSidebarPorts();
       setInterval(() => this.refreshSidebarPorts(), 30000); // Refresh every 30s
+      setInterval(() => this.refreshSessionModelBadges({ force: true }), this.modelConfigRefreshMs);
 
 	      // Set up UI
 	      this.setupEventListeners();
@@ -1329,6 +1418,11 @@ class ClaudeOrchestrator {
         if (/-claude$|-codex$/.test(String(sessionId || ''))) {
           this.detectGitHubLinks(sessionId, data);
           this.maybeScheduleLongSessionIntentRefresh(sessionId);
+          // Terminal activity (e.g. running /model) may have changed the model/effort — refresh soon, throttled.
+          this.refreshSessionModelBadges({ minGap: this.modelConfigOutputThrottleMs });
+          // ...and once more after output settles, to catch the settings-file write that
+          // lands just after a /model or /effort confirmation (which the throttle can miss).
+          this.scheduleTrailingModelBadgeRefresh();
         }
 
         // Fast-path branch refresh when git reports a branch change in output.
@@ -3981,6 +4075,8 @@ class ClaudeOrchestrator {
     this.updateTerminalGrid();
     // On load, fill missing intent hints once and rely on milestone refreshes afterward.
     this.refreshIntentHaikusForAgentSessions({ delayMs: this.intentHaikuInitialRefreshDelayMs, force: false, onlyMissing: true });
+    // Throttled: new terminals trigger their own forced fetch in createTerminalElement.
+    this.refreshSessionModelBadges();
 
     // Check for auto-start after a delay to let terminals initialize
     setTimeout(() => {
@@ -6246,6 +6342,8 @@ class ClaudeOrchestrator {
 	    ) : '';
       const intentHaikuId = showIntentHints ? this.getSessionDomId('intent-haiku', sessionId) : '';
       const intentHaikuText = showIntentHints ? this.escapeHtml(this.getSessionIntentHaikuText(sessionId)) : '';
+      const showModelBadge = this.isModelBadgeEnabled();
+      const modelBadgeId = showModelBadge ? this.getSessionDomId('model-badge', sessionId) : '';
 			    wrapper.innerHTML = `
 			      <div class="terminal-header">
 			        <div class="terminal-title">
@@ -6254,6 +6352,7 @@ class ClaudeOrchestrator {
 		          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
 		          ${showBranchRefresh ? `<button type="button" class="terminal-branch-refresh" data-branch-refresh="${this.escapeHtml(branchRefreshId)}" title="Refresh branch label">↻</button>` : ''}
 		          ${ticketChip}
+		          ${isAgentSession && showModelBadge ? `<span class="terminal-model-badge" id="${modelBadgeId}" style="display: none;"></span>` : ''}
 			        </div>
 		        <div class="terminal-controls">
 		          <button type="button" class="terminal-controls-toggle" title="Show controls"><span class="controls-toggle-icon">⋯</span></button>
@@ -6331,6 +6430,12 @@ class ClaudeOrchestrator {
 
     if (isAgentSession) {
       this.renderSessionIntentHaiku(sessionId, { pending: false, error: false });
+      if (showModelBadge) {
+        this.renderSessionModelBadge(sessionId, wrapper);
+        if (!this.modelConfigBySession.has(String(sessionId))) {
+          this.refreshSessionModelBadges({ force: true });
+        }
+      }
     }
 
     return wrapper;

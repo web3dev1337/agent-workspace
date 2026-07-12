@@ -103,6 +103,8 @@ server/threadService.js            - Workspace/project thread persistence (`~/.o
 server/projectBoardService.js      - Local projects kanban board persistence (`~/.orchestrator/project-board.json`) + APIs (`GET /api/projects/board`, `POST /api/projects/board/move`, `POST /api/projects/board/patch`)
 server/discordIntegrationService.js - Discord queue orchestration bridge (Services workspace ensure/start, signed queue verification, invocation idempotency, JSONL audit log for processing dispatch/replay/fail paths)
 server/intentHaikuService.js       - Session intent summarizer for context-switch hints (optional Anthropic Haiku model, heuristic fallback)
+server/agentModelConfigService.js  - Resolves the model + reasoning effort agent launches will use per worktree (Claude `.claude/settings*.json` cascade: local > project > user; Codex `~/.codex/config.toml`)
+tests/unit/agentModelConfigService.test.js - Coverage for settings-cascade precedence, malformed/missing files, short-lived file cache, and Codex config parsing
 server/threadWorktreeSelection.js  - Repository/worktree normalization + reuse-first candidate selection for thread creation
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
@@ -235,6 +237,7 @@ client/app.js                      - Main client application
 ├─ Features: 16-terminal layout, real-time updates, session switching
 ├─ Command Palette: header `⌘ Commands` button + `Ctrl/Cmd+K` searchable command launcher for command-catalog actions
 ├─ Intent hints: compact "intent haiku" strip above each agent terminal, refreshed from `POST /api/sessions/intent-haiku`
+├─ Model badge: terminal-header chip showing the model + reasoning effort each worktree's agent launches use (`GET /api/sessions/model-config`, toggle via `ui.visibility.terminal.modelBadge`)
 ├─ Projects + Chats automation: `project-chats-new` Commander/voice action supports explicit workspace + repository targeting
 ├─ Projects + Chats list: repository-first aggregation (project-centric view) while preserving workspace context for mixed workspaces
 ├─ Projects + Chats data source: prefers server-aggregated repository projects from `GET /api/thread-projects` with client fallback aggregation
@@ -624,6 +627,7 @@ GET /api/discord/status            - Discord queue + services health/status (cou
 POST /api/discord/ensure-services  - Ensure Services workspace/session bootstrap; accepts optional `dangerousModeOverride` (gated by `DISCORD_ALLOW_DANGEROUS_OVERRIDE`)
 POST /api/discord/process-queue    - Dispatch queue processing prompt with optional `Idempotency-Key`/`idempotencyKey`, queue signature verification, idempotent replay, audit logging, and per-endpoint rate limiting
 POST /api/sessions/intent-haiku   - Generate <=200 char intent summary for an active Claude/Codex session
+GET /api/sessions/model-config    - Model + reasoning-effort config per active agent session (Claude settings cascade per worktree, global Codex config)
 GET /api/greenfield/categories    - Greenfield category list (taxonomy-backed)
 POST /api/greenfield/detect-category - Infer category from description (taxonomy keyword matching)
 GET /api/setup-actions            - List Windows dependency-onboarding actions

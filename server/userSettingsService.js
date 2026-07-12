@@ -191,6 +191,7 @@ class UserSettingsService {
             },
             terminal: {
               intentHints: false,
+              modelBadge: true,
               branchRefresh: false,
               closeProcess: false,
               removeWorktree: true,

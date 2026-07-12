@@ -167,6 +167,7 @@ const { ConfigPromoterService } = require('./configPromoterService');
 const { normalizeServiceManifest, getWorkspaceServiceManifest } = require('./workspaceServiceStackService');
 const { ServiceStackRuntimeService } = require('./serviceStackRuntimeService');
 const { IntentHaikuService } = require('./intentHaikuService');
+const { AgentModelConfigService } = require('./agentModelConfigService');
 const {
   getLifecyclePolicy,
   parseWorktreeKey,
@@ -395,6 +396,7 @@ const schedulerService = SchedulerService.getInstance({ logger });
 const pagerService = PagerService.getInstance({ logger });
 const threadService = ThreadService.getInstance({ logger });
 const intentHaikuService = IntentHaikuService.getInstance({ logger });
+const agentModelConfigService = AgentModelConfigService.getInstance({ logger });
 const serviceStackRuntimeService = ServiceStackRuntimeService.getInstance({ logger });
 const policyService = PolicyService.getInstance({ logger });
 const auditExportService = AuditExportService.getInstance({ logger });
@@ -2831,6 +2833,29 @@ app.post('/api/sessions/intent-haiku', async (req, res) => {
     }
     logger.error('Failed to generate intent haiku', { error: error.message, stack: error.stack });
     return res.status(500).json({ ok: false, error: 'Failed to generate intent haiku' });
+  }
+});
+
+app.get('/api/sessions/model-config', (req, res) => {
+  try {
+    const sessions = {};
+    for (const [sessionId, session] of sessionManager.sessions) {
+      const type = String(session?.type || '').trim().toLowerCase();
+      if (type !== 'claude' && type !== 'codex') continue;
+      const cwd = sessionManager.getSessionCwd(session);
+      sessions[sessionId] = {
+        cwd,
+        claude: agentModelConfigService.resolveClaudeConfig(cwd)
+      };
+    }
+    return res.json({
+      ok: true,
+      codex: agentModelConfigService.resolveCodexConfig(),
+      sessions
+    });
+  } catch (error) {
+    logger.error('Failed to resolve session model config', { error: error.message, stack: error.stack });
+    return res.status(500).json({ ok: false, error: 'Failed to resolve session model config' });
   }
 });
 
