@@ -255,4 +255,50 @@ describe('AgentModelConfigService', () => {
     expect(resolved.effortSource.label).toBe('server environment');
     expect(resolved.effortSource.file).toBeNull();
   });
+
+  const writeTranscript = (svc, cwd, jsonlLines) => {
+    const encoded = svc.encodeClaudeProjectDir(path.resolve(cwd));
+    const dir = path.join(homeDir, '.claude', 'projects', encoded);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'session-abc.jsonl');
+    fs.writeFileSync(file, jsonlLines.join('\n') + '\n');
+    return file;
+  };
+
+  test('encodeClaudeProjectDir replaces non-alphanumeric chars with dashes', () => {
+    const svc = createService();
+    expect(svc.encodeClaudeProjectDir('C:\\Users\\cuppy\\.agent-workspace\\work1'))
+      .toBe('C--Users-cuppy--agent-workspace-work1');
+  });
+
+  test('reads the most recent real model from the transcript tail, skipping synthetic', () => {
+    const svc = createService();
+    const file = writeTranscript(svc, worktreeDir, [
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-fable-5' } }),
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8' } }),
+      JSON.stringify({ type: 'assistant', message: { model: '<synthetic>' } })
+    ]);
+    expect(svc.readLastModelFromTranscript(file)).toBe('claude-opus-4-8');
+  });
+
+  test('resolveClaudeConfig prefers the live transcript model over the configured default', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+    const svc = createService();
+    writeTranscript(svc, worktreeDir, [
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8' } })
+    ]);
+
+    const resolved = svc.resolveClaudeConfig(worktreeDir);
+    expect(resolved.model).toBe('claude-opus-4-8'); // live session wins
+    expect(resolved.modelSource.label).toBe('live session (transcript)');
+    expect(resolved.effortLevel).toBe('high'); // effort still comes from config
+  });
+
+  test('resolveClaudeConfig keeps the configured model when there is no transcript', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+    expect(resolved.model).toBe('claude-fable-5[1m]');
+    expect(resolved.modelSource.label).toBe('user settings (global)');
+  });
 });
