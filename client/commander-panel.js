@@ -787,14 +787,17 @@ class CommanderPanel {
     }
   }
 
-  async executeTextCommand(text) {
+  async executeTextCommand(text, typedInput = '') {
     const input = String(text || '').trim();
-    if (!input) return;
+    if (!input) {
+      if (this.terminal) this.terminal.write('\r\n');
+      return;
+    }
     try {
       const response = await fetch(`${this.serverUrl}/api/commander/execute-text`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: input })
+        body: JSON.stringify({ text: input, rulesOnly: true })
       });
       const data = await response.json().catch(() => ({}));
 
@@ -802,6 +805,13 @@ class CommanderPanel {
       const parsed = data?.parsed;
       const result = data?.result;
       const cmdName = parsed?.success ? String(parsed.command || '').trim() : '';
+
+      if (!ok && parsed && parsed.success !== true) {
+        // Not an orchestrator command — hand the original slash command to
+        // the agent in the Commander terminal (e.g. Claude Code /resume).
+        this.forwardCapturedInputToAgent(typedInput || `/${input}`);
+        return;
+      }
 
       if (this.terminal) {
         const header = cmdName ? `[cmd] ${cmdName}` : '[cmd]';
@@ -820,15 +830,28 @@ class CommanderPanel {
     }
   }
 
+  /**
+   * Erase the locally echoed slash command and send it to the Commander PTY
+   * so the agent (Claude Code / Codex) can run it as its own slash command.
+   */
+  forwardCapturedInputToAgent(typedInput) {
+    const text = String(typedInput || '');
+    if (!text) return;
+    if (this.terminal) {
+      this.terminal.write('\b \b'.repeat(text.length));
+    }
+    this.sendInput(`${text}\r`);
+  }
+
   handleTerminalData(data) {
     // If we're currently capturing a command, don't forward to Commander PTY.
     if (this.commandCapture) {
       if (data === '\r' || data === '\n') {
         const text = String(this.commandCapture.text || '').trim();
+        const typedInput = String(this.commandCapture.display || '');
         this.commandCapture = null;
         this.resetLocalLineBuffer();
-        if (this.terminal) this.terminal.write('\r\n');
-        this.executeTextCommand(text);
+        this.executeTextCommand(text, typedInput);
         return;
       }
       if (data === '\x03') {

@@ -297,3 +297,25 @@ describe('VoiceCommandService (rule parsing)', () => {
     expect(resumeCodex.params).toEqual({ source: 'codex', id: 'sess_123' });
   });
 });
+
+describe('VoiceCommandService parseCommand (rulesOnly)', () => {
+  test('rulesOnly skips LLM fallbacks and reports unrecognized text', async () => {
+    const parsed = await voiceCommandService.parseCommand('resume', { rulesOnly: true });
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toBe('Command not recognized');
+  });
+
+  test('rulesOnly still resolves rule-parsable commands', async () => {
+    const parsed = await voiceCommandService.parseCommand('enter focus mode', { rulesOnly: true });
+    expect(parsed.success).toBe(true);
+    expect(parsed.command).toBe('set-workflow-mode');
+    expect(parsed.params).toEqual({ mode: 'focus' });
+  });
+
+  test('common agent slash commands do not collide with rules', async () => {
+    for (const text of ['resume', 'help', 'clear', 'compact', 'model', 'status', 'init']) {
+      const parsed = await voiceCommandService.parseCommand(text, { rulesOnly: true });
+      expect(parsed.success).toBe(false);
+    }
+  });
+});
