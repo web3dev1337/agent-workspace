@@ -31,10 +31,11 @@ const CLAUDE_EFFORT_ENV = 'CLAUDE_CODE_EFFORT_LEVEL';
 const CLAUDE_MODEL_ENV = 'ANTHROPIC_MODEL';
 
 class AgentModelConfigService {
-  constructor({ logger = console, homeDir = null, fsImpl = fs } = {}) {
+  constructor({ logger = console, homeDir = null, fsImpl = fs, processEnv = process.env } = {}) {
     this.logger = logger;
     this.homeDir = homeDir || os.homedir();
     this.fs = fsImpl;
+    this.processEnv = processEnv;
     this.fileCache = new Map();
   }
 
@@ -127,9 +128,9 @@ class AgentModelConfigService {
       };
     }
 
-    if (this.isNonEmptyString(process.env[name])) {
+    if (this.isNonEmptyString(this.processEnv[name])) {
       return {
-        value: process.env[name].trim(),
+        value: this.processEnv[name].trim(),
         source: { label: 'server environment', file: null }
       };
     }

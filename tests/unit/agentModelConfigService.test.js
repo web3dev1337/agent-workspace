@@ -17,8 +17,10 @@ describe('AgentModelConfigService', () => {
   const writeClaudeSettings = (baseDir, fileName, settings) =>
     writeFileInside(baseDir, ['.claude', fileName], JSON.stringify(settings));
 
+  // processEnv defaults to {} so host machines with ANTHROPIC_*/CLAUDE_CODE_*
+  // env vars set can't leak into these tests.
   const createService = (options = {}) =>
-    new AgentModelConfigService({ homeDir, logger: { debug: () => {} }, ...options });
+    new AgentModelConfigService({ homeDir, logger: { debug: () => {} }, processEnv: {}, ...options });
 
   beforeEach(() => {
     homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-model-home-'));
@@ -137,5 +139,120 @@ describe('AgentModelConfigService', () => {
 
     expect(readsAfterFirst).toBeGreaterThan(0);
     expect(reads).toBe(readsAfterFirst);
+  });
+
+  test('maps model aliases through ANTHROPIC_DEFAULT_*_MODEL env blocks', () => {
+    writeClaudeSettings(homeDir, 'settings.json', {
+      model: 'opus',
+      env: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8[1m]' }
+    });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.model).toBe('claude-opus-4-8[1m]');
+    expect(resolved.modelSource.label).toBe('ANTHROPIC_DEFAULT_OPUS_MODEL via env block (user settings (global))');
+  });
+
+  test('maps the fable alias through ANTHROPIC_DEFAULT_FABLE_MODEL', () => {
+    writeClaudeSettings(homeDir, 'settings.json', {
+      model: 'fable',
+      env: { ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5[1m]' }
+    });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.model).toBe('claude-fable-5[1m]');
+  });
+
+  test('leaves aliases untouched when no default env var resolves them', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'opus' });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.model).toBe('opus');
+    expect(resolved.modelSource.label).toBe('user settings (global)');
+  });
+
+  test('local settings env block beats the user settings env block for aliases', () => {
+    writeClaudeSettings(homeDir, 'settings.json', {
+      model: 'opus',
+      env: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-6' }
+    });
+    writeClaudeSettings(worktreeDir, 'settings.local.json', {
+      env: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8[1m]' }
+    });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.model).toBe('claude-opus-4-8[1m]');
+    expect(resolved.modelSource.label).toBe('ANTHROPIC_DEFAULT_OPUS_MODEL via env block (local settings)');
+  });
+
+  test('ANTHROPIC_MODEL env fills in when no model key is set', () => {
+    writeClaudeSettings(homeDir, 'settings.json', {
+      env: { ANTHROPIC_MODEL: 'claude-sonnet-5' }
+    });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.model).toBe('claude-sonnet-5');
+    expect(resolved.modelSource.label).toBe('env block (user settings (global))');
+  });
+
+  test('model key wins over ANTHROPIC_MODEL env', () => {
+    writeClaudeSettings(homeDir, 'settings.json', {
+      model: 'claude-fable-5[1m]',
+      env: { ANTHROPIC_MODEL: 'claude-sonnet-5' }
+    });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.model).toBe('claude-fable-5[1m]');
+    expect(resolved.modelSource.label).toBe('user settings (global)');
+  });
+
+  test('CLAUDE_CODE_EFFORT_LEVEL overrides the effortLevel settings key', () => {
+    writeClaudeSettings(homeDir, 'settings.json', {
+      effortLevel: 'high',
+      env: { CLAUDE_CODE_EFFORT_LEVEL: 'XHIGH' }
+    });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.effortLevel).toBe('xhigh');
+    expect(resolved.effortSource.label).toBe('env block (user settings (global))');
+  });
+
+  test('reads env overrides from ~/.claude/.env (export syntax, quotes, comments)', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { effortLevel: 'high' });
+    writeFileInside(homeDir, ['.claude', '.env'], [
+      '# thinking budget',
+      'MAX_THINKING_TOKENS=128000',
+      'export CLAUDE_CODE_EFFORT_LEVEL="max"',
+      ''
+    ].join('\n'));
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.effortLevel).toBe('max');
+    expect(resolved.effortSource.label).toBe('env file');
+  });
+
+  test('settings env blocks beat ~/.claude/.env which beats the server environment', () => {
+    writeFileInside(homeDir, ['.claude', '.env'], 'CLAUDE_CODE_EFFORT_LEVEL=low\n');
+    const resolved = createService({ processEnv: { CLAUDE_CODE_EFFORT_LEVEL: 'medium' } })
+      .resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.effortLevel).toBe('low');
+    expect(resolved.effortSource.label).toBe('env file');
+  });
+
+  test('falls back to the server environment for env overrides', () => {
+    const resolved = createService({ processEnv: { CLAUDE_CODE_EFFORT_LEVEL: 'medium' } })
+      .resolveClaudeConfig(worktreeDir);
+
+    expect(resolved.effortLevel).toBe('medium');
+    expect(resolved.effortSource.label).toBe('server environment');
+    expect(resolved.effortSource.file).toBeNull();
   });
 });
