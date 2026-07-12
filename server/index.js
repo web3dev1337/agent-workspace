@@ -8561,7 +8561,17 @@ function tryListen(port, attempt) {
         if (!workspaceReady) {
           return;
         }
-        return sessionManager.initializeSessions();
+        return sessionManager.initializeSessions().then(() => {
+          // Worktree sessions spawn asynchronously here, AFTER the server has
+          // already started accepting connections and the connect handler has
+          // sent each client its one-and-only 'sessions' snapshot. A client that
+          // connects during this window receives an empty list and renders an
+          // empty sidebar, and nothing ever refills it — so worktrees are missing
+          // until the next restart/reconnect. Re-broadcast the now-complete states
+          // so those clients reconcile. Mirrors the connect-handler payload; the
+          // client's 'sessions' handler is idempotent (clears + rebuilds).
+          io.emit('sessions', sessionManager.getSessionStates());
+        });
       })
       .then(() => {
         if (!shouldAutoEnsureDiscordServices) return;
