@@ -164,6 +164,48 @@ describe('SessionManager.closeSession', () => {
     expect(ids).toEqual(['zoo-game-work2-claude', 'zoo-game-work2-server']);
   });
 
+  test('getSessionGroupIds stays scoped to one repo when repos share a worktree name', () => {
+    const io = { emit: jest.fn() };
+    const sm = new SessionManager(io, null);
+
+    for (const repo of ['sandbox', 'other-repo', 'cat-code-academy']) {
+      for (const type of ['claude', 'server']) {
+        sm.sessions.set(`${repo}-work1-${type}`, {
+          id: `${repo}-work1-${type}`,
+          type,
+          workspace: 'ws1',
+          repositoryName: repo,
+          worktreeId: 'work1',
+          pty: null
+        });
+      }
+    }
+
+    const ids = sm.getSessionGroupIds('sandbox-work1-claude');
+    expect(ids).toEqual(['sandbox-work1-claude', 'sandbox-work1-server']);
+  });
+
+  test('getSessionGroupIds derives the repo from the session id when repositoryName is missing', () => {
+    const io = { emit: jest.fn() };
+    const sm = new SessionManager(io, null);
+
+    for (const repo of ['sandbox', 'other-repo']) {
+      for (const type of ['claude', 'server']) {
+        sm.sessions.set(`${repo}-work1-${type}`, {
+          id: `${repo}-work1-${type}`,
+          type,
+          workspace: 'ws1',
+          repositoryName: '',
+          worktreeId: 'work1',
+          pty: null
+        });
+      }
+    }
+
+    const ids = sm.getSessionGroupIds('sandbox-work1-claude');
+    expect(ids).toEqual(['sandbox-work1-claude', 'sandbox-work1-server']);
+  });
+
   test('getSessionGroupIds returns original id when session is missing', () => {
     const io = { emit: jest.fn() };
     const sm = new SessionManager(io, null);
