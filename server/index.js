@@ -4695,9 +4695,21 @@ app.get('/api/recovery/:workspaceId', async (req, res) => {
       return [];
     })();
 
+    const terminalHints = (workspace && Array.isArray(workspace.terminals))
+      ? workspace.terminals
+          .filter((t) => t && typeof t === 'object' && t.visible !== false)
+          .map((t) => ({
+            id: String(t.id || '').trim(),
+            type: String(t.terminalType || t.type || '').trim().toLowerCase(),
+            worktreePath: String(t.worktreePath || '').trim()
+          }))
+          .filter((t) => t.id)
+      : [];
+
     const recoveryInfo = await sessionRecoveryService.getRecoveryInfo(workspaceId, {
       allowSessionIds: allowSessionIds.length ? allowSessionIds : null,
-      pruneMissing: true
+      pruneMissing: true,
+      terminalHints
     });
     const pendingRecoverySessions = Array.isArray(recoveryInfo?.sessions)
       ? recoveryInfo.sessions.filter((entry) => {

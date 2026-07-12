@@ -99,6 +99,18 @@ class SessionRecoveryService {
   }
 
   /**
+   * Claude Code stores conversations under ~/.claude/projects/<sanitized-cwd>,
+   * sanitizing EVERY character outside [a-zA-Z0-9-] to '-'
+   * ('C:\Users\x\.app' -> 'C--Users-x--app', '/home/x/.app' -> '-home-x--app').
+   * Replacing only slashes leaves ':' and '.' behind, so conversation lookups
+   * never matched and recovery silently downgraded "resume conversation" to
+   * "start fresh".
+   */
+  claudeProjectFolderName(targetPath) {
+    return String(targetPath || '').replace(/[^a-zA-Z0-9-]/g, '-');
+  }
+
+  /**
    * Load recovery state for a workspace
    */
   async loadWorkspaceState(workspaceId) {
@@ -279,7 +291,7 @@ class SessionRecoveryService {
    * Get recovery info for display
    * Validates that conversation files exist and have content before including
    */
-  async getRecoveryInfo(workspaceId, { allowSessionIds = null, pruneMissing = false } = {}) {
+  async getRecoveryInfo(workspaceId, { allowSessionIds = null, pruneMissing = false, terminalHints = null } = {}) {
     const state = await this.loadWorkspaceState(workspaceId);
     const sessions = state.sessions || {};
     const allowSet = Array.isArray(allowSessionIds) ? new Set(allowSessionIds.map(s => String(s || '').trim()).filter(Boolean)) : null;
@@ -314,25 +326,55 @@ class SessionRecoveryService {
       }
     }
 
+    // Recovery must survive marker loss: state entries are routinely re-seeded bare
+    // (or dropped entirely) across app restarts, which used to leave the recovery
+    // dialog empty even though every conversation is safe on disk. Claude terminals
+    // known from the workspace config are synthesized here so the newest saved
+    // conversation in their worktree can stand in for the lost markers.
+    const hintById = new Map();
+    for (const h of Array.isArray(terminalHints) ? terminalHints : []) {
+      const hid = String(h?.id || '').trim();
+      if (hid) hintById.set(hid, h);
+    }
+    const entryIds = new Set(allowedEntries.map(([id]) => String(id || '').trim()));
+    for (const [hid, h] of hintById) {
+      const type = String(h?.type || '').trim().toLowerCase();
+      if (type !== 'claude' || entryIds.has(hid)) continue;
+      if (allowSet && !allowSet.has(hid)) continue;
+      allowedEntries.push([hid, {
+        sessionId: hid,
+        type: 'claude',
+        worktreePath: String(h?.worktreePath || '').trim() || null
+      }]);
+    }
+
     // Build recovery info for each session - validate conversations exist
     const recoveryData = [];
     for (const [id, s0] of allowedEntries) {
       const sid = String(id || '').trim();
       const s = s0 || {};
-      // Only include sessions that have meaningful recovery state. A bare worktreePath (seeded on session creation)
-      // is not actionable and creates noisy "recoverable session" prompts after restarts.
-      if (!s.lastAgent && !s.lastServerCommand) continue;
+      const hint = hintById.get(sid);
+      const isClaudeTerminal = s.lastAgent === 'claude'
+        || String(s.type || '').trim().toLowerCase() === 'claude'
+        || String(hint?.type || '').trim().toLowerCase() === 'claude';
+      const effectiveAgent = s.lastAgent || (isClaudeTerminal ? 'claude' : null);
+      // Sessions with no meaningful recovery state are only actionable for claude
+      // terminals, where the worktree's newest saved conversation can stand in
+      // (checked below — bare entries with nothing to resume are still skipped).
+      const bareEntry = !s.lastAgent && !s.lastServerCommand;
+      if (bareEntry && !isClaudeTerminal) continue;
 
       // For Claude sessions, validate the conversation file exists and has content
       let conversationValid = false;
-      let conversationCwd = s.lastAgentCwd || s.lastCwd || s.worktreePath;
-      if (s.lastAgent === 'claude' && s.lastConversationId && conversationCwd) {
+      let conversationCwd = s.lastAgentCwd || s.lastCwd || s.worktreePath
+        || String(hint?.worktreePath || '').trim() || null;
+      if (effectiveAgent === 'claude' && s.lastConversationId && conversationCwd) {
         const roots = [...new Set([
           ...(conversationCwd ? candidateRoots(conversationCwd) : []),
           ...(s.worktreePath ? candidateRoots(s.worktreePath) : [])
         ])];
         for (const root of roots) {
-          const folderName = String(root || '').replace(/[\\/]/g, '-');
+          const folderName = this.claudeProjectFolderName(root);
           const convPath = path.join(
             HOME_DIR, '.claude', 'projects', folderName,
             `${s.lastConversationId}.jsonl`
@@ -350,23 +392,40 @@ class SessionRecoveryService {
         }
       }
 
-      const safeConversationId = (s.lastAgent === 'claude' && conversationValid)
-        ? s.lastConversationId
+      // Stored ids go stale quickly: Claude Code writes a NEW session file on every
+      // resume, so the exact id often no longer exists. Fall back to the newest
+      // conversation in the worktree's project folder instead of dropping to fresh.
+      let fallbackConversationId = null;
+      if (effectiveAgent === 'claude' && !conversationValid && conversationCwd) {
+        const latest = this.getLatestConversation(conversationCwd);
+        if (latest && latest.conversationId) {
+          fallbackConversationId = latest.conversationId;
+          conversationCwd = latest.actualCwd || conversationCwd;
+        }
+      }
+
+      // A bare entry earns its place in the dialog only when there is actually
+      // a conversation to resume; otherwise it would be a noisy "fresh" prompt.
+      if (bareEntry && !conversationValid && !fallbackConversationId) continue;
+
+      const safeConversationId = (effectiveAgent === 'claude')
+        ? (conversationValid ? s.lastConversationId : fallbackConversationId)
         : null;
-      if (s.lastAgent === 'claude' && !conversationValid) {
-        logger.debug('Recovery session missing valid conversation, falling back to continue', {
+      if (effectiveAgent === 'claude' && !conversationValid) {
+        logger.debug('Recovery session conversation id stale', {
           sessionId: s.sessionId,
-          conversationId: s.lastConversationId
+          conversationId: s.lastConversationId,
+          fallbackConversationId
         });
       }
 
       recoveryData.push({
         sessionId: s.sessionId,
         lastCwd: conversationCwd || s.worktreePath,
-        lastAgent: s.lastAgent,
+        lastAgent: effectiveAgent,
         lastMode: s.lastMode,
         lastConversationId: safeConversationId,
-        worktreePath: s.worktreePath,
+        worktreePath: s.worktreePath || String(hint?.worktreePath || '').trim() || null,
         lastServerCommand: s.lastServerCommand,
         updatedAt: s.updatedAt
       });
@@ -397,8 +456,8 @@ class SessionRecoveryService {
     let bestMtime = 0;
 
     for (const checkPath of pathsToCheck) {
-      // Convert path to Claude's folder format: $HOME/foo → -home-user-foo
-      const folderName = String(checkPath || '').replace(/[\\/]/g, '-');
+      // Convert path to Claude's folder format (see claudeProjectFolderName)
+      const folderName = this.claudeProjectFolderName(checkPath);
       const projectsDir = path.join(HOME_DIR, '.claude', 'projects', folderName);
 
       try {
