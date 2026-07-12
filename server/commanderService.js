@@ -640,8 +640,12 @@ class CommanderService {
     if (normalized.includes('welcome to claude code') && normalized.includes('? for shortcuts')) {
       return true;
     }
-    // Claude Code v2 banner: "Claude Code v2.x.y"
-    return /claude code v\d/.test(normalized);
+    // Claude Code v2 banner: "Claude Code v2.x.y". Don't match version strings
+    // that are part of an upgrade notice ("claude code v2.1.201 -> v2.1.205"),
+    // which can hit the buffer before the TUI is actually interactive. The first
+    // lookahead pins the full version (stops greedy backtracking from matching a
+    // truncated version that dodges the arrow check).
+    return /claude code v[\d.]+(?![\d.])(?!\s*(?:->|→|=>)\s*v?\d)/.test(normalized);
   }
 
   flushQueuedLaunchInputs() {

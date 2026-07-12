@@ -1798,6 +1798,9 @@ header {
 
 /* Expensive effort levels stand out so token burn is visible at a glance. */
 .terminal-model-badge[data-effort="xhigh"],
+.terminal-model-badge[data-effort="ultra"],
+.terminal-model-badge[data-effort="ultra-code"],
+.terminal-model-badge[data-effort="ultracode"],
 .terminal-model-badge[data-effort="max"] {
   color: var(--accent-warning);
   border-color: color-mix(in srgb, var(--accent-warning) 45%, transparent);
@@ -1809,6 +1812,14 @@ header {
   color: var(--accent-success);
   border-color: color-mix(in srgb, var(--accent-success) 40%, transparent);
   background: color-mix(in srgb, var(--accent-success) 8%, transparent);
+}
+
+/* Narrow viewports: keep the (effort-first) chip from crowding out the
+   terminal title/branch in the header flex row. */
+@media (max-width: 640px) {
+  .terminal-model-badge {
+    max-width: 6.5rem;
+  }
 }
 
 .tier-dropdown {

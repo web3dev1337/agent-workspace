@@ -76,6 +76,10 @@ const CLAUDE_TRUST_PROMPT_BUFFER_CHARS = 6000;
 const CLAUDE_TRUST_PROMPT_WINDOW_MS = 15000;
 
 class SessionManager extends EventEmitter {
+  // How long a matching-size resize may be skipped before it is re-applied to
+  // the real PTY anyway (guards against OS-level resizes that silently failed).
+  static RESIZE_REASSERT_COOLDOWN_MS = 60_000;
+
   constructor(io, agentManager) {
     super();
     this.io = io;
@@ -1913,14 +1917,22 @@ class SessionManager extends EventEmitter {
 
       // Skip no-op resizes: the client periodically re-asserts its size to heal
       // dropped resize messages (client/terminal.js auto-heal); a same-size ConPTY
-      // resize would otherwise trigger needless repaints.
-      if (session.lastAppliedCols === cols && session.lastAppliedRows === rows) {
+      // resize would otherwise trigger needless repaints. But don't trust the
+      // cache forever — node-pty's resize() can report success while the OS-level
+      // resize silently failed (upstream won't-fix), and a permanent skip would
+      // then block the auto-heal for good. Re-apply after a cooldown even when
+      // the sizes match.
+      const now = Date.now();
+      const withinReassertCooldown =
+        (now - (session.lastResizeAppliedAt || 0)) < SessionManager.RESIZE_REASSERT_COOLDOWN_MS;
+      if (session.lastAppliedCols === cols && session.lastAppliedRows === rows && withinReassertCooldown) {
         return true;
       }
 
       session.pty.resize(cols, rows);
       session.lastAppliedCols = cols;
       session.lastAppliedRows = rows;
+      session.lastResizeAppliedAt = now;
       return true;
     } catch (error) {
       // Handle ENOTTY/EBADF errors gracefully - these mean the PTY is dead
