@@ -2796,9 +2796,17 @@ class SessionManager extends EventEmitter {
     const repositoryName = String(session?.repositoryName || '').trim().toLowerCase();
     const parsedWorktreeId = worktreeId || String(sid).replace(/-(claude|codex|server)$/i, '').split('-').pop()?.toLowerCase() || '';
     const composedKey = repositoryName && parsedWorktreeId ? `${repositoryName}-${parsedWorktreeId}` : '';
+    // Repo-scoped prefix taken straight from the session id (e.g. "sandbox-work1").
+    // parseWorktreeKey treats "<repo>-work<N>" as repo-scoped, so it only ever matches
+    // the same worktree's sessions.
+    const worktreePrefix = String(sid).replace(/-(claude|codex|server)$/i, '').trim().toLowerCase();
 
     const group = new Set([sid]);
-    const keys = [composedKey, parsedWorktreeId].filter(Boolean);
+    // Only ever look up by repo-scoped keys. NEVER key on the bare worktree number
+    // (e.g. "work1"): in a mixed-repo workspace many repos each have a "work1", and a
+    // bare-number lookup matches ALL of them — so closing one worktree would close every
+    // repo's work1. Both keys below carry a repository discriminator.
+    const keys = [composedKey, worktreePrefix].filter(Boolean);
     for (const key of keys) {
       const ids = this.getSessionIdsForWorktree({
         workspaceId: ws,
