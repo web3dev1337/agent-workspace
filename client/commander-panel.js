@@ -20,6 +20,10 @@ class CommanderPanel {
     this.commandModeEnabled = this.loadCommanderCommandModePreference();
     this.commandCapture = null; // { display: string, text: string }
     this.lineBuffer = '';
+    this.historyPending = false;
+    this.lastSyncedSize = null;
+    this.resizeObserver = null;
+    this.inputChain = Promise.resolve();
   }
 
   fitTerminalSoon() {
@@ -27,9 +31,39 @@ class CommanderPanel {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         this.fitAddon?.fit();
+        this.syncTerminalSize();
         this.terminal?.refresh?.(0, Math.max(0, (this.terminal.rows || 1) - 1));
         this.terminal?.focus();
       });
+    });
+  }
+
+  /**
+   * Tell the backend PTY the panel's real grid size so Claude Code
+   * renders for the dimensions the user actually sees.
+   */
+  syncTerminalSize() {
+    if (!this.terminal) return;
+    const cols = this.terminal.cols;
+    const rows = this.terminal.rows;
+    if (!cols || !rows) return;
+    if (this.lastSyncedSize && this.lastSyncedSize.cols === cols && this.lastSyncedSize.rows === rows) {
+      return;
+    }
+    this.lastSyncedSize = { cols, rows };
+    fetch(`${this.serverUrl}/api/commander/resize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cols, rows })
+    }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success !== true) {
+        // PTY not running yet (or resize rejected) - retry on the next fit
+        this.lastSyncedSize = null;
+      }
+    }).catch((error) => {
+      this.lastSyncedSize = null;
+      console.error('Failed to sync terminal size:', error);
     });
   }
 
@@ -226,13 +260,9 @@ class CommanderPanel {
     // Use requestAnimationFrame to ensure renderer is ready before fitting
     this.fitTerminalSoon();
 
-    // Write any pending output that was buffered before terminal was ready
-    if (this.pendingOutput) {
-      this.terminal.write(this.pendingOutput);
-      this.pendingOutput = '';
-    }
-
-    // Fetch and display existing output from Commander
+    // Replay server-side history first; live socket output stays buffered
+    // until the replay finishes so nothing is written out of order.
+    this.historyPending = true;
     this.fetchInitialOutput();
 
     // Handle input - send to Commander service (with optional command-mode interception)
@@ -302,6 +332,16 @@ class CommanderPanel {
         this.fitTerminalSoon();
       }
     });
+
+    // Refit when the panel itself changes size, not just the window
+    if (window.ResizeObserver && !this.resizeObserver) {
+      this.resizeObserver = new ResizeObserver(() => {
+        if (this.isVisible && this.fitAddon) {
+          this.fitTerminalSoon();
+        }
+      });
+      this.resizeObserver.observe(container);
+    }
   }
 
   /**
@@ -339,9 +379,12 @@ class CommanderPanel {
     document.getElementById('commander-advice-close')?.addEventListener('click', () => this.hideAdvice());
     document.getElementById('commander-advice-refresh')?.addEventListener('click', () => this.fetchAdvice({ force: true }));
 
-    // ESC to close
+    // ESC to close - but only when the terminal itself isn't focused,
+    // because inside the terminal ESC means "interrupt Claude Code".
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.isVisible) {
+        const terminalContainer = document.getElementById('commander-terminal');
+        if (terminalContainer && terminalContainer.contains(e.target)) return;
         this.hide();
       }
     });
@@ -531,16 +574,18 @@ class CommanderPanel {
     socket.off('commander-exit');
 
     socket.on('commander-output', ({ data }) => {
-      if (this.terminal) {
+      if (this.terminal && !this.historyPending) {
         this.terminal.write(data);
       } else {
-        // Buffer output if terminal not ready
+        // Buffer output until the terminal exists and history replay is done
         this.pendingOutput = (this.pendingOutput || '') + data;
       }
     });
 
     socket.on('commander-exit', ({ exitCode }) => {
       this.isRunning = false;
+      // A restarted PTY comes back at its default size, so force a re-sync
+      this.lastSyncedSize = null;
       this.updateStatusBadge();
       if (this.terminal) {
         this.terminal.writeln(`\r\n[Commander exited with code ${exitCode}]`);
@@ -604,6 +649,7 @@ class CommanderPanel {
       panel.classList.remove('hidden');
       backdrop?.classList.remove('hidden');
       this.isVisible = true;
+      this.pinPanelPosition(panel);
 
       // Check Commander status from server
       const status = await this.checkStatus();
@@ -624,9 +670,26 @@ class CommanderPanel {
 
       // Fit and focus terminal
       if (this.fitAddon && this.terminal) {
+        // The PTY size can drift while the panel is closed (e.g. a restart
+        // or an API caller resized it), so always re-sync on open.
+        this.lastSyncedSize = null;
         this.fitTerminalSoon();
       }
     }
+  }
+
+  /**
+   * Convert the centered transform position into fixed left/top pixels so
+   * the native CSS resize handle tracks the cursor instead of growing the
+   * panel from its center.
+   */
+  pinPanelPosition(panel) {
+    if (!panel || panel.style.left) return;
+    const rect = panel.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    panel.style.left = `${rect.left}px`;
+    panel.style.top = `${rect.top}px`;
+    panel.style.transform = 'none';
   }
 
   /**
@@ -893,15 +956,18 @@ class CommanderPanel {
    * Send input to Commander terminal
    */
   async sendInput(input) {
-    try {
-      await fetch(`${this.serverUrl}/api/commander/input`, {
+    // Chain requests so keystrokes reach the terminal in the order typed;
+    // parallel fetches can otherwise arrive out of order and scramble input.
+    this.inputChain = this.inputChain
+      .then(() => fetch(`${this.serverUrl}/api/commander/input`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input })
+      }))
+      .catch((error) => {
+        console.error('Failed to send input:', error);
       });
-    } catch (error) {
-      console.error('Failed to send input:', error);
-    }
+    return this.inputChain;
   }
 
   /**
@@ -915,10 +981,19 @@ class CommanderPanel {
         const { output } = await response.json();
         if (output && this.terminal) {
           this.terminal.write(output);
+          // The history snapshot already includes anything buffered before now,
+          // so drop the buffer instead of writing it twice.
+          this.pendingOutput = '';
         }
       }
     } catch (error) {
       console.error('Failed to fetch initial output:', error);
+    } finally {
+      this.historyPending = false;
+      if (this.pendingOutput && this.terminal) {
+        this.terminal.write(this.pendingOutput);
+        this.pendingOutput = '';
+      }
     }
   }
 
