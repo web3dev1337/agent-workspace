@@ -323,7 +323,7 @@ class CommanderPanel {
         }
         this.lastPasteAt = now;
 
-        this.sendInput(text);
+        this.sendInput(this.bracketPastedText(text));
       };
 
       container.addEventListener('paste', onPaste, true);
@@ -976,6 +976,19 @@ class CommanderPanel {
     // Normal mode: forward to Commander PTY and keep a best-effort local line buffer.
     this.updateLocalLineBufferFromData(data);
     this.sendInput(data);
+  }
+
+  /**
+   * Wrap pasted text so multi-line pastes aren't treated as a burst of Enter keys.
+   * Newlines are normalized to \r (how a terminal sees Enter), and when the Commander
+   * program has bracketed-paste mode enabled (it sent ESC[?2004h) the text is wrapped
+   * in ESC[200~ .. ESC[201~ so the program treats it as literal pasted input. Programs
+   * that don't enable the mode get the text unwrapped, so nothing regresses.
+   */
+  bracketPastedText(text) {
+    const normalized = String(text == null ? '' : text).replace(/\r\n|\r|\n/g, '\r');
+    const bracketed = this.terminal && this.terminal.modes && this.terminal.modes.bracketedPasteMode;
+    return bracketed ? `\x1b[200~${normalized}\x1b[201~` : normalized;
   }
 
   /**
