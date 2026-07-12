@@ -1911,7 +1911,16 @@ class SessionManager extends EventEmitter {
         return false;
       }
 
+      // Skip no-op resizes: the client periodically re-asserts its size to heal
+      // dropped resize messages (client/terminal.js auto-heal); a same-size ConPTY
+      // resize would otherwise trigger needless repaints.
+      if (session.lastAppliedCols === cols && session.lastAppliedRows === rows) {
+        return true;
+      }
+
       session.pty.resize(cols, rows);
+      session.lastAppliedCols = cols;
+      session.lastAppliedRows = rows;
       return true;
     } catch (error) {
       // Handle ENOTTY/EBADF errors gracefully - these mean the PTY is dead
