@@ -363,7 +363,7 @@ class CommanderPanel {
     document.getElementById('commander-toggle')?.addEventListener('click', () => this.toggle());
 
     // Window controls
-    document.getElementById('commander-close')?.addEventListener('click', () => this.hide());
+    document.getElementById('commander-close')?.addEventListener('click', () => this.closeSession());
     document.getElementById('commander-minimize')?.addEventListener('click', () => this.hide());
 
     // Terminal controls
@@ -718,6 +718,18 @@ class CommanderPanel {
       backdrop?.classList.add('hidden');
       this.isVisible = false;
     }
+  }
+
+  // Close (✕): fully stop the Commander session, then hide the panel. Reopening
+  // starts a fresh Commander. This is distinct from minimize (—), which only hides
+  // the window and leaves the session running so it's instantly available again.
+  async closeSession() {
+    try {
+      await this.stopCommander();
+    } catch (error) {
+      console.error('Failed to stop commander on close:', error);
+    }
+    this.hide();
   }
 
   /**
