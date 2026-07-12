@@ -651,6 +651,10 @@ class CommanderPanel {
       this.isVisible = true;
       this.pinPanelPosition(panel);
 
+      // Focus immediately so keystrokes land without waiting for the
+      // status round-trip below.
+      this.terminal?.focus();
+
       // Check Commander status from server
       const status = await this.checkStatus();
 
