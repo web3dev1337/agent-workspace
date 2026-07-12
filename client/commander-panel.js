@@ -223,8 +223,8 @@ class CommanderPanel {
       convertEol: false,
       wordSeparator: ' ()[]{}\'"',
       rightClickSelectsWord: true,
-      rendererType: 'canvas',
-      experimentalCharAtlas: 'dynamic',
+      // xterm 5.x removed rendererType/experimentalCharAtlas; the Canvas renderer is
+      // loaded as an addon after open() below (DOM renderer leaves garbled rows).
       theme: {
         background: '#0d1117',
         foreground: '#c9d1d9',
@@ -256,6 +256,17 @@ class CommanderPanel {
 
     // Open terminal
     this.terminal.open(container);
+
+    // Select the Canvas renderer (must be loaded after open()); falls back to the
+    // DOM renderer if the addon is unavailable.
+    try {
+      if (typeof CanvasAddon !== 'undefined' && CanvasAddon.CanvasAddon) {
+        this.canvasAddon = new CanvasAddon.CanvasAddon();
+        this.terminal.loadAddon(this.canvasAddon);
+      }
+    } catch (err) {
+      console.warn('Canvas renderer unavailable for Commander terminal, using DOM renderer:', err);
+    }
 
     // Use requestAnimationFrame to ensure renderer is ready before fitting
     this.fitTerminalSoon();

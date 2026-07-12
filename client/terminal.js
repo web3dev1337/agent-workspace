@@ -11,6 +11,7 @@ class TerminalManager {
     this.fitAddons = new Map();
     this.searchAddons = new Map();
     this.webLinksAddons = new Map();
+    this.canvasAddons = new Map();
     
     // Paste debouncing
     this.lastPasteTimes = new Map();
@@ -325,9 +326,11 @@ class TerminalManager {
       allowTransparency: false,
       convertEol: false,  // CRITICAL: Don't convert \r to \r\n - needed for spinner animations
       wordSeparator: ' ()[]{}\'"',
-      rightClickSelectsWord: true,
-      rendererType: 'canvas',
-      experimentalCharAtlas: 'dynamic'
+      rightClickSelectsWord: true
+      // NOTE: xterm 5.x removed the `rendererType`/`experimentalCharAtlas` options.
+      // The renderer is now selected by loading an addon after open() — see CanvasAddon
+      // below. Without it, xterm falls back to the DOM renderer, which intermittently
+      // fails to repaint damaged rows (garbled text until a scroll forces a redraw).
     });
     
     // Load addons
@@ -352,6 +355,20 @@ class TerminalManager {
     requestAnimationFrame(() => {
       // Open terminal in DOM
       terminal.open(terminalElement);
+
+      // Select the Canvas renderer. xterm 5.x's default DOM renderer intermittently
+      // leaves stale/garbled rows on screen until a scroll forces a repaint; the
+      // Canvas renderer repaints damaged regions reliably. Must be loaded AFTER open().
+      // Guarded so a missing/failed addon degrades gracefully to the DOM renderer.
+      try {
+        if (typeof CanvasAddon !== 'undefined' && CanvasAddon.CanvasAddon) {
+          const canvasAddon = new CanvasAddon.CanvasAddon();
+          terminal.loadAddon(canvasAddon);
+          this.canvasAddons.set(sessionId, canvasAddon);
+        }
+      } catch (err) {
+        console.warn(`Canvas renderer unavailable for ${sessionId}, using DOM renderer:`, err);
+      }
 
       // Add id/name to xterm textarea for accessibility/linting
       this.setTerminalInputAttributes(sessionId, terminalElement);
@@ -1409,10 +1426,12 @@ class TerminalManager {
     this.terminalScrollStates.delete(sessionId);
     this.userScrolling.delete(sessionId);
 
-    // Clean up addons
+    // Clean up addons (terminal.dispose() above already disposes loaded addons;
+    // just drop our references so the maps don't leak).
     this.fitAddons.delete(sessionId);
     this.searchAddons.delete(sessionId);
     this.webLinksAddons.delete(sessionId);
+    this.canvasAddons.delete(sessionId);
     
     // Clean up resize observer
     const terminalElement = this.getTerminalElement(sessionId);
