@@ -59,6 +59,27 @@ const TRUST_PROMPT_MAX_WAIT_MS = 15000;
 // for the prompt before deciding it isn't coming (already-trusted folder).
 const READY_WITHOUT_TRUST_GRACE_MS = 2000;
 
+// Claude Code records accepted trust dialogs per project in ~/.claude.json,
+// keyed by path with forward slashes (e.g. "C:/Users/x/project").
+function isCommanderCwdTrusted() {
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(HOME_DIR, '.claude.json'), 'utf8'));
+    const projects = config && config.projects;
+    if (!projects || typeof projects !== 'object') return false;
+
+    const normalize = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const target = normalize(COMMANDER_CWD);
+    for (const [projectPath, projectConfig] of Object.entries(projects)) {
+      if (normalize(projectPath) === target) {
+        return projectConfig && projectConfig.hasTrustDialogAccepted === true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function seedCommanderInstructionsIfNeeded() {
   if (!isPackaged) return;
   if (process.env.COMMANDER_CWD) return;
@@ -296,8 +317,12 @@ class CommanderService {
       cmd += ' --dangerously-skip-permissions';
     }
 
-    logger.info('Starting Claude in Commander', { mode, yolo, cmd, platform: process.platform });
-    this.beginClaudeLaunch({ expectTrustPrompt: yolo });
+    // Only wait for a trust prompt if Claude Code hasn't already trusted this
+    // folder — on a trusted folder the prompt never appears and waiting for it
+    // just delays the first keystrokes (READY_WITHOUT_TRUST_GRACE_MS).
+    const expectTrustPrompt = yolo && !isCommanderCwdTrusted();
+    logger.info('Starting Claude in Commander', { mode, yolo, cmd, expectTrustPrompt, platform: process.platform });
+    this.beginClaudeLaunch({ expectTrustPrompt });
     const success = this.sendInput(cmd + '\n', { bypassLaunchQueue: true });
     logger.info('Sent claude command', { success, cmd });
 
@@ -671,4 +696,4 @@ class CommanderService {
   }
 }
 
-module.exports = { CommanderService };
+module.exports = { CommanderService, isCommanderCwdTrusted };
