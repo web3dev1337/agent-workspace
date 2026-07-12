@@ -901,13 +901,24 @@ class CommanderPanel {
    * Erase the locally echoed slash command and send it to the Commander PTY
    * so the agent (Claude Code / Codex) can run it as its own slash command.
    */
-  forwardCapturedInputToAgent(typedInput) {
+  async forwardCapturedInputToAgent(typedInput) {
     const text = String(typedInput || '');
     if (!text) return;
     if (this.terminal) {
       this.terminal.write('\b \b'.repeat(text.length));
     }
-    this.sendInput(`${text}\r`);
+    // sendInput swallows network errors (resolves undefined) and the server
+    // replies { success: false } when the Commander PTY isn't running yet.
+    // Either way the command went nowhere — say so instead of eating it.
+    const response = await this.sendInput(`${text}\r`);
+    let delivered = false;
+    if (response && response.ok) {
+      const data = await response.json().catch(() => null);
+      delivered = data?.success !== false;
+    }
+    if (!delivered && this.terminal) {
+      this.terminal.writeln(`\r\n[cmd] ✗ Commander agent is not running — ${text} was not delivered\r`);
+    }
   }
 
   handleTerminalData(data) {

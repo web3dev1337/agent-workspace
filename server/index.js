@@ -8561,6 +8561,7 @@ function tryListen(port, attempt) {
         if (!workspaceReady) {
           return;
         }
+        const workspaceIdAtInitStart = workspaceManager.getActiveWorkspace?.()?.id || null;
         return sessionManager.initializeSessions().then(() => {
           // Worktree sessions spawn asynchronously here, AFTER the server has
           // already started accepting connections and the connect handler has
@@ -8570,6 +8571,19 @@ function tryListen(port, attempt) {
           // until the next restart/reconnect. Re-broadcast the now-complete states
           // so those clients reconcile. Mirrors the connect-handler payload; the
           // client's 'sessions' handler is idempotent (clears + rebuilds).
+          // Guard: if a client switched the active workspace while init was still
+          // running, this snapshot belongs to the new workspace and the switch
+          // handler already delivered it per-socket — broadcasting it to every
+          // client could overwrite a different workspace's view (this codebase
+          // deliberately avoids io.emit for workspace-scoped payloads).
+          const activeWorkspaceId = workspaceManager.getActiveWorkspace?.()?.id || null;
+          if (activeWorkspaceId !== workspaceIdAtInitStart) {
+            logger.info('Skipping startup sessions rebroadcast: workspace switched during init', {
+              atInitStart: workspaceIdAtInitStart,
+              now: activeWorkspaceId
+            });
+            return;
+          }
           io.emit('sessions', sessionManager.getSessionStates());
         });
       })

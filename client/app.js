@@ -781,6 +781,9 @@ class ClaudeOrchestrator {
     const session = this.sessions.get(sid) || this.sessions.get(sessionId);
     const runningAgent = String(session?.agent || '').trim().toLowerCase();
     const sessionType = String(session?.type || '').trim().toLowerCase();
+    // Only Claude and Codex configs are resolved; other agents (gemini,
+    // opencode, aider) don't read these files — hide rather than mislabel.
+    if (runningAgent && runningAgent !== 'claude' && runningAgent !== 'codex') return null;
     const isCodex = runningAgent === 'codex' || (!runningAgent && sessionType === 'codex');
     const config = isCodex ? this.modelConfigCodex : this.modelConfigBySession.get(sid)?.claude;
     if (!config || (!config.model && !config.effortLevel)) return null;
@@ -790,13 +793,18 @@ class ClaudeOrchestrator {
     // Effort first: it stays readable even when a narrow header truncates the chip.
     const text = [effortLevel.toUpperCase(), modelLabel].filter(Boolean).join(' · ');
 
-    const tooltipLines = ['Model & effort agent launches in this worktree will use.'];
+    const tooltipLines = ['Model & effort agent launches in this worktree will use (settings files + env overrides).'];
+    const describeSource = (source) => {
+      const label = source?.label || 'unknown';
+      return source?.file ? `${label} (${source.file})` : label;
+    };
     if (config.model) {
-      tooltipLines.push(`Model: ${config.model} — from ${config.modelSource?.label || 'unknown'} (${config.modelSource?.file || '?'})`);
+      tooltipLines.push(`Model: ${config.model} — from ${describeSource(config.modelSource)}`);
     }
     if (effortLevel) {
-      tooltipLines.push(`Effort: ${effortLevel} — from ${config.effortSource?.label || 'unknown'} (${config.effortSource?.file || '?'})`);
+      tooltipLines.push(`Effort: ${effortLevel} — from ${describeSource(config.effortSource)}`);
     }
+    tooltipLines.push('Note: a /model pick for "this session only" is not written to disk and won\'t show here.');
     return { text, tooltip: tooltipLines.join('\n'), effortLevel };
   }
 
@@ -1294,6 +1302,11 @@ class ClaudeOrchestrator {
       this.refreshSidebarPorts();
       setInterval(() => this.refreshSidebarPorts(), 30000); // Refresh every 30s
       setInterval(() => this.refreshSessionModelBadges({ force: true }), this.modelConfigRefreshMs);
+      // Settings edited while the window was unfocused (e.g. /model in another
+      // terminal writing ~/.claude/settings.json) show up on the next glance.
+      window.addEventListener('focus', () => {
+        this.refreshSessionModelBadges({ minGap: this.modelConfigOutputThrottleMs });
+      });
 
 	      // Set up UI
 	      this.setupEventListeners();
