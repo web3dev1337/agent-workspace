@@ -1,0 +1,4 @@
+- [x] Download + clean transcript (6,304 words)
+- [x] Write summary doc
+- [x] Save full transcript locally (transcripts/ next to master/)
+- [x] Commit + push + PR
