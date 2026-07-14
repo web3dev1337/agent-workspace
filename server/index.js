@@ -141,6 +141,7 @@ const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const { PrReviewAutomationService } = require('./prReviewAutomationService');
 const { EvidenceService } = require('./evidenceService');
 const { ReviewWorkflowService } = require('./reviewWorkflowService');
+const visibilityPresets = require('./visibilityPresetService');
 const { GitHubRepoService } = require('./githubRepoService');
 const { GitHubCloneWorktreeService } = require('./githubCloneWorktreeService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
@@ -4103,6 +4104,27 @@ app.get('/api/user-settings', (req, res) => {
   } catch (error) {
     logger.error('Failed to get user settings', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get user settings' });
+  }
+});
+
+// Visibility presets: one-click Simple ↔ Power/Process UI switch.
+app.get('/api/user-settings/visibility-presets', (req, res) => {
+  try {
+    const current = userSettingsService.getAllSettings()?.global?.ui?.visibilityPreset || 'simple';
+    res.json({ presets: visibilityPresets.listPresets(), current });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to list visibility presets' });
+  }
+});
+
+app.post('/api/user-settings/visibility-preset', express.json(), (req, res) => {
+  try {
+    const result = visibilityPresets.applyPreset(userSettingsService, String(req.body?.preset || ''));
+    activityFeed.track('settings.visibility-preset', { preset: result.preset });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to apply visibility preset', { error: error.message });
+    res.status(400).json({ error: error.message || 'Failed to apply visibility preset' });
   }
 });
 
