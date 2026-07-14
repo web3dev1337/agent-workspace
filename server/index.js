@@ -140,6 +140,7 @@ const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const { PrReviewAutomationService } = require('./prReviewAutomationService');
 const { EvidenceService } = require('./evidenceService');
+const { ReviewWorkflowService } = require('./reviewWorkflowService');
 const { GitHubRepoService } = require('./githubRepoService');
 const { GitHubCloneWorktreeService } = require('./githubCloneWorktreeService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
@@ -3896,6 +3897,17 @@ const evidenceService = EvidenceService.getInstance({
   workspaceManager
 });
 
+const reviewWorkflowService = ReviewWorkflowService.getInstance({
+  taskRecordService,
+  pullRequestService,
+  sessionManager,
+  workspaceManager,
+  evidenceService,
+  io
+});
+// Resume polling for any runs that were mid-flight when the server restarted.
+if (reviewWorkflowService.listActiveRuns().length) reviewWorkflowService.startPolling();
+
 // Register pr-review-poll command so the scheduler can invoke it
 commandRegistry.register('pr-review-poll', {
   category: 'process',
@@ -6301,6 +6313,58 @@ app.put('/api/process/evidence/:id', express.json(), async (req, res) => {
   } catch (error) {
     logger.error('Failed to set evidence', { id: req.params.id, error: error.message });
     res.status(500).json({ error: error.message || 'Failed to set evidence' });
+  }
+});
+
+// Review workflows: data-driven multi-agent review chains per task.
+app.get('/api/process/review-workflows', (req, res) => {
+  try {
+    const cfg = reviewWorkflowService.getConfig({ force: req.query.force === '1' });
+    res.json({
+      workflows: Object.entries(cfg.workflows || {}).map(([id, w]) => ({
+        id,
+        label: w.label || id,
+        description: w.description || '',
+        stages: (w.stages || []).map(s => ({ role: s.role, agentId: s.agentId, model: s.model || null, effort: s.effort || null }))
+      })),
+      riskDefaults: cfg.riskDefaults || {},
+      roles: Object.fromEntries(Object.entries(cfg.roles || {}).map(([id, r]) => [id, { label: r.label || id }]))
+    });
+  } catch (error) {
+    logger.error('Failed to read review workflow config', { error: error.message });
+    res.status(500).json({ error: 'Failed to read review workflow config' });
+  }
+});
+
+app.post('/api/process/review-workflows/:id/start', express.json(), async (req, res) => {
+  try {
+    const run = await reviewWorkflowService.startWorkflow(req.params.id, req.body?.workflowId, {
+      standards: Array.isArray(req.body?.standards) ? req.body.standards : []
+    });
+    res.json({ id: req.params.id, run });
+  } catch (error) {
+    logger.error('Failed to start review workflow', { id: req.params.id, error: error.message });
+    res.status(400).json({ error: error.message || 'Failed to start review workflow' });
+  }
+});
+
+app.post('/api/process/review-workflows/:id/advance', express.json(), async (req, res) => {
+  try {
+    const run = await reviewWorkflowService.advanceWorkflow(req.params.id);
+    if (!run) return res.status(404).json({ error: 'No workflow run for this task' });
+    res.json({ id: req.params.id, run });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to advance review workflow' });
+  }
+});
+
+app.post('/api/process/review-workflows/:id/cancel', express.json(), async (req, res) => {
+  try {
+    const run = await reviewWorkflowService.cancelWorkflow(req.params.id);
+    if (!run) return res.status(404).json({ error: 'No workflow run for this task' });
+    res.json({ id: req.params.id, run });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to cancel review workflow' });
   }
 });
 

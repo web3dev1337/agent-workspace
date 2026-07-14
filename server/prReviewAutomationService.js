@@ -3,6 +3,8 @@
 const path = require('path');
 const winston = require('winston');
 
+const { findAvailableWorktree, spawnAgentInSession } = require('./agentSpawnHelper');
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
@@ -451,27 +453,18 @@ class PrReviewAutomationService {
     const prompt = this._buildReviewPrompt(pr, cfg);
 
     try {
-      // Start the agent
       const agent = cfg.reviewerAgent || 'claude';
-      const started = this.sessionManager.startAgentWithConfig(sessionId, {
+      const started = spawnAgentInSession({
+        sessionManager: this.sessionManager,
+        sessionId,
         agentId: agent,
-        mode: 'fresh',
-        flags: agent === 'claude' ? ['skipPermissions'] : ['yolo']
+        prompt
       });
 
       if (!started) {
         logger.warn('Failed to start reviewer agent', { sessionId, prId: pr.prId });
         return false;
       }
-
-      // Wait for agent init, then send the prompt text and submit with a
-      // separate carriage return (agent CLIs treat a trailing "\n" inside the
-      // same write as part of the pasted text, not as submit).
-      const initDelay = agent === 'codex' ? 15_000 : 8_000;
-      setTimeout(() => {
-        this.sessionManager.writeToSession(sessionId, prompt);
-        setTimeout(() => this.sessionManager.writeToSession(sessionId, '\r'), 500);
-      }, initDelay);
 
       // Track the active reviewer
       this.activeReviewers.set(pr.prId, {
@@ -501,40 +494,20 @@ class PrReviewAutomationService {
   // ---------------------------------------------------------------------------
 
   async _findAvailableWorktree(pr, cfg) {
-    if (!this.workspaceManager) return null;
-
-    // Get active workspace
-    const activeWs = this.workspaceManager.getActiveWorkspace?.();
-    const wsId = activeWs?.id;
-    if (!wsId) {
-      logger.warn('No active workspace found for reviewer spawn');
-      return null;
-    }
-
-    const workspace = this.workspaceManager.getWorkspaceById?.(wsId);
-    if (!workspace) return null;
-
-    // Find worktrees that aren't currently used by active reviewers
-    const usedWorktrees = new Set(
+    const usedWorktreeIds = new Set(
       Array.from(this.activeReviewers.values()).map(r => r.worktreeId)
     );
 
-    const terminals = workspace.terminals || [];
-    for (const terminal of terminals) {
-      const wId = terminal.worktreeId || terminal.worktree;
-      if (!wId) continue;
-      if (usedWorktrees.has(wId)) continue;
+    const target = findAvailableWorktree({
+      workspaceManager: this.workspaceManager,
+      sessionManager: this.sessionManager,
+      usedWorktreeIds
+    });
 
-      // Check if the session in this worktree is idle/exited
-      const repoName = terminal.repository?.name || terminal.repositoryName || '';
-      const claudeSessionId = `${repoName}-${wId}-claude`;
-      const session = this.sessionManager?.getSessionById?.(claudeSessionId);
-      if (!session || session.status === 'exited' || session.status === 'idle') {
-        return { worktreeId: wId, repoName };
-      }
+    if (!target) {
+      logger.warn('No available worktree found for reviewer spawn');
     }
-
-    return null;
+    return target;
   }
 
   // ---------------------------------------------------------------------------

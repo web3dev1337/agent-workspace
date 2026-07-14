@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "comment": "Data-driven agent review chains. Chain math: p_chain = product of per-stage miss rates — a 30% single-reviewer miss rate compounds to ~9% with 2 stages and ~2.7% with 3. Override per user at ~/.agent-workspace/review-workflows.json (deep merge). effort applies to codex stages (model_reasoning_effort); claude stages accept model aliases (sonnet/opus/...).",
+  "roles": {
+    "general": {
+      "label": "General reviewer",
+      "focusBullets": [
+        "Correctness — does the change do what the PR claims? Trace the main flow end to end.",
+        "Project conventions — match existing patterns, naming, file layout (read CLAUDE.md / CODEBASE_DOCUMENTATION.md first).",
+        "Tests — are the changes covered? Do existing tests still pass? Run them.",
+        "Simplicity — flag dead code, duplication, god-functions introduced by the change."
+      ]
+    },
+    "security": {
+      "label": "Security reviewer",
+      "focusBullets": [
+        "Injection surfaces — shell commands, SQL, HTML rendering, path traversal on any user/agent-supplied string.",
+        "Secrets — credentials, tokens, or private paths committed or logged.",
+        "Untrusted input — every new endpoint/param validated and bounded? File access constrained to expected roots?",
+        "Dependency risk — new packages: pinned exact versions, reputable, actually needed?",
+        "Permissions/escalation — anything widening what an agent or endpoint may do without a gate."
+      ]
+    },
+    "performance": {
+      "label": "Performance reviewer",
+      "focusBullets": [
+        "Hot paths — loops over large collections, per-frame/per-request allocations, sync I/O on request paths.",
+        "N+1 patterns — repeated queries/fetches/spawns that should batch.",
+        "Memory — caches without bounds, listeners/timers/PTYs without cleanup.",
+        "Measure where possible — run the relevant benchmark or a quick timing before claiming a regression."
+      ]
+    }
+  },
+  "workflows": {
+    "standard": {
+      "label": "Standard — 1 general reviewer",
+      "description": "Default for low/medium-risk tier-3 work. Single general review pass.",
+      "stages": [
+        { "role": "general", "agentId": "claude", "model": "sonnet" }
+      ]
+    },
+    "hardened": {
+      "label": "Hardened — security, then general",
+      "description": "For high-risk changes. Security specialist first (codex), then a strong general pass.",
+      "stages": [
+        { "role": "security", "agentId": "codex", "model": "gpt-5.5", "effort": "high" },
+        { "role": "general", "agentId": "claude", "model": "opus" }
+      ]
+    },
+    "full-gate": {
+      "label": "Full gate — security, performance, general",
+      "description": "For critical changes. Three specialist passes before a human ever looks.",
+      "stages": [
+        { "role": "security", "agentId": "codex", "model": "gpt-5.5", "effort": "high" },
+        { "role": "performance", "agentId": "claude", "model": "sonnet" },
+        { "role": "general", "agentId": "claude", "model": "opus" }
+      ]
+    }
+  },
+  "riskDefaults": {
+    "low": "standard",
+    "medium": "standard",
+    "high": "hardened",
+    "critical": "full-gate"
+  },
+  "stageTimeoutMinutes": 45
+}

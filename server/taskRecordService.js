@@ -199,6 +199,67 @@ const normalizeReviewChecklist = (raw) => {
   return Object.keys(out).length ? out : null;
 };
 
+const WORKFLOW_RUN_STATUSES = new Set(['pending', 'running', 'blocked_fix', 'stalled', 'complete', 'cancelled']);
+const WORKFLOW_STAGE_STATUSES = new Set(['pending', 'running', 'done', 'failed', 'skipped']);
+
+const normalizeReviewWorkflow = (raw) => {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== 'object') return null;
+
+  const out = {};
+  const str = (v, max) => {
+    const s = String(v ?? '').trim();
+    return s ? s.slice(0, max) : null;
+  };
+
+  const workflowId = str(raw.workflowId, 60);
+  if (workflowId) out.workflowId = workflowId;
+
+  const status = String(raw.status || '').trim().toLowerCase();
+  if (WORKFLOW_RUN_STATUSES.has(status)) out.status = status;
+
+  const stageIndex = Number(raw.stageIndex);
+  if (Number.isInteger(stageIndex) && stageIndex >= 0 && stageIndex < 20) out.stageIndex = stageIndex;
+
+  for (const key of ['startedAt', 'updatedAt', 'completedAt']) {
+    const dt = normalizeDateTime(raw[key]);
+    if (dt) out[key] = dt;
+  }
+
+  if (Array.isArray(raw.stages)) {
+    const stages = raw.stages.slice(0, 10).map((s) => {
+      if (!s || typeof s !== 'object') return null;
+      const stage = {};
+      const role = str(s.role, 60);
+      if (role) stage.role = role.toLowerCase();
+      const agentId = str(s.agentId, 40);
+      if (agentId) stage.agentId = agentId.toLowerCase();
+      const model = str(s.model, 80);
+      if (model) stage.model = model;
+      const effort = str(s.effort, 20);
+      if (effort) stage.effort = effort.toLowerCase();
+      const stageStatus = String(s.status || '').trim().toLowerCase();
+      if (WORKFLOW_STAGE_STATUSES.has(stageStatus)) stage.status = stageStatus;
+      const sessionId = str(s.sessionId, 240);
+      if (sessionId) stage.sessionId = sessionId;
+      const worktreeId = str(s.worktreeId, 120);
+      if (worktreeId) stage.worktreeId = worktreeId;
+      const verdict = normalizeReviewOutcome(s.verdict);
+      if (verdict) stage.verdict = verdict;
+      const reviewUrl = str(s.reviewUrl, 600);
+      if (reviewUrl) stage.reviewUrl = reviewUrl;
+      for (const key of ['spawnedAt', 'completedAt']) {
+        const dt = normalizeDateTime(s[key]);
+        if (dt) stage[key] = dt;
+      }
+      return Object.keys(stage).length ? stage : null;
+    }).filter(Boolean);
+    if (stages.length) out.stages = stages;
+  }
+
+  return Object.keys(out).length ? out : null;
+};
+
 const evidenceString = (v, max) => {
   const s = String(v ?? '').trim();
   return s ? s.slice(0, max) : null;
@@ -519,6 +580,15 @@ class TaskRecordService {
       } else {
         const normalized = normalizeEvidence(p.evidence);
         if (normalized !== null) next.evidence = normalized;
+      }
+    }
+
+    if (p.reviewWorkflow !== undefined) {
+      if (p.reviewWorkflow === null) {
+        clear.add('reviewWorkflow');
+      } else {
+        const normalized = normalizeReviewWorkflow(p.reviewWorkflow);
+        if (normalized !== null) next.reviewWorkflow = normalized;
       }
     }
 
@@ -938,4 +1008,4 @@ class TaskRecordService {
   }
 }
 
-module.exports = { TaskRecordService, normalizeEvidence };
+module.exports = { TaskRecordService, normalizeEvidence, normalizeReviewWorkflow };

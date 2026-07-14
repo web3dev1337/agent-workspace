@@ -28747,6 +28747,8 @@ class ClaudeOrchestrator {
 
         ${window.QueueEvidence ? window.QueueEvidence.renderCard(t, record) : ''}
 
+        ${window.QueueWorkflow ? window.QueueWorkflow.renderCard(t, record) : ''}
+
         <div class="tasks-detail-block">
           <div class="tasks-detail-block-title">Tier + Risk</div>
           <div class="tasks-kv">
@@ -28991,24 +28993,31 @@ class ClaudeOrchestrator {
 	        </div>
 	      `;
 
+      const reloadDetailRecord = async () => {
+        try {
+          const recRes = await fetch(`/api/process/task-records/${encodeURIComponent(t.id)}`);
+          if (recRes.ok) {
+            const data = await recRes.json();
+            if (data?.record) t.record = data.record;
+          }
+        } catch { /* keep the stale record if the re-fetch fails */ }
+        renderDetail(t);
+      };
+
+      window.QueueWorkflow?.wire(detailEl, t, record, {
+        onChanged: reloadDetailRecord
+      });
+
       window.QueueEvidence?.wire(detailEl, t, record, {
         onRefresh: async () => {
-          const encId = encodeURIComponent(t.id);
           const worktreePath = t.worktreePath || record?.evidence?.worktreePath || '';
-          const res = await fetch(`/api/process/evidence/${encId}/refresh`, {
+          const res = await fetch(`/api/process/evidence/${encodeURIComponent(t.id)}/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(worktreePath ? { worktreePath } : {})
           });
           if (!res.ok) throw new Error(`Evidence refresh failed (${res.status})`);
-          try {
-            const recRes = await fetch(`/api/process/task-records/${encId}`);
-            if (recRes.ok) {
-              const data = await recRes.json();
-              if (data?.record) t.record = data.record;
-            }
-          } catch { /* keep the stale record if the re-fetch fails */ }
-          renderDetail(t);
+          await reloadDetailRecord();
         }
       });
 

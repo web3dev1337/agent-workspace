@@ -168,3 +168,50 @@
   max-height: 92vh;
   border-radius: 0.375rem;
 }
+
+/* Review workflow (agent chain) block */
+
+.wf-run { margin: 0.375rem 0; }
+
+.wf-stages {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.wf-stage {
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #3a3f4b);
+  background: var(--bg-tertiary, #252a33);
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+
+.wf-stage-done { border-color: #2e7d4f; background: rgba(46, 125, 79, 0.18); }
+.wf-stage-failed { border-color: #b3452e; background: rgba(179, 69, 46, 0.2); }
+.wf-stage-running { border-color: #46608a; background: rgba(70, 96, 138, 0.22); }
+.wf-stage-skipped { opacity: 0.6; }
+.wf-stage-active { outline: 1px solid #6f8fc0; }
+
+.wf-arrow { color: var(--text-secondary, #9aa3b2); }
+
+.wf-status {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  color: var(--text-secondary, #9aa3b2);
+}
+
+.wf-status-blocked_fix { color: #e08563; }
+.wf-status-stalled { color: #d3a94c; }
+.wf-status-complete { color: #58b283; }
+
+.wf-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  margin-top: 0.375rem;
+}
