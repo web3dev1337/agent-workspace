@@ -135,7 +135,11 @@ server/reviewWorkflowService.js    - Data-driven multi-agent review chains (conf
 ├─ Runner: spawns each reviewer into an idle worktree, polls GitHub review verdicts, records outcomes into evidence.reviews[]
 └─ Run state persists on the task record (`reviewWorkflow`) — restarts resume polling; stalls on timeout, blocks on needs_fix
 server/agentSpawnHelper.js         - Shared worktree-locate + one-shot agent launch (used by PR review automation, review workflows)
+├─ Agent-agnostic: launch flags + init delay resolve from the agentManager registry (any registered agent id works)
 └─ Two-write submit: prompt text, then `\r` separately (a single "text\r" chunk is treated as a bracketed paste by agent CLIs)
+server/agentManager.js             - Agent registry: built-ins (claude/codex) + custom CLI agents merged from `~/.agent-workspace/custom-agents.json`
+├─ Custom agents (Gemini/OpenCode/Grok/aider/...) are pure config: modes, flags, defaultFlags, per-agent `modelFlag`/`reasoningFlag` CLI syntax, initDelayMs — see config/custom-agents.example.json
+└─ Registered agents surface automatically in /api/agents (agent picker UI), batch launches, and review-workflow stages
 server/visibilityPresetService.js  - One-click UI Mode presets (simple ↔ power/process) rewriting ui.visibility (`POST /api/user-settings/visibility-preset`)
 server/contextSwitchTelemetryService.js - Local-only context-switch JSONL log + summary (Context Tax estimator; `~/.agent-workspace/telemetry/context-switches.jsonl`)
 server/serverLaunchCommandResolver.js - Data-driven dev-server launch: cascaded `serverCommand` template + {{gameMode}}/{{commonFlags}} substitution (replaces hardcoded `hytopia start`)

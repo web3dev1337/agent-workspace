@@ -3,8 +3,12 @@
 // Shared helpers for spawning a one-shot agent (reviewer/fixer/workflow stage)
 // into an idle worktree terminal. Used by prReviewAutomationService and
 // reviewWorkflowService so the launch mechanics live in exactly one place.
+// Agent-agnostic: flags and init delays resolve from the agentManager
+// registry (built-ins + ~/.agent-workspace/custom-agents.json), so any
+// registered CLI agent works here — the maps below are only fallbacks.
 
 const AGENT_INIT_DELAY_MS = { claude: 8_000, codex: 15_000 };
+const FALLBACK_SPAWN_FLAGS = { claude: ['skipPermissions'], codex: ['yolo'] };
 const PROMPT_SUBMIT_DELAY_MS = 500;
 
 // Find an idle/exited agent terminal in the active workspace whose worktree
@@ -51,18 +55,27 @@ const spawnAgentInSession = ({
 } = {}) => {
   if (!sessionManager || !sessionId) return false;
 
+  const agentManager = sessionManager.agentManager || null;
+  const registryFlags = typeof agentManager?.getSpawnFlags === 'function'
+    ? agentManager.getSpawnFlags(agentId)
+    : null;
+
   const config = {
     agentId,
     mode,
-    flags: agentId === 'claude' ? ['skipPermissions'] : ['yolo']
+    flags: (registryFlags && registryFlags.length)
+      ? registryFlags
+      : (FALLBACK_SPAWN_FLAGS[agentId] || [])
   };
   if (model) config.model = model;
-  if (agentId === 'codex' && effort) config.reasoning = effort;
+  if (effort) config.reasoning = effort;
 
   const started = sessionManager.startAgentWithConfig(sessionId, config);
   if (!started) return false;
 
-  const initDelay = AGENT_INIT_DELAY_MS[agentId] || AGENT_INIT_DELAY_MS.claude;
+  const initDelay = typeof agentManager?.getInitDelayMs === 'function'
+    ? agentManager.getInitDelayMs(agentId)
+    : (AGENT_INIT_DELAY_MS[agentId] || AGENT_INIT_DELAY_MS.claude);
   const initTimer = setTimeout(() => {
     sessionManager.writeToSession(sessionId, prompt);
     const submitTimer = setTimeout(() => sessionManager.writeToSession(sessionId, '\r'), PROMPT_SUBMIT_DELAY_MS);

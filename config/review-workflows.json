@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "comment": "Data-driven agent review chains. Chain math: p_chain = product of per-stage miss rates — a 30% single-reviewer miss rate compounds to ~9% with 2 stages and ~2.7% with 3. Override per user at ~/.agent-workspace/review-workflows.json (deep merge). effort applies to codex stages (model_reasoning_effort); claude stages accept model aliases (sonnet/opus/...).",
+  "comment": "Data-driven agent review chains. Chain math: p_chain = product of per-stage miss rates — a 30% single-reviewer miss rate compounds to ~9% with 2 stages and ~2.7% with 3. Override per user at ~/.agent-workspace/review-workflows.json (deep merge). agentId may be ANY registered agent — built-ins (claude/codex) or custom CLIs from ~/.agent-workspace/custom-agents.json (gemini/opencode/grok/...); model/effort use each agent's own flag syntax (claude --model aliases; codex -m + model_reasoning_effort; custom agents declare modelFlag/reasoningFlag).",
   "roles": {
     "general": {
       "label": "General reviewer",
