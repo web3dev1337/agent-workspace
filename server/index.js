@@ -139,6 +139,7 @@ const { TaskTicketingService } = require('./taskTicketingService');
 const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const { PrReviewAutomationService } = require('./prReviewAutomationService');
+const { EvidenceService } = require('./evidenceService');
 const { GitHubRepoService } = require('./githubRepoService');
 const { GitHubCloneWorktreeService } = require('./githubCloneWorktreeService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
@@ -3888,6 +3889,13 @@ const prReviewAutomationService = PrReviewAutomationService.getInstance({
   io
 });
 
+const evidenceService = EvidenceService.getInstance({
+  taskRecordService,
+  pullRequestService,
+  gitHelper,
+  workspaceManager
+});
+
 // Register pr-review-poll command so the scheduler can invoke it
 commandRegistry.register('pr-review-poll', {
   category: 'process',
@@ -6268,6 +6276,42 @@ app.get('/api/process/task-records/:id', (req, res) => {
   } catch (error) {
     logger.error('Failed to get task record', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get task record' });
+  }
+});
+
+// Evidence: collected proof (tests/app-run/reviews/media/data) per task.
+app.post('/api/process/evidence/:id/refresh', express.json(), async (req, res) => {
+  try {
+    const result = await evidenceService.refresh(req.params.id, {
+      worktreePath: req.body?.worktreePath
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to refresh evidence', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: error.message || 'Failed to refresh evidence' });
+  }
+});
+
+app.put('/api/process/evidence/:id', express.json(), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const evidence = Object.prototype.hasOwnProperty.call(body, 'evidence') ? body.evidence : body;
+    const result = await evidenceService.setDirect(req.params.id, evidence);
+    res.json({ id: req.params.id, evidence: result });
+  } catch (error) {
+    logger.error('Failed to set evidence', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: error.message || 'Failed to set evidence' });
+  }
+});
+
+app.get('/api/process/evidence/:id/media/:idx', (req, res) => {
+  try {
+    const resolved = evidenceService.resolveMediaPath(req.params.id, req.params.idx);
+    if (resolved.error) return res.status(resolved.status || 400).json({ error: resolved.error });
+    res.sendFile(resolved.path);
+  } catch (error) {
+    logger.error('Failed to serve evidence media', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: 'Failed to serve evidence media' });
   }
 });
 

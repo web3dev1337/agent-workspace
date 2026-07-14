@@ -346,6 +346,11 @@ const normalizeEvidence = (raw) => {
     if (Object.keys(d).length) out.diffStats = d;
   }
 
+  // Trusted server-set root used by the media streaming endpoint; agent
+  // supplied blocks have this stripped before they reach normalization.
+  const worktreePath = evidenceString(raw.worktreePath, 500);
+  if (worktreePath) out.worktreePath = worktreePath;
+
   if (!Object.keys(out).length) return null;
 
   out.schema = 1;
