@@ -28745,6 +28745,8 @@ class ClaudeOrchestrator {
         </div>
         ` : ''}
 
+        ${window.QueueEvidence ? window.QueueEvidence.renderCard(t, record) : ''}
+
         <div class="tasks-detail-block">
           <div class="tasks-detail-block-title">Tier + Risk</div>
           <div class="tasks-kv">
@@ -28988,6 +28990,27 @@ class ClaudeOrchestrator {
 	          <div id="queue-reverse-deps" class="tasks-detail-meta">Loading…</div>
 	        </div>
 	      `;
+
+      window.QueueEvidence?.wire(detailEl, t, record, {
+        onRefresh: async () => {
+          const encId = encodeURIComponent(t.id);
+          const worktreePath = t.worktreePath || record?.evidence?.worktreePath || '';
+          const res = await fetch(`/api/process/evidence/${encId}/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(worktreePath ? { worktreePath } : {})
+          });
+          if (!res.ok) throw new Error(`Evidence refresh failed (${res.status})`);
+          try {
+            const recRes = await fetch(`/api/process/task-records/${encId}`);
+            if (recRes.ok) {
+              const data = await recRes.json();
+              if (data?.record) t.record = data.record;
+            }
+          } catch { /* keep the stale record if the re-fetch fails */ }
+          renderDetail(t);
+        }
+      });
 
       const tierEl = detailEl.querySelector('#queue-tier');
       const riskEl = detailEl.querySelector('#queue-change-risk');
