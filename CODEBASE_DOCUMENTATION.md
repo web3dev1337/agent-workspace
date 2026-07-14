@@ -125,6 +125,20 @@ server/portRegistry.js             - Port assignment + live service scanner (`/a
 server/commanderService.js         - Top-level Commander PTY (Claude/Codex) + launch buffering
 ├─ Packaged CWD: uses `ORCHESTRATOR_DATA_DIR/commander` so desktop users can edit `CLAUDE.md` / `AGENTS.md` safely
 └─ First-run seed: copies the packaged `docs/COMMANDER_CLAUDE.md` into the Commander data directory when missing
+server/evidenceService.js          - Per-task evidence collection (review-readiness proof)
+├─ Sources: fenced ```agent-evidence JSON blocks in PR body/comments/reviews, `.agent-evidence.json` in the worktree, direct API
+├─ Merge: later sources win per scalar section; reviews/media/data accumulate de-duped; PR diff stats computed server-side
+├─ Media: `GET /api/process/evidence/:id/media/:idx` streams only from the server-recorded worktree root (extension whitelist, traversal rejected)
+└─ Protocol agents follow: docs/agents/EVIDENCE_PROTOCOL.md (compact snippet auto-appended to batch launch prompts via server/evidencePromptSnippet.js)
+server/reviewWorkflowService.js    - Data-driven multi-agent review chains (config/review-workflows.json + ~/.agent-workspace/review-workflows.json override)
+├─ Stages: role + agentId + model + effort per stage; riskDefaults pick a chain per task risk
+├─ Runner: spawns each reviewer into an idle worktree, polls GitHub review verdicts, records outcomes into evidence.reviews[]
+└─ Run state persists on the task record (`reviewWorkflow`) — restarts resume polling; stalls on timeout, blocks on needs_fix
+server/agentSpawnHelper.js         - Shared worktree-locate + one-shot agent launch (used by PR review automation, review workflows)
+└─ Two-write submit: prompt text, then `\r` separately (a single "text\r" chunk is treated as a bracketed paste by agent CLIs)
+server/visibilityPresetService.js  - One-click UI Mode presets (simple ↔ power/process) rewriting ui.visibility (`POST /api/user-settings/visibility-preset`)
+server/contextSwitchTelemetryService.js - Local-only context-switch JSONL log + summary (Context Tax estimator; `~/.agent-workspace/telemetry/context-switches.jsonl`)
+server/serverLaunchCommandResolver.js - Data-driven dev-server launch: cascaded `serverCommand` template + {{gameMode}}/{{commonFlags}} substitution (replaces hardcoded `hytopia start`)
 scripts/tauri/prepare-backend-resources.js - Tauri backend packager
 ├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
 ├─ Commander instructions: copies `docs/COMMANDER_CLAUDE.md` into `resources/backend/{COMMANDER_CLAUDE.md,CLAUDE.md,AGENTS.md}` for desktop builds
@@ -291,7 +305,19 @@ client/styles/projects-board.css   - Projects Board modal styling
 client/plugin-host.js              - Client plugin runtime for UI slots/actions
 ├─ Loads: `/api/plugins/client-surface` slot actions with cache/refresh support
 ├─ Exposes: `window.orchestratorPluginHost`
-└─ Supports actions: open_url, open_route, copy_text, commander_action
+├─ Supports actions: open_url, open_route, copy_text, commander_action, post_route (local route + optional prompted input)
+└─ Rendered slots: `commander.tools` (Commander panel strip), `dashboard.telemetry.actions` (telemetry overlay)
+
+client/queue-evidence.js           - Evidence card in Queue detail (badges: tests/app-ran/reviews/media/data/diff; media lightbox; refresh)
+client/queue-workflow.js           - Review-workflow block in Queue detail (chain picker by risk, run/skip/cancel, stage chips)
+client/visibility-preset.js        - Settings → UI Mode preset switch (simple ↔ power)
+client/plugins-admin.js            - Settings → Plugins list (loaded + failed) + reload
+client/context-telemetry.js        - Fire-and-forget context-switch tracking hooks (window.ContextTelemetry)
+client/styles/queue-evidence.css   - Evidence card + workflow chips + cache-cold chip styling
+
+plugins/youtube-transcript/        - Example plugin: YouTube URL → yt-dlp subtitles → plain-text transcript in ~/Downloads/transcripts (commander.tools button + `youtube-transcript-transcribe` command)
+config/review-workflows.json       - Named review chains (standard/hardened/full-gate), role prompt focuses, riskDefaults
+docs/agents/EVIDENCE_PROTOCOL.md   - How agents report evidence (schema, channels, reviewer obligations, handoff notes)
 ```
 
 ### Tabbed Workspace System (NEW)
@@ -643,6 +669,16 @@ GET /api/policy/templates                                    - Built-in team gov
 POST /api/policy/bundles/export                              - Export policy bundle (template/current/custom) for sharing
 POST /api/policy/bundles/import                              - Apply policy bundle (replace/merge) into global settings
 GET /api/audit/export?signed=1                               - Signed audit export (HMAC-SHA256; requires signing enabled + secret)
+POST /api/process/evidence/:id/refresh                        - Re-collect task evidence from PR comments + worktree file
+PUT /api/process/evidence/:id                                 - Directly set/merge task evidence
+GET /api/process/evidence/:id/media/:idx                      - Stream an evidence screenshot/video (path-validated)
+GET /api/process/review-workflows                             - Review chain catalog (workflows/roles/riskDefaults)
+POST /api/process/review-workflows/:id/{start,advance,cancel} - Run/skip-stage/cancel a review chain for a PR task
+POST /api/process/telemetry/context-switch                    - Record a local context-switch event
+GET /api/process/telemetry/context-switches?hours=24          - Context-switch summary (count, est. refocus cost, top pairs)
+GET /api/user-settings/visibility-presets                     - List UI Mode presets + current
+POST /api/user-settings/visibility-preset                     - Apply a UI Mode preset (simple|power)
+
 GET /api/agent-providers                                      - List registered agent providers and capabilities
 GET /api/agent-providers/:providerId/sessions                 - List provider sessions from SessionManager
 POST /api/agent-providers/:providerId/resume-plan             - Build provider-specific resume command/config plan
