@@ -440,22 +440,23 @@ class PrReviewAutomationService {
     }
 
     // Find an available worktree in the active workspace
-    const worktreeId = await this._findAvailableWorktree(pr, cfg);
-    if (!worktreeId) {
+    const target = await this._findAvailableWorktree(pr, cfg);
+    if (!target) {
       logger.warn('No available worktree for reviewer', { prId: pr.prId });
       return false;
     }
 
-    const sessionId = `${pr.repo || 'review'}-${worktreeId}-claude`;
+    const { worktreeId, repoName } = target;
+    const sessionId = `${repoName || pr.repo || 'review'}-${worktreeId}-claude`;
     const prompt = this._buildReviewPrompt(pr, cfg);
 
     try {
       // Start the agent
       const agent = cfg.reviewerAgent || 'claude';
       const started = this.sessionManager.startAgentWithConfig(sessionId, {
-        provider: agent,
-        skipPermissions: true,
-        mode: 'fresh'
+        agentId: agent,
+        mode: 'fresh',
+        flags: agent === 'claude' ? ['skipPermissions'] : ['yolo']
       });
 
       if (!started) {
@@ -463,10 +464,13 @@ class PrReviewAutomationService {
         return false;
       }
 
-      // Wait for agent init, then send prompt
+      // Wait for agent init, then send the prompt text and submit with a
+      // separate carriage return (agent CLIs treat a trailing "\n" inside the
+      // same write as part of the pasted text, not as submit).
       const initDelay = agent === 'codex' ? 15_000 : 8_000;
       setTimeout(() => {
-        this.sessionManager.writeToSession(sessionId, prompt + '\n');
+        this.sessionManager.writeToSession(sessionId, prompt);
+        setTimeout(() => this.sessionManager.writeToSession(sessionId, '\r'), 500);
       }, initDelay);
 
       // Track the active reviewer
@@ -526,7 +530,7 @@ class PrReviewAutomationService {
       const claudeSessionId = `${repoName}-${wId}-claude`;
       const session = this.sessionManager?.getSessionById?.(claudeSessionId);
       if (!session || session.status === 'exited' || session.status === 'idle') {
-        return wId;
+        return { worktreeId: wId, repoName };
       }
     }
 

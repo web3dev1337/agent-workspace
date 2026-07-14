@@ -177,7 +177,7 @@ class BatchLaunchService {
     }).catch(err => logger.warn('Failed to link task record', { sessionId: claudeSessionId, error: err.message }));
 
     // 4. Start agent
-    const flags = (agentId === 'claude') ? ['skipPermissions'] : [];
+    const flags = (agentId === 'claude') ? ['skipPermissions'] : ['yolo'];
     const agentStarted = this.sessionManager.startAgentWithConfig(claudeSessionId, {
       agentId,
       mode: 'fresh',
