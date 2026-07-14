@@ -14,7 +14,7 @@ class PluginLoaderService {
     this.lastLoadedAt = null;
     this.supportedManifestVersions = new Set([1]);
     this.allowedCommandSurfaces = new Set(['commander', 'voice', 'ui', 'scheduler']);
-    this.allowedClientActionTypes = new Set(['open_url', 'open_route', 'copy_text', 'commander_action']);
+    this.allowedClientActionTypes = new Set(['open_url', 'open_route', 'copy_text', 'commander_action', 'post_route']);
     this.orchestratorVersion = this.loadOrchestratorVersion();
   }
 
@@ -134,6 +134,9 @@ class PluginLoaderService {
       }
 
       const router = express.Router();
+      // Plugin routes get JSON bodies parsed for them (the host app uses
+      // per-route parsers, so plugins would otherwise see req.body undefined).
+      router.use(express.json({ limit: '1mb' }));
       const routeBase = `/api/plugins/${encodeURIComponent(id)}`;
       const commandPrefix = `${id}-`;
       const capabilities = manifest?.capabilities || {};
@@ -327,6 +330,23 @@ class PluginLoaderService {
         const commanderAction = String(action.commanderAction || action.action || '').trim();
         if (!commanderAction) throw new Error(`Missing commanderAction for slot id: ${id}`);
         normalizedAction.commanderAction = commanderAction;
+        if (action.payload && typeof action.payload === 'object' && !Array.isArray(action.payload)) {
+          normalizedAction.payload = action.payload;
+        }
+      }
+      if (type === 'post_route') {
+        // POST to a local route, optionally prompting the user for one input
+        // field first (e.g. paste a URL). Routes only — never external hosts.
+        const route = String(action.route || '').trim();
+        if (!route || !route.startsWith('/')) throw new Error(`Invalid post_route action route for slot id: ${id}`);
+        normalizedAction.route = route;
+        const promptLabel = String(action.prompt || '').trim();
+        if (promptLabel) {
+          normalizedAction.prompt = promptLabel.slice(0, 200);
+          const field = String(action.field || 'value').trim();
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]{0,39}$/.test(field)) throw new Error(`Invalid post_route field name for slot id: ${id}`);
+          normalizedAction.field = field;
+        }
         if (action.payload && typeof action.payload === 'object' && !Array.isArray(action.payload)) {
           normalizedAction.payload = action.payload;
         }

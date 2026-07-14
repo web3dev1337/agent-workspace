@@ -10796,6 +10796,25 @@ body.dependency-onboarding-active #dependency-setup-modal {
   z-index: 10;
 }
 
+/* Plugin tool buttons (client.slots → "commander.tools") */
+.commander-tools-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.commander-tools-strip.hidden {
+  display: none;
+}
+
+.commander-tool-btn {
+  font-size: 0.75rem;
+}
+
 .commander-btn {
   padding: var(--space-xs) var(--space-md);
   background: var(--bg-tertiary);

@@ -133,6 +133,34 @@ class OrchestratorPluginHost {
       return { ok: true };
     }
 
+    if (type === 'post_route') {
+      const route = String(action.route || '').trim();
+      if (!route || !route.startsWith('/')) return { ok: false, error: 'Invalid route' };
+
+      const body = action.payload && typeof action.payload === 'object' ? { ...action.payload } : {};
+      if (action.prompt) {
+        const value = window.prompt(String(action.prompt));
+        if (value === null) return { ok: false, cancelled: true };
+        body[String(action.field || 'value')] = value;
+      }
+
+      try {
+        const res = await fetch(route, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data?.ok === false) {
+          return { ok: false, error: String(data?.error || `Request failed (${res.status})`), data };
+        }
+        this.emit('post-route-result', { item, data });
+        return { ok: true, data };
+      } catch (e) {
+        return { ok: false, error: String(e?.message || e) };
+      }
+    }
+
     return { ok: false, error: `Unsupported action type: ${type}` };
   }
 }

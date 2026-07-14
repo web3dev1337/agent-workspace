@@ -256,6 +256,17 @@
                             </div>
                         </div>
 
+                        <div class="setting-section" data-section-id="plugins" data-section-title="Plugins">
+                            <h4>Plugins</h4>
+                            <p class="setting-description">Plugins live in the <code>plugins/</code> folder
+                                (or <code>ORCHESTRATOR_PLUGINS_DIR</code>) — each adds routes, commands, and UI
+                                buttons via a <code>plugin.json</code> manifest. See <code>plugins/README.md</code>.</p>
+                            <div class="setting-group">
+                                <div id="plugins-admin-list" class="setting-description">Loading…</div>
+                                <button class="btn-secondary" id="plugins-reload-btn" type="button">🔄 Reload plugins</button>
+                            </div>
+                        </div>
+
                         <div class="setting-section" data-section-id="ui-mode" data-section-title="UI Mode">
                             <h4>UI Mode</h4>
                             <p class="setting-description">Switch between the lean default UI and the full
@@ -554,6 +565,7 @@
     <script src="queue-evidence.js"></script>
     <script src="queue-workflow.js"></script>
     <script src="visibility-preset.js"></script>
+    <script src="plugins-admin.js"></script>
     <script src="quick-links.js"></script>
     <script src="commander-panel.js"></script>
     <script src="recommendations.js"></script>

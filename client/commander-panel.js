@@ -147,6 +147,7 @@ class CommanderPanel {
           Advice
         </button>
       </div>
+      <div class="commander-tools-strip hidden" id="commander-tools-strip"></div>
       <div class="commander-terminal" id="commander-terminal">
         <div class="commander-placeholder">
           <p>Commander is a Claude Code terminal for orchestrating your sessions.</p>
@@ -173,6 +174,55 @@ class CommanderPanel {
     document.body.appendChild(advice);
 
     this.orchestrator?.applyUiVisibility?.();
+    this.renderToolsStrip();
+  }
+
+  // Plugin tools (client.slots targeting "commander.tools") render as a
+  // button strip between the toolbar and the terminal.
+  async renderToolsStrip() {
+    const strip = document.getElementById('commander-tools-strip');
+    const host = window.orchestratorPluginHost;
+    if (!strip || !host) return;
+
+    try {
+      await host.refresh({ slot: 'commander.tools' });
+    } catch {
+      return; // no plugin surface available — leave the strip hidden
+    }
+
+    const items = host.getSlotItems('commander.tools');
+    if (!items.length) {
+      strip.classList.add('hidden');
+      strip.innerHTML = '';
+      return;
+    }
+
+    strip.classList.remove('hidden');
+    strip.innerHTML = '';
+    for (const item of items) {
+      const btn = document.createElement('button');
+      btn.className = 'commander-btn commander-tool-btn';
+      btn.textContent = item.label || item.id;
+      if (item.description) btn.title = item.description;
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const original = btn.textContent;
+        try {
+          const result = await host.runAction(item, { orchestrator: this.orchestrator });
+          if (result?.cancelled) return;
+          const message = result?.data?.message || (result?.ok ? 'Done' : (result?.error || 'Failed'));
+          if (this.terminal) {
+            this.terminal.writeln(`\r\n[tool] ${item.label || item.id}: ${result?.ok ? '✓' : '✗'} ${message}\r`);
+          } else {
+            btn.textContent = result?.ok ? '✓ done' : '✗ failed';
+            setTimeout(() => { btn.textContent = original; }, 2500);
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      });
+      strip.appendChild(btn);
+    }
   }
 
   setPlaceholderMessages(lines = []) {
