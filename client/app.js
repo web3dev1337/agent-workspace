@@ -28698,6 +28698,15 @@ class ClaudeOrchestrator {
       const nextAutoSnoozeMs = computeBackoffMs(snoozeCount + 1);
       const nextAutoSnoozeLabel = formatBackoff(nextAutoSnoozeMs);
 
+      // Prompt caches expire after ~1h idle: reprompting the original session
+      // past that point restarts from a cold cache — prefer a fresh window
+      // seeded with the evidence handoff notes.
+      const promptAgeMs = promptSentAt ? Math.max(0, nowMs - parseIso(promptSentAt)) : 0;
+      const cacheCold = promptAgeMs > 55 * 60 * 1000;
+      const cacheColdChip = cacheCold
+        ? `<span class="cache-cold-chip" title="Last prompt was ${Math.round(promptAgeMs / 60000)} min ago — the session's prompt cache has likely expired. Reprompt/Fixer will use a FRESH window seeded with the handoff notes instead of continuing the cold session.">🧊 cache cold — fresh window on reprompt</span>`
+        : '';
+
       const identitySaved = Array.isArray(this.userSettings?.global?.ui?.identity?.saved)
         ? this.userSettings.global.ui.identity.saved
         : [];
@@ -28714,7 +28723,7 @@ class ClaudeOrchestrator {
 	        <div class="tasks-detail-header">
 	          <div class="tasks-detail-title">
 	            <div class="pr-subtitle">${escapeHtml(t.title || t.id)}</div>
-	            <div class="tasks-detail-meta">${escapeHtml(t.id)}</div>
+	            <div class="tasks-detail-meta">${escapeHtml(t.id)} ${cacheColdChip}</div>
 	          </div>
 				          <div class="tasks-detail-actions">
 				            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}

@@ -15,6 +15,11 @@ const logger = winston.createLogger({
 
 const CONFIG_PATH = 'global.ui.tasks.automations.prReview';
 
+// Anthropic prompt caches go cold after ~1h idle. Past this age, sending
+// feedback text into the ORIGINAL session wastes the reprompt on a cold
+// cache — a fresh session seeded with handoff notes is cheaper and cleaner.
+const PROMPT_CACHE_TTL_MS = 55 * 60 * 1000;
+
 const DEFAULT_CONFIG = {
   enabled: false,
   pollEnabled: true,
@@ -567,6 +572,9 @@ class PrReviewAutomationService {
       }
     }
 
+    const promptSentMs = Date.parse(record.promptSentAt || '') || 0;
+    const cacheCold = !promptSentMs || (Date.now() - promptSentMs) > PROMPT_CACHE_TTL_MS;
+
     const feedbackMsg = [
       `\n--- PR Review Feedback ---`,
       `PR #${reviewInfo.number} has been reviewed by ${reviewInfo.reviewUser || 'AI reviewer'}.`,
@@ -578,24 +586,80 @@ class PrReviewAutomationService {
       `--- End Review Feedback ---\n`
     ].join('\n');
 
-    if (targetSession) {
-      logger.info('Sending review feedback to session', { prId, sessionId: targetSession });
+    if (targetSession && !cacheCold) {
+      logger.info('Sending review feedback to warm session', { prId, sessionId: targetSession });
       this.sessionManager.writeToSession(targetSession, feedbackMsg);
       return;
     }
 
-    // If no active session found and autoSpawnFixer is on, spawn a fixer
+    // Session is missing or its prompt cache has gone cold (>~1h): a fresh
+    // fixer seeded with the review feedback + handoff notes beats continuing
+    // a cold conversation.
     if (cfg.autoSpawnFixer) {
-      logger.info('Original session not found, would spawn fixer', { prId });
-      this.taskRecordService?.upsert?.(prId, {
-        notes: `Review feedback pending - original session not found. Fixer needed.`
-      });
-    } else {
-      logger.info('No active session found for feedback, storing in task record', { prId });
-      this.taskRecordService?.upsert?.(prId, {
-        notes: `Review: changes requested by ${reviewInfo.reviewUser || 'AI'}. Feedback: ${(reviewInfo.reviewBody || '').slice(0, 500)}`
-      });
+      const spawned = await this._spawnFreshFixer(prId, reviewInfo, record);
+      if (spawned) return;
     }
+
+    if (targetSession) {
+      // Fixer disabled/unavailable — still deliver into the old session.
+      logger.info('Sending review feedback to stale session (cache likely cold)', { prId, sessionId: targetSession });
+      this.sessionManager.writeToSession(targetSession, feedbackMsg);
+      return;
+    }
+
+    logger.info('No delivery target for feedback, storing in task record', { prId });
+    this.taskRecordService?.upsert?.(prId, {
+      notes: `Review: changes requested by ${reviewInfo.reviewUser || 'AI'}. Feedback: ${(reviewInfo.reviewBody || '').slice(0, 500)}`
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal: spawn a fresh fixer agent (fresh window = warm start, no cold cache)
+  // ---------------------------------------------------------------------------
+
+  async _spawnFreshFixer(prId, reviewInfo, record) {
+    const match = prId.match(/^pr:([^/]+)\/([^#]+)#(\d+)$/);
+    if (!match) return false;
+    const [, owner, repo, numStr] = match;
+    const number = parseInt(numStr, 10);
+
+    const target = await this._findAvailableWorktree({ prId }, this.getConfig());
+    if (!target) {
+      this.taskRecordService?.upsert?.(prId, {
+        notes: `Review feedback pending — no free worktree to spawn a fixer. Feedback: ${(reviewInfo.reviewBody || '').slice(0, 400)}`
+      });
+      return false;
+    }
+
+    const handoffNotes = String(record?.evidence?.handoff?.notes || '').trim();
+    const prompt = [
+      `You are fixing PR #${number} in ${owner}/${repo} after review feedback. This is a FRESH session — everything you need is below.`,
+      '',
+      handoffNotes ? `Handoff notes from the implementing agent:\n${handoffNotes}\n` : '',
+      'Review feedback to address:',
+      reviewInfo.reviewBody || '(see the PR review on GitHub)',
+      '',
+      `Steps: \`gh pr checkout ${number}\` in this worktree, address EVERY point above, run the tests, commit and push to the SAME branch (never create a new one), then reply on the PR describing the fixes and update the agent-evidence block.`,
+      `Use \`gh pr view ${number} --comments\` for full context.`
+    ].filter(Boolean).join('\n');
+
+    const sessionId = `${target.repoName || repo}-${target.worktreeId}-claude`;
+    const started = spawnAgentInSession({
+      sessionManager: this.sessionManager,
+      sessionId,
+      agentId: this.getConfig().reviewerAgent || 'claude',
+      prompt
+    });
+
+    if (!started) return false;
+
+    this.taskRecordService?.upsert?.(prId, {
+      fixerSpawnedAt: new Date().toISOString(),
+      fixerWorktreeId: target.worktreeId
+    });
+    logger.info('Fresh fixer spawned for review feedback', { prId, sessionId, worktreeId: target.worktreeId });
+    this._emitUpdate('fixer-spawned', { prId, sessionId, worktreeId: target.worktreeId });
+    return true;
   }
 
   // ---------------------------------------------------------------------------
