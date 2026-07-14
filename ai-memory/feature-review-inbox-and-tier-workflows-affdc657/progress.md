@@ -13,10 +13,10 @@
 - [x] Phase 9: prompt-cache freshness — fresh-window fixer (implements stubbed autoSpawnFixer), 🧊 cache-cold chip + tests (1665e198)
 - [x] Phase 10: context-switch telemetry service + client hooks (workflow mode/worktree focus/workspace switch/review timers) + dashboard telemetry overlay line + tests (14c0f819)
 - [x] Phase 11a: commander /clear fix — captured slash cmds were sent as one "/text\r" paste chunk; now two writes (1aafc943)
-- [ ] Phase 12: plugins — example youtube-transcript plugin, post_route action type, commander.tools slot renderer, plugin admin in Settings, README client.slots docs
-- [ ] Phase 13 (stretch): play buttons revival (uncomment app.js:4537-4555 area, wire getDynamicLaunchOptions, {{gameMode}}/{{commonFlags}} substitution)
-- [ ] Phase 11b: multi-commander — write feasibility/seam note in PLANS (commanderService = hard singleton w/ one PTY); implement only if small
-- [ ] Phase 14: CODEBASE_DOCUMENTATION.md update, full test suite, gh pr create (PR URL in final reply!)
+- [x] Phase 12: plugins (d5f9e5f8) — example youtube-transcript plugin, post_route action type, commander.tools slot renderer, plugin admin in Settings, README client.slots docs
+- [x] Phase 13: play buttons — serverLaunchCommandResolver, data-driven serverCommand + {{gameMode}}/{{commonFlags}}, UI re-enabled behind flags (31508193)
+- [x] Phase 11b: multi-commander feasibility note — PLANS/2026-07-15/MULTI_COMMANDER_FEASIBILITY.md (follow-up PR, ~400-600 lines)
+- [x] Phase 14: docs updated (35de0dfe), 652 unit tests green, command-surface drift clean, PR created
 
 ## Key facts for resume
 - Worktree node_modules installed (npm ci done). npm run test:unit green (620+ tests). Never touch ~/GitHub/tools/automation/claude-orchestrator/* (running prod, port 4000).
