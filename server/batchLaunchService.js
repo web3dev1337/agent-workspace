@@ -1,6 +1,8 @@
 const winston = require('winston');
 const path = require('path');
 
+const { buildEvidencePromptSnippet } = require('./evidencePromptSnippet');
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
@@ -227,11 +229,15 @@ class BatchLaunchService {
       ''
     ].filter(Boolean).join('\n');
 
+    const settings = this.userSettingsService?.getAllSettings?.() || {};
+    const evidenceEnabled = settings?.global?.ui?.tasks?.evidencePromptEnabled !== false;
+
     return [
       globalPromptPrefix || '',
       boardPromptPrefix || '',
       preface || '',
-      (card.desc || '').trim() || ''
+      (card.desc || '').trim() || '',
+      evidenceEnabled ? buildEvidencePromptSnippet() : ''
     ].map(s => String(s || '').replace(/\s+$/, '')).filter(Boolean).join('\n\n').trim();
   }
 
