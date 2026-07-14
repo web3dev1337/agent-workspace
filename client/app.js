@@ -4534,26 +4534,27 @@ class ClaudeOrchestrator {
 
     if (isRunning) {
       html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>`;
+    } else if (showStartServer) {
+      // Play buttons: options come from the cascaded config's gameModes/
+      // commonFlags (Global → Category → Framework → Project → Worktree);
+      // the server resolves the actual command from `serverCommand`.
+      if (showServerLaunchMenu) {
+        html += `<div class="server-launch-group">
+          <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
+                  onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+            <option value="">▶</option>
+            ${this.getDynamicLaunchOptions(sessionId)}
+            <option value="custom" selected>Custom...</option>
+          </select>
+          ${showLaunchSettings ? `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>` : ''}
+        </div>`;
+      } else {
+        html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start Server">▶</button>`;
+        if (showLaunchSettings) {
+          html += `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>`;
+        }
+      }
     }
-    // START SERVER BUTTON — disabled, kept for future re-enablement
-    // } else if (showStartServer) {
-    //   if (showServerLaunchMenu) {
-    //     html += `<div class="server-launch-group">
-    //       <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
-    //               onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
-    //         <option value="">▶</option>
-    //         ${this.getDynamicLaunchOptions(sessionId)}
-    //         <option value="custom" selected>Custom...</option>
-    //       </select>
-    //       ${showLaunchSettings ? `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>` : ''}
-    //     </div>`;
-    //   } else {
-    //     html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start Server">▶</button>`;
-    //     if (showLaunchSettings) {
-    //       html += `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>`;
-    //     }
-    //   }
-    // }
 
     // Add dynamic buttons from config
     const buttons = this.getButtonsForSession(sessionId, 'server');
@@ -4600,14 +4601,13 @@ class ClaudeOrchestrator {
     const visibility = this.getTerminalVisibilityConfig();
     const isRunning = this.serverStatuses.get(serverSessionId) === 'running';
 
-    // Only show stop button; start is gated behind explicit opt-in
+    // Only show stop button by default; start is gated behind explicit opt-in
     if (isRunning) {
       return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}')" title="Stop Server">⏹S</button>`;
     }
-    // START SERVER (dev) — disabled, kept for future re-enablement
-    // if (visibility.startServerDev === true) {
-    //   return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
-    // }
+    if (visibility.startServerDev === true) {
+      return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
+    }
     return '';
   }
 

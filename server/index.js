@@ -144,6 +144,7 @@ const { ReviewWorkflowService } = require('./reviewWorkflowService');
 const visibilityPresets = require('./visibilityPresetService');
 const { ContextSwitchTelemetryService } = require('./contextSwitchTelemetryService');
 const contextSwitchTelemetry = ContextSwitchTelemetryService.getInstance();
+const { resolveServerLaunchCommand } = require('./serverLaunchCommandResolver');
 const { GitHubRepoService } = require('./githubRepoService');
 const { GitHubCloneWorktreeService } = require('./githubCloneWorktreeService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
@@ -663,7 +664,7 @@ io.on('connection', (socket) => {
       // Clear any existing input first with Ctrl+C, then send command
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C to clear
 
-      setTimeout(() => {
+      setTimeout(async () => {
         // Build command with NODE_ENV and custom settings
         const nodeEnv = environment === 'production' ? 'production' : 'development';
 
@@ -679,24 +680,31 @@ io.on('connection', (socket) => {
           Object.assign(env, parseEnvAssignments(launchSettings.envVars));
         }
 
-        // Build command (cross-shell).
         // Use NODE_OPTIONS for node flags so this works on both bash and PowerShell.
         // (Avoids bash-only `$(which hytopia)` and Windows `.cmd` wrapper issues.)
-        let runCommand = 'hytopia start';
         const nodeOptions = String(launchSettings?.nodeOptions || '').trim();
         if (nodeOptions) {
           env.NODE_OPTIONS = nodeOptions;
         }
 
-        const gameArgs = String(launchSettings?.gameArgs || '').trim();
-        if (gameArgs) {
-          runCommand += ` ${gameArgs}`;
-        }
-
         const cwd = session?.config?.cwd || null;
-        const command = buildShellCommand({ shellKind, cwd, env, command: runCommand }) + '\n';
 
-        logger.info('Starting server with command', { sessionId, command, port, nodeEnv, repoPath, worktreeId });
+        // Launch command comes from the cascaded config (serverCommand +
+        // gameModes/commonFlags templating), not a hardcoded binary.
+        const resolved = await resolveServerLaunchCommand({
+          workspaceManager,
+          sessionId,
+          cwd,
+          environment,
+          launchSettings
+        });
+
+        const command = buildShellCommand({ shellKind, cwd, env, command: resolved.command }) + '\n';
+
+        logger.info('Starting server with command', {
+          sessionId, command, port, nodeEnv, repoPath, worktreeId,
+          repositoryType: resolved.repositoryType, gameMode: resolved.usedGameMode
+        });
 
         const written = sessionManager.writeToSession(sessionId, command);
         if (!written) {

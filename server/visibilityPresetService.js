@@ -33,7 +33,11 @@ const POWER_OVERRIDES = {
     sessionVisibilityToggles: true
   },
   terminal: {
-    intentHints: false // opt-in separately: calls a model API
+    intentHints: false, // opt-in separately: calls a model API
+    startServer: true,
+    serverLaunchMenu: true,
+    launchSettings: true,
+    startServerDev: true
   },
   dashboard: {
     processBanner: true,
