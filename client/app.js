@@ -3192,6 +3192,7 @@ class ClaudeOrchestrator {
     // Second-layer filter only: do NOT modify worktree visibility (visibleTerminals) or tierFilter.
     this.updateTerminalGrid();
     this.buildSidebar();
+    window.ContextTelemetry?.track('workflow-mode', normalized);
 
     // Persist for the user.
     this.updateGlobalUserSetting('ui.workflow.mode', normalized);
@@ -5473,6 +5474,7 @@ class ClaudeOrchestrator {
 
   showOnlyWorktree(worktreeIdOrKey) {
     console.log(`Showing only worktree: ${worktreeIdOrKey}`);
+    window.ContextTelemetry?.track('worktree-focus', String(worktreeIdOrKey || ''));
 
     // Clear all visible terminals first
     this.visibleTerminals.clear();
@@ -19071,6 +19073,7 @@ class ClaudeOrchestrator {
 
   switchToWorkspace(workspaceId) {
     console.log('Switching to workspace:', workspaceId);
+    window.ContextTelemetry?.track('workspace-switch', String(workspaceId || ''));
     this.socket.emit('switch-workspace', { workspaceId });
   }
 
@@ -27695,6 +27698,7 @@ class ClaudeOrchestrator {
       const endIso = endedAtIso || new Date().toISOString();
       state.reviewTimer.taskId = null;
       state.reviewTimer.startedAtMs = null;
+      window.ContextTelemetry?.track('review-end', activeId);
       try {
         const rec = await upsertRecord(activeId, { reviewEndedAt: endIso });
         updateTaskRecordInState(activeId, rec);
@@ -27747,6 +27751,7 @@ class ClaudeOrchestrator {
       const nowMs = Date.now();
       state.reviewTimer.taskId = id;
       state.reviewTimer.startedAtMs = nowMs;
+      window.ContextTelemetry?.track('review-start', id);
       try {
         const rec = await upsertRecord(id, {
           reviewStartedAt: new Date(nowMs).toISOString(),

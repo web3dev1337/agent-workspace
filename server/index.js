@@ -142,6 +142,8 @@ const { PrReviewAutomationService } = require('./prReviewAutomationService');
 const { EvidenceService } = require('./evidenceService');
 const { ReviewWorkflowService } = require('./reviewWorkflowService');
 const visibilityPresets = require('./visibilityPresetService');
+const { ContextSwitchTelemetryService } = require('./contextSwitchTelemetryService');
+const contextSwitchTelemetry = ContextSwitchTelemetryService.getInstance();
 const { GitHubRepoService } = require('./githubRepoService');
 const { GitHubCloneWorktreeService } = require('./githubCloneWorktreeService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
@@ -6063,6 +6065,27 @@ app.get('/api/process/telemetry', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch process telemetry', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch process telemetry' });
+  }
+});
+
+// Context-switch telemetry (local JSONL, never leaves the machine).
+app.post('/api/process/telemetry/context-switch', express.json(), (req, res) => {
+  try {
+    const result = contextSwitchTelemetry.track(req.body || {});
+    if (!result.ok) return res.status(400).json(result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to record context switch' });
+  }
+});
+
+app.get('/api/process/telemetry/context-switches', (req, res) => {
+  try {
+    const hours = req.query.hours ? Number(req.query.hours) : 24;
+    res.json(contextSwitchTelemetry.getSummary({ hours }));
+  } catch (error) {
+    logger.error('Failed to summarize context switches', { error: error.message });
+    res.status(500).json({ error: 'Failed to summarize context switches' });
   }
 });
 
