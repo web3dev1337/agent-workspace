@@ -921,15 +921,24 @@ class CommanderPanel {
     // sendInput swallows network errors (resolves undefined) and the server
     // replies { success: false } when the Commander PTY isn't running yet.
     // Either way the command went nowhere — say so instead of eating it.
-    const response = await this.sendInput(`${text}\r`);
+    //
+    // The text and the submitting "\r" MUST be separate writes with a gap:
+    // a single "/clear\r" chunk reaches the agent CLI as a bracketed paste,
+    // which inserts it as literal text and never executes the slash command.
+    const response = await this.sendInput(text);
     let delivered = false;
     if (response && response.ok) {
       const data = await response.json().catch(() => null);
       delivered = data?.success !== false;
     }
-    if (!delivered && this.terminal) {
-      this.terminal.writeln(`\r\n[cmd] ✗ Commander agent is not running — ${text} was not delivered\r`);
+    if (!delivered) {
+      if (this.terminal) {
+        this.terminal.writeln(`\r\n[cmd] ✗ Commander agent is not running — ${text} was not delivered\r`);
+      }
+      return;
     }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await this.sendInput('\r');
   }
 
   handleTerminalData(data) {
