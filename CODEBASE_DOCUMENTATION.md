@@ -122,6 +122,8 @@ server/githubCloneWorktreeService.js - GitHub import flow for Quick Work (`owner
 server/portRegistry.js             - Port assignment + live service scanner (`/api/ports/scan`)
 ├─ Windows scan path: uses hidden `netstat`/`tasklist` probes so packaged Tauri builds do not flash console windows when Ports/Dashboard panels refresh
 └─ UI metadata: labels orchestrator-assigned ports, known dev servers, and custom user labels
+server/commanderManager.js         - Holds N Commander instances keyed by id (primary 'commander' = unchanged single-Commander behavior); list/spawn/remove; per-instance PTY + cwd
+server/utils/shellSafety.js        - Allowlist validators for values interpolated into shell commands (model/reasoning/flags) — guards custom-agent + server-launch command construction
 server/commanderService.js         - Top-level Commander PTY (Claude/Codex) + launch buffering
 ├─ Packaged CWD: uses `ORCHESTRATOR_DATA_DIR/commander` so desktop users can edit `CLAUDE.md` / `AGENTS.md` safely
 └─ First-run seed: copies the packaged `docs/COMMANDER_CLAUDE.md` into the Commander data directory when missing

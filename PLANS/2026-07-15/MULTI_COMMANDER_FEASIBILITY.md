@@ -1,5 +1,12 @@
 # Multi-Commander Feasibility (2026-07-15)
 
+> **UPDATE 2026-07-16 — SHIPPED.** Multiple commander instances now exist:
+> `CommanderManager` keys N instances by id (primary stays `commander`, fully
+> backward compatible), id-aware PTY-lifecycle routes, scoped socket payloads,
+> `list`/`spawn`/`remove` routes, and a titlebar tab-switcher that rebinds the
+> single panel to another backend PTY. Remaining follow-up is only full
+> side-by-side N-panel rendering (see end). Original analysis below.
+
 Ask: "sometimes I just need another commander."
 
 ## Current seams (why it's not a small change)
