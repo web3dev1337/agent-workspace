@@ -7,7 +7,16 @@
 const fs = require('fs');
 const path = require('path');
 
+const { isSafeModel, isSafeReasoning, isSafeFlag } = require('./utils/shellSafety');
+
 const CUSTOM_AGENT_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+// A model/reasoning flag template must contain its single placeholder and only
+// shell-safe surrounding characters (double-quotes allowed — the codex default
+// is `-c model_reasoning_effort="{reasoning}"`; the interpolated VALUE is
+// separately validated by isSafeModel/isSafeReasoning, so quotes in the
+// template itself can't introduce injection).
+const MODEL_TEMPLATE_RE = /^[A-Za-z0-9 _\-=./:@,+"]*\{model\}[A-Za-z0-9 _\-=./:@,+"]*$/;
+const REASONING_TEMPLATE_RE = /^[A-Za-z0-9 _\-=./:@,+"]*\{reasoning\}[A-Za-z0-9 _\-=./:@,+"]*$/;
 
 class AgentManager {
   constructor({ customAgentsPath } = {}) {
@@ -56,6 +65,15 @@ class AgentManager {
     }
   }
 
+  validatedTemplate(value, re, id, field) {
+    if (!value) return undefined;
+    const str = String(value);
+    if (!re.test(str)) {
+      throw new Error(`${field} template contains unsafe characters or lacks its placeholder`);
+    }
+    return str;
+  }
+
   normalizeCustomAgent(id, cfg) {
     if (!CUSTOM_AGENT_ID_RE.test(id)) throw new Error('invalid id (lowercase letters/digits/dashes)');
     if (!cfg || typeof cfg !== 'object') throw new Error('config must be an object');
@@ -80,6 +98,10 @@ class AgentManager {
     for (const [flagId, flag] of Object.entries(rawFlags)) {
       const flagStr = String(flag?.flag || '').trim();
       if (!flagStr) continue;
+      // Flag strings are written to a shell; reject shell metacharacters.
+      if (!isSafeFlag(flagStr)) {
+        throw new Error(`flag '${flagId}' contains unsafe shell characters`);
+      }
       flags[flagId] = {
         flag: flagStr,
         description: String(flag?.description || ''),
@@ -110,8 +132,9 @@ class AgentManager {
       models: Array.isArray(cfg.models) ? cfg.models.map(m => String(m)) : undefined,
       defaultModel: cfg.defaultModel ? String(cfg.defaultModel) : undefined,
       // Per-agent CLI syntax for model/effort selection, e.g. "--model {model}".
-      modelFlag: cfg.modelFlag ? String(cfg.modelFlag) : undefined,
-      reasoningFlag: cfg.reasoningFlag ? String(cfg.reasoningFlag) : undefined,
+      // Reject templates with shell metacharacters at load time.
+      modelFlag: this.validatedTemplate(cfg.modelFlag, MODEL_TEMPLATE_RE, id, 'modelFlag'),
+      reasoningFlag: this.validatedTemplate(cfg.reasoningFlag, REASONING_TEMPLATE_RE, id, 'reasoningFlag'),
       initDelayMs: Number.isFinite(initDelayMs) && initDelayMs >= 0 ? initDelayMs : undefined,
       custom: true
     };
@@ -325,16 +348,22 @@ class AgentManager {
 
 	      // Add model if specified. Agents declare their own CLI syntax via
 	      // `modelFlag` (e.g. "--model {model}"); default is codex-style `-m`.
+	      // Both the value AND the template are validated — this string is
+	      // written to a shell, so an unsafe model/template is dropped, not run.
 	      if (config.model && (agent.models || agent.modelFlag)) {
 	        const modelTemplate = agent.modelFlag || '-m {model}';
-	        command += ` ${modelTemplate.replace('{model}', config.model)}`;
+	        if (isSafeModel(config.model) && MODEL_TEMPLATE_RE.test(modelTemplate)) {
+	          command += ` ${modelTemplate.replace('{model}', config.model)}`;
+	        }
 	      }
 
       // Add reasoning level if the agent supports one (codex declares
       // reasoningLevels; custom agents declare their own reasoningFlag).
       if (config.reasoning && (agent.reasoningLevels || agent.reasoningFlag)) {
         const reasoningTemplate = agent.reasoningFlag || '-c model_reasoning_effort="{reasoning}"';
-        command += ` ${reasoningTemplate.replace('{reasoning}', config.reasoning)}`;
+        if (isSafeReasoning(config.reasoning) && REASONING_TEMPLATE_RE.test(reasoningTemplate)) {
+          command += ` ${reasoningTemplate.replace('{reasoning}', config.reasoning)}`;
+        }
       }
 
       // Add verbosity level if specified (Codex)

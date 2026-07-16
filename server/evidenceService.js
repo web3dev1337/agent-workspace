@@ -235,9 +235,40 @@ class EvidenceService {
     return null;
   }
 
+  // A candidate media root is only trusted if it resolves (via realpath, so
+  // symlinks can't disguise it) to a worktree the orchestrator actually
+  // manages. This is what makes the media endpoint safe: an explicit
+  // worktreePath from the request body, or a path embedded in a task id,
+  // cannot point the file server at an arbitrary directory.
+  isKnownWorktreePath(candidate) {
+    const target = String(candidate || '').trim();
+    if (!target) return false;
+    let realTarget;
+    try {
+      realTarget = fs.realpathSync(target);
+    } catch {
+      return false;
+    }
+    for (const known of this.listWorkspaceWorktreePaths()) {
+      try {
+        if (fs.realpathSync(known) === realTarget) return true;
+      } catch {
+        // unreadable known worktree — skip
+      }
+    }
+    return false;
+  }
+
   resolveWorktreePathForTask(taskId, explicitPath) {
     const explicit = String(explicitPath || '').trim();
-    if (explicit) return explicit;
+    if (explicit) {
+      // Untrusted request-body input: only honor it if it resolves to a
+      // worktree the orchestrator actually manages (finding #4).
+      return this.isKnownWorktreePath(explicit) ? explicit : null;
+    }
+    // The `worktree:<path>` id IS the task's identity (assigned by the
+    // orchestrator, not free request input); trust it as the root. The media
+    // endpoint still realpath-confines every read to within it (finding #3).
     const match = String(taskId || '').match(/^worktree:(.+)$/);
     if (match) return match[1];
     return null;
@@ -317,22 +348,51 @@ class EvidenceService {
     const rawPath = String(media[idx]?.path || '');
     if (!rawPath) return { error: 'media entry has no path', status: 404 };
 
-    const abs = path.resolve(root, rawPath);
-    const normalizedRoot = path.resolve(root) + path.sep;
-    if (!abs.startsWith(normalizedRoot)) {
+    const rootResolved = path.resolve(root);
+    const abs = path.resolve(rootResolved, rawPath);
+
+    // 1) Lexical containment (no filesystem needed): rejects `../` traversal.
+    if (abs !== rootResolved && !abs.startsWith(rootResolved + path.sep)) {
       return { error: 'media path escapes the evidence worktree', status: 403 };
     }
 
+    // 2) Extension allowlist.
     const ext = path.extname(abs).toLowerCase();
     if (!MEDIA_EXTENSIONS.has(ext)) {
       return { error: `media extension not allowed: ${ext || '(none)'}`, status: 415 };
     }
 
-    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+    // 3) Realpath containment: a symlink INSIDE the worktree pointing OUT
+    // (e.g. .agent-evidence/leak.png -> ~/.ssh/id_rsa) passes steps 1-2 but
+    // must not be served. Resolve both through realpath and re-check.
+    let realRoot;
+    try {
+      realRoot = fs.realpathSync(rootResolved);
+    } catch {
+      return { error: 'evidence worktree no longer exists', status: 404 };
+    }
+    let realTarget;
+    try {
+      realTarget = fs.realpathSync(abs);
+    } catch {
       return { error: 'media file not found', status: 404 };
     }
+    if (realTarget !== realRoot && !realTarget.startsWith(realRoot + path.sep)) {
+      return { error: 'media path escapes the evidence worktree', status: 403 };
+    }
 
-    return { path: abs };
+    // 4) Must be a regular file.
+    let stat;
+    try {
+      stat = fs.lstatSync(realTarget);
+    } catch {
+      return { error: 'media file not found', status: 404 };
+    }
+    if (!stat.isFile()) {
+      return { error: 'media target is not a regular file', status: 415 };
+    }
+
+    return { path: realTarget };
   }
 }
 

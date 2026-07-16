@@ -288,7 +288,7 @@ class PluginLoaderService {
     return out;
   }
 
-  normalizeClientSlots(input) {
+  normalizeClientSlots(input, pluginId = '') {
     if (!Array.isArray(input)) return [];
     const out = [];
     const seenIds = new Set();
@@ -336,9 +336,15 @@ class PluginLoaderService {
       }
       if (type === 'post_route') {
         // POST to a local route, optionally prompting the user for one input
-        // field first (e.g. paste a URL). Routes only — never external hosts.
+        // field first (e.g. paste a URL). Restricted to the plugin's OWN route
+        // namespace so a manifest can't POST prompted user input to arbitrary
+        // app endpoints, and "//host" scheme-relative URLs (which the browser
+        // treats as cross-origin) are rejected.
         const route = String(action.route || '').trim();
-        if (!route || !route.startsWith('/')) throw new Error(`Invalid post_route action route for slot id: ${id}`);
+        const ownPrefix = pluginId ? `/api/plugins/${pluginId}/` : '/api/plugins/';
+        if (!route.startsWith('/') || route.startsWith('//') || !route.startsWith(ownPrefix)) {
+          throw new Error(`post_route action route must start with ${ownPrefix} for slot id: ${id}`);
+        }
         normalizedAction.route = route;
         const promptLabel = String(action.prompt || '').trim();
         if (promptLabel) {
@@ -428,7 +434,7 @@ class PluginLoaderService {
         throw new Error('Manifest client must be an object');
       }
       normalized.client = {
-        slots: this.normalizeClientSlots(client.slots || [])
+        slots: this.normalizeClientSlots(client.slots || [], normalized.id)
       };
     }
 

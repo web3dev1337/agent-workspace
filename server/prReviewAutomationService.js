@@ -572,8 +572,13 @@ class PrReviewAutomationService {
       }
     }
 
+    // Cache is "cold" only when we have a prompt timestamp older than the TTL.
+    // A MISSING timestamp is unknown, not cold: if a live author session
+    // exists we deliver there rather than needlessly spawning a fresh fixer.
     const promptSentMs = Date.parse(record.promptSentAt || '') || 0;
-    const cacheCold = !promptSentMs || (Date.now() - promptSentMs) > PROMPT_CACHE_TTL_MS;
+    const cacheCold = promptSentMs
+      ? (Date.now() - promptSentMs) > PROMPT_CACHE_TTL_MS
+      : !targetSession;
 
     const feedbackMsg = [
       `\n--- PR Review Feedback ---`,

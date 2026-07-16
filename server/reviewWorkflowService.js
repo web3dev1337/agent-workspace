@@ -317,25 +317,38 @@ class ReviewWorkflowService {
   }
 
   async pollActiveRuns() {
-    const active = this.listActiveRuns();
-    if (!active.length) {
-      this.stopPolling();
-      return { checked: 0 };
-    }
-
-    let progressed = 0;
-    for (const { taskId, run } of active) {
-      try {
-        const moved = await this._checkRun(taskId, run);
-        if (moved) progressed++;
-      } catch (e) {
-        logger.warn('Failed to check workflow run', { taskId, error: e.message });
+    // Serialize poll cycles: a slow GitHub round-trip must not let a second
+    // interval tick start and act on the same stale run snapshot (which could
+    // spawn the next reviewer twice).
+    if (this._polling) return { skipped: true, reason: 'in-progress' };
+    this._polling = true;
+    try {
+      const active = this.listActiveRuns();
+      if (!active.length) {
+        this.stopPolling();
+        return { checked: 0 };
       }
+
+      let progressed = 0;
+      for (const { taskId } of active) {
+        try {
+          const moved = await this._checkRun(taskId);
+          if (moved) progressed++;
+        } catch (e) {
+          logger.warn('Failed to check workflow run', { taskId, error: e.message });
+        }
+      }
+      return { checked: active.length, progressed };
+    } finally {
+      this._polling = false;
     }
-    return { checked: active.length, progressed };
   }
 
-  async _checkRun(taskId, run) {
+  async _checkRun(taskId) {
+    // Re-read the run fresh (not a snapshot from listActiveRuns): the state
+    // may have changed since the poll cycle began.
+    const run = this.getRun(taskId);
+    if (!run || run.status !== 'running') return false;
     const idx = Number(run.stageIndex) || 0;
     const stage = run.stages?.[idx];
     if (!stage || stage.status !== 'running') return false;
@@ -355,15 +368,30 @@ class ReviewWorkflowService {
     try {
       const prData = await this.pullRequestService.getPullRequest({ owner, repo, number, fields: ['reviews'] });
       const reviews = prData?.reviews || [];
-      latestReview = reviews
+      const candidates = reviews
         .filter(r => r.state && r.state !== 'PENDING' && r.state !== 'DISMISSED')
         .filter(r => {
           const submitted = Date.parse(r.submittedAt || '') || 0;
           return submitted && spawnedMs && submitted >= spawnedMs;
         })
-        .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))[0] || null;
+        .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+      // Prefer a review the stage agent actually authored (it embeds an
+      // agent-evidence block / names its role), so a stray human or unrelated
+      // bot review submitted during the window can't be misattributed to the
+      // stage. Fall back to the latest only if no marked review is found.
+      const marker = new RegExp(`agent-evidence|"role"\\s*:\\s*"${stage.role}"|\\b${stage.role}\\b`, 'i');
+      latestReview = candidates.find(r => marker.test(String(r.body || ''))) || candidates[0] || null;
     } catch (e) {
       logger.warn('Failed to fetch PR reviews for workflow', { taskId, error: e.message });
+    }
+
+    // CAS guard: the run/stage state must not have advanced while we were
+    // awaiting GitHub. If it did, abandon this check — a later poll re-reads.
+    const fresh = this.getRun(taskId);
+    if (!fresh || fresh.status !== 'running' || Number(fresh.stageIndex) !== idx
+        || fresh.stages?.[idx]?.status !== 'running'
+        || fresh.stages?.[idx]?.spawnedAt !== stage.spawnedAt) {
+      return false;
     }
 
     if (!latestReview) {

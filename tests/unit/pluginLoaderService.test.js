@@ -329,7 +329,7 @@ describe('PluginLoaderService post_route actions + real example plugin', () => {
     const status = await service.loadAll({ app: express(), commandRegistry: { register: jest.fn(), getCommand: jest.fn(() => null) }, services: {} });
 
     expect(status.loaded).toHaveLength(0);
-    expect(String(status.failed[0].error || '')).toContain('Invalid post_route action route');
+    expect(String(status.failed[0].error || '')).toMatch(/post_route action route/);
   });
 
   test('the shipped youtube-transcript plugin loads cleanly', async () => {

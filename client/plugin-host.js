@@ -135,7 +135,10 @@ class OrchestratorPluginHost {
 
     if (type === 'post_route') {
       const route = String(action.route || '').trim();
-      if (!route || !route.startsWith('/')) return { ok: false, error: 'Invalid route' };
+      // Same-origin, plugin-namespaced routes only (server enforces this too).
+      if (!route.startsWith('/') || route.startsWith('//') || !route.startsWith('/api/plugins/')) {
+        return { ok: false, error: 'Invalid route' };
+      }
 
       const body = action.payload && typeof action.payload === 'object' ? { ...action.payload } : {};
       if (action.prompt) {
