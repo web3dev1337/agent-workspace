@@ -203,7 +203,8 @@
           "startClaude": false,
           "advice": false,
           "sessions": true,
-          "modeSelect": false
+          "modeSelect": false,
+          "tabs": false
         }
       },
       "desktop": {

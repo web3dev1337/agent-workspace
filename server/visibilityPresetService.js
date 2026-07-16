@@ -54,7 +54,8 @@ const POWER_OVERRIDES = {
     cmdMode: true,
     modeSelect: true,
     startStop: true,
-    startClaude: true
+    startClaude: true,
+    tabs: true
   }
 };
 

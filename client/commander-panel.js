@@ -24,6 +24,30 @@ class CommanderPanel {
     this.lastSyncedSize = null;
     this.resizeObserver = null;
     this.inputChain = Promise.resolve();
+    // Multi-commander: which instance this single panel is currently bound to.
+    // 'commander' is the primary; switching rebinds the same xterm to another
+    // backend PTY (tab-style), so the DOM/terminal is reused, not duplicated.
+    this.activeCommanderId = 'commander';
+    this.knownCommanders = [{ id: 'commander', primary: true }];
+  }
+
+  // Merge the active commander id into a request body (JSON string).
+  cmdBody(extra = {}) {
+    return JSON.stringify({ ...extra, commanderId: this.activeCommanderId });
+  }
+
+  // Append the active commander id to a GET path's query string.
+  cmdUrl(pathAndQuery) {
+    const sep = pathAndQuery.includes('?') ? '&' : '?';
+    return `${this.serverUrl}${pathAndQuery}${sep}commanderId=${encodeURIComponent(this.activeCommanderId)}`;
+  }
+
+  // An incoming socket payload belongs to this panel if it targets the active
+  // commander. Undefined id = the primary (backward compatible with older
+  // server builds that emitted no commanderId).
+  matchesActiveCommander(commanderId) {
+    const id = commanderId || 'commander';
+    return id === this.activeCommanderId;
   }
 
   fitTerminalSoon() {
@@ -54,7 +78,7 @@ class CommanderPanel {
     fetch(`${this.serverUrl}/api/commander/resize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cols, rows })
+      body: this.cmdBody({ cols, rows })
     }).then(async (response) => {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.success !== true) {
@@ -77,6 +101,116 @@ class CommanderPanel {
     this.setupSocketListeners();
     await this.fetchStatus();
     this.updateCommanderTitle();
+    this.refreshCommanderTabs();
+  }
+
+  // ---- Multi-commander tabs -------------------------------------------------
+
+  async refreshCommanderTabs() {
+    try {
+      const res = await fetch(`${this.serverUrl}/api/commander/list`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.commanders) && data.commanders.length) {
+          this.knownCommanders = data.commanders;
+        }
+      }
+    } catch {
+      // keep last-known list
+    }
+    this.renderCommanderTabs();
+  }
+
+  renderCommanderTabs() {
+    const bar = document.getElementById('commander-tabs');
+    if (!bar) return;
+    const tabs = this.knownCommanders.map((c) => {
+      const active = c.id === this.activeCommanderId ? ' active' : '';
+      const dot = c.running ? '🟢' : '⚪';
+      const label = c.primary ? 'Commander' : c.id;
+      const close = c.primary ? '' : `<span class="commander-tab-close" data-commander-close="${c.id}" title="Remove">✕</span>`;
+      return `<button class="commander-tab${active}" data-commander-tab="${c.id}" title="Switch to ${label}">${dot} ${label}${close}</button>`;
+    }).join('');
+    bar.innerHTML = tabs + `<button class="commander-tab commander-tab-add" id="commander-tab-add" title="Add a second Commander">＋</button>`;
+
+    bar.querySelectorAll('[data-commander-tab]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        if (e.target?.dataset?.commanderClose) return; // handled below
+        this.switchCommander(el.dataset.commanderTab);
+      });
+    });
+    bar.querySelectorAll('[data-commander-close]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.removeCommander(el.dataset.commanderClose);
+      });
+    });
+    const addBtn = document.getElementById('commander-tab-add');
+    if (addBtn) addBtn.addEventListener('click', () => this.spawnCommander());
+  }
+
+  async spawnCommander() {
+    const suggested = `c${this.knownCommanders.length}`;
+    const id = (window.prompt('New Commander id (lowercase letters/digits/dashes):', suggested) || '').trim();
+    if (!id) return;
+    try {
+      const res = await fetch(`${this.serverUrl}/api/commander/spawn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        window.alert(data?.error || 'Failed to add commander');
+        return;
+      }
+      if (Array.isArray(data?.commanders)) this.knownCommanders = data.commanders;
+      await this.switchCommander(data.id || id);
+    } catch (e) {
+      window.alert(`Failed to add commander: ${e.message}`);
+    }
+  }
+
+  async removeCommander(id) {
+    if (id === 'commander') return;
+    try {
+      const res = await fetch(`${this.serverUrl}/api/commander/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data?.commanders)) this.knownCommanders = data.commanders;
+    } catch {
+      // best-effort
+    }
+    if (this.activeCommanderId === id) {
+      await this.switchCommander('commander');
+    } else {
+      this.renderCommanderTabs();
+    }
+  }
+
+  // Rebind the single panel/terminal to a different backend commander PTY.
+  async switchCommander(id) {
+    const target = String(id || 'commander').trim();
+    if (target === this.activeCommanderId) return;
+    this.activeCommanderId = target;
+    this.lastSyncedSize = null;
+
+    // Reset the terminal view; the target's buffer is replayed by
+    // fetchInitialOutput() once the (re)bound status is known.
+    if (this.terminal) {
+      this.terminal.clear();
+      this.terminal.reset();
+    }
+    this.renderCommanderTabs();
+
+    // Ensure the target is started, then replay its output into the terminal.
+    await this.startCommander();
+    await this.fetchInitialOutput();
+    await this.refreshCommanderTabs();
+    if (this.terminal) this.terminal.focus();
   }
 
   /**
@@ -128,6 +262,7 @@ class CommanderPanel {
           <button id="commander-close" class="commander-window-btn close" title="Close">✕</button>
         </div>
       </div>
+      <div class="commander-tabs" id="commander-tabs" data-ui-visibility="commander.tabs"></div>
       <div class="commander-toolbar">
         <button id="commander-start" class="commander-btn" title="Start terminal" data-ui-visibility="commander.startStop">▶️ Start</button>
         <button id="commander-stop" class="commander-btn" title="Stop terminal" data-ui-visibility="commander.startStop">⏹️ Stop</button>
@@ -634,7 +769,8 @@ class CommanderPanel {
     socket.off('commander-output');
     socket.off('commander-exit');
 
-    socket.on('commander-output', ({ data }) => {
+    socket.on('commander-output', ({ data, commanderId }) => {
+      if (!this.matchesActiveCommander(commanderId)) return;
       if (this.terminal && !this.historyPending) {
         this.terminal.write(data);
       } else {
@@ -643,7 +779,8 @@ class CommanderPanel {
       }
     });
 
-    socket.on('commander-exit', ({ exitCode }) => {
+    socket.on('commander-exit', ({ exitCode, commanderId }) => {
+      if (!this.matchesActiveCommander(commanderId)) return;
       this.isRunning = false;
       // A restarted PTY comes back at its default size, so force a re-sync
       this.lastSyncedSize = null;
@@ -659,7 +796,7 @@ class CommanderPanel {
    */
   async fetchStatus() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/commander/status`);
+      const response = await fetch(this.cmdUrl('/api/commander/status'));
       if (response.ok) {
         const status = await response.json();
         this.isRunning = status.running;
@@ -784,7 +921,9 @@ class CommanderPanel {
     this.startCommanderPromise = (async () => {
       try {
         const response = await fetch(`${this.serverUrl}/api/commander/start`, {
-          method: 'POST'
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: this.cmdBody()
         });
         const result = response.ok
           ? await response.json()
@@ -826,7 +965,9 @@ class CommanderPanel {
   async stopCommander() {
     try {
       const response = await fetch(`${this.serverUrl}/api/commander/stop`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: this.cmdBody()
       });
 
       if (response.ok) {
@@ -852,7 +993,7 @@ class CommanderPanel {
       const response = await fetch(`${this.serverUrl}/api/commander/start-claude`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode })
+        body: this.cmdBody({ mode })
       });
 
       if (response.ok) {
@@ -1047,7 +1188,7 @@ class CommanderPanel {
       .then(() => fetch(`${this.serverUrl}/api/commander/input`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input })
+        body: this.cmdBody({ input })
       }))
       .catch((error) => {
         console.error('Failed to send input:', error);
@@ -1061,7 +1202,7 @@ class CommanderPanel {
    */
   async fetchInitialOutput() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/commander/output?lines=500`);
+      const response = await fetch(this.cmdUrl('/api/commander/output?lines=500'));
       if (response.ok) {
         const { output } = await response.json();
         if (output && this.terminal) {
@@ -1087,7 +1228,7 @@ class CommanderPanel {
    */
   async checkStatus() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/commander/status`);
+      const response = await fetch(this.cmdUrl('/api/commander/status'));
       if (response.ok) {
         const status = await response.json();
         this.isRunning = status.running;
