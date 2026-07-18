@@ -246,10 +246,14 @@ const io = new Server(httpServer, {
         origin.startsWith('http://127.0.0.1:') ||
         origin.startsWith('http://[::1]:') ||
         origin.startsWith('http://100.') ||
-        // WSL2 vEthernet addresses live in the RFC1918 172.16.0.0/12 block
-        // (172.16-172.31 only) — a bare "172." prefix would also whitelist
-        // public internet space (e.g. Cloudflare/Google ranges in 172/8).
-        /^http:\/\/172\.(1[6-9]|2\d|3[01])\./.test(origin);
+        // Private (RFC1918) ranges only — home/office LAN devices reaching the
+        // orchestrator via the Windows portproxy (phone, second PC) present
+        // origins like http://192.168.0.53:2080. A bare "172." prefix would
+        // also whitelist public internet space (e.g. Cloudflare/Google ranges
+        // in 172/8), so the 172 block is matched exactly (172.16-172.31).
+        /^http:\/\/172\.(1[6-9]|2\d|3[01])\./.test(origin) ||
+        origin.startsWith('http://192.168.') ||
+        origin.startsWith('http://10.');
 
       if (allowed) {
         callback(null, true);
