@@ -1,11 +1,16 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { claudeProjectFolderName } = require('./utils/pathUtils');
 
 // Claude Code re-reads these files on every launch, so a short cache keeps
 // badge refreshes cheap (and dedupes the shared user-global file across sessions
 // within one request) without showing stale values for long.
 const FILE_CACHE_TTL_MS = 1500;
+
+// The live model is read from the tail of the session transcript; 64 KB comfortably
+// contains the most recent assistant turn even for very large (multi-MB) transcripts.
+const TRANSCRIPT_TAIL_BYTES = 64 * 1024;
 
 // Claude Code settings precedence (highest first) for the keys we care about:
 // CLI args > .claude/settings.local.json > .claude/settings.json > ~/.claude/settings.json
@@ -37,6 +42,7 @@ class AgentModelConfigService {
     this.fs = fsImpl;
     this.processEnv = processEnv;
     this.fileCache = new Map();
+    this.liveModelCache = new Map();
   }
 
   static getInstance(options = {}) {
@@ -46,7 +52,7 @@ class AgentModelConfigService {
     return AgentModelConfigService.instance;
   }
 
-  resolveClaudeConfig(directory) {
+  resolveClaudeConfig(directory, { agentRunning = false } = {}) {
     const resolved = {
       agent: 'claude',
       model: null,
@@ -101,7 +107,112 @@ class AgentModelConfigService {
       }
     }
 
+    // Prefer the model the running session is ACTUALLY using, read from its Claude Code
+    // transcript. The user can switch models mid-session with /model, which never touches
+    // the settings files above — so the config-derived model can be stale/wrong (the
+    // "badge says Fable but I'm actually on Opus" trap). Only consulted while a Claude
+    // agent is actually running in the terminal: a closed/finished chat leaves its
+    // transcript behind, and showing that as if it were live state is the same trap
+    // in the other direction. Falls back to config when no transcript resolves.
+    if (agentRunning) {
+      const liveModel = this.resolveLiveClaudeModel(directory);
+      if (liveModel) {
+        resolved.model = liveModel;
+        resolved.modelSource = { label: 'live session (transcript)', file: null };
+      }
+    }
+
     return resolved;
+  }
+
+  // Read the model the running Claude session is actually using, from its transcript
+  // (~/.claude/projects/<encoded-cwd>/<session>.jsonl). Claude Code records the model on
+  // every assistant turn, so the newest one reflects a mid-session /model switch the
+  // settings files never see. Returns null (caller keeps the config model) when no
+  // transcript can be resolved. Results are cached per directory with the same TTL as
+  // file reads — the client polls this endpoint per session, and each uncached lookup
+  // costs a readdir + a stat per historical transcript.
+  resolveLiveClaudeModel(directory) {
+    try {
+      if (!this.isNonEmptyString(directory)) return null;
+      const cwd = path.resolve(directory);
+      const now = Date.now();
+      const cached = this.liveModelCache.get(cwd);
+      if (cached && now - cached.readAt < FILE_CACHE_TTL_MS) {
+        return cached.model;
+      }
+      const model = this.readLiveClaudeModel(cwd);
+      this.liveModelCache.set(cwd, { readAt: now, model });
+      return model;
+    } catch {
+      return null;
+    }
+  }
+
+  readLiveClaudeModel(cwd) {
+    const projectDir = path.join(this.homeDir, '.claude', 'projects', this.encodeClaudeProjectDir(cwd));
+    let names;
+    try {
+      names = this.fs.readdirSync(projectDir);
+    } catch {
+      return null;
+    }
+    const newest = names
+      .filter((name) => name.endsWith('.jsonl'))
+      .map((name) => {
+        const file = path.join(projectDir, name);
+        let mtimeMs = 0;
+        try { mtimeMs = this.fs.statSync(file).mtimeMs; } catch { /* skip unreadable */ }
+        return { file, mtimeMs };
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
+    if (!newest) return null;
+    return this.readLastModelFromTranscript(newest.file);
+  }
+
+  // Claude Code names each project's transcript folder by sanitizing the absolute cwd;
+  // delegates to the shared implementation used by session recovery.
+  encodeClaudeProjectDir(cwd) {
+    return claudeProjectFolderName(cwd);
+  }
+
+  // Return the most recent real model id from a transcript, reading only its tail so
+  // multi-MB files stay cheap. Parses whole JSONL lines and only accepts the top-level
+  // message.model of assistant turns — a substring scan would also match "model" keys
+  // inside message CONTENT (tool params, quoted JSON in code discussions) and show a
+  // wrong-but-authoritative-looking model. Skips synthetic placeholders ("<synthetic>").
+  readLastModelFromTranscript(file) {
+    let fd;
+    try {
+      fd = this.fs.openSync(file, 'r');
+      const size = this.fs.fstatSync(fd).size;
+      const length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
+      if (length <= 0) return null;
+      const buffer = Buffer.alloc(length);
+      this.fs.readSync(fd, buffer, 0, length, size - length);
+      const lines = buffer.toString('utf8').split('\n');
+      // Walk newest-first; a truncated first line of the tail simply fails to parse.
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        let parsed;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (!parsed || parsed.type !== 'assistant') continue;
+        const model = typeof parsed.message?.model === 'string' ? parsed.message.model.trim() : '';
+        if (model && !model.startsWith('<')) return model;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      if (fd !== undefined) {
+        try { this.fs.closeSync(fd); } catch { /* ignore */ }
+      }
+    }
   }
 
   // Look an env var up the way a launched agent would see it: settings-layer

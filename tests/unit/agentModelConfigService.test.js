@@ -255,4 +255,99 @@ describe('AgentModelConfigService', () => {
     expect(resolved.effortSource.label).toBe('server environment');
     expect(resolved.effortSource.file).toBeNull();
   });
+
+  const writeTranscript = (svc, cwd, jsonlLines) => {
+    const encoded = svc.encodeClaudeProjectDir(path.resolve(cwd));
+    const dir = path.join(homeDir, '.claude', 'projects', encoded);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'session-abc.jsonl');
+    fs.writeFileSync(file, jsonlLines.join('\n') + '\n');
+    return file;
+  };
+
+  test('encodeClaudeProjectDir replaces non-alphanumeric chars with dashes', () => {
+    const svc = createService();
+    expect(svc.encodeClaudeProjectDir('C:\\Users\\cuppy\\.agent-workspace\\work1'))
+      .toBe('C--Users-cuppy--agent-workspace-work1');
+  });
+
+  test('reads the most recent real model from the transcript tail, skipping synthetic', () => {
+    const svc = createService();
+    const file = writeTranscript(svc, worktreeDir, [
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-fable-5' } }),
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8' } }),
+      JSON.stringify({ type: 'assistant', message: { model: '<synthetic>' } })
+    ]);
+    expect(svc.readLastModelFromTranscript(file)).toBe('claude-opus-4-8');
+  });
+
+  test('resolveClaudeConfig prefers the live transcript model while an agent is running', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+    const svc = createService();
+    writeTranscript(svc, worktreeDir, [
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8' } })
+    ]);
+
+    const resolved = svc.resolveClaudeConfig(worktreeDir, { agentRunning: true });
+    expect(resolved.model).toBe('claude-opus-4-8'); // live session wins
+    expect(resolved.modelSource.label).toBe('live session (transcript)');
+    expect(resolved.effortLevel).toBe('high'); // effort still comes from config
+  });
+
+  test('resolveClaudeConfig ignores leftover transcripts when no agent is running', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+    const svc = createService();
+    // A finished/closed chat leaves its transcript behind — with no agent
+    // running, the badge must show the configured launch default instead.
+    writeTranscript(svc, worktreeDir, [
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8' } })
+    ]);
+
+    const resolved = svc.resolveClaudeConfig(worktreeDir);
+    expect(resolved.model).toBe('claude-fable-5[1m]');
+    expect(resolved.modelSource.label).toBe('user settings (global)');
+  });
+
+  test('resolveClaudeConfig keeps the configured model when there is no transcript', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+
+    const resolved = createService().resolveClaudeConfig(worktreeDir);
+    expect(resolved.model).toBe('claude-fable-5[1m]');
+    expect(resolved.modelSource.label).toBe('user settings (global)');
+  });
+
+  test('ignores "model" strings inside message content — only assistant message.model counts', () => {
+    const svc = createService();
+    const file = writeTranscript(svc, worktreeDir, [
+      // Real per-turn model, followed in the SAME line by a sub-agent spawn param and
+      // quoted JSON in the assistant's text — both must not win over message.model.
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-fable-5',
+          content: [
+            { type: 'text', text: 'set {"model": "gpt-4"} in your config' },
+            { type: 'tool_use', name: 'Agent', input: { model: 'sonnet', prompt: 'scout' } }
+          ]
+        }
+      }),
+      // Non-assistant lines with model-shaped strings must be skipped entirely.
+      JSON.stringify({ type: 'user', message: { content: 'try "model": "haiku" maybe?' } })
+    ]);
+    expect(svc.readLastModelFromTranscript(file)).toBe('claude-fable-5');
+  });
+
+  test('caches the live-model lookup so per-session polling stays cheap', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+    const svc = createService();
+    const file = writeTranscript(svc, worktreeDir, [
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8' } })
+    ]);
+
+    expect(svc.resolveClaudeConfig(worktreeDir, { agentRunning: true }).model).toBe('claude-opus-4-8');
+
+    // Within the cache TTL the transcript is not re-read, even if it changed on disk.
+    fs.writeFileSync(file, JSON.stringify({ type: 'assistant', message: { model: 'claude-sonnet-5' } }) + '\n');
+    expect(svc.resolveClaudeConfig(worktreeDir, { agentRunning: true }).model).toBe('claude-opus-4-8');
+  });
 });

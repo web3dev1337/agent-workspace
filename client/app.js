@@ -790,8 +790,8 @@ class ClaudeOrchestrator {
 
     const modelLabel = String(config.model || '').replace(/^claude-/i, '');
     const effortLevel = String(config.effortLevel || '').trim().toLowerCase();
-    // Effort first: it stays readable even when a narrow header truncates the chip.
-    const text = [effortLevel.toUpperCase(), modelLabel].filter(Boolean).join(' · ');
+    // Model first — it's the fact you scan for; effort is the qualifier.
+    const text = [modelLabel, effortLevel.toUpperCase()].filter(Boolean).join(' · ');
 
     const tooltipLines = ['Model & effort agent launches in this worktree will use (settings files + env overrides).'];
     const describeSource = (source) => {
@@ -804,7 +804,7 @@ class ClaudeOrchestrator {
     if (effortLevel) {
       tooltipLines.push(`Effort: ${effortLevel} — from ${describeSource(config.effortSource)}`);
     }
-    tooltipLines.push('Note: a /model pick for "this session only" is not written to disk and won\'t show here.');
+    tooltipLines.push('Note: while a Claude session is running here, Model reflects what it is actually using (including "/model" switches); otherwise the configured launch default is shown.');
     return { text, tooltip: tooltipLines.join('\n'), effortLevel };
   }
 
