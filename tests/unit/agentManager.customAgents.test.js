@@ -118,7 +118,7 @@ describe('spawnAgentInSession registry-driven behavior', () => {
       prompt: 'review this'
     });
 
-    expect(ok).toBe(true);
+    expect(ok.started).toBe(true);
     expect(starts[0].config).toEqual({
       agentId: 'gemini',
       mode: 'fresh',
@@ -131,6 +131,31 @@ describe('spawnAgentInSession registry-driven behavior', () => {
     expect(writes).toHaveLength(0);
     jest.advanceTimersByTime(1);
     expect(writes[0]).toBe('review this');
+    jest.useRealTimers();
+  });
+
+  test('cancelPendingPrompt stops the delayed prompt injection', () => {
+    jest.useFakeTimers();
+    const manager = new AgentManager({ customAgentsPath: writeCustomAgents({ gemini: GEMINI_LIKE }) });
+
+    const writes = [];
+    const sessionManager = {
+      agentManager: manager,
+      startAgentWithConfig: () => true,
+      writeToSession: (sessionId, data) => writes.push(data)
+    };
+
+    const spawned = spawnAgentInSession({
+      sessionManager,
+      sessionId: 'repo-work1-claude',
+      agentId: 'gemini',
+      prompt: 'review this'
+    });
+    expect(spawned.started).toBe(true);
+
+    spawned.cancelPendingPrompt();
+    jest.advanceTimersByTime(60_000);
+    expect(writes).toHaveLength(0);
     jest.useRealTimers();
   });
 });

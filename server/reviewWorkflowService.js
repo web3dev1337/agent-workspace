@@ -44,6 +44,7 @@ class ReviewWorkflowService {
     this.pollTimer = null;
     this._configCache = null;
     this._configCacheAt = 0;
+    this._pendingSpawns = new Map(); // taskId -> cancelPendingPrompt fn for the in-flight stage spawn
   }
 
   static getInstance(deps = {}) {
@@ -144,6 +145,14 @@ class ReviewWorkflowService {
   async cancelWorkflow(taskId) {
     const run = this.getRun(taskId);
     if (!run) return null;
+    // Stop an in-flight stage spawn's delayed prompt injection — without this,
+    // cancelling inside the agent-init window still types the review prompt
+    // into the terminal seconds after the run was reported cancelled.
+    const cancelSpawn = this._pendingSpawns.get(taskId);
+    if (cancelSpawn) {
+      try { cancelSpawn(); } catch { /* timers may already have fired */ }
+      this._pendingSpawns.delete(taskId);
+    }
     await this._patchRun(taskId, { status: 'cancelled', completedAt: new Date().toISOString() });
     this._emit('workflow-cancelled', { taskId });
     return this.getRun(taskId);
@@ -153,6 +162,11 @@ class ReviewWorkflowService {
   async advanceWorkflow(taskId) {
     const run = this.getRun(taskId);
     if (!run || !Array.isArray(run.stages)) return null;
+    // Only live runs can be advanced — advancing spawns a real agent, so a
+    // cancelled or completed run must never be resurrected through this path.
+    if (!['running', 'blocked_fix', 'stalled'].includes(String(run.status))) {
+      return run;
+    }
     const idx = Number(run.stageIndex) || 0;
     const stages = run.stages.map((s, i) => (i === idx && s.status !== 'done')
       ? { ...s, status: 'skipped', completedAt: new Date().toISOString() }
@@ -211,7 +225,7 @@ class ReviewWorkflowService {
       standards
     });
 
-    const started = spawnAgentInSession({
+    const spawned = spawnAgentInSession({
       sessionManager: this.sessionManager,
       sessionId,
       agentId: stage.agentId || 'claude',
@@ -219,7 +233,10 @@ class ReviewWorkflowService {
       effort: stage.effort || null,
       prompt
     });
-    if (!started) return false;
+    if (!spawned) return false;
+    if (typeof spawned.cancelPendingPrompt === 'function') {
+      this._pendingSpawns.set(taskId, spawned.cancelPendingPrompt);
+    }
 
     const stages = run.stages.map((s, i) => i === stageIndex
       ? { ...s, status: 'running', sessionId, worktreeId: target.worktreeId, spawnedAt: new Date().toISOString() }

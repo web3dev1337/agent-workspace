@@ -76,14 +76,23 @@ const spawnAgentInSession = ({
   const initDelay = typeof agentManager?.getInitDelayMs === 'function'
     ? agentManager.getInitDelayMs(agentId)
     : (AGENT_INIT_DELAY_MS[agentId] || AGENT_INIT_DELAY_MS.claude);
+  // Track both delayed writes so a caller that cancels its run (e.g. a review
+  // workflow cancelled during the init window) can stop the prompt from being
+  // typed into the terminal seconds after the run was reported dead.
+  const timers = [];
   const initTimer = setTimeout(() => {
     sessionManager.writeToSession(sessionId, prompt);
     const submitTimer = setTimeout(() => sessionManager.writeToSession(sessionId, '\r'), PROMPT_SUBMIT_DELAY_MS);
+    timers.push(submitTimer);
     if (typeof submitTimer?.unref === 'function') submitTimer.unref();
   }, initDelay);
+  timers.push(initTimer);
   if (typeof initTimer?.unref === 'function') initTimer.unref();
 
-  return true;
+  return {
+    started: true,
+    cancelPendingPrompt: () => { for (const t of timers.splice(0)) clearTimeout(t); }
+  };
 };
 
 module.exports = {
