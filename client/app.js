@@ -68,6 +68,10 @@ class ClaudeOrchestrator {
     this.currentLayout = '2x4';
     this._wasMobileLayout = this.isMobileLayout();
     this._layoutModeCrossed = false;
+    // Minimum usable height for a terminal-pair row; below this the grid
+    // scrolls instead of squeezing. Keep in sync with the 200px floor in
+    // .terminal-grid-scrollable's grid-auto-rows.
+    this.minTerminalRowPx = 200;
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
@@ -3338,6 +3342,8 @@ class ClaudeOrchestrator {
             this._layoutModeCrossed = false;
             this.updateTerminalGrid();
           }
+        // Window height changed — re-decide squeeze-to-fit vs scroll.
+        this.updateTerminalGridScrollMode();
 	        // Refit all terminals (not just activeView — covers newly started sessions)
 	        for (const sessionId of this.terminalManager.terminals.keys()) {
           this.terminalManager.fitTerminal(sessionId);
@@ -6261,12 +6267,28 @@ class ClaudeOrchestrator {
       }
     });
 
-    grid.classList.toggle('terminal-grid-scrollable', visibleCount > 16);
+    this.updateTerminalGridScrollMode(grid, rows);
 
     // Force a resize after everything is rendered to ensure terminals fit properly
     setTimeout(() => {
       this.resizeAllVisibleTerminals();
     }, 200);
+  }
+
+  // Scroll only when sharing the viewport would crush rows below a usable
+  // height. Height-based instead of the old magic ">16 pairs" count: a tall
+  // monitor fits more rows without scrolling, and a small window stops
+  // squeezing terminals into unreadable slivers before the scrollbar appears.
+  updateTerminalGridScrollMode(grid = null, rowsOverride = null) {
+    const target = grid || this.getTerminalGrid?.() || document.getElementById('terminal-grid');
+    if (!target) return;
+    const rows = Math.max(1, Number(rowsOverride ?? target.style.getPropertyValue('--grid-rows')) || 1);
+    const available = target.clientHeight;
+    if (!available) return; // grid hidden (dashboard/tab switch) — keep current mode
+    const styles = window.getComputedStyle(target);
+    const rowGap = parseFloat(styles.rowGap) || 0;
+    const needed = rows * this.minTerminalRowPx + Math.max(0, rows - 1) * rowGap;
+    target.classList.toggle('terminal-grid-scrollable', needed > available + 1);
   }
 
 	  showClaudeOnly() {
