@@ -3172,10 +3172,13 @@ class Dashboard {
 	    const detailsUrl = `/api/process/telemetry/details?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}`;
 	    const benchmarkUrl = `/api/process/telemetry/benchmarks?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}&limit=8`;
 
+	    const contextUrl = `/api/process/telemetry/context-switches?hours=${encodeURIComponent(String(safeHours))}`;
+
 	    try {
-	      const [detailsRes, benchmarkRes] = await Promise.all([
+	      const [detailsRes, benchmarkRes, contextRes] = await Promise.all([
 	        fetch(detailsUrl).catch(() => null),
-	        fetch(benchmarkUrl).catch(() => null)
+	        fetch(benchmarkUrl).catch(() => null),
+	        fetch(contextUrl).catch(() => null)
 	      ]);
 
 	      const data = detailsRes ? await detailsRes.json().catch(() => ({})) : {};
@@ -3186,7 +3189,10 @@ class Dashboard {
 	      const benchmark = benchmarkRes && benchmarkRes.ok
 	        ? await benchmarkRes.json().catch(() => null)
 	        : null;
-	      body.innerHTML = this.renderTelemetryDetails(data, benchmark);
+	      const contextSwitches = contextRes && contextRes.ok
+	        ? await contextRes.json().catch(() => null)
+	        : null;
+	      body.innerHTML = this.renderTelemetryDetails(data, benchmark, contextSwitches);
 	    } catch {
 	      body.textContent = 'Failed to load.';
 	    }
@@ -3314,7 +3320,7 @@ class Dashboard {
 	    }
 	  }
 
-	  renderTelemetryDetails(data, benchmarkData = null) {
+	  renderTelemetryDetails(data, benchmarkData = null, contextSwitches = null) {
 	    const escapeHtml = (value) => String(value ?? '')
 	      .replace(/&/g, '&amp;')
 	      .replace(/</g, '&lt;')
@@ -3390,6 +3396,14 @@ class Dashboard {
 	    const promptHist = data?.histograms?.promptChars;
 	    const benchmarkSection = this.renderTelemetryBenchmark(benchmarkData);
 
+	    const cs = contextSwitches && typeof contextSwitches === 'object' ? contextSwitches : null;
+	    const contextSection = cs ? `
+	      <div class="dashboard-telemetry-meta" title="Local-only context-switch log. The Context Tax: every switch costs ~5-15 min of refocus — batch work by repo/tier to reduce it.">
+	        <div>Context switches (${escapeHtml(cs.hours)}h): <strong>${Number(cs.switches ?? 0)}</strong> ≈ <strong>${Number(cs.estimatedCostMinutes ?? 0)}m</strong> refocus cost • review focus <strong>${Number(cs.reviewMinutes ?? 0)}m</strong></div>
+	        ${Array.isArray(cs.topPairs) && cs.topPairs.length ? `<div>Top thrash: ${cs.topPairs.slice(0, 3).map(p => `${escapeHtml(p.pair)} ×${Number(p.count)}`).join(' • ')}</div>` : ''}
+	      </div>
+	    ` : '';
+
 	    return `
 	      <div class="dashboard-telemetry-meta">
 	        <div>Bucket <strong>${escapeHtml(bucketMinutes)}m</strong></div>
@@ -3422,6 +3436,7 @@ class Dashboard {
 	          ${histogram(promptHist, { formatLabel: (v) => `${Math.round(Number(v) || 0)}` })}
 	        </div>
 	      </div>
+	      ${contextSection}
 	      ${benchmarkSection}
 	    `;
 	  }

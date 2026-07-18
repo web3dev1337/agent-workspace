@@ -199,6 +199,226 @@ const normalizeReviewChecklist = (raw) => {
   return Object.keys(out).length ? out : null;
 };
 
+const WORKFLOW_RUN_STATUSES = new Set(['pending', 'running', 'blocked_fix', 'stalled', 'complete', 'cancelled']);
+const WORKFLOW_STAGE_STATUSES = new Set(['pending', 'running', 'done', 'failed', 'skipped']);
+
+const normalizeReviewWorkflow = (raw) => {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== 'object') return null;
+
+  const out = {};
+  const str = (v, max) => {
+    const s = String(v ?? '').trim();
+    return s ? s.slice(0, max) : null;
+  };
+
+  const workflowId = str(raw.workflowId, 60);
+  if (workflowId) out.workflowId = workflowId;
+
+  const status = String(raw.status || '').trim().toLowerCase();
+  if (WORKFLOW_RUN_STATUSES.has(status)) out.status = status;
+
+  const stageIndex = Number(raw.stageIndex);
+  if (Number.isInteger(stageIndex) && stageIndex >= 0 && stageIndex < 20) out.stageIndex = stageIndex;
+
+  for (const key of ['startedAt', 'updatedAt', 'completedAt']) {
+    const dt = normalizeDateTime(raw[key]);
+    if (dt) out[key] = dt;
+  }
+
+  if (Array.isArray(raw.stages)) {
+    const stages = raw.stages.slice(0, 10).map((s) => {
+      if (!s || typeof s !== 'object') return null;
+      const stage = {};
+      const role = str(s.role, 60);
+      if (role) stage.role = role.toLowerCase();
+      const agentId = str(s.agentId, 40);
+      if (agentId) stage.agentId = agentId.toLowerCase();
+      const model = str(s.model, 80);
+      if (model) stage.model = model;
+      const effort = str(s.effort, 20);
+      if (effort) stage.effort = effort.toLowerCase();
+      const stageStatus = String(s.status || '').trim().toLowerCase();
+      if (WORKFLOW_STAGE_STATUSES.has(stageStatus)) stage.status = stageStatus;
+      const sessionId = str(s.sessionId, 240);
+      if (sessionId) stage.sessionId = sessionId;
+      const worktreeId = str(s.worktreeId, 120);
+      if (worktreeId) stage.worktreeId = worktreeId;
+      const verdict = normalizeReviewOutcome(s.verdict);
+      if (verdict) stage.verdict = verdict;
+      const reviewUrl = str(s.reviewUrl, 600);
+      if (reviewUrl) stage.reviewUrl = reviewUrl;
+      for (const key of ['spawnedAt', 'completedAt']) {
+        const dt = normalizeDateTime(s[key]);
+        if (dt) stage[key] = dt;
+      }
+      return Object.keys(stage).length ? stage : null;
+    }).filter(Boolean);
+    if (stages.length) out.stages = stages;
+  }
+
+  return Object.keys(out).length ? out : null;
+};
+
+const evidenceString = (v, max) => {
+  const s = String(v ?? '').trim();
+  return s ? s.slice(0, max) : null;
+};
+
+const evidenceCount = (v) => {
+  const x = Number(v);
+  if (!Number.isFinite(x) || x < 0) return null;
+  return Math.round(x);
+};
+
+const EVIDENCE_MEDIA_TYPES = new Set(['image', 'video', 'gif', 'other']);
+
+const normalizeEvidence = (raw) => {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== 'object') return null;
+
+  const out = {};
+
+  const summary = evidenceString(raw.summary, 2000);
+  if (summary) out.summary = summary;
+
+  if (raw.tests && typeof raw.tests === 'object') {
+    const t = {};
+    if (raw.tests.ran !== undefined) t.ran = !!raw.tests.ran;
+    const command = evidenceString(raw.tests.command, 300);
+    if (command) t.command = command;
+    const passed = evidenceCount(raw.tests.passed);
+    if (passed !== null) t.passed = passed;
+    const failed = evidenceCount(raw.tests.failed);
+    if (failed !== null) t.failed = failed;
+    const output = evidenceString(raw.tests.output, 4000);
+    if (output) t.output = output;
+    const at = normalizeDateTime(raw.tests.at);
+    if (at) t.at = at;
+    if (Object.keys(t).length) out.tests = t;
+  }
+
+  if (raw.appRun && typeof raw.appRun === 'object') {
+    const a = {};
+    if (raw.appRun.ran !== undefined) a.ran = !!raw.appRun.ran;
+    const method = evidenceString(raw.appRun.method, 80);
+    if (method) a.method = method;
+    const url = evidenceString(raw.appRun.url, 600);
+    if (url) a.url = url;
+    const notes = evidenceString(raw.appRun.notes, 2000);
+    if (notes) a.notes = notes;
+    const at = normalizeDateTime(raw.appRun.at);
+    if (at) a.at = at;
+    if (Object.keys(a).length) out.appRun = a;
+  }
+
+  if (Array.isArray(raw.media)) {
+    const media = raw.media.slice(0, 20).map((m) => {
+      if (!m || typeof m !== 'object') return null;
+      const item = {};
+      const type = String(m.type || '').trim().toLowerCase();
+      item.type = EVIDENCE_MEDIA_TYPES.has(type) ? type : 'other';
+      const p = evidenceString(m.path, 600);
+      if (!p) return null;
+      item.path = p;
+      const caption = evidenceString(m.caption, 300);
+      if (caption) item.caption = caption;
+      return item;
+    }).filter(Boolean);
+    if (media.length) out.media = media;
+  }
+
+  if (Array.isArray(raw.data)) {
+    const data = raw.data.slice(0, 50).map((d) => {
+      if (!d || typeof d !== 'object') return null;
+      const metric = evidenceString(d.metric, 120);
+      if (!metric) return null;
+      const item = { metric };
+      for (const key of ['before', 'after']) {
+        const v = d[key];
+        if (v === undefined || v === null) continue;
+        if (typeof v === 'number' && Number.isFinite(v)) item[key] = v;
+        else {
+          const s = evidenceString(v, 120);
+          if (s) item[key] = s;
+        }
+      }
+      const note = evidenceString(d.note, 300);
+      if (note) item.note = note;
+      return item;
+    }).filter(Boolean);
+    if (data.length) out.data = data;
+  }
+
+  if (Array.isArray(raw.reviews)) {
+    const reviews = raw.reviews.slice(0, 20).map((r) => {
+      if (!r || typeof r !== 'object') return null;
+      const item = {};
+      const role = evidenceString(r.role, 60);
+      if (role) item.role = role.toLowerCase();
+      const agentId = evidenceString(r.agentId, 40);
+      if (agentId) item.agentId = agentId.toLowerCase();
+      const model = evidenceString(r.model, 80);
+      if (model) item.model = model;
+      const effort = evidenceString(r.effort, 20);
+      if (effort) item.effort = effort.toLowerCase();
+      const verdict = normalizeReviewOutcome(r.verdict);
+      if (verdict) item.verdict = verdict;
+      const summary = evidenceString(r.summary, 2000);
+      if (summary) item.summary = summary;
+      const findings = evidenceCount(r.findings);
+      if (findings !== null) item.findings = findings;
+      const fixed = evidenceCount(r.fixed);
+      if (fixed !== null) item.fixed = fixed;
+      const at = normalizeDateTime(r.at);
+      if (at) item.at = at;
+      const by = evidenceString(r.by, 240);
+      if (by) item.by = by;
+      const url = evidenceString(r.url, 600);
+      if (url) item.url = url;
+      return Object.keys(item).length ? item : null;
+    }).filter(Boolean);
+    if (reviews.length) out.reviews = reviews;
+  }
+
+  if (Array.isArray(raw.standards)) {
+    const standards = raw.standards
+      .map((s) => evidenceString(s, 200))
+      .filter(Boolean)
+      .slice(0, 20);
+    if (standards.length) out.standards = [...new Set(standards)];
+  }
+
+  if (raw.handoff && typeof raw.handoff === 'object') {
+    const h = {};
+    const notes = evidenceString(raw.handoff.notes, 4000);
+    if (notes) h.notes = notes;
+    const at = normalizeDateTime(raw.handoff.at);
+    if (at) h.at = at;
+    if (Object.keys(h).length) out.handoff = h;
+  }
+
+  if (raw.diffStats && typeof raw.diffStats === 'object') {
+    const d = {};
+    for (const key of ['files', 'additions', 'deletions']) {
+      const v = evidenceCount(raw.diffStats[key]);
+      if (v !== null) d[key] = v;
+    }
+    if (Object.keys(d).length) out.diffStats = d;
+  }
+
+  // Trusted server-set root used by the media streaming endpoint; agent
+  // supplied blocks have this stripped before they reach normalization.
+  const worktreePath = evidenceString(raw.worktreePath, 500);
+  if (worktreePath) out.worktreePath = worktreePath;
+
+  if (!Object.keys(out).length) return null;
+
+  out.schema = 1;
+  out.updatedAt = normalizeDateTime(raw.updatedAt) || new Date().toISOString();
+  return out;
+};
+
 class TaskRecordService {
   constructor({ filePath } = {}) {
     this.filePath = filePath || DEFAULT_PATH;
@@ -351,6 +571,24 @@ class TaskRecordService {
       } else {
         const normalized = normalizeReviewChecklist(p.reviewChecklist);
         if (normalized !== null) next.reviewChecklist = normalized;
+      }
+    }
+
+    if (p.evidence !== undefined) {
+      if (p.evidence === null) {
+        clear.add('evidence');
+      } else {
+        const normalized = normalizeEvidence(p.evidence);
+        if (normalized !== null) next.evidence = normalized;
+      }
+    }
+
+    if (p.reviewWorkflow !== undefined) {
+      if (p.reviewWorkflow === null) {
+        clear.add('reviewWorkflow');
+      } else {
+        const normalized = normalizeReviewWorkflow(p.reviewWorkflow);
+        if (normalized !== null) next.reviewWorkflow = normalized;
       }
     }
 
@@ -770,4 +1008,4 @@ class TaskRecordService {
   }
 }
 
-module.exports = { TaskRecordService };
+module.exports = { TaskRecordService, normalizeEvidence, normalizeReviewWorkflow };

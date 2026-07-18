@@ -268,3 +268,82 @@ describe('PluginLoaderService', () => {
     expect(String(status.failed[0].error || '')).toContain('Duplicate client slot id');
   });
 });
+
+describe('PluginLoaderService post_route actions + real example plugin', () => {
+  function writePlugin(tmpDir, pluginId, { manifest = null, serverSource }) {
+    const pluginDir = path.join(tmpDir, pluginId);
+    fs.mkdirSync(pluginDir, { recursive: true });
+    if (manifest) {
+      fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify(manifest, null, 2));
+    }
+    fs.writeFileSync(path.join(pluginDir, 'server.js'), serverSource);
+  }
+
+  const NOOP_SERVER = 'module.exports = async function register() {};';
+
+  test('accepts a valid post_route slot action', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-plugin-test-'));
+    writePlugin(tmpDir, 'postroute', {
+      manifest: {
+        name: 'Post route plugin',
+        version: '0.1.0',
+        client: {
+          slots: [{
+            id: 'run-it',
+            slot: 'commander.tools',
+            label: 'Run',
+            action: { type: 'post_route', route: '/api/plugins/postroute/run', prompt: 'Value:', field: 'url' }
+          }]
+        }
+      },
+      serverSource: NOOP_SERVER
+    });
+
+    const service = new PluginLoaderService({ pluginsDir: tmpDir, logger: { info: () => {}, warn: () => {}, error: () => {} } });
+    const status = await service.loadAll({ app: express(), commandRegistry: { register: jest.fn(), getCommand: jest.fn(() => null) }, services: {} });
+
+    expect(status.failed).toHaveLength(0);
+    const slot = status.loaded[0].client.slots[0];
+    expect(slot.action).toEqual({ type: 'post_route', route: '/api/plugins/postroute/run', prompt: 'Value:', field: 'url' });
+  });
+
+  test('rejects post_route actions with non-local routes or bad field names', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-plugin-test-'));
+    writePlugin(tmpDir, 'badpostroute', {
+      manifest: {
+        name: 'Bad post route',
+        version: '0.1.0',
+        client: {
+          slots: [{
+            id: 'bad',
+            slot: 'commander.tools',
+            label: 'Bad',
+            action: { type: 'post_route', route: 'https://evil.example/exfil' }
+          }]
+        }
+      },
+      serverSource: NOOP_SERVER
+    });
+
+    const service = new PluginLoaderService({ pluginsDir: tmpDir, logger: { info: () => {}, warn: () => {}, error: () => {} } });
+    const status = await service.loadAll({ app: express(), commandRegistry: { register: jest.fn(), getCommand: jest.fn(() => null) }, services: {} });
+
+    expect(status.loaded).toHaveLength(0);
+    expect(String(status.failed[0].error || '')).toMatch(/post_route action route/);
+  });
+
+  test('the shipped youtube-transcript plugin loads cleanly', async () => {
+    const service = new PluginLoaderService({
+      pluginsDir: path.join(__dirname, '..', '..', 'plugins'),
+      logger: { info: () => {}, warn: () => {}, error: () => {} }
+    });
+    const commandRegistry = { register: jest.fn(), getCommand: jest.fn(() => null) };
+    const status = await service.loadAll({ app: express(), commandRegistry, services: {} });
+
+    const yt = status.loaded.find(p => p.id === 'youtube-transcript');
+    expect(yt).toBeTruthy();
+    expect(status.failed.find(p => (p.id || '') === 'youtube-transcript')).toBeFalsy();
+    expect(commandRegistry.register).toHaveBeenCalledWith('youtube-transcript-transcribe', expect.any(Object));
+    expect(yt.client.slots[0].slot).toBe('commander.tools');
+  });
+});

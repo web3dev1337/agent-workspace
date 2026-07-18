@@ -10796,6 +10796,25 @@ body.dependency-onboarding-active #dependency-setup-modal {
   z-index: 10;
 }
 
+/* Plugin tool buttons (client.slots → "commander.tools") */
+.commander-tools-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.commander-tools-strip.hidden {
+  display: none;
+}
+
+.commander-tool-btn {
+  font-size: 0.75rem;
+}
+
 .commander-btn {
   padding: var(--space-xs) var(--space-md);
   background: var(--bg-tertiary);
@@ -16041,3 +16060,43 @@ body.dependency-onboarding-active #dependency-setup-modal {
     grid-template-columns: 1fr;
   }
 }
+
+/* Multi-commander tab bar */
+.commander-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem 0;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.commander-tabs.hidden { display: none; }
+
+.commander-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: 0.35rem 0.35rem 0 0;
+  background: var(--bg-tertiary, #252a33);
+  color: var(--text-secondary, #9aa3b2);
+  cursor: pointer;
+}
+
+.commander-tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary, #fff);
+  border-color: var(--accent, #6f8fc0);
+}
+
+.commander-tab-add { font-weight: 700; }
+
+.commander-tab-close {
+  opacity: 0.6;
+  font-size: 0.65rem;
+}
+.commander-tab-close:hover { opacity: 1; color: var(--accent-danger, #d4593c); }

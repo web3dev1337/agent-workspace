@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 1,
+  "id": "youtube-transcript",
+  "name": "YouTube Transcript",
+  "version": "0.1.0",
+  "description": "Paste a YouTube URL, get a plain-text transcript saved locally (uses yt-dlp subtitles — no API key).",
+  "serverEntry": "server.js",
+  "capabilities": {
+    "routes": true,
+    "commands": true,
+    "surfaces": ["commander", "voice", "ui"]
+  },
+  "client": {
+    "slots": [
+      {
+        "id": "transcribe",
+        "slot": "commander.tools",
+        "label": "🎬 YouTube → Transcript",
+        "description": "Fetch subtitles for a YouTube video and save them as a plain-text transcript",
+        "order": 10,
+        "action": {
+          "type": "post_route",
+          "route": "/api/plugins/youtube-transcript/transcribe",
+          "prompt": "YouTube URL to transcribe:",
+          "field": "url"
+        }
+      }
+    ]
+  },
+  "compatibility": { "minNodeVersion": "18.0.0" }
+}
