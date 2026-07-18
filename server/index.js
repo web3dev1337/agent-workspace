@@ -245,7 +245,11 @@ const io = new Server(httpServer, {
         origin.startsWith('http://localhost:') ||
         origin.startsWith('http://127.0.0.1:') ||
         origin.startsWith('http://[::1]:') ||
-        origin.startsWith('http://100.');
+        origin.startsWith('http://100.') ||
+        // WSL2 vEthernet addresses live in the RFC1918 172.16.0.0/12 block
+        // (172.16-172.31 only) — a bare "172." prefix would also whitelist
+        // public internet space (e.g. Cloudflare/Google ranges in 172/8).
+        /^http:\/\/172\.(1[6-9]|2\d|3[01])\./.test(origin);
 
       if (allowed) {
         callback(null, true);
