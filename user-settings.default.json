@@ -157,7 +157,7 @@
           "forceKill": true,
           "launchSettings": false,
           "serverLaunchMenu": false,
-          "startServer": true
+          "startServer": false
         },
         "dashboard": {
           "processBanner": false,

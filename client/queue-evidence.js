@@ -12,6 +12,14 @@
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+  // Evidence originates from PR bodies/comments (semi-untrusted). Entity-escaping
+  // alone doesn't stop a javascript:/data: URI from becoming a clickable link, so
+  // only plain http(s) URLs are rendered as anchors; anything else stays text.
+  const safeHttpUrl = (value) => {
+    const s = String(value || '').trim();
+    return /^https?:\/\//i.test(s) ? s : '';
+  };
+
   const VERDICT_META = {
     approved: { icon: '✅', cls: 'ok' },
     needs_fix: { icon: '🛑', cls: 'bad' },
@@ -83,7 +91,8 @@
       const counts = (r.findings !== undefined || r.fixed !== undefined)
         ? ` — ${r.findings ?? 0} finding(s), ${r.fixed ?? 0} fixed`
         : '';
-      const link = r.url ? ` <a href="${esc(r.url)}" target="_blank" rel="noreferrer">↗</a>` : '';
+      const reviewUrl = safeHttpUrl(r.url);
+      const link = reviewUrl ? ` <a href="${esc(reviewUrl)}" target="_blank" rel="noreferrer">↗</a>` : '';
       return `<div class="evidence-review-row evidence-${meta.cls}">
         <span class="evidence-review-verdict">${meta.icon}</span>
         <span class="evidence-review-role">${esc(r.role || 'review')}</span>
@@ -127,7 +136,7 @@
       <div class="evidence-badges">${buildBadges(evidence)}</div>
       ${evidence.summary ? `<div class="evidence-summary">${esc(evidence.summary)}</div>` : ''}
       ${evidence.tests?.ran && evidence.tests.command ? `<div class="evidence-line">🧪 <code>${esc(evidence.tests.command)}</code>${evidence.tests.at ? ` · ${esc(timeAgo(evidence.tests.at))}` : ''}</div>` : ''}
-      ${evidence.appRun?.ran ? `<div class="evidence-line">▶️ ${esc(evidence.appRun.method || 'ran')}${evidence.appRun.url ? ` · <a href="${esc(evidence.appRun.url)}" target="_blank" rel="noreferrer">${esc(evidence.appRun.url)}</a>` : ''}${evidence.appRun.notes ? ` — ${esc(evidence.appRun.notes)}` : ''}</div>` : ''}
+      ${evidence.appRun?.ran ? `<div class="evidence-line">▶️ ${esc(evidence.appRun.method || 'ran')}${evidence.appRun.url ? (safeHttpUrl(evidence.appRun.url) ? ` · <a href="${esc(safeHttpUrl(evidence.appRun.url))}" target="_blank" rel="noreferrer">${esc(evidence.appRun.url)}</a>` : ` · ${esc(evidence.appRun.url)}`) : ''}${evidence.appRun.notes ? ` — ${esc(evidence.appRun.notes)}` : ''}</div>` : ''}
       ${renderReviews(Array.isArray(evidence.reviews) ? evidence.reviews : [])}
       ${renderMedia(Array.isArray(evidence.media) ? evidence.media : [], task.id)}
       ${renderData(Array.isArray(evidence.data) ? evidence.data : [])}
@@ -154,13 +163,15 @@
     overlay.innerHTML = type === 'video'
       ? `<video src="${esc(src)}" controls autoplay></video>`
       : `<img src="${esc(src)}" alt="evidence media" />`;
-    overlay.addEventListener('click', () => overlay.remove());
-    document.addEventListener('keydown', function onKey(e) {
-      if (e.key === 'Escape') {
-        overlay.remove();
-        document.removeEventListener('keydown', onKey);
-      }
-    });
+    // One shared close path so the document-level key listener is removed no
+    // matter how the lightbox is dismissed (click previously leaked it).
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    };
+    overlay.addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
     document.body.appendChild(overlay);
   };
 

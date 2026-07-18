@@ -1471,6 +1471,16 @@ class ClaudeOrchestrator {
         this.notificationManager.handleNotification(notification);
       });
 
+      // Live-update the open Queue detail when a review workflow progresses.
+      // The server emits stage transitions on this channel; without a listener
+      // the workflow card's chips only refresh after the user's own clicks.
+      this.socket.on('review-workflow', (payload) => {
+        const live = window.__queueDetailLive;
+        if (live && payload?.taskId && payload.taskId === live.taskId) {
+          try { live.reload(); } catch { /* detail may have closed */ }
+        }
+      });
+
       this.socket.on('session-exited', ({ sessionId, exitCode }) => {
         this.handleSessionExit(sessionId, exitCode);
       });
@@ -29008,6 +29018,7 @@ class ClaudeOrchestrator {
 	      `;
 
       const reloadDetailRecord = async () => {
+        if (!detailEl.isConnected) return; // detail panel was closed/replaced
         try {
           const recRes = await fetch(`/api/process/task-records/${encodeURIComponent(t.id)}`);
           if (recRes.ok) {
@@ -29017,6 +29028,10 @@ class ClaudeOrchestrator {
         } catch { /* keep the stale record if the re-fetch fails */ }
         renderDetail(t);
       };
+
+      // Register for server-pushed review-workflow events (socket listener in
+      // setupSocketListeners) so stage chips update without user interaction.
+      window.__queueDetailLive = { taskId: t.id, reload: reloadDetailRecord };
 
       window.QueueWorkflow?.wire(detailEl, t, record, {
         onChanged: reloadDetailRecord
