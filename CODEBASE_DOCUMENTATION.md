@@ -255,6 +255,7 @@ client/app.js                       - Config pre-fetching & caching
 client/app.js                      - Main client application
 ├─ Manages: UI state, socket connections, terminal grid
 ├─ Features: 16-terminal layout, real-time updates, session switching
+├─ Experimental workspace UI persistence: optional per-workspace restore for hidden worktrees plus View/Tier filters, and optional restore of the open workspace tab set across reloads and app restarts
 ├─ Command Palette: header `⌘ Commands` button + `Ctrl/Cmd+K` searchable command launcher for command-catalog actions
 ├─ Intent hints: compact "intent haiku" strip above each agent terminal, refreshed from `POST /api/sessions/intent-haiku`
 ├─ Model badge: terminal-header chip showing the model + reasoning effort each worktree's agent launches use (`GET /api/sessions/model-config`, toggle via `ui.visibility.terminal.modelBadge`)
@@ -412,6 +413,7 @@ package.json                       - Node.js dependencies and scripts
 
 user-settings.json                 - User preferences and workspace settings
 user-settings.default.json         - Default user settings template
+├─ Experimental UI state: `global.ui.experimental.persistWorkspaceSidebarState` gates per-workspace sidebar snapshots stored in `workspaceSidebarStateByWorkspace`
 ```
 
 ### Workspace Templates & Scripts
