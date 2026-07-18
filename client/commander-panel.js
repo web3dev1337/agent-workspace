@@ -932,20 +932,30 @@ class CommanderPanel {
     }
   }
 
-  // Detect terminal mouse-tracking reports: SGR (mode 1006) "ESC[<btn;col;rowM/m"
-  // and X10/normal (modes 1000/1002/1003) "ESC[M" + 3 bytes.
-  isMouseReport(data) {
-    const s = String(data || '');
-    return /^\x1b\[<[0-9;]*[Mm]/.test(s) || /^\x1b\[M/.test(s);
+  // Strip mouse-tracking MOTION reports (idle hover, no button held) from an input
+  // chunk: SGR (mode 1006) "ESC[<btn;col;rowM/m" and X10-encoded (modes 1002/1003)
+  // "ESC[M" + 3 bytes. Only motion-with-no-button reports are noise; clicks, drags,
+  // and scroll-wheel reports are meaningful to mouse-aware apps (Claude Code's TUI,
+  // vim, less) and must keep flowing. Stripping (vs dropping the whole chunk) also
+  // preserves any real keystrokes xterm coalesced into the same data event.
+  stripMouseMotionReports(data) {
+    const s = String(data == null ? '' : data);
+    if (!s.includes('\x1b[')) return s;
+    const isIdleMotion = (btnCode) => (btnCode & 0x20) !== 0 && (btnCode & 0x03) === 3 && (btnCode & 0x40) === 0;
+    return s
+      .replace(/\x1b\[<(\d+);\d+;\d+[Mm]/g, (match, btn) => (isIdleMotion(Number(btn)) ? '' : match))
+      .replace(/\x1b\[M([\s\S]{3})/g, (match, payload) => (isIdleMotion(payload.charCodeAt(0) - 32) ? '' : match));
   }
 
   handleTerminalData(data) {
-    // Drop mouse-tracking reports. Claude Code's TUI enables mouse reporting, so every
+    // Filter mouse-motion noise. Claude Code's TUI enables mouse reporting, so every
     // mouse move over the panel emits a report — and each was sent as its own chained
     // HTTP request, flooding the input queue and stalling real keystrokes (measured:
-    // hundreds of mouse reports queued ahead of a single typed character). Commander is
-    // keyboard-driven, so these are safe to drop and it keeps typing responsive.
-    if (this.isMouseReport(data)) return;
+    // hundreds of mouse reports queued ahead of a single typed character). Hover
+    // motion carries no meaning for the panel, so it's stripped; clicks/drags/scroll
+    // still reach the PTY for apps that use them.
+    data = this.stripMouseMotionReports(data);
+    if (!data) return;
 
     // If we're currently capturing a command, don't forward to Commander PTY.
     if (this.commandCapture) {
