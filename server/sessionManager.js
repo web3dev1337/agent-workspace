@@ -2792,13 +2792,18 @@ class SessionManager extends EventEmitter {
     if (!session) return [sid];
 
     const ws = String(workspaceId || session?.workspace || '').trim() || null;
-    const worktreeId = String(session?.worktreeId || '').trim().toLowerCase();
-    const repositoryName = String(session?.repositoryName || '').trim().toLowerCase();
-    const parsedWorktreeId = worktreeId || String(sid).replace(/-(claude|codex|server)$/i, '').split('-').pop()?.toLowerCase() || '';
-    const composedKey = repositoryName && parsedWorktreeId ? `${repositoryName}-${parsedWorktreeId}` : '';
+    const parsedFromSid = parseWorktreeKey(sid);
+    const worktreeId = String(session?.worktreeId || '').trim().toLowerCase()
+      || String(parsedFromSid?.worktreeId || '').trim().toLowerCase();
+    const repositoryName = String(session?.repositoryName || '').trim().toLowerCase()
+      || String(parsedFromSid?.repositoryName || '').trim().toLowerCase();
+    const composedKey = repositoryName && worktreeId ? `${repositoryName}-${worktreeId}` : '';
 
     const group = new Set([sid]);
-    const keys = [composedKey, parsedWorktreeId].filter(Boolean);
+    // Fall back to the bare worktree id only when the repository is unknown:
+    // mixed-repo workspaces reuse worktree names like "work1", so a bare-key
+    // lookup would group (and close) every repo's work1 sessions together.
+    const keys = [composedKey || worktreeId].filter(Boolean);
     for (const key of keys) {
       const ids = this.getSessionIdsForWorktree({
         workspaceId: ws,
