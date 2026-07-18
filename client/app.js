@@ -804,7 +804,7 @@ class ClaudeOrchestrator {
     if (effortLevel) {
       tooltipLines.push(`Effort: ${effortLevel} — from ${describeSource(config.effortSource)}`);
     }
-    tooltipLines.push('Note: a /model pick for "this session only" is not written to disk and won\'t show here.');
+    tooltipLines.push('Note: when a live session transcript is found, Model reflects what the session is actually using (including "/model" switches); otherwise it shows the configured default.');
     return { text, tooltip: tooltipLines.join('\n'), effortLevel };
   }
 
