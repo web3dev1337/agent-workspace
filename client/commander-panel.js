@@ -723,13 +723,15 @@ class CommanderPanel {
   // Close (✕): fully stop the Commander session, then hide the panel. Reopening
   // starts a fresh Commander. This is distinct from minimize (—), which only hides
   // the window and leaves the session running so it's instantly available again.
-  async closeSession() {
-    try {
-      await this.stopCommander();
-    } catch (error) {
-      console.error('Failed to stop commander on close:', error);
+  // Stopping a live session is destructive (kills the Commander's agent process),
+  // so gate it behind a confirm; hide immediately so the panel never hangs on the
+  // stop round-trip (stopCommander handles its own errors and never throws).
+  closeSession() {
+    if (this.isRunning && !window.confirm('Close Commander and stop its running session? Use minimize (—) to keep it running in the background.')) {
+      return;
     }
     this.hide();
+    this.stopCommander();
   }
 
   /**
