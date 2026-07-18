@@ -61,6 +61,7 @@ class ClaudeOrchestrator {
     this.desktopDevtoolsKeydownHandler = null;
     this.currentLayout = '2x4';
     this._wasMobileLayout = this.isMobileLayout();
+    this._layoutModeCrossed = false;
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
@@ -174,6 +175,11 @@ class ClaudeOrchestrator {
     }
 
     this._wasMobileLayout = nowMobile;
+    // Latch the crossing for the debounced resize callback. Resize events come in
+    // bursts and only the last one's callback runs — comparing two point-in-time
+    // snapshots there misses crossings that happen mid-burst (continuous window
+    // drags, orientation changes), so the crossing itself records the fact.
+    this._layoutModeCrossed = true;
 
     if (becameMobile) {
       // On mobile layouts, always start from a closed sidebar state.
@@ -2861,12 +2867,12 @@ class ClaudeOrchestrator {
     // Handle window resize to fix blank terminals
     let resizeTimeout;
 	    window.addEventListener('resize', () => {
-      const prevLayout = this._wasMobileLayout;
       this.syncDesktopMobileLayoutState();
       this.updateSidebarToggleIcon();
 	      clearTimeout(resizeTimeout);
 	      resizeTimeout = setTimeout(() => {
-          if (this._wasMobileLayout !== prevLayout) {
+          if (this._layoutModeCrossed) {
+            this._layoutModeCrossed = false;
             this.updateTerminalGrid();
           }
 	        // Refit all terminals (not just activeView — covers newly started sessions)
