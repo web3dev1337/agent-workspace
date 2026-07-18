@@ -228,7 +228,11 @@
       },
       "experimental": {
         "persistWorkspaceSidebarState": false,
-        "workspaceSidebarStateByWorkspace": {}
+        "workspaceSidebarStateByWorkspace": {},
+        "workspaceTabState": {
+          "openWorkspaceIds": [],
+          "activeWorkspaceId": ""
+        }
       },
       "worktrees": {
         "autoCreateExtraWhenBusy": true,
