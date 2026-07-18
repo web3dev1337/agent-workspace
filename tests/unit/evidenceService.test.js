@@ -126,7 +126,15 @@ describe('EvidenceService.resolveMediaPath', () => {
         worktreePath: worktree
       }
     });
-    return { svc: new EvidenceService({ taskRecordService }), worktree };
+    // resolveMediaPath re-validates worktreePath against the managed-worktree
+    // set at read time, so the fixture worktree must be a managed one.
+    const workspaceManager = {
+      getActiveWorkspace: () => ({ id: 'ws1' }),
+      getWorkspaceById: () => ({
+        terminals: [{ repository: { path: path.dirname(worktree) }, worktreeId: path.basename(worktree) }]
+      })
+    };
+    return { svc: new EvidenceService({ taskRecordService, workspaceManager }), worktree };
   };
 
   test('resolves a valid media file inside the worktree', async () => {
@@ -145,5 +153,19 @@ describe('EvidenceService.resolveMediaPath', () => {
     const { svc } = await setup();
     expect(svc.resolveMediaPath('task:media', 2).status).toBe(415);
     expect(svc.resolveMediaPath('task:media', 99).status).toBe(404);
+  });
+
+  test('rejects a worktreePath outside the managed set (e.g. planted via raw task-record PUT)', async () => {
+    const taskRecordService = makeTaskRecords();
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-unmanaged-'));
+    fs.writeFileSync(path.join(outside, 'leak.png'), 'fake-png');
+    // The generic PUT /api/process/task-records/:id accepts a raw evidence
+    // object — the media endpoint must not serve from a directory that isn't
+    // one of the orchestrator's own worktrees, however the record was written.
+    await taskRecordService.upsert('task:evil', {
+      evidence: { media: [{ type: 'image', path: 'leak.png' }], worktreePath: outside }
+    });
+    const svc = new EvidenceService({ taskRecordService });
+    expect(svc.resolveMediaPath('task:evil', 0).status).toBe(403);
   });
 });

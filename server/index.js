@@ -6433,6 +6433,12 @@ app.get('/api/process/evidence/:id/media/:idx', (req, res) => {
   try {
     const resolved = evidenceService.resolveMediaPath(req.params.id, req.params.idx);
     if (resolved.error) return res.status(resolved.status || 400).json({ error: resolved.error });
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // SVG can carry scripts that would run in the orchestrator's own origin on
+    // direct navigation; force download for it (embedding via <img> is unaffected).
+    if (resolved.path.toLowerCase().endsWith('.svg')) {
+      res.setHeader('Content-Disposition', 'attachment');
+    }
     res.sendFile(resolved.path);
   } catch (error) {
     logger.error('Failed to serve evidence media', { id: req.params.id, error: error.message });

@@ -345,6 +345,14 @@ class EvidenceService {
     const root = String(evidence?.worktreePath || '').trim();
     if (!root) return { error: 'no trusted worktree path recorded for this evidence', status: 400 };
 
+    // The recorded worktreePath may have arrived via the generic task-record
+    // PUT (raw request body), not only the validated evidence endpoints — so
+    // re-check it against the managed-worktree set at read time. Without this,
+    // a crafted record could point the media server at any readable directory.
+    if (!this.isKnownWorktreePath(root)) {
+      return { error: 'evidence worktree is not managed by this orchestrator', status: 403 };
+    }
+
     const rawPath = String(media[idx]?.path || '');
     if (!rawPath) return { error: 'media entry has no path', status: 404 };
 
