@@ -414,8 +414,13 @@ class TerminalManager {
       this.orchestrator?.onManualTerminalInput?.(sessionId);
       this.orchestrator.sendTerminalInput(sessionId, data);
 
-      // Track input buffer for autosuggestions
-      this.updateInputBuffer(sessionId, data);
+      // Track input buffer for autosuggestions — but not for paste-originated
+      // bursts: an unbracketed multi-line paste would be stored whole as the
+      // "current line" and later pollute command history with a bogus glued
+      // entry. (Bracketed pastes were already skipped by their ESC prefix.)
+      if (!this._pasteInProgress) {
+        this.updateInputBuffer(sessionId, data);
+      }
     });
     
     // Handle resize
@@ -673,9 +678,19 @@ class TerminalManager {
   pasteTextToTerminal(sessionId, text) {
     const terminal = this.terminals.get(sessionId);
     if (terminal && typeof terminal.paste === 'function') {
-      terminal.paste(text);
+      // paste() fires onData synchronously; flag the burst so autosuggestion
+      // input-buffer tracking skips it (see the onData handler).
+      this._pasteInProgress = true;
+      try {
+        terminal.paste(text);
+      } finally {
+        this._pasteInProgress = false;
+      }
       return;
     }
+    // Deliberate fail-open: the terminal vanished during the async clipboard
+    // read (tab close/teardown race) — deliver the raw text unnormalized
+    // rather than dropping the paste.
     this.orchestrator?.onManualTerminalInput?.(sessionId);
     this.orchestrator?.sendTerminalInput?.(sessionId, text);
   }

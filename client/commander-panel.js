@@ -988,7 +988,9 @@ class CommanderPanel {
   bracketPastedText(text) {
     const normalized = String(text == null ? '' : text).replace(/\r\n|\r|\n/g, '\r');
     const bracketed = this.terminal && this.terminal.modes && this.terminal.modes.bracketedPasteMode;
-    return bracketed ? `\x1b[200~${normalized}\x1b[201~` : normalized;
+    // Strip any embedded paste terminator so crafted clipboard content can't
+    // end the bracket early and smuggle the rest in as live keystrokes.
+    return bracketed ? `\x1b[200~${normalized.replace(/\x1b\[201~/g, '')}\x1b[201~` : normalized;
   }
 
   /**
