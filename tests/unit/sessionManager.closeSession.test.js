@@ -206,6 +206,29 @@ describe('SessionManager.closeSession', () => {
     expect(ids).toEqual(['sandbox-work1-claude', 'sandbox-work1-server']);
   });
 
+  test('getSessionGroupIds does not cross repos that share a worktree number in the same workspace', () => {
+    const io = { emit: jest.fn() };
+    const sm = new SessionManager(io, null);
+
+    // Mixed-repo workspace where several repos each have a "work1" (and one "work4").
+    // Closing sandbox's terminal must target ONLY sandbox's sessions — not every
+    // repo's work1. Previously the group was also looked up by the bare worktree
+    // number "work1", which matched all of them and closed every tiled terminal.
+    const seed = (id, repo, wt, type) => sm.sessions.set(id, {
+      id, type, workspace: 'learning', repositoryName: repo, worktreeId: wt, pty: null
+    });
+    seed('sandbox-work1-claude', 'sandbox', 'work1', 'claude');
+    seed('sandbox-work1-server', 'sandbox', 'work1', 'server');
+    seed('agent-workspace-work1-claude', 'agent-workspace', 'work1', 'claude');
+    seed('agent-workspace-work1-server', 'agent-workspace', 'work1', 'server');
+    seed('USDUC-work1-claude', 'USDUC', 'work1', 'claude');
+    seed('Cat-Code-Academy-work1-claude', 'Cat-Code-Academy', 'work1', 'claude');
+    seed('Test-game-work4-claude', 'Test-game', 'work4', 'claude');
+
+    const ids = sm.getSessionGroupIds('sandbox-work1-claude');
+    expect(ids).toEqual(['sandbox-work1-claude', 'sandbox-work1-server']);
+  });
+
   test('getSessionGroupIds returns original id when session is missing', () => {
     const io = { emit: jest.fn() };
     const sm = new SessionManager(io, null);
