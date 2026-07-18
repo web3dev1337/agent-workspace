@@ -52,7 +52,7 @@ class AgentModelConfigService {
     return AgentModelConfigService.instance;
   }
 
-  resolveClaudeConfig(directory) {
+  resolveClaudeConfig(directory, { agentRunning = false } = {}) {
     const resolved = {
       agent: 'claude',
       model: null,
@@ -110,12 +110,16 @@ class AgentModelConfigService {
     // Prefer the model the running session is ACTUALLY using, read from its Claude Code
     // transcript. The user can switch models mid-session with /model, which never touches
     // the settings files above — so the config-derived model can be stale/wrong (the
-    // "badge says Fable but I'm actually on Opus" trap). Fall back to config when no live
-    // transcript can be resolved.
-    const liveModel = this.resolveLiveClaudeModel(directory);
-    if (liveModel) {
-      resolved.model = liveModel;
-      resolved.modelSource = { label: 'live session (transcript)', file: null };
+    // "badge says Fable but I'm actually on Opus" trap). Only consulted while a Claude
+    // agent is actually running in the terminal: a closed/finished chat leaves its
+    // transcript behind, and showing that as if it were live state is the same trap
+    // in the other direction. Falls back to config when no transcript resolves.
+    if (agentRunning) {
+      const liveModel = this.resolveLiveClaudeModel(directory);
+      if (liveModel) {
+        resolved.model = liveModel;
+        resolved.modelSource = { label: 'live session (transcript)', file: null };
+      }
     }
 
     return resolved;

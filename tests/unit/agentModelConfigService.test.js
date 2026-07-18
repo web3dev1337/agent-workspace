@@ -281,17 +281,31 @@ describe('AgentModelConfigService', () => {
     expect(svc.readLastModelFromTranscript(file)).toBe('claude-opus-4-8');
   });
 
-  test('resolveClaudeConfig prefers the live transcript model over the configured default', () => {
+  test('resolveClaudeConfig prefers the live transcript model while an agent is running', () => {
     writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
     const svc = createService();
     writeTranscript(svc, worktreeDir, [
       JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8' } })
     ]);
 
-    const resolved = svc.resolveClaudeConfig(worktreeDir);
+    const resolved = svc.resolveClaudeConfig(worktreeDir, { agentRunning: true });
     expect(resolved.model).toBe('claude-opus-4-8'); // live session wins
     expect(resolved.modelSource.label).toBe('live session (transcript)');
     expect(resolved.effortLevel).toBe('high'); // effort still comes from config
+  });
+
+  test('resolveClaudeConfig ignores leftover transcripts when no agent is running', () => {
+    writeClaudeSettings(homeDir, 'settings.json', { model: 'claude-fable-5[1m]', effortLevel: 'high' });
+    const svc = createService();
+    // A finished/closed chat leaves its transcript behind — with no agent
+    // running, the badge must show the configured launch default instead.
+    writeTranscript(svc, worktreeDir, [
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8' } })
+    ]);
+
+    const resolved = svc.resolveClaudeConfig(worktreeDir);
+    expect(resolved.model).toBe('claude-fable-5[1m]');
+    expect(resolved.modelSource.label).toBe('user settings (global)');
   });
 
   test('resolveClaudeConfig keeps the configured model when there is no transcript', () => {
@@ -330,10 +344,10 @@ describe('AgentModelConfigService', () => {
       JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8' } })
     ]);
 
-    expect(svc.resolveClaudeConfig(worktreeDir).model).toBe('claude-opus-4-8');
+    expect(svc.resolveClaudeConfig(worktreeDir, { agentRunning: true }).model).toBe('claude-opus-4-8');
 
     // Within the cache TTL the transcript is not re-read, even if it changed on disk.
     fs.writeFileSync(file, JSON.stringify({ type: 'assistant', message: { model: 'claude-sonnet-5' } }) + '\n');
-    expect(svc.resolveClaudeConfig(worktreeDir).model).toBe('claude-opus-4-8');
+    expect(svc.resolveClaudeConfig(worktreeDir, { agentRunning: true }).model).toBe('claude-opus-4-8');
   });
 });
