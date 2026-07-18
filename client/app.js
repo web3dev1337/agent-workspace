@@ -60,6 +60,8 @@ class ClaudeOrchestrator {
     this.simpleModeStartupTriggered = false;
     this.desktopDevtoolsKeydownHandler = null;
     this.currentLayout = '2x4';
+    this._wasMobileLayout = this.isMobileLayout();
+    this._layoutModeCrossed = false;
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
@@ -169,6 +171,39 @@ class ClaudeOrchestrator {
     } catch {
       return false;
     }
+  }
+
+  syncDesktopMobileLayoutState() {
+    const nowMobile = this.isMobileLayout();
+    const becameMobile = !this._wasMobileLayout && nowMobile;
+    const becameDesktop = this._wasMobileLayout && !nowMobile;
+    if (!becameMobile && !becameDesktop) {
+      this._wasMobileLayout = nowMobile;
+      return;
+    }
+
+    this._wasMobileLayout = nowMobile;
+    // Latch the crossing for the debounced resize callback. Resize events come in
+    // bursts and only the last one's callback runs — comparing two point-in-time
+    // snapshots there misses crossings that happen mid-burst (continuous window
+    // drags, orientation changes), so the crossing itself records the fact.
+    this._layoutModeCrossed = true;
+
+    if (becameMobile) {
+      // On mobile layouts, always start from a closed sidebar state.
+      this.closeSidebar();
+      this.updateSidebarToggleIcon();
+      return;
+    }
+
+    // Desktop cleanup: clear any transient mobile-open class and restore
+    // persisted desktop preferences (instead of inheriting mobile behavior).
+    if (document.body.classList.contains('sidebar-open')) {
+      document.body.classList.remove('sidebar-open');
+    }
+    this.applySidebarDesktopCollapsedFromPrefs();
+    this.syncSidebarBackdrop();
+    this.updateSidebarToggleIcon();
   }
 
   isEditableEventTarget(target) {
@@ -2956,9 +2991,14 @@ class ClaudeOrchestrator {
     // Handle window resize to fix blank terminals
     let resizeTimeout;
 	    window.addEventListener('resize', () => {
+      this.syncDesktopMobileLayoutState();
       this.updateSidebarToggleIcon();
 	      clearTimeout(resizeTimeout);
 	      resizeTimeout = setTimeout(() => {
+          if (this._layoutModeCrossed) {
+            this._layoutModeCrossed = false;
+            this.updateTerminalGrid();
+          }
 	        // Refit all terminals (not just activeView — covers newly started sessions)
 	        for (const sessionId of this.terminalManager.terminals.keys()) {
           this.terminalManager.fitTerminal(sessionId);
