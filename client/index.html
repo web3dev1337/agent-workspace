@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="styles/tabs.css">
     <link rel="stylesheet" href="styles/projects-board.css">
+    <link rel="stylesheet" href="styles/queue-evidence.css">
     
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="assets/agent-workspace-logo.png?v=circle">
@@ -78,9 +79,8 @@
                 <button id="prs-btn" class="header-btn" title="Browse pull requests" data-ui-visibility="header.prs">
                     🔀 PRs
                 </button>
-                <!-- FLAGGED: Review Inbox hidden to save header space -->
-                <button id="queue-btn" class="header-btn" title="Review inbox (PRs + queue)" data-ui-visibility="header.queue" style="display:none">
-                    📥 Review Inbox
+                <button id="queue-btn" class="header-btn" title="Review Hub — queue of PRs/worktrees with evidence, one-by-one review flow" data-ui-visibility="header.queue">
+                    📥 Review
                 </button>
                 <button id="project-chats-btn" class="header-btn" title="Simple projects + chats shell (Alt+P)" data-ui-visibility="header.chats" hidden aria-hidden="true" style="display:none">
                     🧵 Chats
@@ -253,6 +253,30 @@
                                     <input type="checkbox" id="auto-scroll" checked />
                                     Auto-scroll Terminals
                                 </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-section" data-section-id="plugins" data-section-title="Plugins">
+                            <h4>Plugins</h4>
+                            <p class="setting-description">Plugins live in the <code>plugins/</code> folder
+                                (or <code>ORCHESTRATOR_PLUGINS_DIR</code>) — each adds routes, commands, and UI
+                                buttons via a <code>plugin.json</code> manifest. See <code>plugins/README.md</code>.</p>
+                            <div class="setting-group">
+                                <div id="plugins-admin-list" class="setting-description">Loading…</div>
+                                <button class="btn-secondary" id="plugins-reload-btn" type="button">🔄 Reload plugins</button>
+                            </div>
+                        </div>
+
+                        <div class="setting-section" data-section-id="ui-mode" data-section-title="UI Mode">
+                            <h4>UI Mode</h4>
+                            <p class="setting-description">Switch between the lean default UI and the full
+                                process/workflow layer (process banner, workflow modes Focus/Review/Background,
+                                tier filters, PRs, Review Route, Activity, Diff, dashboard process cards,
+                                commander controls). Applies immediately and reloads the page.</p>
+                            <div class="setting-group" id="visibility-preset-group">
+                                <button class="btn-secondary" type="button" data-visibility-preset="simple">🧘 Simple</button>
+                                <button class="btn-secondary" type="button" data-visibility-preset="power">⚡ Power / Process</button>
+                                <span id="visibility-preset-current" class="setting-description" style="margin-left:0.5rem;"></span>
                             </div>
                         </div>
 
@@ -536,7 +560,12 @@
 
     <!-- Our scripts -->
     <script src="logger.js"></script>
+    <script src="context-telemetry.js"></script>
     <script src="plugin-host.js"></script>
+    <script src="queue-evidence.js"></script>
+    <script src="queue-workflow.js"></script>
+    <script src="visibility-preset.js"></script>
+    <script src="plugins-admin.js"></script>
     <script src="quick-links.js"></script>
     <script src="commander-panel.js"></script>
     <script src="recommendations.js"></script>

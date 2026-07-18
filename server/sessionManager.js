@@ -2940,7 +2940,7 @@ class SessionManager extends EventEmitter {
     return getShellKind();
   }
 
-  buildClaudeCommand({ shellKind, mode, resumeId, skipPermissions }) {
+  buildClaudeCommand({ shellKind, mode, resumeId, skipPermissions, model }) {
     let cmd = 'claude';
 
     if (mode === 'continue') {
@@ -2953,6 +2953,12 @@ class SessionManager extends EventEmitter {
 
     if (skipPermissions) {
       cmd += ' --dangerously-skip-permissions';
+    }
+
+    // Model alias or full id (e.g. "sonnet", "opus", "claude-opus-4-8[1m]").
+    const modelName = String(model || '').trim();
+    if (modelName && /^[A-Za-z0-9._[\]-]+$/.test(modelName)) {
+      cmd += ` --model ${quoteForShell(modelName, shellKind)}`;
     }
 
     return cmd;
@@ -3118,7 +3124,8 @@ class SessionManager extends EventEmitter {
           shellKind,
           mode: finalConfig.mode,
           resumeId: finalConfig.resumeId,
-          skipPermissions
+          skipPermissions,
+          model: finalConfig.model
         });
         const resolvedCommand = this.resolveClaudeCommand(claudeCmd, provider);
         if (resolvedCommand.warning) {

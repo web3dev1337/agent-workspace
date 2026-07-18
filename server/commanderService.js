@@ -149,6 +149,10 @@ class CommanderService {
   constructor(options = {}) {
     this.io = options.io;
     this.sessionManager = options.sessionManager;
+    // Instance identity: the default/primary Commander keeps id 'commander'
+    // so existing single-Commander behavior is byte-for-byte unchanged.
+    this.id = options.id || 'commander';
+    this.cwd = options.cwd || COMMANDER_CWD;
     this.session = null;
     this.outputBuffer = '';
     this.maxBufferChars = 200000;
@@ -164,6 +168,13 @@ class CommanderService {
     return CommanderService.instance;
   }
 
+  // Socket payloads carry commanderId so the client can route output to the
+  // right panel. The primary instance still emits the same event names, and
+  // existing listeners simply ignore the extra field.
+  emit(event, payload = {}) {
+    if (this.io) this.io.emit(event, { ...payload, commanderId: this.id });
+  }
+
   /**
    * Start the Commander terminal session
    * This spawns a Claude Code instance from the orchestrator directory
@@ -175,7 +186,7 @@ class CommanderService {
     }
 
     seedCommanderInstructionsIfNeeded();
-    logger.info('Starting Commander terminal', { cwd: COMMANDER_CWD });
+    logger.info('Starting Commander terminal', { commanderId: this.id, cwd: this.cwd });
 
     try {
       if (!pty) {
@@ -215,7 +226,7 @@ class CommanderService {
         name: 'xterm-color',
         cols: 120,
         rows: 40,
-        cwd: COMMANDER_CWD,
+        cwd: this.cwd,
         env
       };
 
@@ -223,7 +234,7 @@ class CommanderService {
       const ptyProcess = pty.spawn(shell, shellArgs, ptyOptions);
 
       this.session = {
-        id: 'commander',
+        id: this.id,
         pty: ptyProcess,
         type: 'commander',
         status: 'starting',
@@ -244,9 +255,7 @@ class CommanderService {
         this.handleClaudeLaunchOutput(data);
 
         // Emit to Commander panel
-        if (this.io) {
-          this.io.emit('commander-output', { data });
-        }
+        this.emit('commander-output', { data });
 
         // Detect when shell is ready
         if (data.includes('>') || data.includes('$')) {
@@ -273,9 +282,7 @@ class CommanderService {
         this.isReady = false;
         this.claudeStarted = false; // Reset for next start
         this.resetClaudeLaunchState();
-        if (this.io) {
-          this.io.emit('commander-exit', { exitCode });
-        }
+        this.emit('commander-exit', { exitCode });
       });
 
       return { success: true, message: 'Commander terminal started' };

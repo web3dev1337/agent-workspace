@@ -1471,6 +1471,16 @@ class ClaudeOrchestrator {
         this.notificationManager.handleNotification(notification);
       });
 
+      // Live-update the open Queue detail when a review workflow progresses.
+      // The server emits stage transitions on this channel; without a listener
+      // the workflow card's chips only refresh after the user's own clicks.
+      this.socket.on('review-workflow', (payload) => {
+        const live = window.__queueDetailLive;
+        if (live && payload?.taskId && payload.taskId === live.taskId) {
+          try { live.reload(); } catch { /* detail may have closed */ }
+        }
+      });
+
       this.socket.on('session-exited', ({ sessionId, exitCode }) => {
         this.handleSessionExit(sessionId, exitCode);
       });
@@ -3192,6 +3202,7 @@ class ClaudeOrchestrator {
     // Second-layer filter only: do NOT modify worktree visibility (visibleTerminals) or tierFilter.
     this.updateTerminalGrid();
     this.buildSidebar();
+    window.ContextTelemetry?.track('workflow-mode', normalized);
 
     // Persist for the user.
     this.updateGlobalUserSetting('ui.workflow.mode', normalized);
@@ -4533,26 +4544,27 @@ class ClaudeOrchestrator {
 
     if (isRunning) {
       html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>`;
+    } else if (showStartServer) {
+      // Play buttons: options come from the cascaded config's gameModes/
+      // commonFlags (Global → Category → Framework → Project → Worktree);
+      // the server resolves the actual command from `serverCommand`.
+      if (showServerLaunchMenu) {
+        html += `<div class="server-launch-group">
+          <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
+                  onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+            <option value="">▶</option>
+            ${this.getDynamicLaunchOptions(sessionId)}
+            <option value="custom" selected>Custom...</option>
+          </select>
+          ${showLaunchSettings ? `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>` : ''}
+        </div>`;
+      } else {
+        html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start Server">▶</button>`;
+        if (showLaunchSettings) {
+          html += `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>`;
+        }
+      }
     }
-    // START SERVER BUTTON — disabled, kept for future re-enablement
-    // } else if (showStartServer) {
-    //   if (showServerLaunchMenu) {
-    //     html += `<div class="server-launch-group">
-    //       <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
-    //               onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
-    //         <option value="">▶</option>
-    //         ${this.getDynamicLaunchOptions(sessionId)}
-    //         <option value="custom" selected>Custom...</option>
-    //       </select>
-    //       ${showLaunchSettings ? `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>` : ''}
-    //     </div>`;
-    //   } else {
-    //     html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start Server">▶</button>`;
-    //     if (showLaunchSettings) {
-    //       html += `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>`;
-    //     }
-    //   }
-    // }
 
     // Add dynamic buttons from config
     const buttons = this.getButtonsForSession(sessionId, 'server');
@@ -4599,14 +4611,13 @@ class ClaudeOrchestrator {
     const visibility = this.getTerminalVisibilityConfig();
     const isRunning = this.serverStatuses.get(serverSessionId) === 'running';
 
-    // Only show stop button; start is gated behind explicit opt-in
+    // Only show stop button by default; start is gated behind explicit opt-in
     if (isRunning) {
       return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}')" title="Stop Server">⏹S</button>`;
     }
-    // START SERVER (dev) — disabled, kept for future re-enablement
-    // if (visibility.startServerDev === true) {
-    //   return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
-    // }
+    if (visibility.startServerDev === true) {
+      return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
+    }
     return '';
   }
 
@@ -5473,6 +5484,7 @@ class ClaudeOrchestrator {
 
   showOnlyWorktree(worktreeIdOrKey) {
     console.log(`Showing only worktree: ${worktreeIdOrKey}`);
+    window.ContextTelemetry?.track('worktree-focus', String(worktreeIdOrKey || ''));
 
     // Clear all visible terminals first
     this.visibleTerminals.clear();
@@ -19071,6 +19083,7 @@ class ClaudeOrchestrator {
 
   switchToWorkspace(workspaceId) {
     console.log('Switching to workspace:', workspaceId);
+    window.ContextTelemetry?.track('workspace-switch', String(workspaceId || ''));
     this.socket.emit('switch-workspace', { workspaceId });
   }
 
@@ -27695,6 +27708,7 @@ class ClaudeOrchestrator {
       const endIso = endedAtIso || new Date().toISOString();
       state.reviewTimer.taskId = null;
       state.reviewTimer.startedAtMs = null;
+      window.ContextTelemetry?.track('review-end', activeId);
       try {
         const rec = await upsertRecord(activeId, { reviewEndedAt: endIso });
         updateTaskRecordInState(activeId, rec);
@@ -27747,6 +27761,7 @@ class ClaudeOrchestrator {
       const nowMs = Date.now();
       state.reviewTimer.taskId = id;
       state.reviewTimer.startedAtMs = nowMs;
+      window.ContextTelemetry?.track('review-start', id);
       try {
         const rec = await upsertRecord(id, {
           reviewStartedAt: new Date(nowMs).toISOString(),
@@ -28698,6 +28713,15 @@ class ClaudeOrchestrator {
       const nextAutoSnoozeMs = computeBackoffMs(snoozeCount + 1);
       const nextAutoSnoozeLabel = formatBackoff(nextAutoSnoozeMs);
 
+      // Prompt caches expire after ~1h idle: reprompting the original session
+      // past that point restarts from a cold cache — prefer a fresh window
+      // seeded with the evidence handoff notes.
+      const promptAgeMs = promptSentAt ? Math.max(0, nowMs - parseIso(promptSentAt)) : 0;
+      const cacheCold = promptAgeMs > 55 * 60 * 1000;
+      const cacheColdChip = cacheCold
+        ? `<span class="cache-cold-chip" title="Last prompt was ${Math.round(promptAgeMs / 60000)} min ago — the session's prompt cache has likely expired. Reprompt/Fixer will use a FRESH window seeded with the handoff notes instead of continuing the cold session.">🧊 cache cold — fresh window on reprompt</span>`
+        : '';
+
       const identitySaved = Array.isArray(this.userSettings?.global?.ui?.identity?.saved)
         ? this.userSettings.global.ui.identity.saved
         : [];
@@ -28714,7 +28738,7 @@ class ClaudeOrchestrator {
 	        <div class="tasks-detail-header">
 	          <div class="tasks-detail-title">
 	            <div class="pr-subtitle">${escapeHtml(t.title || t.id)}</div>
-	            <div class="tasks-detail-meta">${escapeHtml(t.id)}</div>
+	            <div class="tasks-detail-meta">${escapeHtml(t.id)} ${cacheColdChip}</div>
 	          </div>
 				          <div class="tasks-detail-actions">
 				            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
@@ -28744,6 +28768,10 @@ class ClaudeOrchestrator {
           </div>
         </div>
         ` : ''}
+
+        ${window.QueueEvidence ? window.QueueEvidence.renderCard(t, record) : ''}
+
+        ${window.QueueWorkflow ? window.QueueWorkflow.renderCard(t, record) : ''}
 
         <div class="tasks-detail-block">
           <div class="tasks-detail-block-title">Tier + Risk</div>
@@ -28988,6 +29016,39 @@ class ClaudeOrchestrator {
 	          <div id="queue-reverse-deps" class="tasks-detail-meta">Loading…</div>
 	        </div>
 	      `;
+
+      const reloadDetailRecord = async () => {
+        if (!detailEl.isConnected) return; // detail panel was closed/replaced
+        try {
+          const recRes = await fetch(`/api/process/task-records/${encodeURIComponent(t.id)}`);
+          if (recRes.ok) {
+            const data = await recRes.json();
+            if (data?.record) t.record = data.record;
+          }
+        } catch { /* keep the stale record if the re-fetch fails */ }
+        renderDetail(t);
+      };
+
+      // Register for server-pushed review-workflow events (socket listener in
+      // setupSocketListeners) so stage chips update without user interaction.
+      window.__queueDetailLive = { taskId: t.id, reload: reloadDetailRecord };
+
+      window.QueueWorkflow?.wire(detailEl, t, record, {
+        onChanged: reloadDetailRecord
+      });
+
+      window.QueueEvidence?.wire(detailEl, t, record, {
+        onRefresh: async () => {
+          const worktreePath = t.worktreePath || record?.evidence?.worktreePath || '';
+          const res = await fetch(`/api/process/evidence/${encodeURIComponent(t.id)}/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(worktreePath ? { worktreePath } : {})
+          });
+          if (!res.ok) throw new Error(`Evidence refresh failed (${res.status})`);
+          await reloadDetailRecord();
+        }
+      });
 
       const tierEl = detailEl.querySelector('#queue-tier');
       const riskEl = detailEl.querySelector('#queue-change-risk');
