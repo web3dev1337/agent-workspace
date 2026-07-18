@@ -30,6 +30,104 @@ class WorkspaceTabManager {
     this.setupKeyboardShortcuts();
   }
 
+  getTabPersistenceStorageKey() {
+    return 'agent-workspace-open-workspace-tabs-v1';
+  }
+
+  isTabPersistenceEnabled() {
+    return this.orchestrator?.isWorkspaceSidebarStatePersistenceEnabled?.() === true;
+  }
+
+  buildPersistedTabStateSnapshot() {
+    const openWorkspaceIds = Array.from(this.tabs.values())
+      .map((tab) => String(tab?.workspaceId || '').trim())
+      .filter(Boolean);
+    const activeWorkspaceId = String(this.getActiveTab()?.workspaceId || '').trim();
+    return {
+      openWorkspaceIds: Array.from(new Set(openWorkspaceIds)),
+      activeWorkspaceId
+    };
+  }
+
+  loadPersistedTabState() {
+    if (!this.isTabPersistenceEnabled()) {
+      return { workspaceIds: [], activeWorkspaceId: '' };
+    }
+
+    const persistedFromSettings = this.orchestrator?.getPersistedWorkspaceTabState?.();
+    if (persistedFromSettings) {
+      return {
+        workspaceIds: Array.isArray(persistedFromSettings.openWorkspaceIds) ? persistedFromSettings.openWorkspaceIds : [],
+        activeWorkspaceId: String(persistedFromSettings.activeWorkspaceId || '').trim()
+      };
+    }
+
+    try {
+      const raw = localStorage.getItem(this.getTabPersistenceStorageKey());
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (!parsed || typeof parsed !== 'object') return { workspaceIds: [], activeWorkspaceId: '' };
+      const workspaceIds = Array.isArray(parsed.workspaceIds)
+        ? Array.from(new Set(parsed.workspaceIds.map((value) => String(value || '').trim()).filter(Boolean)))
+        : [];
+      const activeWorkspaceId = String(parsed.activeWorkspaceId || '').trim();
+      return { workspaceIds, activeWorkspaceId };
+    } catch {
+      return { workspaceIds: [], activeWorkspaceId: '' };
+    }
+  }
+
+  savePersistedTabState() {
+    const snapshot = this.buildPersistedTabStateSnapshot();
+
+    try {
+      if (this.isTabPersistenceEnabled()) {
+        localStorage.setItem(this.getTabPersistenceStorageKey(), JSON.stringify(snapshot));
+      } else {
+        localStorage.removeItem(this.getTabPersistenceStorageKey());
+      }
+    } catch {
+      // ignore storage failures
+    }
+
+    if (this.isTabPersistenceEnabled()) {
+      this.orchestrator?.queueWorkspaceTabStatePersistence?.({ snapshot });
+    }
+  }
+
+  restorePersistedTabs(availableWorkspaces = [], { activeWorkspaceId = '' } = {}) {
+    const availableById = new Map(
+      (Array.isArray(availableWorkspaces) ? availableWorkspaces : [])
+        .map((workspace) => [String(workspace?.id || '').trim(), workspace])
+        .filter(([workspaceId, workspace]) => workspaceId && workspace)
+    );
+
+    const persisted = this.loadPersistedTabState();
+    const orderedWorkspaceIds = Array.from(new Set([
+      ...persisted.workspaceIds.filter((workspaceId) => availableById.has(workspaceId)),
+      ...(activeWorkspaceId && availableById.has(activeWorkspaceId) ? [activeWorkspaceId] : [])
+    ]));
+
+    if (!orderedWorkspaceIds.length) {
+      return null;
+    }
+
+    orderedWorkspaceIds.forEach((workspaceId) => {
+      const workspace = availableById.get(workspaceId);
+      if (!workspace) return;
+      const tabId = this.createTab(workspace, [], { autoActivate: false });
+      const tabState = this.getTab(tabId);
+      if (tabState && tabState.sessions.size === 0) {
+        tabState.needsPersistedWorkspaceSidebarRestore = true;
+      }
+    });
+
+    if (activeWorkspaceId) {
+      return this.findTabByWorkspaceId(activeWorkspaceId)?.id || null;
+    }
+
+    return this.findTabByWorkspaceId(orderedWorkspaceIds[0])?.id || null;
+  }
+
   createTabBarContainer() {
     const mainContainer = document.querySelector('.main-container');
     if (!mainContainer) {
@@ -97,7 +195,7 @@ class WorkspaceTabManager {
   /**
    * Create a new tab for a workspace
    */
-  createTab(workspace, sessions = []) {
+  createTab(workspace, sessions = [], { autoActivate = null } = {}) {
     // Prevent duplicate tabs for the same workspace
     const existingTab = this.findTabByWorkspaceId(workspace?.id);
     if (existingTab) {
@@ -133,6 +231,7 @@ class WorkspaceTabManager {
 
       // UI/filter state
       uiState: this.createDefaultUIState(),
+      needsPersistedWorkspaceSidebarRestore: false,
 
       // Observer for resize handling
       resizeObserver: null,
@@ -175,11 +274,13 @@ class WorkspaceTabManager {
 
     // Store tab
     this.tabs.set(tabId, tabState);
+    this.savePersistedTabState();
 
     console.log(`Created tab ${tabId} for workspace ${workspace.name}`);
 
     // If this is the first tab, activate it
-    if (this.tabs.size === 1) {
+    const shouldAutoActivate = autoActivate === null ? this.tabs.size === 1 : !!autoActivate;
+    if (shouldAutoActivate) {
       this.switchTab(tabId);
     }
 
@@ -436,6 +537,7 @@ class WorkspaceTabManager {
 
     // Update active state
     this.activeTabId = tabId;
+    this.savePersistedTabState();
 
     // Update UI
     this.updateTabUI();
@@ -510,6 +612,11 @@ class WorkspaceTabManager {
 
     // Persist UI/filter state (visible terminals, filters, etc.) for later restoration
     this.saveTabUIState(tabState);
+    this.orchestrator.queueWorkspaceSidebarStatePersistence?.({
+      workspaceId: tabWorkspaceId,
+      snapshot: this.orchestrator.captureWorkspaceSidebarStateSnapshot?.({ workspaceId: tabWorkspaceId }),
+      immediate: true
+    });
 
     for (const [sessionId, termData] of Array.from(tabState.terminals.entries())) {
       if (currentSessionIds.has(sessionId)) continue;
@@ -878,6 +985,7 @@ class WorkspaceTabManager {
 
     // Remove from tabs map
     this.tabs.delete(tabId);
+    this.savePersistedTabState();
 
     // If we closed the active tab, switch to another
     if (wasActive) {
@@ -920,6 +1028,8 @@ class WorkspaceTabManager {
         this.orchestrator.currentWorkspace = fallbackTab?.workspace || null;
       }
     }
+
+    this.savePersistedTabState();
 
     return tabsToRemove.length;
   }
@@ -1099,6 +1209,7 @@ class WorkspaceTabManager {
 
     // Remove from tabs map
     this.tabs.delete(tabState.id);
+    this.savePersistedTabState();
   }
 
   /**

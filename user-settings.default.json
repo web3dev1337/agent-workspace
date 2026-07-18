@@ -226,6 +226,14 @@
         "viewMode": "all",
         "tierFilter": "all"
       },
+      "experimental": {
+        "persistWorkspaceSidebarState": false,
+        "workspaceSidebarStateByWorkspace": {},
+        "workspaceTabState": {
+          "openWorkspaceIds": [],
+          "activeWorkspaceId": ""
+        }
+      },
       "worktrees": {
         "autoCreateExtraWhenBusy": true,
         "autoCreateMinNumber": 9,
