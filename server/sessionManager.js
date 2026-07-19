@@ -17,6 +17,7 @@ const {
 } = require('./utils/shellCommand');
 const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
 const { loadNodePty } = require('./utils/nodePtyCompat');
+const { TmuxSessionBackend } = require('./utils/tmuxSessionBackend');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -115,6 +116,28 @@ class SessionManager extends EventEmitter {
     this.processTreeKillGraceMs = parseInt(process.env.PROCESS_TREE_KILL_GRACE_MS || '1200');
     this.conversationSnapshotTtlMs = parseInt(process.env.CONVERSATION_SNAPSHOT_TTL_MS || '5000');
     this.conversationSnapshotCache = { timestamp: 0, files: null };
+
+    // Session persistence: terminals live inside tmux sessions on a dedicated
+    // per-instance socket, so they survive app-server restarts and are
+    // re-adopted on the next createSession() for the same id (issue #1025).
+    // ORCHESTRATOR_SESSION_PERSISTENCE=0 disables; unavailable tmux (Windows,
+    // minimal installs) falls back to direct node-pty spawning automatically.
+    const persistenceConfig = this.config.sessions?.persistence || {};
+    const persistenceEnvOverride = String(process.env.ORCHESTRATOR_SESSION_PERSISTENCE || '').trim();
+    const persistenceWanted = persistenceEnvOverride
+      ? persistenceEnvOverride !== '0'
+      : persistenceConfig.enabled !== false;
+    const instancePort = process.env.ORCHESTRATOR_PORT || this.config.server?.port || 'default';
+    this.sessionPersistence = new TmuxSessionBackend({
+      socketName: persistenceConfig.socketName || `agent-workspace-${instancePort}`,
+      logger
+    });
+    this.sessionPersistenceEnabled = persistenceWanted && this.sessionPersistence.isAvailable();
+    logger.info('Session persistence', {
+      enabled: this.sessionPersistenceEnabled,
+      wanted: persistenceWanted,
+      socket: this.sessionPersistence.socketName
+    });
 
     // Worktrees will be built when workspace is set
     this.worktrees = [];
@@ -824,17 +847,47 @@ class SessionManager extends EventEmitter {
 
       const effectiveEnv = augmentProcessEnv(env);
 
-      const ptyProcess = pty.spawn(
-        config.command,
-        config.args,
-        this.buildPtyOptions(config, effectiveEnv)
-      );
+      // Persistence path: spawn a tmux CLIENT instead of the shell directly.
+      // The pane (real shell/agent) lives under the tmux server and survives
+      // app-server restarts; `new-session -A` re-attaches to a surviving
+      // session, which is how sessions are adopted after a restart.
+      let spawnCommand = config.command;
+      let spawnArgs = config.args;
+      let persistence = null;
+      if (this.sessionPersistenceEnabled) {
+        // A leaked TMUX var would make the client refuse to start ("nested").
+        delete effectiveEnv.TMUX;
+        delete effectiveEnv.TMUX_PANE;
+        this.sessionPersistence.ensureConfigured();
+        const adopted = this.sessionPersistence.hasSession(sessionId);
+        const spec = this.sessionPersistence.buildSpawnCommand({
+          sessionId,
+          command: config.command,
+          args: config.args,
+          cwd: config.cwd
+        });
+        spawnCommand = spec.command;
+        spawnArgs = spec.args;
+        persistence = { backend: 'tmux', name: spec.name, adopted };
+        if (adopted) {
+          logger.info('Adopting surviving persistent session', { sessionId });
+        }
+      }
+
+      const ptyOptions = this.buildPtyOptions(config, effectiveEnv);
+      if (persistence) {
+        // The outer client terminal must advertise 256-color support or tmux
+        // degrades every pane's rendering.
+        ptyOptions.name = 'xterm-256color';
+      }
+      const ptyProcess = pty.spawn(spawnCommand, spawnArgs, ptyOptions);
 
       const initialCwd = config.cwd || process.cwd();
-      
+
       const session = {
         id: sessionId,
         pty: ptyProcess,
+        persistence,
         type: config.type,
         worktreeId: config.worktreeId,
         repositoryName: config.repositoryName,  // For mixed-repo workspaces
@@ -857,7 +910,21 @@ class SessionManager extends EventEmitter {
         autoStarted: false,  // Track if auto-start has been triggered
         claudeLaunchState: null
       };
-      
+
+      // Adopted sessions re-attach mid-flight, so the fresh client only sees a
+      // screen redraw. Backfill the buffer from tmux scrollback so the log
+      // endpoint / client history preload can show what happened before the
+      // restart. Mark it delivered: history is served via the log endpoint,
+      // not re-streamed as live output.
+      if (persistence?.adopted) {
+        const history = this.sessionPersistence.capturePane(sessionId, 2000);
+        if (history) {
+          session.buffer = history.endsWith('\n') ? history : `${history}\n`;
+          session.deliveredBufferLength = session.buffer.length;
+        }
+      }
+
+
       // Set up inactivity timer (respect per-type timeout; 0 disables)
       const effectiveTimeout = this.getSessionTimeout(session);
       if (effectiveTimeout > 0) {
@@ -2472,10 +2539,68 @@ class SessionManager extends EventEmitter {
     return true;
   }
   
+  // Pid owning the session's REAL process tree. For persistent sessions the
+  // pane process is a child of the tmux server, not of the client pty the
+  // orchestrator holds — tree-kills and child counting must target the pane.
+  getSessionProcessPid(session) {
+    if (session?.persistence?.backend === 'tmux' && this.sessionPersistenceEnabled) {
+      const panePid = this.sessionPersistence.panePid(session.id);
+      if (panePid) return panePid;
+    }
+    const pid = Number(session?.pty?.pid);
+    return Number.isFinite(pid) && pid > 0 ? pid : null;
+  }
+
+  // Explicit destruction of a persistent session. Killing only the client pty
+  // would DETACH the pane, leaking it as an orphaned tmux session — surviving
+  // is only for server restarts, never for user-initiated close/terminate.
+  destroyPersistentSession(session) {
+    if (session?.persistence?.backend !== 'tmux') return;
+    try {
+      this.sessionPersistence.killSession(session.id);
+    } catch (error) {
+      logger.warn('Failed to kill persistent tmux session', { sessionId: session.id, error: error.message });
+    }
+  }
+
+  // Observability for the persistence layer: what tmux knows vs what the
+  // orchestrator manages. "Orphaned" sessions survived a restart but were not
+  // re-adopted (e.g. their worktree was removed from the workspace meanwhile);
+  // they can be inspected via `tmux -L <socket> attach -t <name>` or killed.
+  getPersistenceStatus() {
+    const status = {
+      enabled: !!this.sessionPersistenceEnabled,
+      backend: 'tmux',
+      socketName: this.sessionPersistence?.socketName || null,
+      managed: [],
+      orphaned: []
+    };
+    if (!status.enabled) return status;
+
+    const known = new Map();
+    const collect = (map) => {
+      for (const session of map.values()) {
+        if (session?.persistence?.name) known.set(session.persistence.name, session.id);
+      }
+    };
+    collect(this.sessions);
+    for (const map of this.workspaceSessionMaps.values()) collect(map);
+
+    const live = this.sessionPersistence.listSessionNames();
+    for (const name of live) {
+      if (known.has(name)) {
+        status.managed.push({ name, sessionId: known.get(name) });
+      } else {
+        status.orphaned.push({ name });
+      }
+    }
+    return status;
+  }
+
   checkProcessLimit(session) {
     if (!session.pty || !session.pty.pid) return;
 
-    const pid = Number(session.pty.pid);
+    const pid = this.getSessionProcessPid(session);
     if (!Number.isFinite(pid) || pid <= 0) return;
 
     const { spawn } = require('child_process');
@@ -2600,7 +2725,11 @@ class SessionManager extends EventEmitter {
       session.pendingStatusTimer = null;
     }
 
-    const ptyPid = Number(session?.pty?.pid);
+    // Resolve the real process-tree pid BEFORE tearing anything down: for
+    // persistent sessions it comes from a tmux query that fails once the
+    // session is killed.
+    const processPid = this.getSessionProcessPid(session);
+    this.destroyPersistentSession(session);
 
     // Kill the PTY process if it exists
     if (session.pty) {
@@ -2616,7 +2745,7 @@ class SessionManager extends EventEmitter {
 
     // Best-effort process tree cleanup to avoid orphaned agent subprocesses
     // after terminals are closed/removed.
-    this.bestEffortKillProcessTree(ptyPid, { sessionId: sid });
+    this.bestEffortKillProcessTree(processPid, { sessionId: sid });
 
     // Remove from sessions map
     sessionMap.delete(sid);
@@ -3221,6 +3350,9 @@ class SessionManager extends EventEmitter {
     // Kill all PTY processes
     for (const [sessionId, session] of this.sessions) {
       try {
+        // Destructive path (workspace teardown): persistent panes must die
+        // with their sessions, not linger detached on the tmux socket.
+        this.destroyPersistentSession(session);
         if (session.pty) {
           session.pty.kill();
           logger.debug(`Killed session: ${sessionId}`);
