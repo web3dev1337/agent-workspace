@@ -2776,6 +2776,17 @@ app.get('/api/audit/export', requirePolicyAction('audit_export'), proOnly, async
   }
 });
 
+// Session-persistence observability: whether terminals run inside tmux (and
+// survive server restarts), which live tmux sessions are managed vs orphaned.
+app.get('/api/sessions/persistence', (req, res) => {
+  try {
+    return res.json({ ok: true, ...sessionManager.getPersistenceStatus() });
+  } catch (error) {
+    logger.error('Failed to resolve session persistence status', { error: error.message, stack: error.stack });
+    return res.status(500).json({ ok: false, error: 'Failed to resolve session persistence status' });
+  }
+});
+
 app.get('/api/sessions/:sessionId/log', (req, res) => {
   try {
     const sessionId = String(req.params.sessionId || '').trim();
