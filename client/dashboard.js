@@ -4549,9 +4549,9 @@ class Dashboard {
   }
 
   async installWindowsStartup() {
-    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
-                      window.location.port === '2081' ? 'http://localhost:4000' :
-                      window.location.origin;
+    // Same-origin: the client dev server proxies /api to the backend, which
+      // also works from remote browsers (a hardcoded localhost:PORT does not).
+      const serverUrl = window.location.origin;
 
     // First check if we're on WSL
     try {
@@ -4604,9 +4604,9 @@ class Dashboard {
   }
 
   async checkRecoveryState(workspaceId) {
-    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
-                      window.location.port === '2081' ? 'http://localhost:4000' :
-                      window.location.origin;
+    // Same-origin: the client dev server proxies /api to the backend, which
+      // also works from remote browsers (a hardcoded localhost:PORT does not).
+      const serverUrl = window.location.origin;
 
     try {
       const response = await fetch(`${serverUrl}/api/recovery/${encodeURIComponent(workspaceId)}`);
@@ -4702,9 +4702,9 @@ class Dashboard {
 
       document.body.appendChild(modal);
 
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
-                        window.location.port === '2081' ? 'http://localhost:4000' :
-                        window.location.origin;
+      // Same-origin: the client dev server proxies /api to the backend, which
+      // also works from remote browsers (a hardcoded localhost:PORT does not).
+      const serverUrl = window.location.origin;
 
       const setButtonsDisabled = (disabled) => {
         modal.querySelectorAll('button').forEach((btn) => { btn.disabled = !!disabled; });
