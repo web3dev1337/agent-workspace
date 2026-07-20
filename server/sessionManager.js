@@ -17,7 +17,7 @@ const {
 } = require('./utils/shellCommand');
 const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
 const { loadNodePty } = require('./utils/nodePtyCompat');
-const { TmuxSessionBackend } = require('./utils/tmuxSessionBackend');
+const { TmuxSessionBackend, stripDeviceReports } = require('./utils/tmuxSessionBackend');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -1845,8 +1845,13 @@ class SessionManager extends EventEmitter {
     
     try {
       let payload = data;
-      // PowerShell terminals need CRLF to reliably execute commands written programmatically.
       if (typeof payload === 'string') {
+        // Under tmux, drop echoed device-attribute reports so they can't land
+        // on the active pane as "1;2c0;276;0c" junk (see stripDeviceReports).
+        if (this.sessionPersistenceEnabled && session.persistence) {
+          payload = stripDeviceReports(payload);
+        }
+        // PowerShell terminals need CRLF to reliably execute commands written programmatically.
         const shellKind = this.getShellKindForSession(sessionId);
         if (shellKind === 'powershell') {
           payload = payload.replace(/\r?\n/g, '\r\n');

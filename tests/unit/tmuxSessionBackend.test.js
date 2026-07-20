@@ -1,4 +1,4 @@
-const { TmuxSessionBackend, shellQuote } = require('../../server/utils/tmuxSessionBackend');
+const { TmuxSessionBackend, shellQuote, stripDeviceReports } = require('../../server/utils/tmuxSessionBackend');
 
 const makeBackend = (overrides = {}) => {
   const calls = [];
@@ -23,6 +23,32 @@ describe('shellQuote', () => {
     expect(shellQuote('')).toBe("''");
     expect(shellQuote('cd "x" && exec bash')).toBe(`'cd "x" && exec bash'`);
     expect(shellQuote("it's")).toBe(`'it'\\''s'`);
+  });
+});
+
+describe('stripDeviceReports', () => {
+  const ESC = '\x1b';
+  test('removes DA1 and DA2 report sequences (the leaked prompt junk)', () => {
+    expect(stripDeviceReports(`${ESC}[?1;2c`)).toBe('');
+    expect(stripDeviceReports(`${ESC}[>0;276;0c`)).toBe('');
+    expect(stripDeviceReports(`${ESC}[?1;2c${ESC}[>0;276;0c`)).toBe('');
+    // interleaved with a real keystroke that happened to follow
+    expect(stripDeviceReports(`${ESC}[?1;2cls`)).toBe('ls');
+  });
+
+  test('leaves ordinary input and other escape sequences untouched', () => {
+    expect(stripDeviceReports('ls -la\r')).toBe('ls -la\r');
+    expect(stripDeviceReports(`${ESC}[A`)).toBe(`${ESC}[A`);            // arrow up
+    expect(stripDeviceReports(`${ESC}[200~pasted${ESC}[201~`)).toBe(`${ESC}[200~pasted${ESC}[201~`);
+    // cursor-position and DSR reports are intentionally preserved (apps use them)
+    expect(stripDeviceReports(`${ESC}[24;80R`)).toBe(`${ESC}[24;80R`);
+    expect(stripDeviceReports(`${ESC}[0n`)).toBe(`${ESC}[0n`);
+  });
+
+  test('is a no-op for non-strings and escape-free input', () => {
+    expect(stripDeviceReports('hello')).toBe('hello');
+    expect(stripDeviceReports(undefined)).toBe(undefined);
+    expect(stripDeviceReports(null)).toBe(null);
   });
 });
 
@@ -100,7 +126,8 @@ describe('TmuxSessionBackend', () => {
       ['set', '-g', 'status', 'off'],
       ['set', '-g', 'prefix', 'None'],
       ['set', '-g', 'mouse', 'off'],
-      ['set', '-g', 'window-size', 'latest']
+      ['set', '-g', 'window-size', 'latest'],
+      ['set', '-ga', 'terminal-features', 'xterm-256color:RGB:clipboard']
     ]));
     // second call is a no-op
     const callsBefore = execImpl.mock.calls.length;
