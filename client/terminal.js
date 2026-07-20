@@ -911,11 +911,30 @@ class TerminalManager {
               return;
             }
 
-            this.warnFit(
+            // 0x0 means the element simply isn't measurable right now — an
+            // off-screen terminal in the scrollable grid, or one whose fonts/
+            // layout haven't settled. That's expected with many worktrees and
+            // resolves on the next show/resize, so keep it at debug level.
+            // A small-but-nonzero proposal is a real fit problem worth warning.
+            const unmeasurable = proposedCols === 0 && proposedRows === 0;
+            const logFit = unmeasurable ? this.debugFit.bind(this) : this.warnFit.bind(this);
+            logFit(
               sessionId,
               'proposed-still-too-small',
               `Terminal ${sessionId} proposed fit still too small after 5 retries (${proposedCols}x${proposedRows}; min ${minStableCols}x${minStableRows}); skipping fit`
             );
+            // Off-screen terminals still deserve a delayed retry so they fit
+            // correctly once scrolled into view without a resize event.
+            if (unmeasurable) {
+              if (!this.delayedFitTimers) this.delayedFitTimers = new Map();
+              if (!this.delayedFitTimers.has(sessionId)) {
+                const t = setTimeout(() => {
+                  this.delayedFitTimers.delete(sessionId);
+                  this.fitTerminal(sessionId, 0);
+                }, 1200);
+                this.delayedFitTimers.set(sessionId, t);
+              }
+            }
             this.fitTimers.delete(sessionId);
             return;
           }
