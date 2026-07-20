@@ -85,6 +85,12 @@ server/utils/processUtils.js       - Shared spawn/env hardening helpers
 └─ Cross-platform behavior: non-Windows platforms pass through unchanged so Linux/macOS launch behavior stays stable
 server/utils/nodePtyCompat.js      - Runtime compatibility shim for the bundled `node-pty` Windows ConPTY loader
 └─ Windows PTY guard: wraps stale ConPTY calls in memory (`startProcess`, `connect`, `resize`, `clear`, `kill`) via `loadNativeModule` when available or direct `conpty.node` patching when package internals differ, so packaged installs survive read-only app-resource layouts and mixed node-pty variants
+server/utils/tmuxSessionBackend.js - tmux-backed session persistence (terminals survive app-server restarts)
+├─ Model: the orchestrator's pty is only a tmux CLIENT; the real shell/agent runs in a pane under the tmux server on a dedicated per-instance socket (`agent-workspace-<port>`), so nodemon reloads/updates/crashes detach instead of killing sessions, and `new-session -A` re-adopts them on the next createSession()
+├─ Env hygiene: scrubs `CLAUDECODE`/`CLAUDE_CODE_ENTRYPOINT`/`TMUX` at the tmux-server choke point so nested-session guards never trip; socket options make panes behave like plain terminals (status off, prefix None, mouse off, window-size latest)
+├─ Lifecycle: explicit close/terminate/workspace-teardown kills the tmux session (never leaks detached panes); server shutdown detaches only; tree-kills + process limits target the PANE pid, not the client
+├─ Fallback: Windows/tmux-less installs fail closed to direct node-pty spawning (`ORCHESTRATOR_SESSION_PERSISTENCE=0` or `config.sessions.persistence.enabled=false` to disable); survives server restarts only — reboots still rely on transcript resume
+└─ Observability: `GET /api/sessions/persistence` reports managed vs orphaned tmux sessions; adopted sessions backfill their buffer from `capture-pane` so the log endpoint/scrollback preload shows pre-restart history
 server/utils/pathUtils.js          - Shared slash-normalization + data-directory compatibility helpers for repo/worktree labels
 └─ Legacy migration: renames `~/.orchestrator` when possible, otherwise merges richer legacy state into `~/.agent-workspace` with conflict backups before falling back to the old directory
 server/tokenCounter.js             - Token usage tracking (if applicable)

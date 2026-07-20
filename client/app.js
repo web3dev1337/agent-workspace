@@ -34,6 +34,15 @@ class ClaudeOrchestrator {
   constructor() {
     this.sessions = new Map();
     this.activeView = [];
+    // Per-worktree button config lookups log "using defaults" for every
+    // worktree without a custom .orchestrator-config.json — normal, and noisy
+    // with many worktrees. Opt in via localStorage 'debug-worktree-config'.
+    this.debugWorktreeConfig = false;
+    try {
+      this.debugWorktreeConfig = window?.localStorage?.getItem('debug-worktree-config') === 'true';
+    } catch {
+      // ignore
+    }
     this.visibleTerminals = new Set(); // Track which terminals are visible
     // Second-layer filter applied after per-worktree visibility toggles:
     // 'all' | 'claude' | 'server'
@@ -4348,15 +4357,15 @@ class ClaudeOrchestrator {
     }
 
     if (!repositoryType) {
-      console.log(`No repositoryType found for session ${sessionId}, using defaults`);
+      if (this.debugWorktreeConfig) console.debug(`No repositoryType found for session ${sessionId}, using defaults`);
       return this.getDefaultButtons(terminalType, sessionId);
     }
 
     // Get worktree-specific cascaded config (pre-fetched)
     const cascadedConfig = this.worktreeConfigs.get(sessionId);
-    console.log(`Looking up worktree config for ${sessionId} (type: ${repositoryType}):`, cascadedConfig);
+    if (this.debugWorktreeConfig) console.debug(`Looking up worktree config for ${sessionId} (type: ${repositoryType}):`, cascadedConfig);
     if (!cascadedConfig || !cascadedConfig.buttons) {
-      console.log(`No worktree config or buttons found for ${sessionId}, using defaults`);
+      if (this.debugWorktreeConfig) console.debug(`No worktree config or buttons found for ${sessionId}, using defaults`);
       return this.getDefaultButtons(terminalType, sessionId);
     }
 
