@@ -20,6 +20,24 @@ const { execFileSync } = require('child_process');
 
 const SESSION_NAME_UNSAFE = /[^A-Za-z0-9_-]/g;
 
+// Device-attribute REPORT sequences: DA1 `ESC [ ? … c` and DA2 `ESC [ > … c`.
+// These are terminal auto-RESPONSES, never something a user types. They only
+// appear on the input stream as an echo of the browser terminal answering a
+// probe. Under tmux the outer-terminal (xterm.js) probe response can arrive on
+// the client's stdin after tmux's read window has closed — tmux then routes the
+// stray bytes to the active pane, where they surface as "1;2c0;276;0c" junk at
+// the shell prompt. Stripping them from inbound input is safe: tmux answers
+// inner-app DA queries itself, and capability detection is pinned via
+// terminal-features below, so nothing legitimate depends on this echo.
+// Cursor-position (…R) and DSR (…n) reports are deliberately NOT stripped —
+// some apps legitimately read those back as input.
+const DEVICE_REPORT_RE = /\x1b\[[?>][0-9;]*c/g;
+
+const stripDeviceReports = (input) => {
+  if (typeof input !== 'string' || input.indexOf('\x1b[') === -1) return input;
+  return input.replace(DEVICE_REPORT_RE, '');
+};
+
 // Quote a value for the shell-command string tmux hands to `$SHELL -c`.
 const shellQuote = (value) => {
   const s = String(value ?? '');
@@ -97,6 +115,10 @@ class TmuxSessionBackend {
       ['set', '-g', 'mouse', 'off'],
       ['set', '-g', 'history-limit', '20000'],
       ['set', '-g', 'default-terminal', 'xterm-256color'],
+      // Pin the outer terminal's capabilities so tmux never has to depend on a
+      // (slow, round-tripped over the browser socket) probe response to detect
+      // truecolor/clipboard — which is what races and leaks DA reports.
+      ['set', '-ga', 'terminal-features', 'xterm-256color:RGB:clipboard'],
       ['set', '-g', 'escape-time', '25'],
       ['set', '-g', 'window-size', 'latest'],
       ['set', '-g', 'allow-rename', 'off'],
@@ -192,4 +214,4 @@ class TmuxSessionBackend {
   }
 }
 
-module.exports = { TmuxSessionBackend, shellQuote };
+module.exports = { TmuxSessionBackend, shellQuote, stripDeviceReports };
