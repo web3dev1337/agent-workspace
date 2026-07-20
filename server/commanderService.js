@@ -544,7 +544,13 @@ class CommanderService {
       return false;
     }
 
-    // Use pty.write directly since sendInput may not exist
+    // Route through the single input choke point so this shares the same
+    // handling as browser keystrokes: device-report stripping under tmux,
+    // PowerShell CRLF normalization, and activity/status bookkeeping. Falls
+    // back to a direct write only if writeToSession is somehow unavailable.
+    if (typeof this.sessionManager.writeToSession === 'function') {
+      return this.sessionManager.writeToSession(sessionId, input);
+    }
     if (session.pty) {
       session.pty.write(input);
       return true;
