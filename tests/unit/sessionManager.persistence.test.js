@@ -98,6 +98,34 @@ describe('SessionManager session persistence', () => {
     expect(status.orphaned).toEqual([{ name: 'stray-work9-claude' }]);
   });
 
+  test('writeToSession strips echoed device-attribute reports for tmux sessions', () => {
+    const { sm } = makeManager();
+    const writes = [];
+    sm.sessions.set('work1-claude', {
+      id: 'work1-claude',
+      type: 'claude',
+      persistence: { backend: 'tmux', name: 'work1-claude' },
+      pty: { write: (d) => writes.push(d) }
+    });
+
+    sm.writeToSession('work1-claude', '\x1b[?1;2c\x1b[>0;276;0cls\r');
+    expect(writes).toEqual(['ls\r']); // DA reports removed, real keystroke kept
+  });
+
+  test('writeToSession leaves input untouched for non-persistent (direct pty) sessions', () => {
+    const { sm } = makeManager();
+    sm.sessionPersistenceEnabled = false;
+    const writes = [];
+    sm.sessions.set('work2-claude', {
+      id: 'work2-claude',
+      type: 'claude',
+      pty: { write: (d) => writes.push(d) }
+    });
+
+    sm.writeToSession('work2-claude', '\x1b[?1;2cls\r');
+    expect(writes).toEqual(['\x1b[?1;2cls\r']); // no stripping without tmux
+  });
+
   test('getPersistenceStatus reports disabled cleanly', () => {
     const { sm } = makeManager();
     sm.sessionPersistenceEnabled = false;
