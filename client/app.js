@@ -29,6 +29,16 @@ const LEGACY_SETTINGS_STORAGE_KEY = 'claude-orchestrator-settings';
 const AUTH_TOKEN_STORAGE_KEY = 'agent-workspace-token';
 const LEGACY_AUTH_TOKEN_STORAGE_KEY = 'claude-orchestrator-token';
 
+// Column id for repos that were never placed on the projects board. Distinct from
+// 'backlog' so the board visibility toggles never hide untriaged repos.
+const PROJECTS_BOARD_UNCLASSIFIED_COLUMN = 'unclassified';
+
+// Repo catalogs survive reloads so Add Worktree opens instantly instead of
+// rescanning from an empty in-memory cache on every page load.
+const SCANNED_REPOS_CACHE_STORAGE_KEY = 'agent-workspace-scanned-repos-cache';
+const GITHUB_REPOS_CACHE_STORAGE_KEY = 'agent-workspace-github-repos-cache';
+const REPO_CACHE_PERSIST_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 // Enhanced Agent Workspace with sidebar and flexible viewing
 class ClaudeOrchestrator {
   constructor() {
@@ -32914,7 +32924,7 @@ class ClaudeOrchestrator {
     this.showToast(`${cloneMessage}: ${repo.nameWithOwner} (${data?.worktree?.id || 'work1'})`, 'success');
 
     // Refresh repo caches so the repo moves from "Not Cloned" into regular scanned repos.
-    this.scannedReposCache = { value: null, fetchedAt: 0 };
+    this.invalidateScannedReposCache();
     await this.loadQuickWorktreeRepos();
 
     if (!keepOpen) {
@@ -35503,10 +35513,45 @@ class ClaudeOrchestrator {
     return safeMinutes * 60 * 1000;
   }
 
+  readPersistedRepoCache(storageKey) {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.value)) return null;
+      const fetchedAt = Number(parsed.fetchedAt);
+      if (!Number.isFinite(fetchedAt) || fetchedAt <= 0) return null;
+      // Guard against clock skew and stale-forever entries.
+      const age = Date.now() - fetchedAt;
+      if (age < 0 || age > REPO_CACHE_PERSIST_MAX_AGE_MS) return null;
+      return { value: parsed.value, fetchedAt, key: parsed.key };
+    } catch {
+      return null;
+    }
+  }
+
+  writePersistedRepoCache(storageKey, entry) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(entry));
+    } catch {
+      // Quota exceeded or storage disabled - the in-memory cache still works.
+      try { localStorage.removeItem(storageKey); } catch {}
+    }
+  }
+
+  invalidateScannedReposCache() {
+    this.scannedReposCache = { value: null, fetchedAt: 0 };
+    try { localStorage.removeItem(SCANNED_REPOS_CACHE_STORAGE_KEY); } catch {}
+  }
+
   async getScannedRepos({ force = false, cacheTtlMs = null } = {}) {
     const now = Date.now();
     const ttlRaw = Number(cacheTtlMs);
     const ttlMs = Number.isFinite(ttlRaw) && ttlRaw >= 0 ? ttlRaw : 20_000;
+    if (!this.scannedReposCache?.value) {
+      const persisted = this.readPersistedRepoCache(SCANNED_REPOS_CACHE_STORAGE_KEY);
+      if (persisted) this.scannedReposCache = { value: persisted.value, fetchedAt: persisted.fetchedAt };
+    }
     if (!force && this.scannedReposCache?.value && (now - (this.scannedReposCache.fetchedAt || 0) < ttlMs)) {
       return this.scannedReposCache.value;
     }
@@ -35516,6 +35561,7 @@ class ClaudeOrchestrator {
     const repos = await res.json();
     const arr = Array.isArray(repos) ? repos : [];
     this.scannedReposCache = { value: arr, fetchedAt: now };
+    this.writePersistedRepoCache(SCANNED_REPOS_CACHE_STORAGE_KEY, this.scannedReposCache);
     return arr;
   }
 
@@ -35598,18 +35644,21 @@ class ClaudeOrchestrator {
 
   getProjectsBoardColumnForProjectKey(projectKey, boardData = null) {
     const key = this.normalizeProjectsBoardProjectKey(projectKey);
-    if (!key) return 'backlog';
+    if (!key) return PROJECTS_BOARD_UNCLASSIFIED_COLUMN;
     const board = (boardData?.board && typeof boardData.board === 'object')
       ? boardData.board
       : (this.projectsBoardCache?.value?.board && typeof this.projectsBoardCache.value.board === 'object' ? this.projectsBoardCache.value.board : null);
     const mapping = board?.projectToColumn && typeof board.projectToColumn === 'object' ? board.projectToColumn : {};
     const mapped = this.normalizeProjectsBoardColumnId(mapping[key]);
-    return mapped || 'backlog';
+    // A repo the user never filed is unclassified, not backlogged. Collapsing the
+    // two hid every untriaged repo as soon as "show backlog" was off - and on a
+    // fresh install (empty board) that is the entire repo list.
+    return mapped || PROJECTS_BOARD_UNCLASSIFIED_COLUMN;
   }
 
   getProjectsBoardColumnForRepo(repo, boardData = null) {
     const key = this.normalizeProjectsBoardProjectKey(repo?.relativePath || repo?.key);
-    if (!key) return 'backlog';
+    if (!key) return PROJECTS_BOARD_UNCLASSIFIED_COLUMN;
     return this.getProjectsBoardColumnForProjectKey(key, boardData);
   }
 
@@ -35625,6 +35674,8 @@ class ClaudeOrchestrator {
 
     return rows.filter((repo) => {
       const col = this.getProjectsBoardColumnForRepo(repo, board);
+      // Untriaged repos stay visible; the toggles only hide repos the user filed.
+      if (col === PROJECTS_BOARD_UNCLASSIFIED_COLUMN) return true;
       if (!prefs.showBacklog && col === 'backlog') return false;
       if (!prefs.showArchived && col === 'archived') return false;
       if (!prefs.showDone && col === 'done') return false;
@@ -35641,6 +35692,12 @@ class ClaudeOrchestrator {
     const ownerKey = owner ? String(owner).trim() : '';
     const key = `${ownerKey}:${safeLimit}`;
 
+    if (this.githubReposCache?.key !== key || !this.githubReposCache?.value) {
+      const persisted = this.readPersistedRepoCache(GITHUB_REPOS_CACHE_STORAGE_KEY);
+      if (persisted && persisted.key === key) {
+        this.githubReposCache = { key, value: persisted.value, fetchedAt: persisted.fetchedAt };
+      }
+    }
     if (!force && this.githubReposCache?.key === key && this.githubReposCache?.value && (now - (this.githubReposCache.fetchedAt || 0) < ttlMs)) {
       return this.githubReposCache.value;
     }
@@ -35658,6 +35715,7 @@ class ClaudeOrchestrator {
     }
     const arr = Array.isArray(data) ? data : [];
     this.githubReposCache = { key, value: arr, fetchedAt: now };
+    this.writePersistedRepoCache(GITHUB_REPOS_CACHE_STORAGE_KEY, this.githubReposCache);
     return arr;
   }
 
