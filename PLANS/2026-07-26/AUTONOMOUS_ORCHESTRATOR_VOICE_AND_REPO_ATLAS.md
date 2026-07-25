@@ -195,11 +195,47 @@ Surfaces shipped: standalone CLI (`scripts/atlas.js`, no server required — sym
 
 ---
 
-## 5. Order of work
+## 5. What shipped (PR #1029)
 
-1. **Repo Atlas** — self-contained, immediately useful, no runtime risk. *(this branch)*
-2. **Supervisor** in `observe` mode — accumulate findings, prove the rules are right before granting any autonomy. *(this branch)*
-3. **Voice out + free-form routing** — makes 1 and 2 conversational. *(this branch)*
-4. Promote supervisor to `assist` after reading a week of findings. *(you, later)*
-5. Reach: Discord/mobile push for escalations. *(follow-up)*
-6. Atlas write-back: agents propose highlights from work they just did, you approve. *(follow-up — this is what makes it stay current instead of rotting)*
+All three, on `feature/autopilot-voice-and-repo-atlas`. 709 unit tests green (was 652).
+
+| Piece | Where | State |
+|---|---|---|
+| Supervisor loop | `server/supervisorService.js`, `server/supervisor/*` | Running, autonomy `observe` |
+| Condition table | `config/supervisor-rules.json` | 8 conditions, none reaching `act` |
+| Speech out | `server/speechService.js`, `client/speech-output.js` | Browser backend active |
+| Free-form voice | `server/voiceCommandService.js` (`setCommanderForwarder`) | Wired to Commander |
+| Repo Atlas | `server/repoAtlasService.js`, `server/atlas/*`, `scripts/atlas.js` | 233 repos mapped, 25 cloned |
+| APIs | `server/routes/{supervisor,speech,atlas}Routes.js` | Policy-gated, live-verified |
+| Commander docs | `docs/COMMANDER_CLAUDE.md` | All three surfaces documented |
+| CLI + skill | `~/.claude/scripts/atlas.sh`, `~/.claude/skills/repo-atlas/` | Installed, on PATH |
+
+Verified live rather than only in tests: supervisor status/tick/briefing, speech status/say, atlas
+status/find/digest/compile, and the autonomy-level guard, all against a running server on a scratch
+port. Sharing checked end to end by compiling `core-team` and `contractors` from one registry and
+confirming differential redaction, no private entries, and no local paths in the output.
+
+### Seeded atlas state
+
+Only highlights with actual evidence behind them were recorded — `box2d-luau` (physics, testing) and
+`roblox-mechanics-encyclopedia` (architecture), all sourced from the repos' own descriptions. **No
+quality scores were invented for the other 230.** The map is built; the judgement is deliberately
+left to you, because a fabricated 4/5 is worse than a blank field — it sends agents somewhere on a
+false promise.
+
+## 6. What is left
+
+1. **Read a week of findings, then promote the supervisor to `assist`.** This is the whole reason
+   `observe` is the shipped default. `~/.agent-workspace/logs/supervisor-audit.jsonl`.
+2. **Curate the atlas as you go** — `atlas note <repo> --topic X --quality N --notes "..."`. The
+   skill already tells agents to record what they learn, so this should accumulate rather than
+   needing a curation session.
+3. **Tag repos into audiences** before sharing anything: `atlas set <id> --visibility team --groups
+   core-team`, then `atlas compile core-team --dry-run --explain` and read every line before dropping
+   the dry-run flag.
+4. **Reach** — Discord/mobile push for escalations, borrowing OpenClaw's one genuinely better idea.
+   `discordIntegrationService` is already half of it.
+5. **Atlas write-back** — agents propose highlights from work they just finished, you approve. This
+   is what keeps the map current instead of letting it rot into another stale doc.
+6. **Atlas in the UI** — findings and the digest currently have APIs but no panel. The Commander
+   status strip proposed in `PLANS/2026-07-15/MULTI_COMMANDER_FEASIBILITY.md` is the natural home.
