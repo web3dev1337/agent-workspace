@@ -15,6 +15,12 @@ const { formatDecisions } = require('../server/atlas/atlasCompiler');
 
 const atlas = RepoAtlasService.getInstance();
 
+// `atlas list | head` closes stdout early; that is a normal end, not a crash.
+process.stdout.on('error', (error) => {
+  if (error?.code === 'EPIPE') process.exit(0);
+  throw error;
+});
+
 function parseArgs(argv) {
   const positionals = [];
   const flags = {};
