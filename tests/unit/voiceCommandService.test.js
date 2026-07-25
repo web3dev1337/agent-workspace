@@ -319,3 +319,58 @@ describe('VoiceCommandService parseCommand (rulesOnly)', () => {
     }
   });
 });
+
+describe('VoiceCommandService (free-form routing)', () => {
+  afterEach(() => {
+    voiceCommandService.setCommanderForwarder(null);
+  });
+
+  test('unmatched speech reaches the Commander instead of dead-ending', async () => {
+    const forwarded = [];
+    voiceCommandService.setCommanderForwarder(async (text) => {
+      forwarded.push(text);
+      return 'sent';
+    });
+
+    const result = await voiceCommandService.processVoiceCommand(
+      'what did work three actually change in the physics code'
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.method).toBe('commander');
+    expect(result.forwardedToCommander).toBe(true);
+    expect(forwarded).toEqual(['what did work three actually change in the physics code']);
+  });
+
+  test('a matched command still executes as a command, not as chat', async () => {
+    const forwarded = [];
+    voiceCommandService.setCommanderForwarder(async (text) => forwarded.push(text));
+
+    const result = await voiceCommandService.processVoiceCommand('enter focus mode');
+
+    expect(result.method).toBe('rules');
+    expect(result.command).toBe('set-workflow-mode');
+    expect(forwarded).toEqual([]);
+  });
+
+  test('with no Commander running the failure is reported, not swallowed', async () => {
+    const result = await voiceCommandService.processVoiceCommand('ramble ramble unmatched words here');
+    expect(result.success).toBe(false);
+  });
+
+  test('a throwing forwarder degrades to a normal failure', async () => {
+    voiceCommandService.setCommanderForwarder(async () => { throw new Error('commander is down'); });
+
+    const result = await voiceCommandService.processVoiceCommand('another unmatched utterance entirely');
+    expect(result.success).toBe(false);
+    expect(result.forward.reason).toBe('commander is down');
+  });
+
+  test('forwarding can be turned off per call', async () => {
+    voiceCommandService.setCommanderForwarder(async () => true);
+
+    const result = await voiceCommandService.processVoiceCommand('yet more unmatched words', { forwardUnmatched: false });
+    expect(result.success).toBe(false);
+    expect(result.forwardedToCommander).toBeUndefined();
+  });
+});

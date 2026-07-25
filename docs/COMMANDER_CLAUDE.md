@@ -118,6 +118,77 @@ curl -sS "$BASE_URL/api/commander/execute" \
 
 ---
 
+## Supervisor (the fleet watchdog)
+
+A rule-driven loop classifies every agent session every 30s from zero-token signals (PTY tail, status, quiet time, git state) and climbs an escalation ladder capped by an autonomy level. Ask it what needs attention instead of reading 16 terminals yourself.
+
+```bash
+# What needs a human right now — start here
+curl -sS "$BASE_URL/api/supervisor/briefing" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Everything recorded recently (filter by severity or session)
+curl -sS "$BASE_URL/api/supervisor/findings?severity=critical" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Loop config: autonomy level, tick rate, which conditions are armed
+curl -sS "$BASE_URL/api/supervisor/status" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Force a pass now (dryRun reports findings without acting on them)
+curl -sS -X POST "$BASE_URL/api/supervisor/tick" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"dryRun": true}' | jq
+```
+
+**Autonomy levels** — `off` (nothing runs) | `observe` (default: record only, zero side effects) | `assist` (may notify and type nudges into sessions) | `autopilot` (may also run allowlisted act handlers).
+
+```bash
+curl -sS -X POST "$BASE_URL/api/supervisor/autonomy" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"level": "assist"}'
+```
+
+**Never raise the autonomy level on your own.** That is the user's decision, and `observe` is deliberately the shipped default so the rules can be judged before they are trusted. Rules live in `config/supervisor-rules.json`, overridable at `~/.agent-workspace/supervisor-rules.json`; every action is appended to `~/.agent-workspace/logs/supervisor-audit.jsonl`.
+
+## Speech
+
+```bash
+# Say something out loud
+curl -sS -X POST "$BASE_URL/api/speech/say" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"text": "Work three is waiting on permission."}'
+
+# Speak the fleet briefing
+curl -sS -X POST "$BASE_URL/api/speech/briefing" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{}' | jq
+
+curl -sS "$BASE_URL/api/speech/status" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+```
+
+Default backend is the browser's own synthesis (nothing to install); piper/`say`/SAPI/espeak take over when present. Keep spoken text to one or two short sentences — it is read aloud, not displayed.
+
+## Repo Atlas (cross-repo prior art)
+
+The map of every repo the user owns, cloned or not, with per-topic quality scores. Query it before searching the filesystem for "how did we do X before".
+
+```bash
+# The main query: who did this well?
+curl -sS "$BASE_URL/api/atlas/find?topic=data-compression" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Compact map worth pasting into a prompt
+curl -sS "$BASE_URL/api/atlas/digest" -H "X-Auth-Token: $AUTH_TOKEN" | jq -r .digest
+
+curl -sS "$BASE_URL/api/atlas/entries/zoo-game" -H "X-Auth-Token: $AUTH_TOKEN" | jq -r .description
+curl -sS "$BASE_URL/api/atlas/topics" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Record what a repo turned out to be good at
+curl -sS -X POST "$BASE_URL/api/atlas/entries/zoo-game/highlights" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"topic": "data-compression", "quality": 5, "paths": ["src/data/"], "notes": "bitpacked saves"}'
+```
+
+Also available as a CLI anywhere: `node scripts/atlas.js find <topic>`.
+
+**Do not change a repo's `visibility` or `groups`, and do not compile sharing bundles, without being asked.** Those decide what leaves the machine.
+
 ## Session Control
 
 ```bash

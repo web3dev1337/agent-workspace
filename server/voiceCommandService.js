@@ -25,6 +25,10 @@ class VoiceCommandService {
     this.claudeModel = process.env.CLAUDE_VOICE_MODEL || 'claude-3-haiku-20240307';
     this.useClaude = false;
 
+    // Set by the server once a Commander instance exists; unmatched speech is
+    // handed to it rather than discarded.
+    this.commanderForwarder = null;
+
     // Current context (set by orchestrator)
     this.context = {
       currentWorkspace: null,
@@ -1541,13 +1545,60 @@ JSON:`;
   }
 
   /**
-   * Parse and execute in one call
+   * Where unrecognized speech goes.
+   *
+   * Without this, anything outside the pattern table is a dead end — which is
+   * what makes a voice interface feel like a remote control instead of an
+   * assistant. The forwarder hands the raw utterance to the Commander agent,
+   * so the fallback for "I didn't match that" is a full agent with the entire
+   * orchestrator API rather than an error beep.
    */
-  async processVoiceCommand(transcript) {
+  setCommanderForwarder(forwarder) {
+    this.commanderForwarder = typeof forwarder === 'function' ? forwarder : null;
+    return Boolean(this.commanderForwarder);
+  }
+
+  hasCommanderForwarder() {
+    return Boolean(this.commanderForwarder);
+  }
+
+  async forwardToCommander(transcript) {
+    if (!this.commanderForwarder) {
+      return { forwarded: false, reason: 'no Commander is running to forward to' };
+    }
+    try {
+      const result = await this.commanderForwarder(transcript);
+      return { forwarded: result !== false, result };
+    } catch (error) {
+      return { forwarded: false, reason: error.message };
+    }
+  }
+
+  /**
+   * Parse and execute in one call.
+   *
+   * `forwardUnmatched` defaults on for spoken input: if no rule and no LLM can
+   * turn the utterance into a command, the words themselves are still useful.
+   */
+  async processVoiceCommand(transcript, { forwardUnmatched = true } = {}) {
     const parsed = await this.parseCommand(transcript);
 
     if (!parsed.success) {
-      return parsed;
+      if (!forwardUnmatched || !this.commanderForwarder) return parsed;
+
+      const forward = await this.forwardToCommander(transcript);
+      if (!forward.forwarded) return { ...parsed, forward };
+
+      return {
+        success: true,
+        method: 'commander',
+        command: null,
+        params: {},
+        transcript,
+        executed: true,
+        forwardedToCommander: true,
+        result: forward.result
+      };
     }
 
     const result = await this.executeCommand(parsed.command, parsed.params);

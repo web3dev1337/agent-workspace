@@ -1377,6 +1377,10 @@ class ClaudeOrchestrator {
       this.socket = io(serverUrl, socketOptions);
       console.log(`Socket connecting to ${serverUrl}...`);
 
+      // Let listeners that load independently of app.js (speech output) bind.
+      window.socket = this.socket;
+      document.dispatchEvent(new CustomEvent('orchestrator-socket-ready', { detail: { socket: this.socket } }));
+
       // Connection events
       this.socket.on('connect', () => {
         console.log('Connected to server');

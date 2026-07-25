@@ -130,6 +130,28 @@ server/repoAtlasService.js         - Repo Atlas facade: one queryable map of eve
 ├─ Query: `find(topic)` ranked by per-topic quality 1-5, `digest()` compact paste-into-a-prompt map, `search()`, `topics()`
 ├─ Curation: `addHighlight()` / `addAvoid()` persist into the registry — quality is scored per topic, so a rough repo can still be the best example of one thing
 └─ Sharing: `compile(audience)` emits audience-scoped bundles — `private` never leaves the machine, `team` needs a group match, `public` goes everywhere
+server/supervisorService.js        - Fleet supervisor: rule-driven watchdog over every agent session
+├─ Loop: rules run on a tick (default 30s) from zero-token signals; no model is called in the loop, only on escalation
+├─ Ladder: observe → notify → nudge → act, capped by autonomy (`off` | `observe` (default) | `assist` | `autopilot`)
+├─ Safety: shipped conditions never reach `act`; act handlers are named functions, so rules cannot inject shell
+├─ Audit: every action appended to `~/.agent-workspace/logs/supervisor-audit.jsonl` with the finding that caused it
+└─ `getBriefing()` renders the spoken/at-a-glance "what needs you now" summary
+server/supervisor/supervisorSignals.js - Per-session signal collection (PTY tail, quiet-time tracker, repeated-line detection, git ahead/dirty for quiet sessions only)
+server/supervisor/supervisorRules.js   - Condition table loader/matcher (`config/supervisor-rules.json`, override `~/.agent-workspace/supervisor-rules.json`) + autonomy ceilings
+server/supervisor/supervisorActions.js - Ladder executor: notify/nudge/act, two-write submit, fail-closed permission-prompt classification
+server/routes/supervisorRoutes.js  - Express router for `/api/supervisor/*`
+config/supervisor-rules.json       - Shipped condition table (autonomy `observe`, permission allow/deny patterns, act-handler allowlist)
+tests/unit/supervisorRules.test.js, supervisorActions.test.js, supervisorService.test.js - Supervisor coverage (matching, autonomy ceilings, cooldowns, fail-closed approvals, audit)
+
+server/speechService.js            - Speech output with degrading backends
+├─ Default `browser` backend emits a `speech-speak` socket event — works on a fresh clone with nothing installed
+├─ Local backends preferred when present: piper (piped straight to paplay/aplay), macOS `say`, Windows SAPI, espeak-ng
+└─ Sanitizes to printable ASCII with no shell metacharacters, caps length, suppresses back-to-back repeats
+server/routes/speechRoutes.js      - `/api/speech/*` (say, backend, enabled, spoken fleet briefing)
+client/speech-output.js            - Web Speech API listener for the browser backend (`window.SpeechOutput`)
+server/voiceCommandService.js      - (existing) rule/LLM voice parsing, now with `setCommanderForwarder()`: unmatched speech is handed to the Commander agent instead of dead-ending
+tests/unit/speechService.test.js   - Sanitization, repeat suppression, backend resolution
+
 server/atlas/atlasSchema.js        - Entry normalization, layered merge, topic-alias folding (`config/repo-atlas-topics.json`), validation
 server/atlas/atlasDiscovery.js     - Local git scan (worktree siblings collapse into one project entry) + `gh repo list` + source merge
 server/atlas/atlasStore.js         - Persistence under `~/.agent-workspace/atlas/` (registry, discovery cache, compiled bundles) + in-repo manifest read/write
@@ -483,6 +505,7 @@ git-change: {branch, status, commits}          - Git repository changes
 notification: {type, message, level}           - System notifications
 workspace-changed: {workspaceId, sessions}     - Workspace switch completed
 workspace-list: {workspaces}                   - Available workspaces update
+speech-speak: {text, priority, at}             - Say this out loud (browser speech backend)
 ```
 
 ### Client → Server Events
@@ -680,6 +703,20 @@ POST /api/atlas/entries/:id/highlights                        - Record "this rep
 POST /api/atlas/entries/:id/avoid                             - Record "do not copy X from this repo"
 GET|POST /api/atlas/audiences                                 - List/define sharing audiences
 POST /api/atlas/compile                                       - Compile an audience bundle (`dryRun: true` returns decisions without writing)
+
+GET /api/supervisor/status                                    - Loop state: running, autonomy, tick rate, armed conditions
+GET /api/supervisor/findings?severity=&sessionId=&limit=      - Recent findings
+GET /api/supervisor/briefing                                  - "What needs you now", with a spoken rendering
+POST /api/supervisor/tick                                     - Force one pass (`dryRun: true` evaluates without acting)
+POST /api/supervisor/start | /stop                            - Control the loop
+POST /api/supervisor/autonomy                                 - Set autonomy (`off` | `observe` | `assist` | `autopilot`)
+POST /api/supervisor/reload-rules                             - Re-read the condition table from disk
+
+GET /api/speech/status                                        - Enabled state, resolved backend, available backends, listeners
+POST /api/speech/say                                          - Speak text (`priority: high` interrupts, `force` skips repeat suppression)
+POST /api/speech/backend                                      - Choose a backend
+POST /api/speech/enabled                                      - Mute/unmute
+POST /api/speech/briefing                                     - Speak the supervisor briefing
 ```
 
 ### WebSocket Events

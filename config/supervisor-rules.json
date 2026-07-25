@@ -1,0 +1,143 @@
+{
+  "$comment": "Condition table for the fleet supervisor. Evaluated every tick against zero-token signals (PTY tail, status, quiet time, git state). Override per-machine with ~/.agent-workspace/supervisor-rules.json.",
+  "schemaVersion": 1,
+
+  "$comment_autonomy": "off = nothing runs. observe = findings recorded, no side effects (start here). assist = may notify and nudge. autopilot = may also run built-in act handlers.",
+  "autonomy": "observe",
+  "tickSeconds": 30,
+  "maxFindingsRetained": 500,
+
+  "safety": {
+    "$comment": "Act handlers are named functions in server/supervisor/supervisorActions.js. Rules cannot inject shell commands — they can only select a handler from this list.",
+    "allowedActHandlers": ["answer-permission", "relaunch-agent", "open-pull-request"],
+    "$comment_permission": "An auto-answered permission prompt must match one of these AND none of the deny patterns. Anything else escalates to you.",
+    "permissionAllowPatterns": [
+      "\\b(Read|Glob|Grep|NotebookRead|WebFetch|WebSearch)\\b",
+      "\\bgit (status|diff|log|show|branch|fetch)\\b",
+      "\\b(npm|pnpm|yarn) (test|run test|run lint|run typecheck)\\b"
+    ],
+    "permissionDenyPatterns": [
+      "\\brm\\b", "\\bsudo\\b", "\\bgit (push|reset|clean|checkout)\\b",
+      "\\bgh (pr merge|release|repo delete)\\b", "\\bDELETE\\b", "\\bDROP\\b",
+      "\\bcurl\\b.*\\|", "\\bchmod\\b", "\\bkill\\b", "> */"
+    ]
+  },
+
+  "conditions": [
+    {
+      "id": "awaiting-permission",
+      "label": "Waiting on a permission prompt",
+      "severity": "warn",
+      "rung": "notify",
+      "cooldownSeconds": 600,
+      "when": {
+        "status": ["waiting"],
+        "minQuietSeconds": 120,
+        "tailMatches": [
+          "Do you want to (proceed|make this edit|create)",
+          "❯\\s*1\\.\\s*Yes",
+          "Allow .* to run",
+          "\\[y/N\\]"
+        ]
+      },
+      "advice": "The agent has been sitting on a permission prompt. Answer it or let autopilot approve read-only prompts."
+    },
+    {
+      "id": "usage-limit-reached",
+      "label": "Usage limit reached",
+      "severity": "critical",
+      "rung": "notify",
+      "cooldownSeconds": 3600,
+      "when": {
+        "tailMatches": [
+          "\\d+-hour limit reached",
+          "limit reached ∙ resets",
+          "You've reached your usage limit",
+          "rate.?limit(ed)? .*(retry|reset)"
+        ]
+      },
+      "advice": "This session is blocked until the window resets. Nothing to do but wait — resume it after the reset time in the banner."
+    },
+    {
+      "id": "error-loop",
+      "label": "Repeating the same error",
+      "severity": "critical",
+      "rung": "notify",
+      "cooldownSeconds": 1800,
+      "when": {
+        "status": ["busy", "idle"],
+        "repeatedTailLine": 4,
+        "tailMatches": ["(?i)\\b(error|failed|exception|traceback|cannot find)\\b"]
+      },
+      "advice": "The same error line keeps coming back — the agent is looping. This one needs a human, never automation."
+    },
+    {
+      "id": "stalled",
+      "label": "Busy but silent",
+      "severity": "warn",
+      "rung": "nudge",
+      "cooldownSeconds": 900,
+      "nudgeText": "status? if you are blocked, say what on and stop.",
+      "when": {
+        "status": ["busy"],
+        "minQuietSeconds": 900,
+        "tailNotMatches": ["limit reached", "Do you want to (proceed|make this edit)"]
+      },
+      "advice": "Marked busy but nothing has come out for 15 minutes."
+    },
+    {
+      "id": "agent-exited",
+      "label": "Agent exited, shell left behind",
+      "severity": "warn",
+      "rung": "notify",
+      "cooldownSeconds": 900,
+      "when": {
+        "status": ["idle"],
+        "agentPresent": false,
+        "minQuietSeconds": 300
+      },
+      "advice": "The agent CLI is gone and the terminal dropped back to a shell. Relaunch it or reuse the worktree."
+    },
+    {
+      "id": "unpushed-work",
+      "label": "Finished with unpushed commits",
+      "severity": "info",
+      "rung": "nudge",
+      "cooldownSeconds": 1800,
+      "nudgeText": "You have local commits that are not pushed. Push the branch and open a PR.",
+      "when": {
+        "status": ["idle"],
+        "minQuietSeconds": 300,
+        "git": { "aheadMin": 1 }
+      },
+      "advice": "Work is done on disk but has not left the machine."
+    },
+    {
+      "id": "uncommitted-work",
+      "label": "Idle with uncommitted changes",
+      "severity": "info",
+      "rung": "nudge",
+      "cooldownSeconds": 3600,
+      "nudgeText": "You have uncommitted changes. Commit them with a descriptive message, or say why they should not be committed.",
+      "when": {
+        "status": ["idle"],
+        "minQuietSeconds": 900,
+        "git": { "dirty": true, "aheadMax": 0 }
+      },
+      "advice": "Edits are sitting in the working tree with nothing recorded."
+    },
+    {
+      "id": "idle-capacity",
+      "label": "Idle worktree, nothing in flight",
+      "severity": "info",
+      "rung": "observe",
+      "cooldownSeconds": 3600,
+      "when": {
+        "status": ["idle"],
+        "minQuietSeconds": 1800,
+        "git": { "dirty": false, "aheadMax": 0 }
+      },
+      "advice": "Free capacity — this worktree could take the next queue item."
+    }
+  ]
+}

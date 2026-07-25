@@ -112,6 +112,10 @@ const { QuickLinksService } = require('./quickLinksService');
 const { RecommendationsService } = require('./recommendationsService');
 const { RepoAtlasService } = require('./repoAtlasService');
 const { createAtlasRoutes } = require('./routes/atlasRoutes');
+const { SupervisorService } = require('./supervisorService');
+const { createSupervisorRoutes } = require('./routes/supervisorRoutes');
+const { SpeechService } = require('./speechService');
+const { createSpeechRoutes } = require('./routes/speechRoutes');
 const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
@@ -352,6 +356,9 @@ const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
 const recommendationsService = RecommendationsService.getInstance();
 const repoAtlasService = RepoAtlasService.getInstance({ logger });
+const speechService = SpeechService.getInstance({ logger });
+speechService.setIO(io);
+const supervisorService = SupervisorService.getInstance({ logger });
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
 activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 9460) });
@@ -426,6 +433,36 @@ threadService.init({ workspaceManager, sessionManager });
 intentHaikuService.setSessionManager(sessionManager);
 serviceStackRuntimeService.init({ workspaceManager, sessionManager, configPromoterService, io });
 auditExportService.init({ activityFeed, schedulerService, userSettingsService });
+supervisorService.init({
+  sessionManager,
+  gitHelper,
+  agentManager,
+  sessionRecoveryService,
+  taskRecordService,
+  activityFeed,
+  notificationService,
+  speechService
+});
+
+// Shipped default autonomy is `observe`: findings accumulate, nothing is
+// touched. That is safe to leave running, and reading a week of it is how you
+// decide whether to grant this thing any real autonomy.
+if (String(process.env.SUPERVISOR_AUTOSTART || 'true').toLowerCase() !== 'false') {
+  const started = supervisorService.start();
+  logger.info('Supervisor', started);
+}
+
+// Speech that no rule matched is still useful: hand the raw words to the
+// active Commander so the fallback is an agent, not an error.
+voiceCommandService.setCommanderForwarder(async (transcript) => {
+  if (!commanderService?.sendInput) return false;
+  // Two writes: agent CLIs treat "text\r" in one chunk as a bracketed paste.
+  const wrote = commanderService.sendInput(transcript);
+  if (wrote === false) return false;
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  commanderService.sendInput('\r');
+  return true;
+});
 
 const loadPlugins = async () => {
   const status = await pluginLoaderService.loadAll({
@@ -1341,6 +1378,21 @@ app.get('/health', (req, res) => {
 
 app.use('/api/atlas', createAtlasRoutes({
   repoAtlasService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/supervisor', createSupervisorRoutes({
+  supervisorService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/speech', createSpeechRoutes({
+  speechService,
+  supervisorService,
   logger,
   requireRead: requirePolicyAction('read'),
   requireWrite: requirePolicyAction('write')
