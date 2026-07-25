@@ -110,6 +110,8 @@ const { ProjectTypeService } = require('./projectTypeService');
 const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
 const { RecommendationsService } = require('./recommendationsService');
+const { RepoAtlasService } = require('./repoAtlasService');
+const { createAtlasRoutes } = require('./routes/atlasRoutes');
 const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
@@ -349,6 +351,7 @@ greenfieldService.setProjectTypeService(projectTypeService);
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
 const recommendationsService = RecommendationsService.getInstance();
+const repoAtlasService = RepoAtlasService.getInstance({ logger });
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
 activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 9460) });
@@ -1335,6 +1338,13 @@ app.get('/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+
+app.use('/api/atlas', createAtlasRoutes({
+  repoAtlasService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
 
 app.get('/api/app-info', (req, res) => {
   res.json(readAppInfo());

@@ -125,6 +125,23 @@ server/portRegistry.js             - Port assignment + live service scanner (`/a
 server/commanderService.js         - Top-level Commander PTY (Claude/Codex) + launch buffering
 ├─ Packaged CWD: uses `ORCHESTRATOR_DATA_DIR/commander` so desktop users can edit `CLAUDE.md` / `AGENTS.md` safely
 └─ First-run seed: copies the packaged `docs/COMMANDER_CLAUDE.md` into the Commander data directory when missing
+server/repoAtlasService.js         - Repo Atlas facade: one queryable map of every repo you own, cloned or not
+├─ Layers (later wins): discovery (disk + `gh repo list`) < in-repo `.repo-atlas.json` manifest < `~/.agent-workspace/atlas/registry.json` (your override)
+├─ Query: `find(topic)` ranked by per-topic quality 1-5, `digest()` compact paste-into-a-prompt map, `search()`, `topics()`
+├─ Curation: `addHighlight()` / `addAvoid()` persist into the registry — quality is scored per topic, so a rough repo can still be the best example of one thing
+└─ Sharing: `compile(audience)` emits audience-scoped bundles — `private` never leaves the machine, `team` needs a group match, `public` goes everywhere
+server/atlas/atlasSchema.js        - Entry normalization, layered merge, topic-alias folding (`config/repo-atlas-topics.json`), validation
+server/atlas/atlasDiscovery.js     - Local git scan (worktree siblings collapse into one project entry) + `gh repo list` + source merge
+server/atlas/atlasStore.js         - Persistence under `~/.agent-workspace/atlas/` (registry, discovery cache, compiled bundles) + in-repo manifest read/write
+server/atlas/atlasQuery.js         - Filters, topic lookup, topic index, digest rendering, entry description
+server/atlas/atlasCompiler.js      - Audience bundle compilation: visibility/group decisions, per-audience field redaction, always strips local-only fields
+server/routes/atlasRoutes.js       - Express router for `/api/atlas/*` (reads policy-`read`; curation and compile policy-`write`)
+scripts/atlas.js                   - Standalone `atlas` CLI — runs without the server (`npm run atlas -- <command>`)
+config/repo-atlas-topics.json      - Canonical topic vocabulary + aliases
+config/repo-atlas.example.json     - Annotated manifest example
+.repo-atlas.json                   - This repo's own manifest
+skills/public/repo-atlas/SKILL.md  - Agent skill: query prior art instead of grepping the filesystem
+tests/unit/repoAtlasSchema.test.js, repoAtlasQuery.test.js, repoAtlasCompiler.test.js, repoAtlasService.test.js - Atlas coverage (merge precedence, quality floors, sharing decisions, redaction)
 scripts/tauri/prepare-backend-resources.js - Tauri backend packager
 ├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
 ├─ Commander instructions: copies `docs/COMMANDER_CLAUDE.md` into `resources/backend/{COMMANDER_CLAUDE.md,CLAUDE.md,AGENTS.md}` for desktop builds
@@ -648,6 +665,21 @@ GET /api/agent-providers/:providerId/sessions                 - List provider se
 POST /api/agent-providers/:providerId/resume-plan             - Build provider-specific resume command/config plan
 GET /api/agent-providers/:providerId/history/search           - Provider-scoped history search (conversation index source-aware)
 GET /api/agent-providers/:providerId/history/:id              - Provider-scoped transcript retrieval
+
+GET /api/atlas/status                                         - Repo Atlas health: where data lives, entry/highlight counts, discovery freshness
+GET /api/atlas/entries?kind=&platform=&group=&query=&minQuality= - Filtered repo list
+GET /api/atlas/entries/:id                                    - One repo, merged across all layers, plus a rendered description
+GET /api/atlas/find?topic=&minQuality=                        - "Who did this well?" — the primary query, ranked by per-topic quality
+GET /api/atlas/topics                                         - Topics in use and which repos hold them
+GET /api/atlas/digest?groupBy=platform|kind|status&max=       - Compact map intended for pasting into an agent prompt
+GET /api/atlas/doctor                                         - Validation report (errors + curation gaps)
+POST /api/atlas/refresh                                       - Re-run discovery (local scan + `gh repo list`)
+PUT /api/atlas/entries/:id                                    - Override entry fields in the registry
+DELETE /api/atlas/entries/:id                                 - Drop a registry override
+POST /api/atlas/entries/:id/highlights                        - Record "this repo is good at X" (topic + quality + paths + notes)
+POST /api/atlas/entries/:id/avoid                             - Record "do not copy X from this repo"
+GET|POST /api/atlas/audiences                                 - List/define sharing audiences
+POST /api/atlas/compile                                       - Compile an audience bundle (`dryRun: true` returns decisions without writing)
 ```
 
 ### WebSocket Events

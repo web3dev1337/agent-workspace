@@ -1,0 +1,55 @@
+{
+  "$comment": "Annotated example of a .repo-atlas.json manifest. Copy this into a repo root (or generate one with `node scripts/atlas.js init`), delete the $comment keys, and commit it. Every field is optional — discovery fills in what you leave out.",
+
+  "id": "zoo-game",
+  "name": "Zoo Game",
+  "summary": "Multiplayer zoo tycoon built on Hytopia. Real players, real economy.",
+
+  "$comment_classification": "kind: game|library|tool|website|service|reference|writing|experiment|infra|other",
+  "kind": "game",
+  "platforms": ["hytopia"],
+  "languages": ["TypeScript"],
+  "dimension": "3d",
+  "tags": ["multiplayer", "tycoon"],
+
+  "$comment_state": "status: active|paused|prototype|archived|abandoned — maturity: production|beta|prototype|experiment",
+  "status": "active",
+  "maturity": "production",
+
+  "$comment_sharing": "visibility: public (in every bundle) | team (only audiences listed in groups) | private (never leaves this machine, overrides groups)",
+  "visibility": "team",
+  "groups": ["core-team"],
+
+  "$comment_highlights": "The point of the atlas: what is this repo worth reading FOR? quality is 1-5 per topic, so a rough repo can still be a 5 at one thing. Run `atlas topics --vocabulary` for the canonical topic list; unknown topics are kept as-is.",
+  "highlights": [
+    {
+      "topic": "data-compression",
+      "quality": 5,
+      "paths": ["src/data/packSave.ts", "src/data/schema.ts"],
+      "notes": "Bitpacked player saves — 12x smaller than the JSON we started with. Copy this approach."
+    },
+    {
+      "topic": "networking",
+      "quality": 3,
+      "paths": ["src/net/"],
+      "notes": "Works, but chatty. Fine as a reference for the handshake, not for the update loop."
+    }
+  ],
+
+  "$comment_avoid": "Explicit do-not-copy markers. These hide the repo from `atlas find <topic>` so nobody is sent somewhere you already regret.",
+  "avoid": [
+    { "topic": "ui", "reason": "hand-rolled HUD, superseded by the shared component kit" }
+  ],
+
+  "seeAlso": ["hyfire2", "hytopia-client-tracker"],
+
+  "$comment_redaction": "Fields stripped from every shared bundle. Redactable: summary, notes, paths, highlights, avoid, seeAlso, tags. The repo still appears in the bundle — it is just opaque.",
+  "redact": [],
+
+  "$comment_group_overrides": "Per-audience adjustments. Here contractors see that the repo exists and its quality scores, but not the notes or file paths.",
+  "groupOverrides": {
+    "contractors": {
+      "redact": ["notes", "paths"]
+    }
+  }
+}
