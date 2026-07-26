@@ -68,6 +68,42 @@ describe('AppServerClient lifecycle', () => {
     expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 
+  test('a stopped child exiting late cannot clobber its replacement', async () => {
+    const first = makeChild(1001);
+    const second = makeChild(1002);
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const client = new AppServerClient({ autoRestart: false, logger: quietLogger });
+
+    await client.start();
+    client.stop();
+    await client.start();
+    expect(client.child).toBe(second);
+
+    // The new child has a request in flight when the OLD child's SIGTERM'd
+    // exit event finally lands (it always arrives on a later tick).
+    const pending = client.request('initialize', {});
+    first.emit('exit', 0, null);
+
+    // The new child and its pending request must be untouched.
+    expect(client.child).toBe(second);
+    expect(client.pending.size).toBe(1);
+    second.emit('data-noop');
+    client.consume('{"id":1,"result":{"ok":true}}\n');
+    await expect(pending).resolves.toEqual({ ok: true });
+  });
+
+  test('every successful spawn emits "started" so the handshake can re-run', async () => {
+    mockSpawn.mockImplementation(() => makeChild());
+    const client = new AppServerClient({ autoRestart: false, logger: quietLogger });
+    const started = [];
+    client.on('started', (info) => started.push(info.pid));
+
+    await client.start();
+    client.child.emit('exit', 1, null);
+    await client.start();
+    expect(started).toHaveLength(2);
+  });
+
   test('an oversized trailing line is dropped without discarding complete frames ahead of it', () => {
     const client = new AppServerClient({ autoRestart: false, logger: quietLogger });
     const seen = [];

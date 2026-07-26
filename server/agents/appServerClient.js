@@ -56,8 +56,9 @@ class AppServerClient extends EventEmitter {
 
     this.stopped = false;
     const startPromise = new Promise((resolve) => {
+      let child;
       try {
-        this.child = spawn(this.command, this.args, {
+        child = spawn(this.command, this.args, {
           ...getHiddenProcessOptions({ stdio: ['pipe', 'pipe', 'pipe'] }),
           cwd: this.cwd || undefined,
           env: augmentProcessEnv(process.env)
@@ -68,20 +69,34 @@ class AppServerClient extends EventEmitter {
         return;
       }
 
-      this.child.stdout.setEncoding('utf8');
-      this.child.stdout.on('data', (chunk) => this.consume(chunk));
-      this.child.stderr.setEncoding('utf8');
-      this.child.stderr.on('data', (chunk) => {
+      this.child = child;
+      // A partial line left over from a previous process must not prefix the
+      // new stream — it would corrupt the first frame the new child sends.
+      this.buffer = '';
+
+      // Every handler below is bound to THIS child and bails if a newer one
+      // has replaced it. A SIGTERM'd child's 'exit' event arrives on a later
+      // tick — without the guard, a quick stop()+start() let the OLD child's
+      // exit reject the NEW child's pending requests (killing the initialize
+      // handshake), null the new child, and schedule a spurious extra respawn.
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (chunk) => {
+        if (this.child === child) this.consume(chunk);
+      });
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk) => {
         const text = String(chunk).trim();
         if (text) this.logger.debug?.('[app-server]', text);
       });
 
-      this.child.on('error', (error) => {
+      child.on('error', (error) => {
+        if (this.child !== child) return;
         this.lastError = error.message;
         this.emit('error', error);
       });
 
-      this.child.on('exit', (code, signal) => {
+      child.on('exit', (code, signal) => {
+        if (this.child !== child) return;
         this.rejectAllPending(new Error(`app-server exited (code ${code}, signal ${signal})`));
         this.child = null;
         this.emit('exit', { code, signal });
@@ -90,7 +105,8 @@ class AppServerClient extends EventEmitter {
 
       this.startedAt = new Date().toISOString();
       this.restartAttempts = 0;
-      resolve({ running: true, pid: this.child.pid });
+      this.emit('started', { pid: child.pid });
+      resolve({ running: true, pid: child.pid });
     });
 
     // Clear the in-flight marker once it settles. The Promise executor runs
@@ -116,6 +132,7 @@ class AppServerClient extends EventEmitter {
 
   stop() {
     this.stopped = true;
+    this.buffer = '';
     this.rejectAllPending(new Error('app-server client stopped'));
     if (this.child) {
       try {

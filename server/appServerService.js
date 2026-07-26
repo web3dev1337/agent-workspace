@@ -55,7 +55,39 @@ class AppServerService {
     this.speechService = speechService || this.speechService;
     this.signals.bind();
     this.bindRealtime();
+    if (!this.handshakeBound) {
+      this.handshakeBound = true;
+      // The protocol handshake belongs to a CONNECTION, not to the service:
+      // every spawned process needs its own initialize, including the ones the
+      // client's auto-restart brings up — otherwise the bridge comes back
+      // running but permanently answers "Not initialized".
+      this.client.on('started', () => {
+        this.serverInfo = null;
+        this.handshake().catch(() => {});
+      });
+      this.client.on('exit', () => {
+        this.serverInfo = null;
+      });
+    }
     return this;
+  }
+
+  async handshake() {
+    if (this.handshaking) return this.handshaking;
+    this.handshaking = (async () => {
+      try {
+        this.serverInfo = await this.client.request('initialize', {
+          clientInfo: { name: 'agent-workspace', version: require('../package.json').version || '1.0.0' }
+        }, { timeoutMs: 15_000 });
+      } catch (error) {
+        this.logger.warn?.('app-server initialize failed', { error: error.message });
+        this.serverInfo = null;
+      } finally {
+        this.handshaking = null;
+      }
+      return this.serverInfo;
+    })();
+    return this.handshaking;
   }
 
   bindRealtime() {
@@ -117,21 +149,16 @@ class AppServerService {
     this.bindRealtime();
 
     // The protocol requires an initialize handshake before anything else; the
-    // server answers with codexHome and platform details.
-    try {
-      this.serverInfo = await this.client.request('initialize', {
-        clientInfo: { name: 'agent-workspace', version: require('../package.json').version || '1.0.0' }
-      }, { timeoutMs: 15_000 });
-    } catch (error) {
-      this.logger.warn?.('app-server initialize failed', { error: error.message });
-      this.serverInfo = null;
-    }
+    // 'started' listener bound in init() also fired it, so this await mostly
+    // just surfaces the result — awaiting twice is harmless (idempotent call).
+    if (!this.serverInfo) await this.handshake();
 
     return { ...started, initialized: Boolean(this.serverInfo) };
   }
 
   stop() {
     this.realtimeThreads.clear();
+    this.serverInfo = null;
     return this.client.stop();
   }
 
