@@ -6,6 +6,7 @@ const store = require('./atlas/atlasStore');
 const discovery = require('./atlas/atlasDiscovery');
 const query = require('./atlas/atlasQuery');
 const compiler = require('./atlas/atlasCompiler');
+const sync = require('./atlas/atlasSync');
 const { getProjectsRoot, getLegacyProjectsRoot } = require('./utils/pathUtils');
 
 const ATLAS_CACHE_MS = 60_000;
@@ -81,9 +82,30 @@ class RepoAtlasService {
     const registry = store.loadRegistry();
 
     const byId = new Map();
+
+    // Bundles other people published sit underneath everything: their map is
+    // useful, but your own discovery and judgement always win over it.
+    for (const bundle of store.loadSubscriptions()) {
+      for (const entry of bundle.entries) {
+        if (!entry?.id) continue;
+        const slot = byId.get(entry.id) || {};
+        slot.subscription = {
+          ...entry,
+          __source: 'subscription',
+          foreign: true,
+          sharedBy: bundle.name,
+          cloned: false,
+          localPath: null
+        };
+        byId.set(entry.id, slot);
+      }
+    }
+
     for (const entry of discovered) {
       if (!entry?.id) continue;
-      byId.set(entry.id, { discovery: { ...entry, __source: 'discovery' } });
+      const slot = byId.get(entry.id) || {};
+      slot.discovery = { ...entry, __source: 'discovery' };
+      byId.set(entry.id, slot);
     }
 
     for (const entry of discovered) {
@@ -110,10 +132,15 @@ class RepoAtlasService {
     for (const [id, layers] of byId.entries()) {
       const merged = schema.mergeEntries(
         { id, visibility: registry.defaults?.visibility, groups: registry.defaults?.groups, __source: 'defaults' },
+        layers.subscription,
         layers.discovery,
         layers.manifest,
         layers.registry
       );
+      if (layers.subscription && !layers.discovery && !layers.registry) {
+        merged.foreign = true;
+        merged.sharedBy = layers.subscription.sharedBy;
+      }
       merged.id = id;
       merged.sources = (merged.sources || []).filter((s) => s !== 'defaults');
       entries.push(merged);
@@ -206,27 +233,91 @@ class RepoAtlasService {
     return store.loadRegistry().audiences || [];
   }
 
-  setAudience({ id, label = '', description = '', outputPath = '' } = {}) {
-    const registry = store.loadRegistry();
+  setAudience({ id, label = '', description = '', outputPath = '', outputRemote = '' } = {}) {
+    const config = store.loadConfig();
     const key = schema.kebab(id);
     if (!key) throw new Error('An audience needs an id');
-    const audiences = (registry.audiences || []).filter((a) => a.id !== key);
-    audiences.push({ id: key, label: label || key, description, outputPath });
-    registry.audiences = audiences;
-    store.saveRegistry(registry);
+    const audiences = (config.audiences || []).filter((a) => a.id !== key);
+    audiences.push({ id: key, label: label || key, description, outputPath, outputRemote });
+    config.audiences = audiences;
+    store.saveConfig(config);
     this.invalidate();
     return audiences;
   }
 
   compile(audience, { write = true } = {}) {
     const meta = this.listAudiences().find((a) => a.id === schema.kebab(audience)) || {};
-    const result = compiler.compileBundle(this.getEntries(), {
+    // Never re-share what someone else shared with you — attribution and
+    // permission both belong to whoever published it.
+    const own = this.getEntries().filter((entry) => entry.foreign !== true);
+    const result = compiler.compileBundle(own, {
       audience,
       label: meta.label,
       description: meta.description
     });
     result.written = write ? store.saveBundle(audience, result.bundle, meta.outputPath) : [];
     return result;
+  }
+
+  /**
+   * Pull, merge and push the registry. This is what makes the atlas survive
+   * working across machines — and survive the machine.
+   */
+  async sync(options = {}) {
+    const result = await sync.syncRegistry(options);
+    this.invalidate();
+    return result;
+  }
+
+  async setRemote(remote) {
+    const value = await sync.setRemote(remote);
+    this.invalidate();
+    return value;
+  }
+
+  async getSyncStatus() {
+    return sync.getSyncStatus();
+  }
+
+  /**
+   * Publish an audience bundle into a repo that audience already has access to.
+   */
+  async publish(audience, { push = true } = {}) {
+    const meta = this.listAudiences().find((a) => a.id === schema.kebab(audience));
+    if (!meta) throw new Error(`Unknown audience "${audience}" — add it with \`atlas audience add ${audience}\``);
+
+    const compiled = this.compile(audience, { write: true });
+    const published = push
+      ? await sync.publishBundle({
+        audience: meta.id,
+        bundle: compiled.bundle,
+        outputPath: meta.outputPath,
+        outputRemote: meta.outputRemote
+      })
+      : { ok: true, committed: false, path: meta.outputPath || compiled.written[0], detail: 'push disabled' };
+
+    return { ...compiled, published };
+  }
+
+  async subscribe({ name, source }) {
+    const result = await sync.subscribe({ name, source });
+    this.invalidate();
+    return result;
+  }
+
+  listSubscriptions() {
+    return store.loadSubscriptions().map((bundle) => ({
+      name: bundle.name,
+      audience: bundle.audience,
+      generatedAt: bundle.generatedAt,
+      entryCount: bundle.entries.length
+    }));
+  }
+
+  unsubscribe(name) {
+    const removed = store.removeSubscription(name);
+    this.invalidate();
+    return removed;
   }
 
   validate() {
@@ -268,12 +359,16 @@ class RepoAtlasService {
     const entries = this.getEntries();
     return {
       atlasDir: store.atlasDir(),
-      registryPath: store.registryPath(),
+      registryDir: store.registryDir(),
       scanRoots: this.getScanRoots(),
       entryCount: entries.length,
       clonedCount: entries.filter((e) => e.cloned).length,
+      foreignCount: entries.filter((e) => e.foreign).length,
+      curatedCount: Object.keys(store.loadEntries()).length,
       highlightCount: entries.reduce((sum, e) => sum + (e.highlights || []).length, 0),
       audiences: this.listAudiences().map((a) => a.id),
+      subscriptions: this.listSubscriptions(),
+      remote: store.loadConfig().remote || null,
       discovery: meta
         ? { generatedAt: meta.generatedAt, stale: meta.stale, githubAvailable: meta.githubAvailable !== false }
         : null

@@ -7,22 +7,52 @@ const { SCHEMA_VERSION, kebab, normalizeEntry } = require('./atlasSchema');
 const MANIFEST_FILENAME = '.repo-atlas.json';
 const MANIFEST_SEARCH_SUBDIRS = ['', 'master', 'main'];
 const DISCOVERY_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const CONFIG_FILENAME = 'atlas.config.json';
+const LEGACY_REGISTRY_FILENAME = 'registry.json';
 
 function atlasDir() {
   const override = String(process.env.AGENT_WORKSPACE_ATLAS_DIR || '').trim();
   return override ? path.resolve(override) : path.join(getAgentWorkspaceDir(), 'atlas');
 }
 
-function registryPath() {
-  return path.join(atlasDir(), 'registry.json');
+/**
+ * The portable half of the atlas — your judgement about repos, which is the
+ * same on every machine you work from and is what belongs in git.
+ */
+function registryDir() {
+  return path.join(atlasDir(), 'registry');
 }
 
+/**
+ * One file per curated repo. This is the detail that makes multi-machine sync
+ * work: two machines curating different repos touch different files, so git
+ * merges them without a conflict. A single registry.json would collide on
+ * every concurrent edit.
+ */
+function entriesDir() {
+  return path.join(registryDir(), 'entries');
+}
+
+function configPath() {
+  return path.join(registryDir(), CONFIG_FILENAME);
+}
+
+function legacyRegistryPath() {
+  return path.join(atlasDir(), LEGACY_REGISTRY_FILENAME);
+}
+
+// Machine-local: what this particular computer happens to have cloned. Never
+// synced — it would be wrong on every other machine.
 function discoveryCachePath() {
   return path.join(atlasDir(), 'discovery.json');
 }
 
 function bundlesDir() {
   return path.join(atlasDir(), 'bundles');
+}
+
+function subscriptionsDir() {
+  return path.join(atlasDir(), 'subscriptions');
 }
 
 function ensureDir(dirPath) {
@@ -49,6 +79,7 @@ function emptyRegistry() {
     schemaVersion: SCHEMA_VERSION,
     scanRoots: [],
     audiences: [],
+    remote: '',
     defaults: { visibility: 'private', groups: [] },
     entries: {}
   };
@@ -61,61 +92,126 @@ function normalizeAudience(raw) {
     id,
     label: String(raw?.label || id).trim(),
     description: String(raw?.description || '').trim(),
-    // Where compiled bundles for this audience should be copied, if anywhere.
-    outputPath: String(raw?.outputPath || '').trim()
+    // Where compiled bundles for this audience get published — a path inside a
+    // repo that audience already has access to.
+    outputPath: String(raw?.outputPath || '').trim(),
+    // Optional git repo to commit that bundle into.
+    outputRemote: String(raw?.outputRemote || '').trim()
   };
+}
+
+function loadConfig() {
+  const raw = readJson(configPath(), null) || readJson(legacyRegistryPath(), null) || {};
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    scanRoots: Array.isArray(raw.scanRoots) ? raw.scanRoots.map(String).filter(Boolean) : [],
+    audiences: (Array.isArray(raw.audiences) ? raw.audiences : []).map(normalizeAudience).filter(Boolean),
+    remote: String(raw.remote || '').trim(),
+    defaults: {
+      visibility: String(raw?.defaults?.visibility || 'private'),
+      groups: Array.isArray(raw?.defaults?.groups) ? raw.defaults.groups.map(kebab).filter(Boolean) : []
+    }
+  };
+}
+
+function saveConfig(config) {
+  return writeJson(configPath(), {
+    schemaVersion: SCHEMA_VERSION,
+    scanRoots: config?.scanRoots || [],
+    audiences: (config?.audiences || []).map(normalizeAudience).filter(Boolean),
+    remote: String(config?.remote || '').trim(),
+    defaults: config?.defaults || { visibility: 'private', groups: [] }
+  });
+}
+
+function entryPath(id) {
+  return path.join(entriesDir(), `${kebab(id)}.json`);
+}
+
+function loadEntries() {
+  const entries = {};
+
+  let files = [];
+  try {
+    files = fs.readdirSync(entriesDir()).filter((name) => name.endsWith('.json'));
+  } catch {
+    files = [];
+  }
+
+  for (const file of files) {
+    const raw = readJson(path.join(entriesDir(), file), null);
+    const id = kebab(raw?.id || path.basename(file, '.json'));
+    if (!id) continue;
+    entries[id] = { ...normalizeEntry({ ...raw, id }), id };
+  }
+
+  return entries;
+}
+
+/**
+ * Fold a pre-split `registry.json` into per-entry files. Runs once, keeps the
+ * old file as a backup, and is a no-op afterwards.
+ */
+function migrateLegacyRegistry() {
+  const legacy = readJson(legacyRegistryPath(), null);
+  if (!legacy) return { migrated: 0 };
+  if (fs.existsSync(configPath())) return { migrated: 0, reason: 'already migrated' };
+
+  ensureDir(entriesDir());
+  let migrated = 0;
+  for (const [key, value] of Object.entries(legacy.entries || {})) {
+    const id = kebab(value?.id || key);
+    if (!id) continue;
+    writeJson(entryPath(id), { ...normalizeEntry({ ...value, id }), id });
+    migrated += 1;
+  }
+
+  saveConfig({
+    scanRoots: legacy.scanRoots || [],
+    audiences: legacy.audiences || [],
+    remote: legacy.remote || '',
+    defaults: legacy.defaults
+  });
+
+  try {
+    fs.renameSync(legacyRegistryPath(), `${legacyRegistryPath()}.migrated`);
+  } catch {
+    // Keeping the original in place is harmless — config presence gates re-runs.
+  }
+
+  return { migrated };
 }
 
 function loadRegistry() {
-  const raw = readJson(registryPath(), null);
-  if (!raw) return emptyRegistry();
-
-  const registry = emptyRegistry();
-  registry.scanRoots = Array.isArray(raw.scanRoots) ? raw.scanRoots.map(String).filter(Boolean) : [];
-  registry.audiences = (Array.isArray(raw.audiences) ? raw.audiences : []).map(normalizeAudience).filter(Boolean);
-  registry.defaults = {
-    visibility: String(raw?.defaults?.visibility || 'private'),
-    groups: Array.isArray(raw?.defaults?.groups) ? raw.defaults.groups.map(kebab).filter(Boolean) : []
-  };
-
-  const entries = raw.entries && typeof raw.entries === 'object' ? raw.entries : {};
-  for (const [key, value] of Object.entries(entries)) {
-    const id = kebab(value?.id || key);
-    if (!id) continue;
-    registry.entries[id] = { ...normalizeEntry({ ...value, id }), id };
-  }
-
-  return registry;
+  migrateLegacyRegistry();
+  const config = loadConfig();
+  return { ...emptyRegistry(), ...config, entries: loadEntries() };
 }
 
 function saveRegistry(registry) {
-  const next = {
-    schemaVersion: SCHEMA_VERSION,
-    scanRoots: registry?.scanRoots || [],
-    audiences: (registry?.audiences || []).map(normalizeAudience).filter(Boolean),
-    defaults: registry?.defaults || { visibility: 'private', groups: [] },
-    entries: registry?.entries || {}
-  };
-  return writeJson(registryPath(), next);
+  saveConfig(registry);
+  for (const [id, entry] of Object.entries(registry?.entries || {})) {
+    writeJson(entryPath(id), { ...entry, id });
+  }
+  return registryDir();
 }
 
 function upsertRegistryEntry(id, patch) {
-  const registry = loadRegistry();
   const key = kebab(id);
   if (!key) throw new Error('An atlas entry needs an id');
-  const existing = registry.entries[key] || { id: key };
-  registry.entries[key] = { ...existing, ...normalizeEntry({ ...patch, id: key }), id: key };
-  saveRegistry(registry);
-  return registry.entries[key];
+
+  migrateLegacyRegistry();
+  const existing = readJson(entryPath(key), null) || { id: key };
+  const next = { ...existing, ...normalizeEntry({ ...patch, id: key }), id: key };
+  writeJson(entryPath(key), next);
+  return next;
 }
 
 function removeRegistryEntry(id) {
-  const registry = loadRegistry();
-  const key = kebab(id);
-  const existed = Boolean(registry.entries[key]);
-  delete registry.entries[key];
-  saveRegistry(registry);
-  return existed;
+  const target = entryPath(id);
+  if (!fs.existsSync(target)) return false;
+  fs.unlinkSync(target);
+  return true;
 }
 
 function loadDiscoveryCache({ maxAgeMs = DISCOVERY_CACHE_TTL_MS } = {}) {
@@ -170,14 +266,62 @@ function saveBundle(audienceId, bundle, outputPath = '') {
   return written;
 }
 
+/**
+ * Bundles published by other people. Read-only, lowest precedence, and always
+ * attributed — a teammate's map should never silently overwrite your own notes.
+ */
+function loadSubscriptions() {
+  let files = [];
+  try {
+    files = fs.readdirSync(subscriptionsDir()).filter((name) => name.endsWith('.json'));
+  } catch {
+    return [];
+  }
+
+  const bundles = [];
+  for (const file of files) {
+    const raw = readJson(path.join(subscriptionsDir(), file), null);
+    if (!raw || !Array.isArray(raw.entries)) continue;
+    bundles.push({
+      name: path.basename(file, '.json'),
+      audience: raw.audience || '',
+      generatedAt: raw.generatedAt || null,
+      entries: raw.entries
+    });
+  }
+  return bundles;
+}
+
+function saveSubscription(name, bundle) {
+  return writeJson(path.join(subscriptionsDir(), `${kebab(name)}.json`), bundle);
+}
+
+function removeSubscription(name) {
+  const target = path.join(subscriptionsDir(), `${kebab(name)}.json`);
+  if (!fs.existsSync(target)) return false;
+  fs.unlinkSync(target);
+  return true;
+}
+
 module.exports = {
   MANIFEST_FILENAME,
+  CONFIG_FILENAME,
   DISCOVERY_CACHE_TTL_MS,
   atlasDir,
-  registryPath,
+  registryDir,
+  entriesDir,
+  configPath,
+  legacyRegistryPath,
+  registryPath: configPath,
   discoveryCachePath,
   bundlesDir,
+  subscriptionsDir,
   emptyRegistry,
+  loadConfig,
+  saveConfig,
+  loadEntries,
+  entryPath,
+  migrateLegacyRegistry,
   loadRegistry,
   saveRegistry,
   upsertRegistryEntry,
@@ -188,6 +332,9 @@ module.exports = {
   loadManifest,
   writeManifest,
   saveBundle,
+  loadSubscriptions,
+  saveSubscription,
+  removeSubscription,
   readJson,
   writeJson
 };

@@ -80,14 +80,27 @@ const commands = {
     out('Next: `atlas doctor` to see what needs curating, `atlas note <id> --topic X --quality N` to record what a repo is good at.');
   },
 
-  status() {
+  async status() {
     const status = atlas.getStatus();
     out(`atlas dir     ${status.atlasDir}`);
-    out(`registry      ${status.registryPath}`);
+    out(`registry      ${status.registryDir}`);
     out(`scan roots    ${status.scanRoots.join(', ')}`);
-    out(`repos         ${status.entryCount} (${status.clonedCount} cloned locally)`);
+    out(`repos         ${status.entryCount} (${status.clonedCount} cloned locally, ${status.curatedCount} curated)`);
     out(`highlights    ${status.highlightCount}`);
     out(`audiences     ${status.audiences.join(', ') || 'none configured'}`);
+    out(`remote        ${status.remote || 'not configured — run `atlas remote set <git-url>`'}`);
+    if (status.subscriptions.length) {
+      out(`subscribed    ${status.subscriptions.map((s) => `${s.name} (${s.entryCount})`).join(', ')}`);
+    }
+
+    const git = await atlas.getSyncStatus();
+    if (git.tracked) {
+      const pending = [git.dirty ? 'uncommitted changes' : '', git.unpushed ? `${git.unpushed} unpushed` : '']
+        .filter(Boolean).join(', ');
+      out(`sync          ${git.branch}${pending ? ` — ${pending}` : ' — up to date'}`);
+    } else {
+      out('sync          not tracked in git yet');
+    }
     if (!status.discovery) {
       out('discovery     never run — start with `atlas scan`');
     } else {
@@ -240,11 +253,74 @@ const commands = {
         id,
         label: flags.label === true ? '' : String(flags.label || ''),
         description: flags.description === true ? '' : String(flags.description || ''),
-        outputPath: flags.out === true ? '' : String(flags.out || '')
+        outputPath: flags.out === true ? '' : String(flags.out || ''),
+        outputRemote: flags.outRemote === true ? '' : String(flags.outRemote || '')
       });
       return out(`Audience "${id}" saved. Tag repos into it with \`atlas set <id> --visibility team --groups ${id}\`.`);
     }
     return fail(`unknown audience action "${action}"`);
+  },
+
+  async remote(positionals, flags) {
+    const action = positionals[0];
+    if (action === 'set') {
+      const url = positionals[1];
+      if (!url) return fail('usage: atlas remote set <git-url>');
+      await atlas.setRemote(url);
+      out(`Registry remote set to ${url}.`);
+      out('Run `atlas sync` to push your curated entries and pull anything from your other machines.');
+      return undefined;
+    }
+    const status = await atlas.getSyncStatus();
+    out(`remote  ${status.remote || 'not configured'}`);
+    out(`dir     ${status.dir}`);
+    if (status.tracked) out(`branch  ${status.branch}${status.dirty ? ' (dirty)' : ''}`);
+    return undefined;
+  },
+
+  async sync(_positionals, flags) {
+    out('Syncing registry…');
+    const result = await atlas.sync({ message: flags.message === true ? '' : String(flags.message || '') });
+    for (const step of result.steps || []) {
+      out(`  ${step.step.padEnd(14)} ${step.ok === false ? 'failed' : 'ok'}${step.detail ? ` — ${String(step.detail).split('\n')[0]}` : ''}`);
+    }
+    if (!result.ok) return fail(result.error);
+    out(`Synced ${result.entryCount} curated entries with ${result.remote} (${result.branch}).`);
+    return undefined;
+  },
+
+  async publish(positionals, flags) {
+    const audience = positionals[0];
+    if (!audience) return fail('usage: atlas publish <audience> [--no-push]');
+
+    const result = await atlas.publish(audience, { push: flags.noPush !== true });
+    out(`${audience}: ${result.counts.included} shared / ${result.counts.excluded} withheld / ${result.counts.redacted} partly redacted`);
+    if (result.published?.error) return fail(result.published.error);
+    out(`wrote ${result.published.path}`);
+    if (result.published.committed) out(result.published.pushed ? 'committed and pushed' : 'committed (push failed)');
+    return undefined;
+  },
+
+  async subscribe(positionals, flags) {
+    const action = positionals[0];
+    if (action === 'list' || !action) {
+      const subs = atlas.listSubscriptions();
+      if (!subs.length) return out('No subscriptions. Add one: `atlas subscribe add <name> <path-or-git-url>`');
+      for (const sub of subs) out(`${sub.name.padEnd(20)} ${sub.entryCount} repos   ${sub.generatedAt || ''}`);
+      return undefined;
+    }
+    if (action === 'add') {
+      const [, name, source] = positionals;
+      if (!name || !source) return fail('usage: atlas subscribe add <name> <path-or-git-url>');
+      const result = await atlas.subscribe({ name, source });
+      return out(`Subscribed to ${result.name} — ${result.entryCount} repos now searchable (marked as theirs).`);
+    }
+    if (action === 'remove') {
+      const name = positionals[1];
+      if (!name) return fail('usage: atlas subscribe remove <name>');
+      return out(atlas.unsubscribe(name) ? `Removed ${name}.` : `No subscription "${name}".`);
+    }
+    return fail(`unknown subscribe action "${action}"`);
   },
 
   compile(positionals, flags) {
@@ -310,8 +386,15 @@ const commands = {
   atlas avoid <id> --topic X --reason "..."
   atlas set <id> [--visibility ...] [--groups a,b] [--kind ...] [--summary "..."]
 
-  atlas audience list | add <id> [--label "..."] [--out <path>]
+  atlas audience list | add <id> [--label "..."] [--out <path>] [--out-remote <git-url>]
   atlas compile <audience> [--dry-run] [--explain]
+
+multi-machine:
+  atlas remote set <git-url>               track the registry in a PRIVATE git repo
+  atlas sync [--message "..."]             pull + merge + push your curated entries
+  atlas publish <audience> [--no-push]     compile a bundle and commit it where that audience can read it
+  atlas subscribe add <name> <path|url>    read someone else's published bundle
+  atlas subscribe list | remove <name>
   atlas doctor
   atlas init [path] [--visibility ...] [--groups a,b]
 
@@ -324,7 +407,12 @@ values:     maturity ${MATURITIES.join('|')}   visibility ${VISIBILITIES.join('|
 Sharing model: entries are private by default. \`visibility: public\` goes in every
 bundle, \`team\` goes only to audiences listed in its groups, \`private\` never leaves
 this machine. Compiled bundles are metadata distribution — GitHub permissions are
-still the real access control.`);
+still the real access control.
+
+Multi-machine: your registry (judgement, portable) lives in a PRIVATE git repo,
+one file per repo so machines never conflict. Discovery (what this computer has
+cloned) stays local and is never synced. Audience bundles are published into
+whichever shared repo that audience already has access to.`);
   }
 };
 

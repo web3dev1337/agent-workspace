@@ -143,6 +143,7 @@ describe('RepoAtlasService', () => {
     expect(status.entryCount).toBe(1);
     expect(status.clonedCount).toBe(1);
     expect(status.highlightCount).toBe(1);
-    expect(status.registryPath).toContain('registry.json');
+    expect(status.registryDir).toContain('registry');
+    expect(status.curatedCount).toBe(1);
   });
 });

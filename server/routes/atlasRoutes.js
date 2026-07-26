@@ -127,6 +127,39 @@ function createAtlasRoutes({ repoAtlasService, logger = console, requireRead = p
     res.json({ ok: true, audiences });
   }));
 
+  router.get('/sync', requireRead, handle('sync status', async (req, res) => {
+    res.json({ ok: true, sync: await repoAtlasService.getSyncStatus() });
+  }));
+
+  router.post('/sync', requireWrite, handle('sync', async (req, res) => {
+    const result = await repoAtlasService.sync({ message: req.body?.message || '' });
+    res.json({ ok: result.ok, ...result });
+  }));
+
+  router.post('/remote', requireWrite, handle('set remote', async (req, res) => {
+    res.json({ ok: true, remote: await repoAtlasService.setRemote(req.body?.remote || '') });
+  }));
+
+  router.post('/publish', requireWrite, handle('publish', async (req, res) => {
+    const audience = req.body?.audience;
+    if (!audience) return res.status(400).json({ ok: false, error: 'audience is required' });
+    const result = await repoAtlasService.publish(audience, { push: req.body?.push !== false });
+    return res.json({ ok: true, audience, counts: result.counts, published: result.published });
+  }));
+
+  router.get('/subscriptions', requireRead, handle('list subscriptions', (req, res) => {
+    res.json({ ok: true, subscriptions: repoAtlasService.listSubscriptions() });
+  }));
+
+  router.post('/subscriptions', requireWrite, handle('subscribe', async (req, res) => {
+    const result = await repoAtlasService.subscribe({ name: req.body?.name, source: req.body?.source });
+    res.json({ ok: true, ...result });
+  }));
+
+  router.delete('/subscriptions/:name', requireWrite, handle('unsubscribe', (req, res) => {
+    res.json({ ok: true, removed: repoAtlasService.unsubscribe(req.params.name) });
+  }));
+
   router.post('/compile', requireWrite, handle('compile bundle', (req, res) => {
     const audience = req.body?.audience;
     if (!audience) return res.status(400).json({ ok: false, error: 'audience is required' });
