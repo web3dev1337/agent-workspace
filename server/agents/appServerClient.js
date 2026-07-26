@@ -36,6 +36,14 @@ class AppServerClient extends EventEmitter {
     this.restartAttempts = 0;
     this.lastError = null;
     this.startedAt = null;
+
+    // EventEmitter throws on an 'error' emit with no listener, which would take
+    // the whole orchestrator down via uncaughtException. A default listener
+    // turns a client-level error into a recorded fact instead of a crash.
+    this.on('error', (error) => {
+      this.lastError = error?.message || String(error);
+      this.logger.warn?.('[app-server] client error', { error: this.lastError });
+    });
   }
 
   isRunning() {
@@ -47,7 +55,7 @@ class AppServerClient extends EventEmitter {
     if (this.starting) return this.starting;
 
     this.stopped = false;
-    this.starting = new Promise((resolve) => {
+    const startPromise = new Promise((resolve) => {
       try {
         this.child = spawn(this.command, this.args, {
           ...getHiddenProcessOptions({ stdio: ['pipe', 'pipe', 'pipe'] }),
@@ -56,7 +64,6 @@ class AppServerClient extends EventEmitter {
         });
       } catch (error) {
         this.lastError = error.message;
-        this.starting = null;
         resolve({ running: false, error: error.message });
         return;
       }
@@ -83,11 +90,19 @@ class AppServerClient extends EventEmitter {
 
       this.startedAt = new Date().toISOString();
       this.restartAttempts = 0;
-      this.starting = null;
       resolve({ running: true, pid: this.child.pid });
     });
 
-    return this.starting;
+    // Clear the in-flight marker once it settles. The Promise executor runs
+    // synchronously, so nulling `this.starting` from inside it would be
+    // clobbered by the assignment below — leaving a stale resolved promise that
+    // makes every later start() (auto-restart included) a permanent no-op.
+    this.starting = startPromise;
+    startPromise.finally(() => {
+      if (this.starting === startPromise) this.starting = null;
+    });
+
+    return startPromise;
   }
 
   scheduleRestart() {
@@ -166,7 +181,11 @@ class AppServerClient extends EventEmitter {
 
     if (message.method) {
       this.emit('notification', { method: message.method, params: message.params || {} });
-      this.emit(message.method, message.params || {});
+      // Re-emit under the method name so listeners can subscribe to a specific
+      // notification (realtime events do this). Never for 'error': that is a
+      // reserved EventEmitter event that throws without a listener, and the
+      // 'error' *notification* is already delivered via 'notification' above.
+      if (message.method !== 'error') this.emit(message.method, message.params || {});
     }
   }
 
