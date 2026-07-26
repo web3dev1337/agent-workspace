@@ -96,6 +96,11 @@ function slugList(value) {
 }
 
 function qualityScore(value) {
+  // `Number(null)` and `Number('')` are 0, which would clamp to 1 — silently
+  // turning an intentionally-unscored highlight ("no opinion yet") into the
+  // worst possible score. Unscored must stay null; only real numbers clamp
+  // (an explicit out-of-range 0 still floors to 1).
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
   const num = Number(value);
   if (!Number.isFinite(num)) return null;
   return Math.min(5, Math.max(1, Math.round(num)));

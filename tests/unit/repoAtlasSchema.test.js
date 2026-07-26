@@ -41,6 +41,17 @@ describe('atlasSchema', () => {
     ]);
   });
 
+  test('an unscored highlight stays unscored rather than becoming quality 1', () => {
+    const entry = normalizeEntry({
+      id: 'x',
+      highlights: [
+        { topic: 'testing', quality: null, notes: 'no opinion yet' },
+        { topic: 'physics' }
+      ]
+    });
+    expect(entry.highlights.map((h) => h.quality)).toEqual([null, null]);
+  });
+
   test('normalizeEntry only accepts redactions for known fields', () => {
     const entry = normalizeEntry({ id: 'x', redact: ['notes', 'secrets', 'paths'] });
     expect(entry.redact).toEqual(['notes', 'paths']);
