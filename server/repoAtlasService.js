@@ -138,7 +138,12 @@ class RepoAtlasService {
         layers.manifest,
         layers.registry
       );
-      if (layers.subscription && !layers.discovery && !layers.registry) {
+      // Foreign = it only exists here because a teammate shared it. A local
+      // registry note (annotating their entry for your own searches) must NOT
+      // declassify it — otherwise compile() would re-publish their inherited
+      // fields under your bundle, breaking the "never re-share" guarantee. Only
+      // actually having the repo locally (discovery) makes it yours to share.
+      if (layers.subscription && !layers.discovery) {
         merged.foreign = true;
         merged.sharedBy = layers.subscription.sharedBy;
       }

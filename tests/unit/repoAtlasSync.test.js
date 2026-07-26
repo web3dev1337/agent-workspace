@@ -157,7 +157,27 @@ describe('Repo Atlas multi-machine sync', () => {
       const entry = me.getEntry('shared-repo');
       expect(entry.highlights[0].quality).toBe(5);
       expect(entry.summary).toBe('their description');
-      expect(entry.foreign).toBeUndefined();
+    });
+
+    test('annotating a shared repo does not make it re-shareable', async () => {
+      const shared = publishBundle(root, [{
+        id: 'shared-repo',
+        name: 'shared-repo',
+        summary: 'their description',
+        visibility: 'public',
+        highlights: [{ topic: 'testing', quality: 2 }]
+      }]);
+
+      const me = machine('me');
+      await me.subscribe({ name: 'them', source: shared });
+      // A local note must not declassify a repo you only know about because a
+      // teammate shared it — re-publishing it would leak their inherited fields.
+      me.addHighlight('shared-repo', { topic: 'testing', quality: 5, notes: 'actually excellent' });
+      me.setEntry('shared-repo', { visibility: 'public' });
+
+      expect(me.getEntry('shared-repo').foreign).toBe(true);
+      const compiled = me.compile('anyone', { write: false });
+      expect(compiled.bundle.entries.map((e) => e.id)).not.toContain('shared-repo');
     });
 
     test('subscribing to something that is not a bundle fails loudly', async () => {
