@@ -25,6 +25,9 @@ discovery.json
 bundles/
 subscriptions/
 *.migrated
+# Machine-local config: remote URL, audiences with local output paths. Syncing
+# it would add/add-conflict between any two machines whose configs differ.
+atlas.config.json
 `;
 
 function git(args, { cwd, timeout = GIT_TIMEOUT_MS } = {}) {
@@ -69,7 +72,13 @@ function seedRepoFiles(dir) {
   const readme = path.join(dir, 'README.md');
   if (!fs.existsSync(readme)) fs.writeFileSync(readme, REGISTRY_README, 'utf8');
   const ignore = path.join(dir, '.gitignore');
-  if (!fs.existsSync(ignore)) fs.writeFileSync(ignore, REGISTRY_GITIGNORE, 'utf8');
+  if (!fs.existsSync(ignore)) {
+    fs.writeFileSync(ignore, REGISTRY_GITIGNORE, 'utf8');
+  } else if (!fs.readFileSync(ignore, 'utf8').includes('atlas.config.json')) {
+    // Registries created before the config was ignored: upgrade in place so
+    // every machine converges on the same tracked .gitignore content.
+    fs.writeFileSync(ignore, REGISTRY_GITIGNORE, 'utf8');
+  }
   fs.mkdirSync(path.join(dir, 'entries'), { recursive: true });
 }
 
@@ -105,6 +114,12 @@ async function syncRegistry({ remote = '', message = '' } = {}) {
   const prepared = await ensureRepo(dir, target);
   if (!prepared.ok) return { ok: false, error: prepared.error };
   seedRepoFiles(dir);
+
+  // Self-heal registries that committed the machine-local config before it was
+  // ignored — leaving it tracked guarantees an add/add conflict with any other
+  // machine. --cached keeps the local file; --ignore-unmatch makes it a no-op
+  // once clean.
+  await git(['rm', '--cached', '--ignore-unmatch', '-q', 'atlas.config.json'], { cwd: dir });
 
   const steps = [];
 

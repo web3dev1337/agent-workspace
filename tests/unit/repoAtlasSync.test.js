@@ -58,6 +58,48 @@ describe('Repo Atlas multi-machine sync', () => {
     expect(b.getEntry('only-on-a')).toBeNull();
   });
 
+  test('machine-local config never syncs, so differing configs cannot conflict', async () => {
+    // The live repro: A has an audience configured, B does not — their
+    // atlas.config.json contents differ, and when the config was tracked this
+    // add/add-conflicted on B's very first sync.
+    const a = machine('a');
+    await a.setRemote(remote);
+    a.setAudience({ id: 'core-team', outputPath: '/machine/a/only/path.json' });
+    a.addHighlight('repo-one', { topic: 'testing', quality: 5 });
+    expect((await a.sync()).ok).toBe(true);
+
+    const b = machine('b');
+    await b.setRemote(remote);
+    const bSync = await b.sync();
+    expect(bSync.ok).toBe(true);
+    expect(b.find('testing')).toHaveLength(1);
+
+    // The config file must not exist anywhere in the shared history.
+    const tracked = execFileSync('git', ['ls-tree', '-r', '--name-only', 'main'], { cwd: remote, stdio: 'pipe' }).toString();
+    expect(tracked).not.toMatch(/atlas\.config\.json/);
+
+    // And B must not have inherited A's machine-local audience config.
+    expect(b.listAudiences().find((x) => x.id === 'core-team')).toBeUndefined();
+  });
+
+  test('a registry that already committed its config self-heals on the next sync', async () => {
+    const a = machine('a');
+    await a.setRemote(remote);
+    a.addHighlight('repo-one', { topic: 'testing', quality: 5 });
+    expect((await a.sync()).ok).toBe(true);
+
+    // Simulate the pre-fix state: force-track the config and commit it.
+    const dir = store.registryDir();
+    execFileSync('git', ['add', '-f', 'atlas.config.json'], { cwd: dir, stdio: 'pipe' });
+    execFileSync('git', ['commit', '-m', 'legacy: tracked config'], { cwd: dir, stdio: 'pipe' });
+
+    expect((await a.sync()).ok).toBe(true);
+    const tracked = execFileSync('git', ['ls-tree', '-r', '--name-only', 'main'], { cwd: remote, stdio: 'pipe' }).toString();
+    expect(tracked).not.toMatch(/atlas\.config\.json/);
+    // The local file itself must survive (--cached).
+    expect(fs.existsSync(store.configPath())).toBe(true);
+  });
+
   test('a failing local commit reports itself, not a misleading push error', async () => {
     const a = machine('a');
     await a.setRemote(remote);
