@@ -246,5 +246,10 @@ Known limits, stated plainly:
   against a live authenticated session. The text path is the default and works.
 - Structured signals only cover Codex. Claude, Gemini and aider stay on PTY scraping —
   which is why the scraper remains the universal fallback rather than being removed.
+- The app-server bridge is verified working in isolation (initialize handshake, thread
+  list, live notifications), but nothing yet links a running PTY session to its
+  app-server thread id, so `getSignalForSession` returns null for every session today and
+  the supervisor runs entirely on PTY signals. Wiring that correlation is what turns the
+  structured path on; until then it is dormant, not active.
 - Discord extraction is rules-only. The `classifier` seam for handing ambiguous messages
   to a cheap model exists but is unused.
