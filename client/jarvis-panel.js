@@ -33,7 +33,9 @@
   const relativeTime = (iso) => {
     const ms = Date.parse(String(iso || ''));
     if (!Number.isFinite(ms)) return '';
-    const seconds = Math.round((Date.now() - ms) / 1000);
+    // A future timestamp (clock skew between machines, or a message posted by a
+    // client whose clock is ahead) must not render as "-40717s ago".
+    const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
     if (seconds < 60) return `${seconds}s ago`;
     if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
