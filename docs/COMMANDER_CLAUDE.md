@@ -138,7 +138,20 @@ curl -sS -X POST "$BASE_URL/api/supervisor/tick" \
   -d '{"dryRun": true}' | jq
 ```
 
-**Autonomy levels** — `off` (nothing runs) | `observe` (default: record only, zero side effects) | `assist` (may notify and type nudges into sessions) | `autopilot` (may also run allowlisted act handlers).
+**Autonomy levels** — `off` (nothing runs) | `observe` (record only) | `assist` (may repair things itself) | `autopilot` (default: may also delegate to a Commander).
+
+Autonomy governs what JARVIS may **fix**, not what it may say. Reaching a human is gated separately: a finding must exhaust its repair attempts, then clear an urgency threshold weighted by the task's tier, then fit inside an interruption budget. Everything else batches into a digest.
+
+**You may be on the receiving end of this.** When rules cannot fix something, the problem is delegated to a Commander as a `[JARVIS]` problem brief with the session, branch, tier and output tail. That is a request to diagnose and fix it — not to relay it to the user. Escalate to a human only if you are genuinely blocked on a decision only they can make.
+
+```bash
+# What is waiting but did not earn an interruption
+curl -sS "$BASE_URL/api/supervisor/digest" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# "Catch me up" — deliver the batch now
+curl -sS -X POST "$BASE_URL/api/supervisor/digest/deliver" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{}' | jq
+```
 
 ```bash
 curl -sS -X POST "$BASE_URL/api/supervisor/autonomy" \
@@ -187,7 +200,28 @@ curl -sS -X POST "$BASE_URL/api/atlas/entries/zoo-game/highlights" \
 
 Also available as a CLI anywhere: `node scripts/atlas.js find <topic>`.
 
-**Do not change a repo's `visibility` or `groups`, and do not compile sharing bundles, without being asked.** Those decide what leaves the machine.
+**Do not change a repo's `visibility` or `groups`, and do not compile or publish sharing bundles, without being asked.** Those decide what leaves the machine.
+
+The registry syncs between machines via a private git repo (`GET/POST /api/atlas/sync`). Entries marked `foreign: true` were shared with you by someone else — read them, never re-share them.
+
+## Discord (ambient team work)
+
+The watcher reads whole channels rather than waiting to be addressed, turns assignments into tracked work with a priority, and publishes status back so nobody has to ask whether an agent picked something up.
+
+```bash
+# Asked for, nobody started — ordered by priority
+curl -sS "$BASE_URL/api/discord-watch/untracked" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+curl -sS "$BASE_URL/api/discord-watch/items?status=in-progress" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+curl -sS "$BASE_URL/api/discord-watch/status" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Bind a work item to the session doing it — this is what makes agent status visible to the team
+curl -sS -X POST "$BASE_URL/api/discord-watch/items/discord:123/link" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"sessionId": "zoo-game-work1-claude"}'
+```
+
+Link a work item whenever you start a session for one — an unlinked item looks untouched to everyone else. Work item tiers come from how urgently the message was phrased, and they flow into the task record, so linking also sets the session's tier correctly.
 
 ## Session Control
 

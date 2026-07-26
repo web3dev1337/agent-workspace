@@ -116,6 +116,8 @@ const { SupervisorService } = require('./supervisorService');
 const { createSupervisorRoutes } = require('./routes/supervisorRoutes');
 const { SpeechService } = require('./speechService');
 const { createSpeechRoutes } = require('./routes/speechRoutes');
+const { DiscordWatchService } = require('./discordWatchService');
+const { createDiscordWatchRoutes } = require('./routes/discordWatchRoutes');
 const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
@@ -359,6 +361,7 @@ const repoAtlasService = RepoAtlasService.getInstance({ logger });
 const speechService = SpeechService.getInstance({ logger });
 speechService.setIO(io);
 const supervisorService = SupervisorService.getInstance({ logger });
+const discordWatchService = DiscordWatchService.getInstance({ logger });
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
 activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 9460) });
@@ -461,6 +464,11 @@ if (String(process.env.SUPERVISOR_AUTOSTART || 'true').toLowerCase() !== 'false'
   const started = supervisorService.start();
   logger.info('Supervisor', started);
 }
+
+// Off unless explicitly configured — it needs a bot token and channel ids.
+discordWatchService.init({ taskRecordService, activityFeed });
+const discordWatchStarted = discordWatchService.start();
+if (discordWatchStarted.running) logger.info('Discord watch', discordWatchStarted);
 
 // Speech that no rule matched is still useful: hand the raw words to the
 // active Commander so the fallback is an agent, not an error.
@@ -1387,6 +1395,13 @@ app.use('/api/atlas', createAtlasRoutes({
 
 app.use('/api/supervisor', createSupervisorRoutes({
   supervisorService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/discord-watch', createDiscordWatchRoutes({
+  discordWatchService,
   logger,
   requireRead: requirePolicyAction('read'),
   requireWrite: requirePolicyAction('write')

@@ -126,14 +126,17 @@ server/commanderService.js         - Top-level Commander PTY (Claude/Codex) + la
 ├─ Packaged CWD: uses `ORCHESTRATOR_DATA_DIR/commander` so desktop users can edit `CLAUDE.md` / `AGENTS.md` safely
 └─ First-run seed: copies the packaged `docs/COMMANDER_CLAUDE.md` into the Commander data directory when missing
 server/repoAtlasService.js         - Repo Atlas facade: one queryable map of every repo you own, cloned or not
-├─ Layers (later wins): discovery (disk + `gh repo list`) < in-repo `.repo-atlas.json` manifest < `~/.agent-workspace/atlas/registry.json` (your override)
+├─ Layers (later wins): subscriptions (bundles others shared) < discovery (disk + `gh repo list`) < in-repo `.repo-atlas.json` < your registry override
 ├─ Query: `find(topic)` ranked by per-topic quality 1-5, `digest()` compact paste-into-a-prompt map, `search()`, `topics()`
 ├─ Curation: `addHighlight()` / `addAvoid()` persist into the registry — quality is scored per topic, so a rough repo can still be the best example of one thing
 └─ Sharing: `compile(audience)` emits audience-scoped bundles — `private` never leaves the machine, `team` needs a group match, `public` goes everywhere
 server/supervisorService.js        - Fleet supervisor: rule-driven watchdog over every agent session
 ├─ Loop: rules run on a tick (default 30s) from zero-token signals; no model is called in the loop, only on escalation
-├─ Ladder: observe → notify → nudge → act, capped by autonomy (`off` | `observe` (default) | `assist` | `autopilot`)
-├─ Safety: shipped conditions never reach `act`; act handlers are named functions, so rules cannot inject shell
+├─ Ordering: fix it itself → hand it to the Commander → only then interrupt a human
+├─ Autonomy (`off` | `observe` | `assist` | `autopilot`, default autopilot; `SUPERVISOR_AUTONOMY` overrides) governs what it may FIX, not what it may say
+├─ Escalation: a finding cannot reach a human until `escalateAfterAttempts` self-heals have failed
+├─ Interruption: urgency = severity x task tier + failed repairs; gated by a budget (2/hour, 15min apart, optional quiet hours); anything refused batches into a digest
+├─ Safety: named handlers only, so rules cannot inject shell; permission auto-approval fails closed on credentials/force-push/merge
 ├─ Audit: every action appended to `~/.agent-workspace/logs/supervisor-audit.jsonl` with the finding that caused it
 └─ `getBriefing()` renders the spoken/at-a-glance "what needs you now" summary
 server/supervisor/supervisorSignals.js - Per-session signal collection (PTY tail, quiet-time tracker, repeated-line detection, git ahead/dirty for quiet sessions only)
@@ -152,6 +155,22 @@ client/speech-output.js            - Web Speech API listener for the browser bac
 server/voiceCommandService.js      - (existing) rule/LLM voice parsing, now with `setCommanderForwarder()`: unmatched speech is handed to the Commander agent instead of dead-ending
 tests/unit/speechService.test.js   - Sanitization, repeat suppression, backend resolution
 
+server/supervisor/supervisorUrgency.js - Urgency scoring (severity x task tier + failed-repair weight), interruption budget, digest queue
+server/discordWatchService.js      - Ambient Discord watching: read the conversation, track the work, publish status back
+├─ Ingest: cursor-based polling (`?after=<lastSeenId>`), so a message missed while the process was down is not possible rather than retried
+├─ Extraction: rules over every message -> work items with assignee, priority and tier; claim/done/drop update existing items
+├─ Publishing: `linkSession()` binds an item to the session doing it, writes a task record, and announces it in-channel
+└─ State: `~/.agent-workspace/discord/discord-watch.json` (cursors + items + member names)
+server/discord/discordClient.js    - Minimal Discord REST client (paged `after` reads, rate-limit backoff, reply-threaded posts)
+server/discord/workExtractor.js    - Message -> work item classification (`config/discord-watch.json`, override `~/.agent-workspace/discord-watch.json`)
+server/routes/discordWatchRoutes.js - Express router for `/api/discord-watch/*`
+config/discord-watch.json          - Priority/kind/claim/done patterns, watched channels, poll cadence
+tests/unit/discordWatchService.test.js - Extraction, cursor durability, restart resume, status publishing
+
+server/atlas/atlasSync.js          - Git operations for the atlas: registry sync, audience publishing, subscriptions
+├─ Registry lives in a PRIVATE git repo (`atlas remote set` + `atlas sync`) so judgement follows you between machines
+├─ One file per repo under `entries/` — two machines curating different repos never conflict
+└─ `subscribe` reads a bundle someone else published; foreign entries are lowest precedence and are never re-shared
 server/atlas/atlasSchema.js        - Entry normalization, layered merge, topic-alias folding (`config/repo-atlas-topics.json`), validation
 server/atlas/atlasDiscovery.js     - Local git scan (worktree siblings collapse into one project entry) + `gh repo list` + source merge
 server/atlas/atlasStore.js         - Persistence under `~/.agent-workspace/atlas/` (registry, discovery cache, compiled bundles) + in-repo manifest read/write
@@ -711,6 +730,24 @@ POST /api/supervisor/tick                                     - Force one pass (
 POST /api/supervisor/start | /stop                            - Control the loop
 POST /api/supervisor/autonomy                                 - Set autonomy (`off` | `observe` | `assist` | `autopilot`)
 POST /api/supervisor/reload-rules                             - Re-read the condition table from disk
+
+GET /api/supervisor/digest                                    - What is waiting but did not earn an interruption
+POST /api/supervisor/digest/deliver                           - "Catch me up" — deliver the batch now
+POST /api/supervisor/interruption-policy                      - Tune threshold/budget/quiet hours
+
+GET /api/atlas/sync | POST /api/atlas/sync                    - Registry git status / pull+merge+push
+POST /api/atlas/remote                                        - Point the registry at a private git repo
+POST /api/atlas/publish                                       - Compile + commit an audience bundle where they can read it
+GET|POST /api/atlas/subscriptions                             - Read bundles other people published
+DELETE /api/atlas/subscriptions/:name                         - Stop reading one
+
+GET /api/discord-watch/status                                 - Watcher state, cursors, item counts
+GET /api/discord-watch/items?status=&assignee=&channelId=     - Tracked work extracted from chat
+GET /api/discord-watch/untracked                              - Asked for, nobody started — ordered by priority
+POST /api/discord-watch/poll | /start | /stop                 - Control the watcher
+GET|POST /api/discord-watch/channels                          - Which channels are watched
+POST /api/discord-watch/items/:id/link                        - Bind an item to the session doing it (and announce it)
+POST /api/discord-watch/items/:id/status                      - Post a status update back into the channel
 
 GET /api/speech/status                                        - Enabled state, resolved backend, available backends, listeners
 POST /api/speech/say                                          - Speak text (`priority: high` interrupts, `force` skips repeat suppression)
