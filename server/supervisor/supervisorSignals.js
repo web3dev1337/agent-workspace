@@ -142,12 +142,42 @@ async function collectGitState(gitHelper, cwd) {
   }
 }
 
+/**
+ * Prefer facts over inference.
+ *
+ * When a structured source (the Codex app-server) knows a thread's state, it
+ * replaces the scraped guess: `waiting` because the thread said it is waiting on
+ * an approval beats `waiting` because a regex matched some prose. Quiet time
+ * stays PTY-derived where the PTY is the thing actually being watched, and the
+ * scraped tail is kept either way so tail-matching rules still work.
+ */
+function applyStructuredSignal(signal, structured) {
+  if (!structured) return signal;
+
+  return {
+    ...signal,
+    signalSource: structured.source || 'app-server',
+    status: structured.status && structured.status !== 'unknown' ? structured.status : signal.status,
+    quietSeconds: Number.isFinite(structured.quietSeconds) ? structured.quietSeconds : signal.quietSeconds,
+    awaitingApproval: structured.awaitingApproval === true,
+    awaitingUserInput: structured.awaitingUserInput === true,
+    activeFlags: structured.activeFlags || [],
+    tokenUsage: structured.tokenUsage || null,
+    rateLimits: structured.rateLimits || null,
+    lastTurnStatus: structured.lastTurnStatus || null,
+    lastTurnError: structured.lastTurnError || null,
+    structuredError: structured.lastError || null,
+    threadId: structured.threadId || null
+  };
+}
+
 async function gatherSignals({
   sessionManager,
   gitHelper,
   sessionRecoveryService,
   taskRecordService,
   quietTracker,
+  structuredSource = null,
   gitQuietThresholdSeconds = 120
 } = {}) {
   const supervised = listSupervisedSessions(sessionManager);
@@ -170,8 +200,9 @@ async function gatherSignals({
 
     const record = taskRecordService?.get?.(`session:${id}`) || null;
 
-    signals.push({
+    const base = {
       sessionId: id,
+      signalSource: 'pty',
       type: String(session.type || '').toLowerCase(),
       status: String(session.status || 'idle').toLowerCase(),
       agent: recovery?.lastAgent || (session.type === 'codex' ? 'codex' : null),
@@ -188,7 +219,9 @@ async function gatherSignals({
       git,
       tier: Number(record?.tier) || null,
       ticketTitle: record?.ticketTitle || null
-    });
+    };
+
+    signals.push(applyStructuredSignal(base, structuredSource?.getSignalForSession?.(session) || null));
   }
 
   return signals;
@@ -202,6 +235,7 @@ module.exports = {
   lastNonEmptyLines,
   maxLineRepeat,
   listSupervisedSessions,
+  applyStructuredSignal,
   countUnpushedCommits,
   collectGitState,
   gatherSignals

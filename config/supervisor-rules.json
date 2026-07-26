@@ -43,6 +43,32 @@
   "$comment_conditions": "Ordered by urgency — the first match per session wins. `resolve` is what JARVIS does about it without asking. `escalateAfterAttempts` is how many failed self-heals before it is allowed to reach you at all.",
   "conditions": [
     {
+      "id": "structured-approval",
+      "label": "Waiting on an approval (reported, not guessed)",
+      "severity": "warn",
+      "cooldownSeconds": 60,
+      "escalateAfterAttempts": 1,
+      "urgency": { "blocksWork": true },
+      "resolve": { "handler": "answer-permission" },
+      "$comment": "The Codex app-server reports waitingOnApproval as a fact, so this fires in seconds rather than waiting out a quiet-time threshold to be confident a prompt is really stuck.",
+      "when": {
+        "awaitingApproval": true,
+        "minQuietSeconds": 10
+      },
+      "advice": "An agent reported it is blocked on an approval that could not be auto-granted safely."
+    },
+    {
+      "id": "thread-system-error",
+      "label": "Thread reported a system error",
+      "severity": "critical",
+      "cooldownSeconds": 600,
+      "escalateAfterAttempts": 1,
+      "urgency": { "blocksWork": true },
+      "resolve": { "handler": "delegate-to-commander" },
+      "when": { "status": ["error"] },
+      "advice": "The agent runtime itself reported a system error — this is not something a nudge fixes."
+    },
+    {
       "id": "awaiting-permission",
       "label": "Waiting on a permission prompt",
       "severity": "warn",

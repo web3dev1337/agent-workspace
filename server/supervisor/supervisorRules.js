@@ -77,6 +77,9 @@ function normalizeCondition(raw) {
       maxQuietSeconds: Number.isFinite(Number(when.maxQuietSeconds)) ? Number(when.maxQuietSeconds) : null,
       repeatedTailLine: Number.isFinite(Number(when.repeatedTailLine)) ? Number(when.repeatedTailLine) : null,
       agentPresent: typeof when.agentPresent === 'boolean' ? when.agentPresent : null,
+      awaitingApproval: typeof when.awaitingApproval === 'boolean' ? when.awaitingApproval : null,
+      awaitingUserInput: typeof when.awaitingUserInput === 'boolean' ? when.awaitingUserInput : null,
+      signalSource: String(when.signalSource || '').trim(),
       tiers: (Array.isArray(when.tiers) ? when.tiers : []).map(Number).filter(Number.isFinite),
       git: when.git && typeof when.git === 'object' ? {
         dirty: typeof when.git.dirty === 'boolean' ? when.git.dirty : null,
@@ -145,6 +148,9 @@ function matches(condition, signal) {
   if (when.status.length && !when.status.includes(signal.status)) return false;
   if (when.types.length && !when.types.includes(signal.type)) return false;
   if (when.agentPresent !== null && Boolean(signal.agentPresent) !== when.agentPresent) return false;
+  if (when.awaitingApproval !== null && Boolean(signal.awaitingApproval) !== when.awaitingApproval) return false;
+  if (when.awaitingUserInput !== null && Boolean(signal.awaitingUserInput) !== when.awaitingUserInput) return false;
+  if (when.signalSource && signal.signalSource !== when.signalSource) return false;
   if (when.tiers.length && !when.tiers.includes(Number(signal.tier))) return false;
   if (when.minQuietSeconds !== null && signal.quietSeconds < when.minQuietSeconds) return false;
   if (when.maxQuietSeconds !== null && signal.quietSeconds > when.maxQuietSeconds) return false;
@@ -216,6 +222,7 @@ function buildFinding(condition, signal) {
     tier: signal.tier,
     ticketTitle: signal.ticketTitle,
     status: signal.status,
+    signalSource: signal.signalSource || 'pty',
     quietSeconds: signal.quietSeconds,
     advice: condition.advice,
     evidence: signal.lastLine,

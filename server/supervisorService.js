@@ -41,6 +41,7 @@ class SupervisorService {
     this.notificationService = null;
     this.speechService = null;
     this.commanderSender = null;
+    this.structuredSource = null;
 
     this.rules = rulesModule.loadRules();
     this.quietTracker = new QuietTracker();
@@ -73,7 +74,7 @@ class SupervisorService {
 
   init({
     sessionManager, gitHelper, agentManager, sessionRecoveryService,
-    taskRecordService, activityFeed, notificationService, speechService, commanderSender
+    taskRecordService, activityFeed, notificationService, speechService, commanderSender, structuredSource
   } = {}) {
     this.sessionManager = sessionManager || this.sessionManager;
     this.gitHelper = gitHelper || this.gitHelper;
@@ -84,6 +85,7 @@ class SupervisorService {
     this.notificationService = notificationService || this.notificationService;
     this.speechService = speechService || this.speechService;
     this.commanderSender = commanderSender || this.commanderSender;
+    this.structuredSource = structuredSource || this.structuredSource;
 
     this.executor = createExecutor({
       sessionManager: this.sessionManager,
@@ -254,7 +256,8 @@ class SupervisorService {
         gitHelper: this.gitHelper,
         sessionRecoveryService: this.sessionRecoveryService,
         taskRecordService: this.taskRecordService,
-        quietTracker: this.quietTracker
+        quietTracker: this.quietTracker,
+        structuredSource: this.structuredSource
       });
 
       const findings = rulesModule.evaluate(signals, this.rules);

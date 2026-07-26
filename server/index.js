@@ -118,6 +118,8 @@ const { SpeechService } = require('./speechService');
 const { createSpeechRoutes } = require('./routes/speechRoutes');
 const { DiscordWatchService } = require('./discordWatchService');
 const { createDiscordWatchRoutes } = require('./routes/discordWatchRoutes');
+const { AppServerService } = require('./appServerService');
+const { createAppServerRoutes } = require('./routes/appServerRoutes');
 const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
@@ -362,6 +364,7 @@ const speechService = SpeechService.getInstance({ logger });
 speechService.setIO(io);
 const supervisorService = SupervisorService.getInstance({ logger });
 const discordWatchService = DiscordWatchService.getInstance({ logger });
+const appServerService = AppServerService.getInstance({ logger });
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
 activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 9460) });
@@ -454,6 +457,10 @@ supervisorService.init({
   activityFeed,
   notificationService,
   speechService,
+  // Facts beat inference: where the Codex app-server knows a thread's state,
+  // it replaces the scraped guess. Null means "no better information", and the
+  // PTY scraper stays authoritative.
+  structuredSource: appServerService,
   // When rules cannot fix something, the Commander gets a written problem brief
   // before you do — it is a full agent with the whole API, and it only costs
   // tokens when something is actually wrong.
@@ -464,6 +471,12 @@ if (String(process.env.SUPERVISOR_AUTOSTART || 'true').toLowerCase() !== 'false'
   const started = supervisorService.start();
   logger.info('Supervisor', started);
 }
+
+// Opt-in via CODEX_APP_SERVER=true; everything degrades to PTY scraping without it.
+appServerService.init({ io, speechService });
+appServerService.start().then((started) => {
+  if (started.running) logger.info('Codex app-server', started);
+}).catch((error) => logger.warn('Codex app-server did not start', { error: error.message }));
 
 // Off unless explicitly configured — it needs a bot token and channel ids.
 discordWatchService.init({ taskRecordService, activityFeed });
@@ -1395,6 +1408,13 @@ app.use('/api/atlas', createAtlasRoutes({
 
 app.use('/api/supervisor', createSupervisorRoutes({
   supervisorService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/app-server', createAppServerRoutes({
+  appServerService,
   logger,
   requireRead: requirePolicyAction('read'),
   requireWrite: requirePolicyAction('write')
