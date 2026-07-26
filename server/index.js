@@ -8727,7 +8727,23 @@ function shutdown(signal = 'unknown') {
 
   isShuttingDown = true;
   logger.info('Shutting down server...', { signal });
-  
+
+  // Stop the services this branch added. The app-server one owns a real child
+  // process (`codex app-server`) that survives a parent restart otherwise —
+  // nodemon reloads would then leak one orphaned process each. The others only
+  // clear unref'd JS intervals, stopped here for symmetry.
+  for (const [name, service] of [
+    ['appServerService', appServerService],
+    ['discordWatchService', discordWatchService],
+    ['supervisorService', supervisorService]
+  ]) {
+    try {
+      service?.stop?.();
+    } catch (error) {
+      logger.warn(`Failed to stop ${name} during shutdown`, { error: error.message });
+    }
+  }
+
   // Clean up sessions first
   sessionManager.cleanup();
   
