@@ -31,7 +31,12 @@ function parseArgs(argv) {
       positionals.push(token);
       continue;
     }
-    const [rawKey, inlineValue] = token.slice(2).split('=');
+    // Split on the FIRST '=' only, so a value containing '=' survives
+    // (e.g. --notes="a = b" or --evidence="x == y").
+    const body = token.slice(2);
+    const eq = body.indexOf('=');
+    const rawKey = eq === -1 ? body : body.slice(0, eq);
+    const inlineValue = eq === -1 ? undefined : body.slice(eq + 1);
     const key = rawKey.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
     if (inlineValue !== undefined) {
       flags[key] = inlineValue;
@@ -53,6 +58,17 @@ const listFlag = (value) => String(value === true ? '' : value || '')
   .split(',')
   .map((v) => v.trim())
   .filter(Boolean);
+
+// A value-less `--quality` (parsed as `true`) or a non-number must not be
+// silently coerced to a score — Number(true) is 1, the worst rating.
+// Returns null for "not given", a number, or a QUALITY_INVALID sentinel.
+const QUALITY_INVALID = Symbol('quality-invalid');
+const qualityFlag = (value) => {
+  if (value === undefined) return null;
+  if (value === true) return QUALITY_INVALID;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : QUALITY_INVALID;
+};
 
 const out = (text) => process.stdout.write(`${text}\n`);
 const fail = (message) => {
@@ -198,9 +214,11 @@ const commands = {
   note(positionals, flags) {
     const id = positionals[0];
     if (!id || !flags.topic) return fail('usage: atlas note <id> --topic <topic> [--quality 1-5] [--paths a,b] [--notes "..."]');
+    const quality = qualityFlag(flags.quality);
+    if (quality === QUALITY_INVALID) return fail('--quality needs a number 1-5');
     const saved = atlas.addHighlight(id, {
       topic: flags.topic,
-      quality: flags.quality === undefined ? null : Number(flags.quality),
+      quality,
       paths: listFlag(flags.paths),
       notes: flags.notes === true ? '' : String(flags.notes || '')
     });
@@ -229,7 +247,11 @@ const commands = {
     if (flags.platforms !== undefined) patch.platforms = listFlag(flags.platforms);
     if (flags.tags !== undefined) patch.tags = listFlag(flags.tags);
     if (flags.redact !== undefined) patch.redact = listFlag(flags.redact);
-    if (flags.quality !== undefined) patch.quality = Number(flags.quality);
+    if (flags.quality !== undefined) {
+      const quality = qualityFlag(flags.quality);
+      if (quality === QUALITY_INVALID) return fail('--quality needs a number 1-5');
+      patch.quality = quality;
+    }
 
     if (!Object.keys(patch).length) return fail('nothing to set');
     const saved = atlas.setEntry(id, patch);
@@ -266,11 +288,13 @@ const commands = {
     if (!id || !flags.topic) {
       return fail('usage: atlas propose <repo-id> --topic <topic> [--quality 1-5] [--paths a,b] [--notes "..."] [--evidence "why"] [--avoid]');
     }
+    const quality = qualityFlag(flags.quality);
+    if (quality === QUALITY_INVALID) return fail('--quality needs a number 1-5');
     const proposal = atlas.proposeHighlight({
       repoId: id,
       topic: flags.topic,
       kind: flags.avoid === true ? 'avoid' : 'highlight',
-      quality: flags.quality === undefined ? null : Number(flags.quality),
+      quality,
       paths: listFlag(flags.paths),
       notes: flags.notes === true ? '' : String(flags.notes || ''),
       evidence: flags.evidence === true ? '' : String(flags.evidence || ''),
