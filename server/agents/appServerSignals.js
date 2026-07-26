@@ -159,7 +159,11 @@ class AppServerSignalSource extends EventEmitter {
       requestedAt: Date.now()
     };
 
-    this.pendingApprovals.set(id, entry);
+    // Keyed by String(id): JSON-RPC ids are numbers (the first is literally 0)
+    // but an HTTP route param arrives as a string, and a Map lookup with the
+    // wrong type silently misses. The entry keeps the ORIGINAL id because the
+    // response on the wire must carry it back with its exact type.
+    this.pendingApprovals.set(String(id), entry);
     if (state) {
       state.status = 'waiting';
       state.activeFlags = [ACTIVE_FLAGS.WAITING_ON_APPROVAL];
@@ -173,11 +177,12 @@ class AppServerSignalSource extends EventEmitter {
    * can only type a keystroke at whatever prompt happens to be showing.
    */
   answerApproval(requestId, approved, { note = '' } = {}) {
-    const entry = this.pendingApprovals.get(requestId);
+    const key = String(requestId);
+    const entry = this.pendingApprovals.get(key);
     if (!entry) return { ok: false, error: `no pending approval "${requestId}"` };
 
-    const sent = this.client?.respond(requestId, { decision: approved ? 'approved' : 'denied', note });
-    this.pendingApprovals.delete(requestId);
+    const sent = this.client?.respond(entry.requestId, { decision: approved ? 'approved' : 'denied', note });
+    this.pendingApprovals.delete(key);
 
     const state = this.threads.get(entry.threadId);
     if (state && approved) {

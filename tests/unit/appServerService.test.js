@@ -138,6 +138,20 @@ describe('AppServerSignalSource', () => {
     expect(signals.answerApproval('nope', true).ok).toBe(false);
   });
 
+  test('a numeric request id 0 is answerable via the string an HTTP route delivers', () => {
+    const { client, signals } = source();
+    // The first JSON-RPC request a real app-server sends has id 0 (a number);
+    // an Express path param arrives as the string "0".
+    client.emitRequest(0, 'item/commandExecution/requestApproval', { threadId: 't1', command: 'printf ok' });
+    expect(signals.listPendingApprovals()).toHaveLength(1);
+
+    const result = signals.answerApproval('0', true);
+    expect(result.ok).toBe(true);
+    // The response on the wire must carry the ORIGINAL numeric id back.
+    expect(client.responses[0].id).toBe(0);
+    expect(signals.listPendingApprovals()).toEqual([]);
+  });
+
   test('a closed thread stops producing signals', () => {
     const { client, signals } = source();
     client.emitNotification('thread/status/changed', { threadId: 't1', status: { type: 'idle' } });
