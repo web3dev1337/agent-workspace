@@ -159,6 +159,11 @@ server/voice/voiceProviderService.js - Swappable voice-model registry (a model i
 ├─ Resolves the ONE active provider per capability (tts/stt/duplex); `auto` = best-quality available, `none` = off; a broken pin falls back to auto so voice never silently mutes
 ├─ `setActive(kind, id)` persists to the override and applies TTS to speechService immediately
 └─ speechService gained a Kokoro/generic-CLI backend + Piper voice auto-discovery (`~/.local/share/piper-voices`)
+server/voice/voiceBrainService.js  - The voice "brain": routes an utterance through three lanes, fastest first
+├─ COMMAND — a semantic command in the registry, run instantly (voiceCommandService)
+├─ FACT — a question answerable from live orchestrator state (sessions/supervisor briefing/queue/discord/workspace) answered straight from a commanderContextService snapshot: an API shortcut, no LLM turn, spoken in ~ms
+├─ AGENT — anything else handed to the Commander (full API, can do anything), acknowledged aloud
+└─ An action phrasing ("open the queue") never gets hijacked by the fact lane; wired via voiceCommandService.setBrain()
 server/routes/voiceProviderRoutes.js - `/api/voice-providers/*` (list+health, swap active per capability, reload)
 config/voice-providers.json        - The model catalogue: TTS (browser/piper/kokoro/chatterbox/espeak), STT (whisper-cpp/faster-whisper/parakeet/moonshine), duplex (codex/personaplex/xtalk) with install hints
 tests/unit/speechService.test.js, voiceProviderService.test.js - Sanitization/backends; registry load, health, auto-resolution, live swap
