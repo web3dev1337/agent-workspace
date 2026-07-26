@@ -120,7 +120,7 @@ curl -sS "$BASE_URL/api/commander/execute" \
 
 ## Supervisor (the fleet watchdog)
 
-A rule-driven loop classifies every agent session every 30s from zero-token signals (PTY tail, status, quiet time, git state) and climbs an escalation ladder capped by an autonomy level. Ask it what needs attention instead of reading 16 terminals yourself.
+A rule-driven loop classifies every agent session every 30s from zero-token signals (PTY tail, status, quiet time, git state — plus structured app-server events for Codex threads) and tries to fix what it finds. Ask it what needs attention instead of reading 16 terminals yourself.
 
 ```bash
 # What needs a human right now — start here
@@ -159,7 +159,7 @@ curl -sS -X POST "$BASE_URL/api/supervisor/autonomy" \
   -d '{"level": "assist"}'
 ```
 
-**Never raise the autonomy level on your own.** That is the user's decision, and `observe` is deliberately the shipped default so the rules can be judged before they are trusted. Rules live in `config/supervisor-rules.json`, overridable at `~/.agent-workspace/supervisor-rules.json`; every action is appended to `~/.agent-workspace/logs/supervisor-audit.jsonl`.
+**Never change the autonomy level on your own** — raising or lowering it is the user's decision. Rules live in `config/supervisor-rules.json`, overridable at `~/.agent-workspace/supervisor-rules.json` and by `SUPERVISOR_AUTONOMY`; every action is appended to `~/.agent-workspace/logs/supervisor-audit.jsonl`.
 
 ## Speech
 

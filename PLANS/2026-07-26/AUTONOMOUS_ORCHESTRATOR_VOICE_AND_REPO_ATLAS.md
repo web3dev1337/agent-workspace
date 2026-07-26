@@ -225,17 +225,26 @@ false promise.
 
 ## 6. What is left
 
-1. **Read a week of findings, then promote the supervisor to `assist`.** This is the whole reason
-   `observe` is the shipped default. `~/.agent-workspace/logs/supervisor-audit.jsonl`.
-2. **Curate the atlas as you go** — `atlas note <repo> --topic X --quality N --notes "..."`. The
-   skill already tells agents to record what they learn, so this should accumulate rather than
-   needing a curation session.
-3. **Tag repos into audiences** before sharing anything: `atlas set <id> --visibility team --groups
-   core-team`, then `atlas compile core-team --dry-run --explain` and read every line before dropping
-   the dry-run flag.
-4. **Reach** — Discord/mobile push for escalations, borrowing OpenClaw's one genuinely better idea.
-   `discordIntegrationService` is already half of it.
-5. **Atlas write-back** — agents propose highlights from work they just finished, you approve. This
-   is what keeps the map current instead of letting it rot into another stale doc.
-6. **Atlas in the UI** — findings and the digest currently have APIs but no panel. The Commander
-   status strip proposed in `PLANS/2026-07-15/MULTI_COMMANDER_FEASIBILITY.md` is the natural home.
+Everything scoped in section 5 and in `RESEARCH_HERMES_CODEX_AND_DISCORD.md` has shipped:
+the fix-first supervisor, git-backed Atlas sync, ambient Discord tracking, the Codex
+app-server adapter, realtime voice, Atlas write-back, and the JARVIS panel.
+
+What genuinely remains is operational rather than unbuilt:
+
+1. **Point the Atlas registry at a private repo** — `atlas remote set <git-url>` then
+   `atlas sync`. Until that runs, the map is still single-machine.
+2. **Curate.** 233 repos are mapped; only a handful are scored. `atlas note` when you know
+   something, and approve the proposals agents file as they work.
+3. **Set `DISCORD_BOT_TOKEN` and add channels** to turn the ambient watcher on.
+4. **Set `CODEX_APP_SERVER=true`** to get structured Codex signals in place of scraping.
+5. **Read a week of `supervisor-audit.jsonl`** and tune. The defaults are opinions —
+   interruption threshold, tier weights and `escalateAfterAttempts` are the dials.
+
+Known limits, stated plainly:
+
+- The raw-audio realtime path (`appendAudio`) is wired but its PCM framing is unverified
+  against a live authenticated session. The text path is the default and works.
+- Structured signals only cover Codex. Claude, Gemini and aider stay on PTY scraping —
+  which is why the scraper remains the universal fallback rather than being removed.
+- Discord extraction is rules-only. The `classifier` seam for handing ambiguous messages
+  to a cheap model exists but is unused.
