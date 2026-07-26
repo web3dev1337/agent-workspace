@@ -60,7 +60,29 @@ describe('permission classification', () => {
 
   test('ordinary edits and commits are allowed — this has to be usable', () => {
     expect(classifyPermissionPrompt('Edit(src/app.js)', rules.safety).safe).toBe(true);
+    expect(classifyPermissionPrompt('Write(src/components/Button.tsx)', rules.safety).safe).toBe(true);
+    expect(classifyPermissionPrompt('Edit(docs/README.md)', rules.safety).safe).toBe(true);
     expect(classifyPermissionPrompt('Bash(git commit -m "fix")', rules.safety).safe).toBe(true);
+  });
+
+  test('refuses to auto-approve writes that execute on the next ordinary operation', () => {
+    // Each of these, once auto-approved, runs code via an already-allowlisted
+    // `npm run build` / `git commit` — so they must fail closed to a human.
+    for (const prompt of [
+      'Edit(.git/hooks/post-commit)',
+      'Write(package.json)',
+      'Edit(package-lock.json)',
+      'Write(.github/workflows/ci.yml)',
+      'Edit(Makefile)',
+      'Write(~/.bashrc)',
+      'Edit(~/.npmrc)',
+      'Write(/etc/passwd)',
+      'Edit(pyproject.toml)'
+    ]) {
+      const verdict = classifyPermissionPrompt(prompt, rules.safety);
+      expect(verdict.safe).toBe(false);
+      expect(verdict.reason).toMatch(/deny pattern/);
+    }
   });
 
   test('an empty prompt is not safe', () => {
