@@ -87,15 +87,20 @@ The missing piece is a **push-based supervisor**: something that continuously cl
 Every condition resolves to one rung, and the rung is capped by a global autonomy level:
 
 ```
-observe → notify → nudge → act → escalate(human)
-             ↑                        ↑
-    autonomy: assist          always available
+observe → resolve (self-heal) → delegate (Commander) → interrupt(human)
+              ↑ assist              ↑ autopilot           ↑ gated by the
+                                                            interruption budget,
+                                                            not by autonomy
 ```
 
 - `off` — nothing runs.
-- `observe` — findings recorded and visible; zero side effects. **Default.** Run it for a week and read the log before you let it touch anything.
-- `assist` — may notify, speak, and nudge (text into a session). Cannot run commands.
-- `autopilot` — may also take listed `act` steps.
+- `observe` — findings recorded and visible; zero side effects.
+- `assist` — may run the named resolve handlers itself (nudge text, answer a safe
+  permission prompt, relaunch an agent, schedule a resume, `gh pr create`).
+- `autopilot` — may also hand a written problem brief to the Commander when a rule
+  can't fix something. **Shipped default** (originally `observe`; promoted after the
+  fix-first redesign — reaching a human is rate-limited separately by the
+  interruption budget, so acting is not the same as interrupting).
 
 Hard invariants regardless of level:
 - **Never** auto-act on anything matching the scheduler's blocked-command patterns (merge, approve, stop-session, remove-worktree, destroy).
@@ -197,12 +202,13 @@ Surfaces shipped: standalone CLI (`scripts/atlas.js`, no server required — sym
 
 ## 5. What shipped (PR #1029)
 
-All three, on `feature/autopilot-voice-and-repo-atlas`. 709 unit tests green (was 652).
+All three, on `feature/autopilot-voice-and-repo-atlas`. 829 unit tests green (652 on main;
+815 at first ship, +14 from the review pass).
 
 | Piece | Where | State |
 |---|---|---|
-| Supervisor loop | `server/supervisorService.js`, `server/supervisor/*` | Running, autonomy `observe` |
-| Condition table | `config/supervisor-rules.json` | 8 conditions, none reaching `act` |
+| Supervisor loop | `server/supervisorService.js`, `server/supervisor/*` | Running, autonomy `autopilot` |
+| Condition table | `config/supervisor-rules.json` | 10 conditions, all with a self-heal or observe path |
 | Speech out | `server/speechService.js`, `client/speech-output.js` | Browser backend active |
 | Free-form voice | `server/voiceCommandService.js` (`setCommanderForwarder`) | Wired to Commander |
 | Repo Atlas | `server/repoAtlasService.js`, `server/atlas/*`, `scripts/atlas.js` | 233 repos mapped, 25 cloned |
