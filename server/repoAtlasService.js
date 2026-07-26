@@ -7,6 +7,7 @@ const discovery = require('./atlas/atlasDiscovery');
 const query = require('./atlas/atlasQuery');
 const compiler = require('./atlas/atlasCompiler');
 const sync = require('./atlas/atlasSync');
+const proposals = require('./atlas/atlasProposals');
 const { getProjectsRoot, getLegacyProjectsRoot } = require('./utils/pathUtils');
 
 const ATLAS_CACHE_MS = 60_000;
@@ -305,6 +306,37 @@ class RepoAtlasService {
     return result;
   }
 
+  /**
+   * Write-back: an agent that just finished work proposes what it learned, and
+   * the proposal waits for you. This is what keeps the map current instead of
+   * letting it rot into another stale doc.
+   */
+  proposeHighlight(input) {
+    return proposals.propose(input);
+  }
+
+  listProposals(filters = {}) {
+    return proposals.list(filters);
+  }
+
+  approveProposal(id, options = {}) {
+    const result = proposals.approve(id, this, options);
+    this.invalidate();
+    return result;
+  }
+
+  rejectProposal(id, options = {}) {
+    return proposals.reject(id, options);
+  }
+
+  clearDecidedProposals() {
+    return proposals.clearDecided();
+  }
+
+  getProposalStats() {
+    return proposals.getStats();
+  }
+
   listSubscriptions() {
     return store.loadSubscriptions().map((bundle) => ({
       name: bundle.name,
@@ -368,6 +400,7 @@ class RepoAtlasService {
       highlightCount: entries.reduce((sum, e) => sum + (e.highlights || []).length, 0),
       audiences: this.listAudiences().map((a) => a.id),
       subscriptions: this.listSubscriptions(),
+      proposals: proposals.getStats(),
       remote: store.loadConfig().remote || null,
       discovery: meta
         ? { generatedAt: meta.generatedAt, stale: meta.stale, githubAvailable: meta.githubAvailable !== false }
@@ -383,4 +416,5 @@ module.exports.store = store;
 module.exports.discovery = discovery;
 module.exports.query = query;
 module.exports.compiler = compiler;
+module.exports.proposals = proposals;
 module.exports.defaultScanRoots = defaultScanRoots;

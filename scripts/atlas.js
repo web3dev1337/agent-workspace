@@ -261,6 +261,59 @@ const commands = {
     return fail(`unknown audience action "${action}"`);
   },
 
+  propose(positionals, flags) {
+    const id = positionals[0];
+    if (!id || !flags.topic) {
+      return fail('usage: atlas propose <repo-id> --topic <topic> [--quality 1-5] [--paths a,b] [--notes "..."] [--evidence "why"] [--avoid]');
+    }
+    const proposal = atlas.proposeHighlight({
+      repoId: id,
+      topic: flags.topic,
+      kind: flags.avoid === true ? 'avoid' : 'highlight',
+      quality: flags.quality === undefined ? null : Number(flags.quality),
+      paths: listFlag(flags.paths),
+      notes: flags.notes === true ? '' : String(flags.notes || ''),
+      evidence: flags.evidence === true ? '' : String(flags.evidence || ''),
+      proposedBy: flags.by === true ? 'agent' : String(flags.by || 'agent')
+    });
+    out(`Proposed ${proposal.kind} ${proposal.repoId} ${proposal.topic}${proposal.quality ? `:${proposal.quality}` : ''} — waiting for review.`);
+    return undefined;
+  },
+
+  proposals(positionals, flags) {
+    const action = positionals[0] || 'list';
+
+    if (action === 'list') {
+      const list = atlas.listProposals({ status: flags.status === true ? 'pending' : (flags.status || 'pending') });
+      if (flags.json) return printJson(list);
+      if (!list.length) return out('No proposals waiting.');
+      for (const p of list) {
+        out(`${p.id}`);
+        out(`   ${p.kind} ${p.quality ? `${p.quality}/5` : ''} by ${p.proposedBy}  ${p.proposedAt.slice(0, 16).replace('T', ' ')}`);
+        if (p.notes) out(`   ${p.notes}`);
+        if (p.evidence) out(`   evidence: ${p.evidence}`);
+        if (p.paths?.length) out(`   paths: ${p.paths.join(', ')}`);
+      }
+      out('');
+      out(`${list.length} waiting — \`atlas proposals approve <id>\` or \`reject <id>\``);
+      return undefined;
+    }
+
+    if (action === 'approve' || action === 'reject') {
+      const id = positionals[1];
+      if (!id) return fail(`usage: atlas proposals ${action} <id> [--note "..."]`);
+      const note = flags.note === true ? '' : String(flags.note || '');
+      const result = action === 'approve' ? atlas.approveProposal(id, { note }) : atlas.rejectProposal(id, { note });
+      if (!result.ok) return fail(result.error);
+      return out(action === 'approve' ? `Approved and written to the registry: ${id}` : `Rejected: ${id}`);
+    }
+
+    if (action === 'clear') {
+      return out(`Cleared decided proposals; ${atlas.clearDecidedProposals()} still waiting.`);
+    }
+    return fail(`unknown proposals action "${action}"`);
+  },
+
   async remote(positionals, flags) {
     const action = positionals[0];
     if (action === 'set') {
@@ -388,6 +441,10 @@ const commands = {
 
   atlas audience list | add <id> [--label "..."] [--out <path>] [--out-remote <git-url>]
   atlas compile <audience> [--dry-run] [--explain]
+
+write-back (agents propose, you decide):
+  atlas propose <id> --topic X [--quality N] [--notes "..."] [--evidence "why"] [--avoid]
+  atlas proposals [list|approve <id>|reject <id>|clear] [--status all]
 
 multi-machine:
   atlas remote set <git-url>               track the registry in a PRIVATE git repo

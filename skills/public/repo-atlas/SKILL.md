@@ -59,12 +59,23 @@ Never clone into the user's `~/GitHub` tree to "just take a look" — use `/tmp`
 
 ## Recording what you learn
 
-When you finish work that produced something genuinely reusable — or discover that a repo's approach to something is excellent or awful — write it down. This is what keeps the map alive.
+**Do this at the end of any substantial piece of work.** If you built something genuinely reusable, or discovered that a repo's approach to something is excellent or awful, propose it. This is the single thing that keeps the map alive instead of letting it rot.
 
 ```bash
-atlas note <repo-id> --topic <topic> --quality 1-5 --paths a/b.ts,c/ --notes "why it is worth copying"
-atlas avoid <repo-id> --topic <topic> --reason "why nobody should copy this"
+atlas propose <repo-id> --topic <topic> --quality 1-5 \
+  --paths src/a.ts,tests/ \
+  --notes "why it is worth copying" \
+  --evidence "what you actually saw that supports this" \
+  --by "<your session id>"
+
+atlas propose <repo-id> --topic <topic> --avoid --notes "why nobody should copy this"
 ```
+
+Proposals wait for the user to approve — **you cannot write to the map directly, and should not try.** That is deliberate: if agents wrote freely, every repo anyone touched would end up rated 5/5 and the quality scores would stop meaning anything.
+
+Always fill in `--evidence`. "40 tests added in tests/unit, all green" is reviewable in two seconds; "it's good" is not, and will be rejected.
+
+If the user is curating directly, `atlas note` / `atlas avoid` write immediately — those are for them, not for you.
 
 Guidance on scores: **5** = copy this exactly; **4** = solid, adapt it; **3** = works, read for ideas; **2** = only if nothing better; **1** = cautionary example. Score the *topic*, not the repo — a prototype can be a 5 at one thing and a 2 at everything else.
 

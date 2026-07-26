@@ -127,6 +127,35 @@ function createAtlasRoutes({ repoAtlasService, logger = console, requireRead = p
     res.json({ ok: true, audiences });
   }));
 
+  /**
+   * Write-back. Agents propose; the human decides. Proposing is a `read`-level
+   * action because it changes nothing — approving is what writes.
+   */
+  router.get('/proposals', requireRead, handle('list proposals', (req, res) => {
+    const list = repoAtlasService.listProposals({ status: req.query.status || 'pending', repoId: req.query.repoId });
+    res.json({ ok: true, count: list.length, proposals: list, stats: repoAtlasService.getProposalStats() });
+  }));
+
+  router.post('/proposals', requireRead, handle('propose', (req, res) => {
+    res.json({ ok: true, proposal: repoAtlasService.proposeHighlight(req.body || {}) });
+  }));
+
+  router.post('/proposals/:id/approve', requireWrite, handle('approve proposal', (req, res) => {
+    const result = repoAtlasService.approveProposal(req.params.id, { note: req.body?.note || '' });
+    if (!result.ok) return res.status(404).json(result);
+    return res.json({ ok: true, ...result });
+  }));
+
+  router.post('/proposals/:id/reject', requireWrite, handle('reject proposal', (req, res) => {
+    const result = repoAtlasService.rejectProposal(req.params.id, { note: req.body?.note || '' });
+    if (!result.ok) return res.status(404).json(result);
+    return res.json({ ok: true, ...result });
+  }));
+
+  router.delete('/proposals', requireWrite, handle('clear decided proposals', (req, res) => {
+    res.json({ ok: true, remaining: repoAtlasService.clearDecidedProposals() });
+  }));
+
   router.get('/sync', requireRead, handle('sync status', async (req, res) => {
     res.json({ ok: true, sync: await repoAtlasService.getSyncStatus() });
   }));
