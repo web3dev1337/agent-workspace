@@ -204,6 +204,41 @@ Also available as a CLI anywhere: `node scripts/atlas.js find <topic>`.
 
 The registry syncs between machines via a private git repo (`GET/POST /api/atlas/sync`). Entries marked `foreign: true` were shared with you by someone else — read them, never re-share them.
 
+## Codex app-server (structured signals + realtime voice)
+
+Opt-in via `CODEX_APP_SERVER=true`. When on, Codex threads report state as facts instead of being scraped, and approvals arrive with the command attached.
+
+```bash
+curl -sS "$BASE_URL/api/app-server/status" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+curl -sS "$BASE_URL/api/app-server/approvals" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Grant or refuse an approval over the wire
+curl -sS -X POST "$BASE_URL/api/app-server/approvals/<requestId>" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"approved": true}'
+
+# Full-duplex voice on a thread
+curl -sS -X POST "$BASE_URL/api/app-server/realtime/<threadId>/start" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{}'
+```
+
+Only approve something you would approve yourself — the same fail-closed rules apply, and the command is right there in the request.
+
+## Atlas write-back
+
+After substantial work, propose what you learned. You cannot write to the map directly.
+
+```bash
+curl -sS -X POST "$BASE_URL/api/atlas/proposals" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"repoId":"zoo-game","topic":"data-compression","quality":5,
+       "paths":["src/data/"],"notes":"bitpacked saves",
+       "evidence":"12x smaller than the JSON it replaced, benchmarked",
+       "proposedBy":"zoo-game-work1-claude"}'
+```
+
+Always include `evidence`. Proposals without it get rejected, and rightly so.
+
 ## Discord (ambient team work)
 
 The watcher reads whole channels rather than waiting to be addressed, turns assignments into tracked work with a priority, and publishes status back so nobody has to ask whether an agent picked something up.

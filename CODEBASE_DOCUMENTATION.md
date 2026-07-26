@@ -155,6 +155,20 @@ client/speech-output.js            - Web Speech API listener for the browser bac
 server/voiceCommandService.js      - (existing) rule/LLM voice parsing, now with `setCommanderForwarder()`: unmatched speech is handed to the Commander agent instead of dead-ending
 tests/unit/speechService.test.js   - Sanitization, repeat suppression, backend resolution
 
+server/appServerService.js         - Codex app-server bridge: structured signals + realtime voice
+├─ Protocol: JSON-RPC 2.0 over stdio to `codex app-server` (Apache 2.0, ships in the CLI); `initialize` handshake required first
+├─ Signals: thread/status/changed, turn/started|completed, tokenUsage, rateLimits, and approval requests replace regex-scraped PTY output
+├─ Realtime: thread/realtime/* full-duplex voice (websocket + webrtc transports), transcripts relayed over Socket.IO
+└─ Degrades: `getSignalForSession` returning null means the PTY scraper stays authoritative; opt in with CODEX_APP_SERVER=true
+server/agents/appServerClient.js   - JSON-RPC client (newline-delimited framing, request/response correlation, restart backoff)
+server/agents/appServerSignals.js  - Notification -> supervisor-signal mapping; ThreadActiveFlag waitingOnApproval, over-the-wire approvals
+server/routes/appServerRoutes.js   - `/api/app-server/*` (threads, turns, approvals, realtime voice, transcripts)
+server/atlas/atlasProposals.js     - Write-back queue: agents propose highlights with evidence, the human approves
+client/jarvis-panel.js             - Alt+J panel: what was handled, what needs you, untracked chat work, atlas proposals + search
+client/realtime-voice.js           - Browser side of the realtime loop (`window.RealtimeVoice`)
+client/styles/jarvis.css           - JARVIS panel styling
+tests/unit/appServerService.test.js, repoAtlasProposals.test.js - App-server framing/signal mapping, write-back approval flow
+
 server/supervisor/supervisorUrgency.js - Urgency scoring (severity x task tier + failed-repair weight), interruption budget, digest queue
 server/discordWatchService.js      - Ambient Discord watching: read the conversation, track the work, publish status back
 ├─ Ingest: cursor-based polling (`?after=<lastSeenId>`), so a message missed while the process was down is not possible rather than retried
@@ -525,6 +539,9 @@ notification: {type, message, level}           - System notifications
 workspace-changed: {workspaceId, sessions}     - Workspace switch completed
 workspace-list: {workspaces}                   - Available workspaces update
 speech-speak: {text, priority, at}             - Say this out loud (browser speech backend)
+app-server-approval: {requestId, threadId, command} - A Codex thread is blocked on an approval
+app-server-realtime: {event, payload}          - Realtime voice lifecycle
+app-server-transcript: {threadId, role, text, done} - Realtime transcript delta
 ```
 
 ### Client → Server Events
@@ -748,6 +765,19 @@ POST /api/discord-watch/poll | /start | /stop                 - Control the watc
 GET|POST /api/discord-watch/channels                          - Which channels are watched
 POST /api/discord-watch/items/:id/link                        - Bind an item to the session doing it (and announce it)
 POST /api/discord-watch/items/:id/status                      - Post a status update back into the channel
+
+GET /api/atlas/proposals?status=&repoId=                      - Agent-proposed highlights waiting for review
+POST /api/atlas/proposals                                     - Propose a highlight (agents; changes nothing until approved)
+POST /api/atlas/proposals/:id/approve | /reject               - Decide a proposal (approve writes it into the registry)
+DELETE /api/atlas/proposals                                   - Clear decided proposals
+
+GET /api/app-server/status | /threads | /signals              - Bridge state, Codex threads, structured signals
+POST /api/app-server/start | /stop                            - Control the app-server process
+GET /api/app-server/approvals                                 - Approvals reported over the wire, with the command in hand
+POST /api/app-server/approvals/:requestId                     - Grant or refuse one
+POST /api/app-server/threads | /threads/:id/turn | /interrupt  - Start a thread, run a turn, interrupt it
+GET /api/app-server/realtime/voices | /realtime/transcripts   - Available voices, transcript history
+POST /api/app-server/realtime/:threadId/start|stop|text|audio - Full-duplex realtime voice
 
 GET /api/speech/status                                        - Enabled state, resolved backend, available backends, listeners
 POST /api/speech/say                                          - Speak text (`priority: high` interrupts, `force` skips repeat suppression)
