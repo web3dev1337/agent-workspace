@@ -143,8 +143,8 @@ server/supervisor/supervisorSignals.js - Per-session signal collection (PTY tail
 server/supervisor/supervisorRules.js   - Condition table loader/matcher (`config/supervisor-rules.json`, override `~/.agent-workspace/supervisor-rules.json`) + autonomy ceilings
 server/supervisor/supervisorActions.js - Ladder executor: notify/nudge/act, two-write submit, fail-closed permission-prompt classification
 server/routes/supervisorRoutes.js  - Express router for `/api/supervisor/*`
-config/supervisor-rules.json       - Shipped condition table (autonomy `observe`, permission allow/deny patterns, act-handler allowlist)
-tests/unit/supervisorRules.test.js, supervisorActions.test.js, supervisorService.test.js - Supervisor coverage (matching, autonomy ceilings, cooldowns, fail-closed approvals, audit)
+config/supervisor-rules.json       - Shipped condition table (autonomy `autopilot`, permission allow/deny patterns incl. exec-on-next-op path denials, act-handler allowlist)
+tests/unit/supervisorRules.test.js, supervisorActions.test.js, supervisorService.test.js, supervisorUrgency.test.js - Supervisor coverage (matching, autonomy ceilings, cooldowns, fail-closed approvals, interruption budget, audit)
 
 server/speechService.js            - Speech output with degrading backends
 ├─ Default `browser` backend emits a `speech-speak` socket event — works on a fresh clone with nothing installed
@@ -167,7 +167,7 @@ server/atlas/atlasProposals.js     - Write-back queue: agents propose highlights
 client/jarvis-panel.js             - Alt+J panel: what was handled, what needs you, untracked chat work, atlas proposals + search
 client/realtime-voice.js           - Browser side of the realtime loop (`window.RealtimeVoice`)
 client/styles/jarvis.css           - JARVIS panel styling
-tests/unit/appServerService.test.js, repoAtlasProposals.test.js - App-server framing/signal mapping, write-back approval flow
+tests/unit/appServerService.test.js, appServerClientLifecycle.test.js, repoAtlasProposals.test.js - App-server framing/signal mapping, child-process lifecycle (crash/restart/overflow), write-back approval flow
 
 server/supervisor/supervisorUrgency.js - Urgency scoring (severity x task tier + failed-repair weight), interruption budget, digest queue
 server/discordWatchService.js      - Ambient Discord watching: read the conversation, track the work, publish status back
@@ -196,7 +196,7 @@ config/repo-atlas-topics.json      - Canonical topic vocabulary + aliases
 config/repo-atlas.example.json     - Annotated manifest example
 .repo-atlas.json                   - This repo's own manifest
 skills/public/repo-atlas/SKILL.md  - Agent skill: query prior art instead of grepping the filesystem
-tests/unit/repoAtlasSchema.test.js, repoAtlasQuery.test.js, repoAtlasCompiler.test.js, repoAtlasService.test.js - Atlas coverage (merge precedence, quality floors, sharing decisions, redaction)
+tests/unit/repoAtlasSchema.test.js, repoAtlasQuery.test.js, repoAtlasCompiler.test.js, repoAtlasService.test.js, repoAtlasSync.test.js - Atlas coverage (merge precedence, quality floors, sharing decisions, redaction, real-git multi-machine sync)
 scripts/tauri/prepare-backend-resources.js - Tauri backend packager
 ├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
 ├─ Commander instructions: copies `docs/COMMANDER_CLAUDE.md` into `resources/backend/{COMMANDER_CLAUDE.md,CLAUDE.md,AGENTS.md}` for desktop builds
