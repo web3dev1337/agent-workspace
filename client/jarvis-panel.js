@@ -63,6 +63,7 @@
           </div>
         </div>
         <div class="jarvis-stats" data-role="stats"></div>
+        <div class="jarvis-error" data-role="action-error" role="alert"></div>
         <div class="jarvis-sections">
           <section data-role="waiting"></section>
           <section data-role="discord"></section>
@@ -92,20 +93,39 @@
       if (!action) return;
 
       if (action === 'close') return this.hide();
-      if (action === 'refresh') return this.refresh();
-      if (action === 'atlas-find') return this.findInAtlas();
 
-      if (action === 'catch-up') {
-        await api('/api/supervisor/digest/deliver', { method: 'POST', body: '{}' });
-        return this.refresh();
-      }
-      if (action === 'approve-proposal' || action === 'reject-proposal') {
-        const id = event.target.dataset.id;
-        const verb = action === 'approve-proposal' ? 'approve' : 'reject';
-        await api(`/api/atlas/proposals/${encodeURIComponent(id)}/${verb}`, { method: 'POST', body: '{}' });
-        return this.refresh();
+      // Every branch below hits the network; a failure must surface, not vanish
+      // into an unhandled rejection that leaves the button looking dead.
+      try {
+        if (action === 'refresh') return await this.refresh();
+        if (action === 'atlas-find') return await this.findInAtlas();
+
+        if (action === 'catch-up') {
+          await api('/api/supervisor/digest/deliver', { method: 'POST', body: '{}' });
+          return await this.refresh();
+        }
+        if (action === 'approve-proposal' || action === 'reject-proposal') {
+          const id = event.target.dataset.id;
+          const verb = action === 'approve-proposal' ? 'approve' : 'reject';
+          await api(`/api/atlas/proposals/${encodeURIComponent(id)}/${verb}`, { method: 'POST', body: '{}' });
+          return await this.refresh();
+        }
+      } catch (error) {
+        this.showActionError(action, error);
       }
       return undefined;
+    }
+
+    showActionError(action, error) {
+      const banner = this.root?.querySelector('[data-role="action-error"]');
+      const message = `${action} failed: ${error?.message || error}`;
+      if (banner) {
+        banner.textContent = message;
+        banner.classList.add('jarvis-error-visible');
+        clearTimeout(this._errorTimer);
+        this._errorTimer = setTimeout(() => banner.classList.remove('jarvis-error-visible'), 5000);
+      }
+      console.error('[JARVIS]', message);
     }
 
     async refresh() {
@@ -295,9 +315,16 @@
 
   // Alt+J — the fleet summary should be one keystroke away, not buried.
   document.addEventListener('keydown', (event) => {
-    if (event.altKey && (event.key === 'j' || event.key === 'J')) {
-      event.preventDefault();
-      panel.toggle();
-    }
+    if (!event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key !== 'j' && event.key !== 'J') return;
+
+    // Don't hijack the key while the user is typing (the same guard every other
+    // Alt-shortcut in the app uses) — including the panel's own atlas search box.
+    const target = event.target;
+    const tag = String(target?.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) return;
+
+    event.preventDefault();
+    panel.toggle();
   });
 })();

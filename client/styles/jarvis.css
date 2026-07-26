@@ -86,6 +86,22 @@
   flex-shrink: 0;
 }
 
+.jarvis-error {
+  display: none;
+  margin: 0 1.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background: #5a2020;
+  border: 1px solid #8a3030;
+  color: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.jarvis-error.jarvis-error-visible {
+  display: block;
+}
+
 .jarvis-stat {
   display: flex;
   flex-direction: column;
