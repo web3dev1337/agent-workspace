@@ -60,6 +60,11 @@
       socket.__realtimeVoiceAttached = true;
 
       socket.on('app-server-transcript', (entry) => {
+        // These events are broadcast to every client. Only react to our own
+        // thread's — otherwise a second tab on a different thread would hear
+        // this one's replies spoken aloud.
+        if (!this.threadId || entry?.threadId !== this.threadId) return;
+
         this.transcript.unshift(entry);
         if (this.transcript.length > 100) this.transcript.length = 100;
 
@@ -71,7 +76,12 @@
         this.emit();
       });
 
-      socket.on('app-server-realtime', ({ event }) => {
+      socket.on('app-server-realtime', ({ event, payload }) => {
+        // Same fleet-wide broadcast: ignore other threads' lifecycle events so
+        // one thread closing can't stop this tab from listening.
+        const threadId = payload?.threadId || null;
+        if (this.threadId && threadId && threadId !== this.threadId) return;
+
         if (event === 'thread/realtime/started') this.active = true;
         if (event === 'thread/realtime/closed' || event === 'thread/realtime/error') {
           this.active = false;
