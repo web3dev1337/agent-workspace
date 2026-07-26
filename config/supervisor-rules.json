@@ -1,38 +1,58 @@
 {
-  "$comment": "Condition table for the fleet supervisor. Evaluated every tick against zero-token signals (PTY tail, status, quiet time, git state). Override per-machine with ~/.agent-workspace/supervisor-rules.json.",
-  "schemaVersion": 1,
+  "$comment": "Condition table for JARVIS, the fleet supervisor. Evaluated every tick against zero-token signals (PTY tail, status, quiet time, git state). Override per-machine with ~/.agent-workspace/supervisor-rules.json.",
+  "schemaVersion": 2,
 
-  "$comment_autonomy": "off = nothing runs. observe = findings recorded, no side effects (start here). assist = may notify and nudge. autopilot = may also run built-in act handlers.",
-  "autonomy": "observe",
+  "$comment_autonomy": "off = nothing runs. observe = record only. assist = may resolve things itself. autopilot = may also delegate to the Commander. Interrupting a human is gated separately by interruption policy, NOT by autonomy — the point is to act, not to narrate.",
+  "autonomy": "autopilot",
   "tickSeconds": 30,
   "maxFindingsRetained": 500,
 
+  "$comment_interruption": "The human is the most expensive resource in the system and every interruption costs a context switch. A finding only reaches you if it scores above the threshold AND fits the budget; everything else self-heals silently or waits for the digest.",
+  "interruption": {
+    "threshold": 60,
+    "alwaysInterruptAbove": 90,
+    "maxPerHour": 2,
+    "minSecondsBetween": 900,
+    "digestIntervalMinutes": 120,
+    "quietHours": { "enabled": false, "startHour": 22, "endHour": 7 },
+    "$comment_tiers": "Tier weights come from the task record. T1 is what you are actually working on; T3/T4 is background work that should never pull you out of flow — fix it or park it.",
+    "tierWeights": { "1": 1.5, "2": 1.15, "3": 0.6, "4": 0.35, "none": 0.8 },
+    "severityBase": { "info": 10, "warn": 40, "critical": 80 }
+  },
+
   "safety": {
-    "$comment": "Act handlers are named functions in server/supervisor/supervisorActions.js. Rules cannot inject shell commands — they can only select a handler from this list.",
-    "allowedActHandlers": ["answer-permission", "relaunch-agent", "open-pull-request"],
-    "$comment_permission": "An auto-answered permission prompt must match one of these AND none of the deny patterns. Anything else escalates to you.",
+    "$comment": "Resolve/delegate handlers are named functions in server/supervisor/supervisorActions.js. Rules select a handler; they cannot inject shell.",
+    "allowedHandlers": ["nudge", "answer-permission", "relaunch-agent", "schedule-resume", "commit-and-push", "open-pull-request", "delegate-to-commander"],
+    "$comment_permission": "An auto-answered permission prompt must match one of these AND none of the deny patterns. Anything else is escalated, never guessed.",
     "permissionAllowPatterns": [
-      "\\b(Read|Glob|Grep|NotebookRead|WebFetch|WebSearch)\\b",
-      "\\bgit (status|diff|log|show|branch|fetch)\\b",
-      "\\b(npm|pnpm|yarn) (test|run test|run lint|run typecheck)\\b"
+      "\\b(Read|Glob|Grep|NotebookRead|WebFetch|WebSearch|TodoWrite)\\b",
+      "\\b(Edit|Write|Update)\\([^)]*\\)",
+      "\\bgit (status|diff|log|show|branch|fetch|add|commit)\\b",
+      "\\b(npm|pnpm|yarn) (test|run test|run lint|run typecheck|run build)\\b",
+      "\\bjest\\b", "\\bplaywright\\b", "\\bpytest\\b", "\\bcargo (test|check|clippy)\\b"
     ],
     "permissionDenyPatterns": [
-      "\\brm\\b", "\\bsudo\\b", "\\bgit (push|reset|clean|checkout)\\b",
-      "\\bgh (pr merge|release|repo delete)\\b", "\\bDELETE\\b", "\\bDROP\\b",
-      "\\bcurl\\b.*\\|", "\\bchmod\\b", "\\bkill\\b", "> */"
+      "\\brm\\s+-[rf]", "\\bsudo\\b", "\\bgit (push --force|reset --hard|clean)\\b",
+      "\\bgh (pr merge|release|repo delete|repo edit)\\b", "\\bDROP\\b", "\\bTRUNCATE\\b",
+      "\\bDELETE FROM\\b", "\\bcurl\\b[^\\n]*\\|\\s*(sh|bash)", "\\bchmod\\s+777\\b",
+      "\\bkill(all)?\\b", "\\bnpm publish\\b", "\\bdd\\s+if=", "\\bmkfs\\b",
+      "~/\\.(ssh|aws|config|codex|claude)\\b", "\\.env\\b"
     ]
   },
 
+  "$comment_conditions": "Ordered by urgency — the first match per session wins. `resolve` is what JARVIS does about it without asking. `escalateAfterAttempts` is how many failed self-heals before it is allowed to reach you at all.",
   "conditions": [
     {
       "id": "awaiting-permission",
       "label": "Waiting on a permission prompt",
       "severity": "warn",
-      "rung": "notify",
-      "cooldownSeconds": 600,
+      "cooldownSeconds": 120,
+      "escalateAfterAttempts": 1,
+      "urgency": { "blocksWork": true },
+      "resolve": { "handler": "answer-permission" },
       "when": {
         "status": ["waiting"],
-        "minQuietSeconds": 120,
+        "minQuietSeconds": 45,
         "tailMatches": [
           "Do you want to (proceed|make this edit|create)",
           "❯\\s*1\\.\\s*Yes",
@@ -40,14 +60,16 @@
           "\\[y/N\\]"
         ]
       },
-      "advice": "The agent has been sitting on a permission prompt. Answer it or let autopilot approve read-only prompts."
+      "advice": "An agent is blocked on a permission prompt that could not be auto-approved safely."
     },
     {
       "id": "usage-limit-reached",
       "label": "Usage limit reached",
-      "severity": "critical",
-      "rung": "notify",
+      "severity": "info",
       "cooldownSeconds": 3600,
+      "escalateAfterAttempts": 99,
+      "urgency": { "base": 5 },
+      "resolve": { "handler": "schedule-resume" },
       "when": {
         "tailMatches": [
           "\\d+-hour limit reached",
@@ -56,82 +78,87 @@
           "rate.?limit(ed)? .*(retry|reset)"
         ]
       },
-      "advice": "This session is blocked until the window resets. Nothing to do but wait — resume it after the reset time in the banner."
+      "advice": "Blocked until the window resets. Resume is scheduled automatically — there is nothing for you to do, so this never interrupts."
     },
     {
       "id": "error-loop",
       "label": "Repeating the same error",
       "severity": "critical",
-      "rung": "notify",
-      "cooldownSeconds": 1800,
+      "cooldownSeconds": 900,
+      "escalateAfterAttempts": 1,
+      "urgency": { "blocksWork": true },
+      "resolve": { "handler": "delegate-to-commander" },
       "when": {
         "status": ["busy", "idle"],
         "repeatedTailLine": 4,
         "tailMatches": ["(?i)\\b(error|failed|exception|traceback|cannot find)\\b"]
       },
-      "advice": "The same error line keeps coming back — the agent is looping. This one needs a human, never automation."
+      "advice": "The same error keeps recurring — the agent is looping and cannot see it."
     },
     {
       "id": "stalled",
       "label": "Busy but silent",
       "severity": "warn",
-      "rung": "nudge",
-      "cooldownSeconds": 900,
-      "nudgeText": "status? if you are blocked, say what on and stop.",
+      "cooldownSeconds": 600,
+      "escalateAfterAttempts": 3,
+      "resolve": { "handler": "nudge", "text": "status? If you are blocked, say what on, then resolve it yourself if you can." },
       "when": {
         "status": ["busy"],
         "minQuietSeconds": 900,
         "tailNotMatches": ["limit reached", "Do you want to (proceed|make this edit)"]
       },
-      "advice": "Marked busy but nothing has come out for 15 minutes."
+      "advice": "Marked busy with no output for 15 minutes and did not respond to nudges."
     },
     {
       "id": "agent-exited",
       "label": "Agent exited, shell left behind",
       "severity": "warn",
-      "rung": "notify",
-      "cooldownSeconds": 900,
+      "cooldownSeconds": 600,
+      "escalateAfterAttempts": 2,
+      "resolve": { "handler": "relaunch-agent" },
       "when": {
         "status": ["idle"],
         "agentPresent": false,
-        "minQuietSeconds": 300
+        "minQuietSeconds": 180
       },
-      "advice": "The agent CLI is gone and the terminal dropped back to a shell. Relaunch it or reuse the worktree."
+      "advice": "The agent CLI is gone and could not be relaunched."
     },
     {
       "id": "unpushed-work",
       "label": "Finished with unpushed commits",
       "severity": "info",
-      "rung": "nudge",
-      "cooldownSeconds": 1800,
-      "nudgeText": "You have local commits that are not pushed. Push the branch and open a PR.",
+      "cooldownSeconds": 1200,
+      "escalateAfterAttempts": 3,
+      "resolve": { "handler": "nudge", "text": "You have local commits that are not pushed. Push the branch and open a PR, then say what you shipped." },
       "when": {
         "status": ["idle"],
         "minQuietSeconds": 300,
         "git": { "aheadMin": 1 }
       },
-      "advice": "Work is done on disk but has not left the machine."
+      "advice": "Finished work has not left the machine and nudges did not shift it."
     },
     {
       "id": "uncommitted-work",
       "label": "Idle with uncommitted changes",
       "severity": "info",
-      "rung": "nudge",
-      "cooldownSeconds": 3600,
-      "nudgeText": "You have uncommitted changes. Commit them with a descriptive message, or say why they should not be committed.",
+      "cooldownSeconds": 1800,
+      "escalateAfterAttempts": 3,
+      "resolve": { "handler": "nudge", "text": "You have uncommitted changes. Commit them with a descriptive message, or say why they should not be committed." },
       "when": {
         "status": ["idle"],
         "minQuietSeconds": 900,
         "git": { "dirty": true, "aheadMax": 0 }
       },
-      "advice": "Edits are sitting in the working tree with nothing recorded."
+      "advice": "Edits sitting in the working tree with nothing recorded."
     },
     {
       "id": "idle-capacity",
       "label": "Idle worktree, nothing in flight",
       "severity": "info",
-      "rung": "observe",
       "cooldownSeconds": 3600,
+      "escalateAfterAttempts": 99,
+      "urgency": { "base": 5 },
+      "resolve": { "handler": "observe" },
       "when": {
         "status": ["idle"],
         "minQuietSeconds": 1800,

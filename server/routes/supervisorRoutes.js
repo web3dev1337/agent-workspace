@@ -58,6 +58,21 @@ function createSupervisorRoutes({ supervisorService, logger = console, requireRe
     res.json({ ok: true, source: rules.source, conditionCount: rules.conditions.length, autonomy: rules.autonomy });
   }));
 
+  router.get('/digest', requireRead, handle('digest', (req, res) => {
+    res.json({ ok: true, pending: supervisorService.digest.pending(), budget: supervisorService.budget.getState() });
+  }));
+
+  /**
+   * Deliver the batch now — "catch me up" — instead of waiting for the timer.
+   */
+  router.post('/digest/deliver', requireWrite, handle('deliver digest', (req, res) => {
+    res.json({ ok: true, delivered: supervisorService.deliverDigest() });
+  }));
+
+  router.post('/interruption-policy', requireWrite, handle('set interruption policy', (req, res) => {
+    res.json({ ok: true, interruption: supervisorService.setInterruptionPolicy(req.body || {}) });
+  }));
+
   return router;
 }
 

@@ -9,8 +9,10 @@ function fakeSession({ id, status = 'idle', buffer = '', type = 'claude' }) {
   return { id, type, status, buffer, worktreeId: id.split('-')[0], workspace: 'ws', pty: {} };
 }
 
-function harness({ sessions = [], autonomy = 'assist' } = {}) {
+function harness({ sessions = [], autonomy = 'autopilot', tier = null, commanderSender = null } = {}) {
   const writes = [];
+  const notifications = [];
+  const spoken = [];
   const sessionMap = new Map(sessions.map((session) => [session.id, session]));
 
   const supervisor = new SupervisorService({ logger: { info: () => {}, warn: () => {}, error: () => {} } });
@@ -21,12 +23,21 @@ function harness({ sessions = [], autonomy = 'assist' } = {}) {
       getSessionCwd: () => null
     },
     sessionRecoveryService: { getSession: () => ({ lastAgent: 'claude', lastAgentActive: true }) },
-    taskRecordService: { get: () => null },
+    taskRecordService: { get: () => (tier ? { tier } : null) },
     activityFeed: { track: () => {} },
-    notificationService: { notify: () => {} }
+    notificationService: { notify: (...args) => notifications.push(args) },
+    speechService: { speak: (text) => spoken.push(text) },
+    commanderSender
   });
   supervisor.rules.autonomy = autonomy;
-  return { supervisor, writes, sessionMap };
+
+  // Push a session past every quiet-time threshold without waiting for it.
+  const goQuiet = (id) => {
+    supervisor.quietTracker.observe(id, 8);
+    supervisor.quietTracker.state.get(id).lastGrowthAt = Date.now() - 3_600_000;
+  };
+
+  return { supervisor, writes, notifications, spoken, goQuiet };
 }
 
 describe('supervisor signals', () => {
@@ -52,8 +63,7 @@ describe('supervisor signals', () => {
   });
 
   test('repeated-line detection ignores short lines', () => {
-    const looping = Array(6).fill('Error: cannot find module "widget"').join('\n');
-    expect(maxLineRepeat(looping)).toBe(6);
+    expect(maxLineRepeat(Array(6).fill('Error: cannot find module "widget"').join('\n'))).toBe(6);
     expect(maxLineRepeat(Array(6).fill('ok').join('\n'))).toBe(0);
   });
 
@@ -75,99 +85,168 @@ describe('SupervisorService', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  test('a stall is fixed silently — no notification for something it handled', async () => {
+    const { supervisor, writes, notifications, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })]
+    });
+    goQuiet('work1-claude');
+
+    const result = await supervisor.tick();
+    expect(result.findings[0].outcome).toBe('resolved');
+    expect(writes.map((w) => w.data)).toEqual([expect.stringMatching(/status\?/), '\r']);
+    expect(notifications).toEqual([]);
+  });
+
+  test('a human is only reached after repair attempts are exhausted', async () => {
+    const { supervisor, notifications, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })],
+      tier: 1
+    });
+
+    const outcomes = [];
+    for (let i = 0; i < 6 && !outcomes.includes('interrupted'); i += 1) {
+      goQuiet('work1-claude');
+      supervisor.cooldowns.clear();
+      outcomes.push((await supervisor.tick()).findings[0].outcome);
+    }
+
+    expect(outcomes.slice(0, 3)).toEqual(['resolved', 'resolved', 'resolved']);
+    expect(outcomes.at(-1)).toBe('interrupted');
+    expect(notifications).toHaveLength(1);
+  });
+
+  test('the same problem never interrupts twice in quick succession', async () => {
+    const { supervisor, notifications, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })],
+      tier: 1
+    });
+
+    for (let i = 0; i < 8; i += 1) {
+      goQuiet('work1-claude');
+      supervisor.cooldowns.clear();
+      await supervisor.tick();
+    }
+
+    // Repeated ticks past the escalation point must not become a drumbeat, even
+    // at an urgency score that overrides quiet hours and the hourly budget.
+    expect(notifications).toHaveLength(1);
+    expect(supervisor.digest.pending()[0].heldBecause).toMatch(/already interrupted/);
+  });
+
+  test('background work never interrupts — it goes to the digest instead', async () => {
+    const { supervisor, notifications, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })],
+      tier: 4
+    });
+
+    for (let i = 0; i < 6; i += 1) {
+      goQuiet('work1-claude');
+      supervisor.cooldowns.clear();
+      await supervisor.tick();
+    }
+
+    expect(notifications).toEqual([]);
+    expect(supervisor.digest.pending()).toHaveLength(1);
+    expect(supervisor.digest.pending()[0].heldBecause).toMatch(/below interrupt threshold/);
+  });
+
+  test('a problem that heals is dropped from the digest, never mentioned', async () => {
+    const session = fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' });
+    const { supervisor, goQuiet } = harness({ sessions: [session], tier: 4 });
+
+    for (let i = 0; i < 5; i += 1) {
+      goQuiet('work1-claude');
+      supervisor.cooldowns.clear();
+      await supervisor.tick();
+    }
+    expect(supervisor.digest.pending()).toHaveLength(1);
+
+    session.status = 'idle';
+    session.buffer = 'done';
+    await supervisor.tick();
+
+    expect(supervisor.digest.pending()).toEqual([]);
+    expect(supervisor.attempts.has('work1-claude:stalled')).toBe(false);
+  });
+
+  test('a usage limit resolves itself and schedules a resume', async () => {
+    const { supervisor, notifications, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: '5-hour limit reached ∙ resets 3am' })]
+    });
+    goQuiet('work1-claude');
+
+    const result = await supervisor.tick();
+    expect(result.findings[0].conditionId).toBe('usage-limit-reached');
+    expect(result.findings[0].outcome).toBe('resolved');
+    expect(notifications).toEqual([]);
+    expect(supervisor.getStatus().scheduledResumes).toHaveLength(1);
+  });
+
+  test('an error loop is delegated to the Commander, not dumped on the human', async () => {
+    const briefs = [];
+    const { supervisor, notifications, goQuiet } = harness({
+      sessions: [fakeSession({
+        id: 'work1-claude',
+        status: 'busy',
+        buffer: Array(6).fill('Error: cannot find module "widget"').join('\n')
+      })],
+      commanderSender: async (text) => { briefs.push(text); return true; }
+    });
+    goQuiet('work1-claude');
+
+    const result = await supervisor.tick();
+    expect(result.findings[0].outcome).toBe('delegated');
+    expect(briefs).toHaveLength(1);
+    expect(notifications).toEqual([]);
+  });
+
   test('observe mode watches without touching anything', async () => {
-    const { supervisor, writes } = harness({
+    const { supervisor, writes, goQuiet } = harness({
       sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })],
       autonomy: 'observe'
     });
-
-    supervisor.quietTracker.observe('work1-claude', 8);
-    supervisor.quietTracker.state.get('work1-claude').lastGrowthAt = Date.now() - 3_600_000;
+    goQuiet('work1-claude');
 
     const result = await supervisor.tick();
-    expect(result.sessionsWatched).toBe(1);
-    expect(result.findings[0].conditionId).toBe('stalled');
     expect(result.findings[0].outcome).toBe('observed');
     expect(writes).toEqual([]);
   });
 
-  test('assist mode nudges a stalled session', async () => {
-    const { supervisor, writes } = harness({
-      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })],
-      autonomy: 'assist'
+  test('dry run reports the plan without carrying it out', async () => {
+    const { supervisor, writes, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })]
     });
-
-    supervisor.quietTracker.observe('work1-claude', 8);
-    supervisor.quietTracker.state.get('work1-claude').lastGrowthAt = Date.now() - 3_600_000;
-
-    const result = await supervisor.tick();
-    expect(result.findings[0].outcome).toBe('nudged');
-    expect(writes.map((w) => w.data)).toEqual(['status? if you are blocked, say what on and stop.', '\r']);
-  });
-
-  test('a finding does not re-fire while it is cooling down', async () => {
-    const { supervisor, writes } = harness({
-      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })],
-      autonomy: 'assist'
-    });
-
-    const stall = () => {
-      supervisor.quietTracker.observe('work1-claude', 8);
-      supervisor.quietTracker.state.get('work1-claude').lastGrowthAt = Date.now() - 3_600_000;
-    };
-
-    stall();
-    await supervisor.tick();
-    stall();
-    const second = await supervisor.tick();
-
-    expect(second.findings[0].outcome).toBe('cooling-down');
-    expect(writes).toHaveLength(2);
-  });
-
-  test('dry run reports what would happen without doing it', async () => {
-    const { supervisor, writes } = harness({
-      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })],
-      autonomy: 'autopilot'
-    });
-
-    supervisor.quietTracker.observe('work1-claude', 8);
-    supervisor.quietTracker.state.get('work1-claude').lastGrowthAt = Date.now() - 3_600_000;
+    goQuiet('work1-claude');
 
     const result = await supervisor.tick({ dryRun: true });
     expect(result.findings[0].outcome).toBe('dry-run');
+    expect(result.findings[0].intent).toBe('resolve');
     expect(writes).toEqual([]);
   });
 
   test('server terminals are not supervised', async () => {
-    const { supervisor } = harness({
-      sessions: [fakeSession({ id: 'work1-server', type: 'server', status: 'busy' })]
-    });
-    const result = await supervisor.tick();
-    expect(result.sessionsWatched).toBe(0);
+    const { supervisor } = harness({ sessions: [fakeSession({ id: 'work1-server', type: 'server', status: 'busy' })] });
+    expect((await supervisor.tick()).sessionsWatched).toBe(0);
   });
 
-  test('actions are written to the audit log', async () => {
-    const { supervisor } = harness({
-      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })],
-      autonomy: 'assist'
+  test('every action lands in the audit log', async () => {
+    const { supervisor, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })]
     });
-
-    supervisor.quietTracker.observe('work1-claude', 8);
-    supervisor.quietTracker.state.get('work1-claude').lastGrowthAt = Date.now() - 3_600_000;
+    goQuiet('work1-claude');
     await supervisor.tick();
 
     const audit = fs.readFileSync(supervisor.auditPath(), 'utf8').trim().split('\n').map(JSON.parse);
-    expect(audit.at(-1)).toMatchObject({ event: 'finding', conditionId: 'stalled', outcome: 'nudged' });
+    expect(audit.at(-1)).toMatchObject({ event: 'finding', conditionId: 'stalled', outcome: 'resolved', intent: 'resolve' });
   });
 
   test('setAutonomy rejects unknown levels and records real changes', () => {
     const { supervisor } = harness();
     expect(() => supervisor.setAutonomy('yolo')).toThrow(/Unknown autonomy level/);
-    expect(supervisor.setAutonomy('autopilot')).toBe('autopilot');
+    expect(supervisor.setAutonomy('assist')).toBe('assist');
 
     const audit = fs.readFileSync(supervisor.auditPath(), 'utf8').trim().split('\n').map(JSON.parse);
-    expect(audit.at(-1)).toMatchObject({ event: 'autonomy-changed', to: 'autopilot' });
+    expect(audit.at(-1)).toMatchObject({ event: 'autonomy-changed', to: 'assist' });
   });
 
   test('start refuses to run when autonomy is off', () => {
@@ -176,30 +255,48 @@ describe('SupervisorService', () => {
     supervisor.stop();
   });
 
-  test('the briefing reads as a sentence and leads with what is critical', async () => {
-    const { supervisor } = harness({
-      sessions: [
-        fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' }),
-        fakeSession({ id: 'work2-claude', status: 'busy', buffer: 'usage limit reached ∙ resets 3am' })
-      ],
-      autonomy: 'assist'
+  test('the briefing leads with what was handled, not with problems', async () => {
+    const { supervisor, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })]
     });
-
-    for (const id of ['work1-claude', 'work2-claude']) {
-      supervisor.quietTracker.observe(id, 8);
-      supervisor.quietTracker.state.get(id).lastGrowthAt = Date.now() - 3_600_000;
-    }
+    supervisor.running = true;
+    goQuiet('work1-claude');
     await supervisor.tick();
 
     const briefing = supervisor.getBriefing();
-    expect(briefing.counts.critical).toBe(1);
-    expect(briefing.items[0].severity).toBe('critical');
-    expect(briefing.spoken).toMatch(/needs you now/);
+    expect(briefing.handledRecently).toBe(1);
+    expect(briefing.waiting).toEqual([]);
+    expect(briefing.spoken).toMatch(/I handled 1 thing/);
+    expect(briefing.spoken).toMatch(/Nothing is waiting on you/);
   });
 
-  test('an empty fleet briefs as quiet rather than as an error', () => {
-    const { supervisor } = harness();
-    supervisor.running = true;
-    expect(supervisor.getBriefing().spoken).toMatch(/quiet/);
+  test('delivering the digest batches everything into one message', async () => {
+    const { supervisor, notifications, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'thinking' })],
+      tier: 4
+    });
+
+    for (let i = 0; i < 5; i += 1) {
+      goQuiet('work1-claude');
+      supervisor.cooldowns.clear();
+      await supervisor.tick();
+    }
+
+    const delivered = supervisor.deliverDigest();
+    expect(delivered.items).toHaveLength(1);
+    expect(notifications).toHaveLength(1);
+    expect(supervisor.digest.pending()).toEqual([]);
+  });
+
+  test('stopping clears scheduled resumes so nothing fires after shutdown', async () => {
+    const { supervisor, goQuiet } = harness({
+      sessions: [fakeSession({ id: 'work1-claude', status: 'busy', buffer: 'limit reached ∙ resets 3am' })]
+    });
+    goQuiet('work1-claude');
+    await supervisor.tick();
+    expect(supervisor.resumeTimers.size).toBe(1);
+
+    supervisor.stop();
+    expect(supervisor.resumeTimers.size).toBe(0);
   });
 });

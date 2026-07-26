@@ -433,6 +433,15 @@ threadService.init({ workspaceManager, sessionManager });
 intentHaikuService.setSessionManager(sessionManager);
 serviceStackRuntimeService.init({ workspaceManager, sessionManager, configPromoterService, io });
 auditExportService.init({ activityFeed, schedulerService, userSettingsService });
+// Two writes: agent CLIs treat "text\r" in one chunk as a bracketed paste.
+const sendToCommander = async (text) => {
+  if (!commanderService?.sendInput) return false;
+  if (commanderService.sendInput(text) === false) return false;
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  commanderService.sendInput('\r');
+  return true;
+};
+
 supervisorService.init({
   sessionManager,
   gitHelper,
@@ -441,12 +450,13 @@ supervisorService.init({
   taskRecordService,
   activityFeed,
   notificationService,
-  speechService
+  speechService,
+  // When rules cannot fix something, the Commander gets a written problem brief
+  // before you do — it is a full agent with the whole API, and it only costs
+  // tokens when something is actually wrong.
+  commanderSender: sendToCommander
 });
 
-// Shipped default autonomy is `observe`: findings accumulate, nothing is
-// touched. That is safe to leave running, and reading a week of it is how you
-// decide whether to grant this thing any real autonomy.
 if (String(process.env.SUPERVISOR_AUTOSTART || 'true').toLowerCase() !== 'false') {
   const started = supervisorService.start();
   logger.info('Supervisor', started);
@@ -454,15 +464,7 @@ if (String(process.env.SUPERVISOR_AUTOSTART || 'true').toLowerCase() !== 'false'
 
 // Speech that no rule matched is still useful: hand the raw words to the
 // active Commander so the fallback is an agent, not an error.
-voiceCommandService.setCommanderForwarder(async (transcript) => {
-  if (!commanderService?.sendInput) return false;
-  // Two writes: agent CLIs treat "text\r" in one chunk as a bracketed paste.
-  const wrote = commanderService.sendInput(transcript);
-  if (wrote === false) return false;
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  commanderService.sendInput('\r');
-  return true;
-});
+voiceCommandService.setCommanderForwarder(sendToCommander);
 
 const loadPlugins = async () => {
   const status = await pluginLoaderService.loadAll({

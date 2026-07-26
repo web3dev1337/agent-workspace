@@ -1,5 +1,7 @@
 const {
   classifyPermissionPrompt,
+  parseResetTime,
+  buildProblemBrief,
   submitText,
   createExecutor
 } = require('../../server/supervisor/supervisorActions');
@@ -14,11 +16,9 @@ const finding = (overrides = {}) => ({
   severity: 'warn',
   sessionId: 'work1-claude',
   worktreeId: 'work1',
-  rung: 'notify',
-  requestedRung: 'notify',
   advice: 'nothing for 15 minutes',
-  nudgeText: '',
-  actHandler: '',
+  quietSeconds: 900,
+  status: 'busy',
   ...overrides
 });
 
@@ -33,145 +33,208 @@ function fakeSessionManager() {
   };
 }
 
-describe('supervisorActions', () => {
-  describe('permission classification', () => {
-    test('approves an unambiguously read-only prompt', () => {
-      const verdict = classifyPermissionPrompt('Do you want to proceed? Read(src/index.js)', rules.safety);
-      expect(verdict.safe).toBe(true);
-    });
-
-    test('refuses anything matching a deny pattern, even alongside an allow match', () => {
-      const verdict = classifyPermissionPrompt('Read(x) then Bash(rm -rf build)', rules.safety);
-      expect(verdict.safe).toBe(false);
-      expect(verdict.reason).toMatch(/deny pattern/);
-    });
-
-    test('refuses a prompt it does not recognize rather than guessing', () => {
-      const verdict = classifyPermissionPrompt('Do you want to proceed? SomeNewTool(x)', rules.safety);
-      expect(verdict.safe).toBe(false);
-      expect(verdict.reason).toMatch(/no allow pattern/);
-    });
-
-    test('refuses git push even though other git commands are allowed', () => {
-      expect(classifyPermissionPrompt('Bash(git push origin main)', rules.safety).safe).toBe(false);
-      expect(classifyPermissionPrompt('Bash(git status)', rules.safety).safe).toBe(true);
-    });
-
-    test('an empty prompt is not safe', () => {
-      expect(classifyPermissionPrompt('', rules.safety).safe).toBe(false);
-    });
+describe('permission classification', () => {
+  test('approves an unambiguously safe prompt', () => {
+    expect(classifyPermissionPrompt('Do you want to proceed? Read(src/index.js)', rules.safety).safe).toBe(true);
+    expect(classifyPermissionPrompt('Bash(npm run test)', rules.safety).safe).toBe(true);
   });
 
-  describe('submitText', () => {
-    test('writes the text and the Enter separately', async () => {
-      const sessionManager = fakeSessionManager();
-      await submitText(sessionManager, 'work1-claude', 'status?', { delayMs: 1 });
-      expect(sessionManager.writes).toEqual([
-        { sessionId: 'work1-claude', data: 'status?' },
-        { sessionId: 'work1-claude', data: '\r' }
-      ]);
-    });
-
-    test('does not send Enter when the first write fails', async () => {
-      const sessionManager = { writeToSession: () => false };
-      expect(await submitText(sessionManager, 'x', 'hi', { delayMs: 1 })).toBe(false);
-    });
+  test('a deny pattern beats an allow pattern in the same prompt', () => {
+    const verdict = classifyPermissionPrompt('Read(x) then Bash(rm -rf build)', rules.safety);
+    expect(verdict.safe).toBe(false);
+    expect(verdict.reason).toMatch(/deny pattern/);
   });
 
-  describe('executor', () => {
-    test('observe does nothing outward', async () => {
-      const sessionManager = fakeSessionManager();
-      const tracked = [];
-      const execute = createExecutor({ sessionManager, activityFeed: { track: (k, d) => tracked.push([k, d]) } });
+  test('refuses anything it does not recognize rather than guessing', () => {
+    const verdict = classifyPermissionPrompt('Do you want to proceed? SomeNewTool(x)', rules.safety);
+    expect(verdict.safe).toBe(false);
+    expect(verdict.reason).toMatch(/no allow pattern/);
+  });
 
-      const result = await execute({ finding: finding({ rung: 'observe' }), signal: {}, rules });
-      expect(result.outcome).toBe('observed');
-      expect(sessionManager.writes).toEqual([]);
-      expect(tracked).toEqual([]);
+  test('refuses to touch credentials or force-push', () => {
+    expect(classifyPermissionPrompt('Read(~/.ssh/id_rsa)', rules.safety).safe).toBe(false);
+    expect(classifyPermissionPrompt('Read(.env)', rules.safety).safe).toBe(false);
+    expect(classifyPermissionPrompt('Bash(git push --force origin main)', rules.safety).safe).toBe(false);
+    expect(classifyPermissionPrompt('Bash(gh pr merge 12)', rules.safety).safe).toBe(false);
+  });
+
+  test('ordinary edits and commits are allowed — this has to be usable', () => {
+    expect(classifyPermissionPrompt('Edit(src/app.js)', rules.safety).safe).toBe(true);
+    expect(classifyPermissionPrompt('Bash(git commit -m "fix")', rules.safety).safe).toBe(true);
+  });
+
+  test('an empty prompt is not safe', () => {
+    expect(classifyPermissionPrompt('', rules.safety).safe).toBe(false);
+  });
+});
+
+describe('parseResetTime', () => {
+  const now = new Date('2026-07-26T14:00:00');
+
+  test('reads the reset hour out of a limit banner', () => {
+    expect(parseResetTime('5-hour limit reached ∙ resets 3pm', now).getHours()).toBe(15);
+    expect(parseResetTime('limit reached ∙ resets 9:30pm', now).getMinutes()).toBe(30);
+  });
+
+  test('a reset time already past today means tomorrow', () => {
+    const reset = parseResetTime('resets 3am', now);
+    expect(reset.getDate()).toBe(now.getDate() + 1);
+  });
+
+  test('returns null when there is no time to parse', () => {
+    expect(parseResetTime('something else entirely', now)).toBeNull();
+  });
+});
+
+describe('problem brief', () => {
+  test('gives the Commander enough to act without asking the human', () => {
+    const brief = buildProblemBrief(
+      finding({ branch: 'feature/x', tier: 1, ticketTitle: 'Fix physics' }),
+      { tail: 'line one\nline two' }
+    );
+    expect(brief).toMatch(/Busy but silent on work1/);
+    expect(brief).toMatch(/Branch: feature\/x/);
+    expect(brief).toMatch(/Tier: T1/);
+    expect(brief).toMatch(/line two/);
+    expect(brief).toMatch(/Diagnose and fix it yourself/);
+  });
+});
+
+describe('submitText', () => {
+  test('writes the text and the Enter separately', async () => {
+    const sessionManager = fakeSessionManager();
+    await submitText(sessionManager, 'work1-claude', 'status?', { delayMs: 1 });
+    expect(sessionManager.writes).toEqual([
+      { sessionId: 'work1-claude', data: 'status?' },
+      { sessionId: 'work1-claude', data: '\r' }
+    ]);
+  });
+
+  test('does not send Enter when the first write fails', async () => {
+    expect(await submitText({ writeToSession: () => false }, 'x', 'hi', { delayMs: 1 })).toBe(false);
+  });
+});
+
+describe('executor', () => {
+  const run = (extra = {}) => createExecutor({ activityFeed: { track: () => {} }, ...extra });
+
+  test('observe does nothing outward', async () => {
+    const sessionManager = fakeSessionManager();
+    const result = await run({ sessionManager })({
+      finding: finding(),
+      plan: { intent: 'observe', reason: 'informational' },
+      signal: {},
+      rules
+    });
+    expect(result.outcome).toBe('observed');
+    expect(sessionManager.writes).toEqual([]);
+  });
+
+  test('resolving a stall types the instruction into the session', async () => {
+    const sessionManager = fakeSessionManager();
+    const result = await run({ sessionManager })({
+      finding: finding(),
+      plan: { intent: 'resolve', handler: 'nudge', text: 'status?' },
+      signal: {},
+      rules
+    });
+    expect(result.outcome).toBe('resolved');
+    expect(sessionManager.writes.map((w) => w.data)).toEqual(['status?', '\r']);
+  });
+
+  test('a handler outside allowedHandlers is blocked', async () => {
+    const sessionManager = fakeSessionManager();
+    const result = await run({ sessionManager })({
+      finding: finding(),
+      plan: { intent: 'resolve', handler: 'delete-everything' },
+      signal: {},
+      rules
+    });
+    expect(result.outcome).toBe('blocked');
+    expect(sessionManager.writes).toEqual([]);
+  });
+
+  test('a risky permission prompt is escalated, never approved', async () => {
+    const sessionManager = fakeSessionManager();
+    const result = await run({ sessionManager })({
+      finding: finding(),
+      plan: { intent: 'resolve', handler: 'answer-permission' },
+      signal: { tail: 'Do you want to proceed? Bash(sudo rm -rf /)' },
+      rules
+    });
+    expect(result.outcome).toBe('repair-failed');
+    expect(result.escalate).toBe(true);
+    expect(sessionManager.writes).toEqual([]);
+  });
+
+  test('a safe permission prompt is approved without anyone being told', async () => {
+    const sessionManager = fakeSessionManager();
+    const result = await run({ sessionManager })({
+      finding: finding(),
+      plan: { intent: 'resolve', handler: 'answer-permission' },
+      signal: { tail: 'Do you want to proceed? Read(src/app.js)' },
+      rules
+    });
+    expect(result.outcome).toBe('resolved');
+    expect(sessionManager.writes.map((w) => w.data)).toEqual(['1', '\r']);
+  });
+
+  test('a usage limit schedules its own resume instead of reporting', async () => {
+    const scheduled = [];
+    const result = await run({
+      sessionManager: fakeSessionManager(),
+      scheduleResume: (options) => scheduled.push(options)
+    })({
+      finding: finding(),
+      plan: { intent: 'resolve', handler: 'schedule-resume' },
+      signal: { tail: '5-hour limit reached ∙ resets 3pm' },
+      rules
     });
 
-    test('notify records and alerts but never types', async () => {
-      const sessionManager = fakeSessionManager();
-      const notified = [];
-      const execute = createExecutor({
-        sessionManager,
-        activityFeed: { track: () => {} },
-        notificationService: { notify: (...args) => notified.push(args) }
-      });
+    expect(result.outcome).toBe('resolved');
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0].sessionId).toBe('work1-claude');
+  });
 
-      const result = await execute({ finding: finding({ rung: 'notify' }), signal: {}, rules });
-      expect(result.outcome).toBe('notified');
-      expect(sessionManager.writes).toEqual([]);
-      expect(notified).toHaveLength(1);
+  test('delegation hands a written brief to the Commander', async () => {
+    const briefs = [];
+    const result = await run({
+      sessionManager: fakeSessionManager(),
+      commanderSender: async (text) => { briefs.push(text); return true; }
+    })({
+      finding: finding({ label: 'Repeating the same error' }),
+      plan: { intent: 'delegate', handler: 'delegate-to-commander' },
+      signal: { tail: 'Error: boom\nError: boom' },
+      rules
     });
 
-    test('nudge types the configured text into the session', async () => {
-      const sessionManager = fakeSessionManager();
-      const execute = createExecutor({ sessionManager, activityFeed: { track: () => {} } });
+    expect(result.outcome).toBe('delegated');
+    expect(briefs[0]).toMatch(/Repeating the same error/);
+  });
 
-      const result = await execute({
-        finding: finding({ rung: 'nudge', nudgeText: 'status?' }),
-        signal: {},
-        rules
-      });
-      expect(result.outcome).toBe('nudged');
-      expect(sessionManager.writes.map((w) => w.data)).toEqual(['status?', '\r']);
+  test('with no Commander, delegation escalates rather than silently dropping', async () => {
+    const result = await run({ sessionManager: fakeSessionManager() })({
+      finding: finding(),
+      plan: { intent: 'delegate', handler: 'delegate-to-commander' },
+      signal: {},
+      rules
     });
+    expect(result.outcome).toBe('repair-failed');
+    expect(result.escalate).toBe(true);
+  });
 
-    test('a handler outside allowedActHandlers is blocked', async () => {
-      const sessionManager = fakeSessionManager();
-      const execute = createExecutor({ sessionManager, activityFeed: { track: () => {} } });
-
-      const result = await execute({
-        finding: finding({ rung: 'act', actHandler: 'delete-everything' }),
-        signal: {},
-        rules
-      });
-      expect(result.outcome).toBe('act-blocked');
-      expect(sessionManager.writes).toEqual([]);
+  test('a broken activity feed does not stop the repair', async () => {
+    const sessionManager = fakeSessionManager();
+    const result = await createExecutor({
+      sessionManager,
+      activityFeed: { track: () => { throw new Error('feed down'); } },
+      logger: { warn: () => {}, error: () => {} }
+    })({
+      finding: finding(),
+      plan: { intent: 'resolve', handler: 'nudge', text: 'ping' },
+      signal: {},
+      rules
     });
-
-    test('auto-answering a risky permission prompt escalates instead', async () => {
-      const sessionManager = fakeSessionManager();
-      const execute = createExecutor({ sessionManager, activityFeed: { track: () => {} } });
-
-      const result = await execute({
-        finding: finding({ rung: 'act', actHandler: 'answer-permission' }),
-        signal: { tail: 'Do you want to proceed? Bash(sudo rm -rf /)' },
-        rules
-      });
-      expect(result.outcome).toBe('escalated');
-      expect(sessionManager.writes).toEqual([]);
-    });
-
-    test('auto-answering a read-only permission prompt approves it', async () => {
-      const sessionManager = fakeSessionManager();
-      const execute = createExecutor({ sessionManager, activityFeed: { track: () => {} } });
-
-      const result = await execute({
-        finding: finding({ rung: 'act', actHandler: 'answer-permission' }),
-        signal: { tail: 'Do you want to proceed? Read(src/app.js)' },
-        rules
-      });
-      expect(result.outcome).toBe('acted');
-      expect(sessionManager.writes.map((w) => w.data)).toEqual(['1', '\r']);
-    });
-
-    test('a broken notification channel does not stop the action', async () => {
-      const sessionManager = fakeSessionManager();
-      const execute = createExecutor({
-        sessionManager,
-        activityFeed: { track: () => { throw new Error('feed down'); } },
-        notificationService: { notify: () => { throw new Error('notify down'); } },
-        logger: { warn: () => {}, error: () => {} }
-      });
-
-      const result = await execute({
-        finding: finding({ rung: 'nudge', nudgeText: 'ping' }),
-        signal: {},
-        rules
-      });
-      expect(result.outcome).toBe('nudged');
-    });
+    expect(result.outcome).toBe('resolved');
   });
 });

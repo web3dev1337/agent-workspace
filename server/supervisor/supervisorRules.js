@@ -2,18 +2,22 @@ const fs = require('fs');
 const path = require('path');
 
 const { getAgentWorkspaceDir } = require('../utils/pathUtils');
+const { normalizeInterruptionPolicy } = require('./supervisorUrgency');
 
-const RUNGS = ['observe', 'notify', 'nudge', 'act'];
 const SEVERITIES = ['info', 'warn', 'critical'];
 const AUTONOMY_LEVELS = ['off', 'observe', 'assist', 'autopilot'];
 
-// How far each autonomy level is allowed to climb the ladder.
-const AUTONOMY_CEILING = {
-  off: null,
-  observe: 'observe',
-  assist: 'nudge',
-  autopilot: 'act'
+// What each autonomy level is allowed to *do about* a finding. Interrupting a
+// human is governed separately by the interruption policy — autonomy is about
+// how much the supervisor may fix, not how much it may say.
+const AUTONOMY_CAPABILITIES = {
+  off: { resolve: false, delegate: false },
+  observe: { resolve: false, delegate: false },
+  assist: { resolve: true, delegate: false },
+  autopilot: { resolve: true, delegate: true }
 };
+
+const DELEGATE_HANDLERS = new Set(['delegate-to-commander']);
 
 const DEFAULT_RULES_PATH = path.join(__dirname, '..', '..', 'config', 'supervisor-rules.json');
 
@@ -33,22 +37,37 @@ function compilePatterns(patterns) {
   return out;
 }
 
+function normalizeResolve(raw) {
+  const handler = String(raw?.handler || '').trim();
+  if (!handler) return null;
+  return {
+    handler,
+    text: String(raw?.text || '').trim(),
+    delegate: DELEGATE_HANDLERS.has(handler)
+  };
+}
+
 function normalizeCondition(raw) {
   const id = String(raw?.id || '').trim();
   if (!id) return null;
 
   const when = raw?.when || {};
-  const rung = RUNGS.includes(raw?.rung) ? raw.rung : 'observe';
+  const urgency = raw?.urgency || {};
 
   return {
     id,
     label: String(raw?.label || id),
     severity: SEVERITIES.includes(raw?.severity) ? raw.severity : 'info',
-    rung,
     cooldownSeconds: Math.max(0, Number(raw?.cooldownSeconds) || 0),
+    // How many failed self-heals before this is allowed to reach a human at all.
+    // A high number means "never bother me about this, just keep handling it".
+    escalateAfterAttempts: Math.max(0, Number(raw?.escalateAfterAttempts ?? 2)),
     advice: String(raw?.advice || ''),
-    nudgeText: String(raw?.nudgeText || '').trim(),
-    actHandler: String(raw?.actHandler || '').trim(),
+    resolve: normalizeResolve(raw?.resolve),
+    urgency: {
+      base: Number.isFinite(Number(urgency.base)) ? Number(urgency.base) : null,
+      blocksWork: urgency.blocksWork === true
+    },
     when: {
       status: (Array.isArray(when.status) ? when.status : []).map((s) => String(s).toLowerCase()),
       types: (Array.isArray(when.types) ? when.types : []).map((s) => String(s).toLowerCase()),
@@ -84,17 +103,24 @@ function readJson(filePath) {
  */
 function loadRules({ rulesPath = null } = {}) {
   const override = rulesPath || overrideRulesPath();
-  const raw = readJson(override) || readJson(DEFAULT_RULES_PATH) || {};
-  const source = readJson(override) ? override : DEFAULT_RULES_PATH;
+  const overrideRaw = readJson(override);
+  const raw = overrideRaw || readJson(DEFAULT_RULES_PATH) || {};
+  const source = overrideRaw ? override : DEFAULT_RULES_PATH;
 
   const safety = raw.safety || {};
+  const envAutonomy = String(process.env.SUPERVISOR_AUTONOMY || '').trim().toLowerCase();
+  const autonomy = AUTONOMY_LEVELS.includes(envAutonomy)
+    ? envAutonomy
+    : (AUTONOMY_LEVELS.includes(raw.autonomy) ? raw.autonomy : 'assist');
+
   return {
     source,
-    autonomy: AUTONOMY_LEVELS.includes(raw.autonomy) ? raw.autonomy : 'observe',
+    autonomy,
     tickSeconds: Math.max(5, Number(raw.tickSeconds) || 30),
     maxFindingsRetained: Math.max(20, Number(raw.maxFindingsRetained) || 500),
+    interruption: normalizeInterruptionPolicy(raw.interruption),
     safety: {
-      allowedActHandlers: Array.isArray(safety.allowedActHandlers) ? safety.allowedActHandlers.map(String) : [],
+      allowedHandlers: Array.isArray(safety.allowedHandlers) ? safety.allowedHandlers.map(String) : [],
       permissionAllowPatterns: compilePatterns(safety.permissionAllowPatterns),
       permissionDenyPatterns: compilePatterns(safety.permissionDenyPatterns)
     },
@@ -132,22 +158,52 @@ function matches(condition, signal) {
   return true;
 }
 
-function rungIndex(rung) {
-  const index = RUNGS.indexOf(rung);
-  return index === -1 ? 0 : index;
+function capabilities(autonomy) {
+  return AUTONOMY_CAPABILITIES[autonomy] || AUTONOMY_CAPABILITIES.observe;
 }
 
 /**
- * The rung a finding may actually reach, given how much autonomy it has been
- * granted. Findings above the ceiling are recorded, not acted on.
+ * What the supervisor intends to do about a finding, before the interruption
+ * policy gets a say.
+ *
+ * The order matters and encodes the whole philosophy: try to fix it, then try
+ * to have something smarter fix it, and only then consider spending a human's
+ * attention. A condition that has not yet exhausted its repair attempts is not
+ * eligible to interrupt at all.
  */
-function effectiveRung(conditionRung, autonomy) {
-  const ceiling = AUTONOMY_CEILING[autonomy];
-  if (!ceiling) return null;
-  return rungIndex(conditionRung) <= rungIndex(ceiling) ? conditionRung : ceiling;
+function planAction(condition, { autonomy, attempts = 0 }) {
+  const can = capabilities(autonomy);
+  const resolve = condition.resolve;
+  const exhausted = attempts >= condition.escalateAfterAttempts;
+
+  if (autonomy === 'off') return { intent: 'none', reason: 'autonomy off' };
+
+  if (resolve && resolve.handler === 'observe') {
+    return { intent: 'observe', reason: 'condition is informational only' };
+  }
+
+  if (resolve && !exhausted) {
+    if (resolve.delegate) {
+      if (can.delegate) return { intent: 'delegate', handler: resolve.handler, reason: 'handing the problem to the Commander' };
+      if (can.resolve) return { intent: 'observe', reason: 'delegation needs autopilot' };
+      return { intent: 'observe', reason: `autonomy "${autonomy}" may not act` };
+    }
+    if (can.resolve) {
+      return { intent: 'resolve', handler: resolve.handler, text: resolve.text, reason: `self-heal attempt ${attempts + 1}` };
+    }
+    return { intent: 'observe', reason: `autonomy "${autonomy}" may not act` };
+  }
+
+  if (!resolve) {
+    return exhausted || condition.escalateAfterAttempts === 0
+      ? { intent: 'interrupt', reason: 'nothing can be done automatically' }
+      : { intent: 'observe', reason: 'no resolve handler configured' };
+  }
+
+  return { intent: 'interrupt', reason: `self-heal failed ${attempts} time${attempts === 1 ? '' : 's'}` };
 }
 
-function buildFinding(condition, signal, autonomy) {
+function buildFinding(condition, signal) {
   return {
     id: `${signal.sessionId}:${condition.id}`,
     conditionId: condition.id,
@@ -158,14 +214,10 @@ function buildFinding(condition, signal, autonomy) {
     repositoryName: signal.repositoryName,
     branch: signal.branch,
     tier: signal.tier,
+    ticketTitle: signal.ticketTitle,
     status: signal.status,
     quietSeconds: signal.quietSeconds,
     advice: condition.advice,
-    requestedRung: condition.rung,
-    rung: effectiveRung(condition.rung, autonomy),
-    suppressedByAutonomy: rungIndex(condition.rung) > rungIndex(AUTONOMY_CEILING[autonomy] || 'observe'),
-    nudgeText: condition.nudgeText,
-    actHandler: condition.actHandler,
     evidence: signal.lastLine,
     detectedAt: new Date().toISOString()
   };
@@ -182,7 +234,7 @@ function evaluate(signals, rules) {
   for (const signal of signals) {
     for (const condition of rules.conditions) {
       if (!matches(condition, signal)) continue;
-      findings.push(buildFinding(condition, signal, rules.autonomy));
+      findings.push(buildFinding(condition, signal));
       break;
     }
   }
@@ -190,15 +242,15 @@ function evaluate(signals, rules) {
 }
 
 module.exports = {
-  RUNGS,
   SEVERITIES,
   AUTONOMY_LEVELS,
-  AUTONOMY_CEILING,
+  AUTONOMY_CAPABILITIES,
   DEFAULT_RULES_PATH,
   overrideRulesPath,
   loadRules,
   normalizeCondition,
   matches,
-  effectiveRung,
+  capabilities,
+  planAction,
   evaluate
 };
