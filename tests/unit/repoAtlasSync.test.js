@@ -58,6 +58,27 @@ describe('Repo Atlas multi-machine sync', () => {
     expect(b.getEntry('only-on-a')).toBeNull();
   });
 
+  test('a failing local commit reports itself, not a misleading push error', async () => {
+    const a = machine('a');
+    await a.setRemote(remote);
+    a.addHighlight('repo-one', { topic: 'testing', quality: 5 });
+    expect((await a.sync()).ok).toBe(true);
+
+    // A rejecting pre-commit hook stands in for any real commit failure
+    // (identity unset, disk full). The sync must stop there and say so.
+    const hookDir = path.join(store.registryDir(), '.git', 'hooks');
+    fs.mkdirSync(hookDir, { recursive: true });
+    const hook = path.join(hookDir, 'pre-commit');
+    fs.writeFileSync(hook, '#!/bin/sh\necho "hook says no" >&2\nexit 1\n');
+    fs.chmodSync(hook, 0o755);
+
+    a.addHighlight('repo-one', { topic: 'testing', quality: 4, notes: 'changed' });
+    const result = await a.sync();
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/local commit failed/);
+    expect(result.error).not.toMatch(/push failed/);
+  });
+
   test('two machines editing different repos merge without conflict', async () => {
     const a = machine('a');
     await a.setRemote(remote);

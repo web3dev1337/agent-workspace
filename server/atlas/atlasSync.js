@@ -110,9 +110,18 @@ async function syncRegistry({ remote = '', message = '' } = {}) {
 
   const localCommit = await commitAll(dir, message || `atlas: sync from ${require('os').hostname()}`);
   steps.push({ step: 'commit-local', ...localCommit });
+  // A failed commit (identity unset, rejecting hook, disk full) must stop the
+  // sync here — carrying on used to surface as a baffling "push failed: src
+  // refspec HEAD does not match any" that pointed at entirely the wrong thing.
+  if (localCommit.error) {
+    return { ok: false, dir, steps, error: `local commit failed: ${localCommit.error}` };
+  }
 
   const fetched = await git(['fetch', 'origin'], { cwd: dir });
   steps.push({ step: 'fetch', ok: fetched.ok, detail: fetched.stderr || null });
+  if (!fetched.ok) {
+    return { ok: false, dir, steps, error: `could not reach the registry remote: ${fetched.stderr || fetched.error}` };
+  }
 
   const branch = (await git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })).stdout || 'main';
   const remoteExists = (await git(['rev-parse', '--verify', `origin/${branch}`], { cwd: dir })).ok;
