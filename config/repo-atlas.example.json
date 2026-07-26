@@ -1,13 +1,13 @@
 {
   "$comment": "Annotated example of a .repo-atlas.json manifest. Copy this into a repo root (or generate one with `node scripts/atlas.js init`), delete the $comment keys, and commit it. Every field is optional — discovery fills in what you leave out.",
 
-  "id": "zoo-game",
-  "name": "Zoo Game",
-  "summary": "Multiplayer zoo tycoon built on Hytopia. Real players, real economy.",
+  "id": "acme-tycoon",
+  "name": "Acme Tycoon",
+  "summary": "Example multiplayer tycoon game. Replace this whole file with your own repo's details.",
 
   "$comment_classification": "kind: game|library|tool|website|service|reference|writing|experiment|infra|other",
   "kind": "game",
-  "platforms": ["hytopia"],
+  "platforms": ["example-engine"],
   "languages": ["TypeScript"],
   "dimension": "3d",
   "tags": ["multiplayer", "tycoon"],
@@ -41,7 +41,7 @@
     { "topic": "ui", "reason": "hand-rolled HUD, superseded by the shared component kit" }
   ],
 
-  "seeAlso": ["hyfire2", "hytopia-client-tracker"],
+  "seeAlso": ["acme-shooter", "acme-client-tools"],
 
   "$comment_redaction": "Fields stripped from every shared bundle. Redactable: summary, notes, paths, highlights, avoid, seeAlso, tags. The repo still appears in the bundle — it is just opaque.",
   "redact": [],

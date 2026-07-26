@@ -21,10 +21,10 @@ atlas find <topic>          # who did this well, and where in the repo
 Example:
 ```bash
 $ atlas find data-compression
-5/5  zoo-game
+5/5  acme-tycoon
      bitpacked player save — 12x smaller than the JSON we started with
      paths: src/data/packSave.ts
-     /home/ab/GitHub/games/hytopia/zoo-game
+     ~/GitHub/acme-tycoon
 ```
 
 Results are ranked by quality (1–5, recorded **per topic**), and repos the user has explicitly marked do-not-copy for that topic are excluded. `⚠old` means untouched for over a year — still readable, just check it against current conventions.
@@ -42,8 +42,8 @@ atlas find testing --min-quality 4
 `atlas digest` is the right first call when you want orientation rather than an answer. It is deliberately terse:
 
 ```
-roblox   box2d-luau(physics:5, testing:5) drain-the-lake(testing:4 ⚠old)
-hytopia  zoo-game(data-compression:5, worldgen:4)
+roblox   physics-kit(physics:5, testing:5) puzzle-proto(testing:4 ⚠old)
+example  acme-tycoon(data-compression:5, worldgen:4)
 ```
 
 ## Not cloned? Still useful
