@@ -70,7 +70,13 @@ function readJson(filePath, fallback = null) {
 
 function writeJson(filePath, value) {
   ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  // Write-then-rename so a crash mid-write can't leave a truncated file. The
+  // registry is git-synced, so a corrupted half-write would otherwise be
+  // committed and propagated to every other machine. rename is atomic on the
+  // same filesystem; the pid keeps concurrent writers from sharing a temp path.
+  const tmp = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  fs.renameSync(tmp, filePath);
   return filePath;
 }
 

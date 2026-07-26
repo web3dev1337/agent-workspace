@@ -68,6 +68,11 @@ class DiscordClient {
    * Page forward from a cursor. Discord returns newest-first even with `after`,
    * so pages are reversed into chronological order — work items should be
    * created in the order the conversation actually happened.
+   *
+   * With no cursor (first-sight backfill) there is nothing to page forward from,
+   * so a single newest-first page is taken and trimmed to the most recent N.
+   * Trimming the oldest N instead would silently skip the newest messages —
+   * exactly the ones a backfill is meant to catch.
    */
   async fetchMessagesAfter(channelId, afterId, { maxMessages = 400 } = {}) {
     const collected = [];
@@ -88,7 +93,10 @@ class DiscordClient {
       if (page.length < MAX_PAGE) break;
     }
 
-    return { ok: true, messages: collected.slice(0, maxMessages), cursor: cursor || afterId };
+    // Forward paging keeps the oldest N after the cursor; a backfill keeps the
+    // most recent N (the tail of the chronological list).
+    const messages = afterId ? collected.slice(0, maxMessages) : collected.slice(-maxMessages);
+    return { ok: true, messages, cursor: messages.length ? messages[messages.length - 1].id : (cursor || afterId) };
   }
 
   async getLatestMessageId(channelId) {

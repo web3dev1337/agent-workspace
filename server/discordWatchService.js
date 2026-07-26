@@ -76,7 +76,12 @@ class DiscordWatchService {
 
   saveState() {
     try {
-      fs.writeFileSync(this.statePath(), `${JSON.stringify(this.state, null, 2)}\n`, 'utf8');
+      // Write-then-rename: a crash mid-write must not corrupt the cursor state,
+      // or the "no missed messages" guarantee turns into duplicates or losses.
+      const target = this.statePath();
+      const tmp = `${target}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, `${JSON.stringify(this.state, null, 2)}\n`, 'utf8');
+      fs.renameSync(tmp, target);
     } catch (error) {
       this.logger.warn?.('Discord watch could not persist state', { error: error.message });
     }

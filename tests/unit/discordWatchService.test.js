@@ -141,6 +141,22 @@ describe('DiscordClient', () => {
     expect(seen[0]).toContain('after=1');
   });
 
+  test('a first-sight backfill keeps the most recent N, not the oldest N', async () => {
+    // 150 messages, newest-first per page (ids 150..51, then 50..1).
+    const all = Array.from({ length: 150 }, (_, i) => ({ id: String(150 - i) }));
+    const pages = [all.slice(0, 100), all.slice(100), []];
+    const client = new DiscordClient({
+      token: 't',
+      fetchImpl: async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(pages.shift() || []) })
+    });
+
+    // No cursor => backfill. Want the 50 most recent (ids 101..150), chronological.
+    const result = await client.fetchMessagesAfter('chan1', null, { maxMessages: 50 });
+    expect(result.messages).toHaveLength(50);
+    expect(result.messages[result.messages.length - 1].id).toBe('150');
+    expect(result.messages[0].id).toBe('101');
+  });
+
   test('a 429 backs off instead of hammering', async () => {
     const client = new DiscordClient({
       token: 't',
