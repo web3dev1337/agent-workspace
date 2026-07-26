@@ -1,4 +1,6 @@
 const os = require('os');
+const fs = require('fs');
+const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 
 const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processUtils');
@@ -6,6 +8,25 @@ const { augmentProcessEnv, getHiddenProcessOptions } = require('./utils/processU
 const MAX_SPOKEN_CHARS = 400;
 const REPEAT_WINDOW_MS = 30_000;
 const HISTORY_LIMIT = 50;
+
+// Where `piper` voices land after `piper.download_voices` or a manual fetch —
+// checked when PIPER_MODEL is unset so the local voice works out of the box.
+const PIPER_VOICE_DIRS = [
+  path.join(os.homedir(), '.local', 'share', 'piper-voices'),
+  path.join(os.homedir(), '.local', 'share', 'piper')
+];
+
+function discoverPiperModel() {
+  for (const dir of PIPER_VOICE_DIRS) {
+    try {
+      const onnx = fs.readdirSync(dir).find((f) => f.endsWith('.onnx'));
+      if (onnx) return path.join(dir, onnx);
+    } catch {
+      // Directory absent — try the next.
+    }
+  }
+  return '';
+}
 
 /**
  * Anything spoken aloud is short, plain, and free of shell metacharacters.
@@ -45,8 +66,12 @@ class SpeechService {
     this.io = null;
     this.enabled = String(process.env.SPEECH_ENABLED || 'true').toLowerCase() !== 'false';
     this.preferredBackend = String(process.env.SPEECH_BACKEND || '').trim().toLowerCase();
-    this.piperModel = String(process.env.PIPER_MODEL || '').trim();
+    this.piperModel = String(process.env.PIPER_MODEL || '').trim() || discoverPiperModel();
     this.voice = String(process.env.SPEECH_VOICE || '').trim();
+    // A generic local TTS CLI (kokoro-tts, chatterbox, …): reads text on stdin,
+    // writes raw s16le PCM on stdout. Set by the provider registry when one of
+    // those is the active engine; empty otherwise.
+    this.cliEngine = String(process.env.SPEECH_CLI_ENGINE || '').trim();
     this.history = [];
     this.lastSpokenAt = new Map();
     this.backendCache = null;
@@ -75,6 +100,7 @@ class SpeechService {
     const backends = [
       { id: 'browser', label: 'Browser speech synthesis', available: true, local: false },
       { id: 'piper', label: 'Piper (local neural TTS)', available: commandExists('piper') && Boolean(this.piperModel), local: true },
+      { id: 'kokoro', label: 'Kokoro / generic local CLI TTS', available: Boolean(this.cliEngine) && commandExists(this.cliEngine), local: true },
       { id: 'say', label: 'macOS say', available: os.platform() === 'darwin' && commandExists('say'), local: true },
       { id: 'sapi', label: 'Windows SAPI', available: os.platform() === 'win32', local: true },
       { id: 'espeak', label: 'espeak-ng', available: commandExists('espeak-ng') || commandExists('espeak'), local: true }
@@ -102,6 +128,21 @@ class SpeechService {
     if (!backend.available) throw new Error(`Speech backend "${backendId}" is not available on this machine`);
     this.preferredBackend = backendId;
     return backendId;
+  }
+
+  /**
+   * Apply a voice-provider registry choice. Unlike setBackend this never throws
+   * and re-detects afterward — the registry is the source of truth for which
+   * model speaks, and a generic-CLI engine (kokoro/chatterbox) changes what is
+   * available. `engine` is the provider's engine; `command` its CLI binary.
+   */
+  setActiveEngine(engine, { command = '' } = {}) {
+    const map = { browser: 'browser', piper: 'piper', espeak: 'espeak', say: 'say', sapi: 'sapi', kokoro: 'kokoro' };
+    const backend = map[engine] || 'browser';
+    if (backend === 'kokoro' && command) this.cliEngine = command;
+    this.preferredBackend = backend;
+    this.backendCache = null;
+    return this.resolveBackend();
   }
 
   isRepeat(text) {
@@ -163,6 +204,34 @@ class SpeechService {
     }
   }
 
+  /**
+   * A generic local neural TTS CLI (kokoro-tts, chatterbox, …). Same contract
+   * as piper: text in on stdin, raw s16le PCM out on stdout, piped to a player
+   * so the text never touches a shell.
+   */
+  speakViaCli(engine, text) {
+    if (!engine) return { spoken: false, reason: 'no local CLI TTS engine configured' };
+    const player = ['paplay', 'aplay'].find((candidate) => commandExists(candidate));
+    if (!player) return { spoken: false, reason: `${engine} is installed but no audio player was found` };
+
+    const playerArgs = player === 'aplay'
+      ? ['-q', '-r', '24000', '-f', 'S16_LE', '-t', 'raw', '-']
+      : ['--raw', '--rate=24000', '--format=s16le', '--channels=1'];
+
+    try {
+      const env = augmentProcessEnv(process.env);
+      const tts = spawn(engine, ['--output-raw'], { stdio: ['pipe', 'pipe', 'ignore'], env });
+      const playback = spawn(player, playerArgs, { stdio: ['pipe', 'ignore', 'ignore'], env });
+      tts.on('error', (error) => this.logger.warn?.(`${engine} failed`, { error: error.message }));
+      playback.on('error', (error) => this.logger.warn?.('Audio playback failed', { player, error: error.message }));
+      tts.stdout.pipe(playback.stdin);
+      tts.stdin.end(`${text}\n`);
+      return { spoken: true };
+    } catch (error) {
+      return { spoken: false, reason: error.message };
+    }
+  }
+
   speakLocally(backendId, text) {
     if (backendId === 'say') {
       return this.spawnQuiet('say', this.voice ? ['-v', this.voice, text] : [text]);
@@ -172,6 +241,7 @@ class SpeechService {
       return this.spawnQuiet(binary, [text]);
     }
     if (backendId === 'piper') return this.speakViaPiper(text);
+    if (backendId === 'kokoro') return this.speakViaCli(this.cliEngine, text);
     if (backendId === 'sapi') {
       // Text is already sanitized to printable ASCII with no shell metacharacters;
       // single quotes are doubled because PowerShell escapes them that way.

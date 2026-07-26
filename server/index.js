@@ -116,6 +116,8 @@ const { SupervisorService } = require('./supervisorService');
 const { createSupervisorRoutes } = require('./routes/supervisorRoutes');
 const { SpeechService } = require('./speechService');
 const { createSpeechRoutes } = require('./routes/speechRoutes');
+const { VoiceProviderService } = require('./voice/voiceProviderService');
+const { createVoiceProviderRoutes } = require('./routes/voiceProviderRoutes');
 const { DiscordWatchService } = require('./discordWatchService');
 const { createDiscordWatchRoutes } = require('./routes/discordWatchRoutes');
 const { AppServerService } = require('./appServerService');
@@ -362,6 +364,11 @@ const recommendationsService = RecommendationsService.getInstance();
 const repoAtlasService = RepoAtlasService.getInstance({ logger });
 const speechService = SpeechService.getInstance({ logger });
 speechService.setIO(io);
+const voiceProviderService = VoiceProviderService.getInstance({ logger });
+voiceProviderService.init({ speechService });
+// Apply the persisted active TTS choice at boot so the registry and the speech
+// service agree on which model speaks.
+voiceProviderService.applyActiveTts().catch((error) => logger.warn('Voice provider apply failed', { error: error.message }));
 const supervisorService = SupervisorService.getInstance({ logger });
 const discordWatchService = DiscordWatchService.getInstance({ logger });
 const appServerService = AppServerService.getInstance({ logger });
@@ -1430,6 +1437,13 @@ app.use('/api/discord-watch', createDiscordWatchRoutes({
 app.use('/api/speech', createSpeechRoutes({
   speechService,
   supervisorService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/voice-providers', createVoiceProviderRoutes({
+  voiceProviderService,
   logger,
   requireRead: requirePolicyAction('read'),
   requireWrite: requirePolicyAction('write')
