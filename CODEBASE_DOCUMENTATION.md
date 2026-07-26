@@ -153,7 +153,16 @@ server/speechService.js            - Speech output with degrading backends
 server/routes/speechRoutes.js      - `/api/speech/*` (say, backend, enabled, spoken fleet briefing)
 client/speech-output.js            - Web Speech API listener for the browser backend (`window.SpeechOutput`)
 server/voiceCommandService.js      - (existing) rule/LLM voice parsing, now with `setCommanderForwarder()`: unmatched speech is handed to the Commander agent instead of dead-ending
-tests/unit/speechService.test.js   - Sanitization, repeat suppression, backend resolution
+server/voice/voiceProviderService.js - Swappable voice-model registry (a model is DATA, not code)
+├─ Loads `config/voice-providers.json` (override `~/.agent-workspace/voice-providers.json`)
+├─ Health-checks each provider (command present? env set? model server reachable?) — all degrade, never throw
+├─ Resolves the ONE active provider per capability (tts/stt/duplex); `auto` = best-quality available, `none` = off; a broken pin falls back to auto so voice never silently mutes
+├─ `setActive(kind, id)` persists to the override and applies TTS to speechService immediately
+└─ speechService gained a Kokoro/generic-CLI backend + Piper voice auto-discovery (`~/.local/share/piper-voices`)
+server/routes/voiceProviderRoutes.js - `/api/voice-providers/*` (list+health, swap active per capability, reload)
+config/voice-providers.json        - The model catalogue: TTS (browser/piper/kokoro/chatterbox/espeak), STT (whisper-cpp/faster-whisper/parakeet/moonshine), duplex (codex/personaplex/xtalk) with install hints
+tests/unit/speechService.test.js, voiceProviderService.test.js - Sanitization/backends; registry load, health, auto-resolution, live swap
+PLANS/2026-07-27/LOCAL_VOICE_MODELS_RESEARCH.md - Full catalogue + how to add/swap a model on the 5090
 
 server/appServerService.js         - Codex app-server bridge: structured signals + realtime voice
 ├─ Protocol: JSON-RPC 2.0 over stdio to `codex app-server` (Apache 2.0, ships in the CLI); `initialize` handshake required first
@@ -784,6 +793,11 @@ POST /api/speech/say                                          - Speak text (`pri
 POST /api/speech/backend                                      - Choose a backend
 POST /api/speech/enabled                                      - Mute/unmute
 POST /api/speech/briefing                                     - Speak the supervisor briefing
+
+GET /api/voice-providers                                     - Every voice model with a live availability check + active tts/stt/duplex
+GET /api/voice-providers/:kind                               - Providers for one capability (tts|stt|duplex), with health
+POST /api/voice-providers/:kind/active                       - Swap the active model (id | 'auto' | 'none'); applies immediately
+POST /api/voice-providers/reload                             - Re-read the registry from disk
 ```
 
 ### WebSocket Events
