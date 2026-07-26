@@ -21,8 +21,10 @@ function load() {
 }
 
 function save(proposals) {
-  fs.mkdirSync(path.dirname(proposalsPath()), { recursive: true });
-  fs.writeFileSync(proposalsPath(), `${JSON.stringify({ proposals }, null, 2)}\n`, 'utf8');
+  // Route through store.writeJson for the same atomic write-then-rename the
+  // registry uses — this is one file for every pending proposal, so a truncating
+  // half-write here loses the whole review queue.
+  store.writeJson(proposalsPath(), { proposals });
   return proposals;
 }
 

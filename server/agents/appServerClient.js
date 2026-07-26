@@ -138,11 +138,6 @@ class AppServerClient extends EventEmitter {
 
   consume(chunk) {
     this.buffer += chunk;
-    if (this.buffer.length > MAX_LINE_BYTES) {
-      this.logger.warn?.('app-server output exceeded the line buffer; dropping it');
-      this.buffer = '';
-      return;
-    }
 
     let index = this.buffer.indexOf('\n');
     while (index !== -1) {
@@ -150,6 +145,14 @@ class AppServerClient extends EventEmitter {
       this.buffer = this.buffer.slice(index + 1);
       if (line) this.handleLine(line);
       index = this.buffer.indexOf('\n');
+    }
+
+    // Only an unterminated trailing line can remain. Drop it if it alone blows
+    // the cap — the complete messages ahead of it were already handled, so this
+    // no longer discards queued-but-parseable frames along with the oversized one.
+    if (this.buffer.length > MAX_LINE_BYTES) {
+      this.logger.warn?.('app-server line exceeded the buffer; dropping the incomplete line');
+      this.buffer = '';
     }
   }
 

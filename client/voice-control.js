@@ -412,7 +412,10 @@ class VoiceControl {
 
       if (result.success) {
         this.transcriptEl.textContent = result.transcript;
-        this.setStatus(`${result.command} (${result.transcriptionTime}ms)`, 'success');
+        // Unmatched speech is forwarded to the Commander and has no command name;
+        // showing the literal "null" reads as a bug.
+        const label = result.forwardedToCommander ? 'Sent to Commander' : (result.command || 'done');
+        this.setStatus(`${label} (${result.transcriptionTime}ms)`, 'success');
         this.showFeedback(result);
       } else {
         this.transcriptEl.textContent = result.transcript || '';

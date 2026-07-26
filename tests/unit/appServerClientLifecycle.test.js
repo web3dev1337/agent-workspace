@@ -68,6 +68,20 @@ describe('AppServerClient lifecycle', () => {
     expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 
+  test('an oversized trailing line is dropped without discarding complete frames ahead of it', () => {
+    const client = new AppServerClient({ autoRestart: false, logger: quietLogger });
+    const seen = [];
+    client.on('notification', (n) => seen.push(n.method));
+
+    // A complete frame, then an unterminated 9MB line (no newline).
+    client.consume('{"method":"turn/completed","params":{}}\n');
+    client.consume(`{"method":"x","params":{"blob":"${'a'.repeat(9 * 1024 * 1024)}`);
+
+    // The complete frame was handled; the oversized incomplete line was dropped.
+    expect(seen).toEqual(['turn/completed']);
+    expect(client.buffer).toBe('');
+  });
+
   test('a spawn failure resolves cleanly and leaves start() retryable', async () => {
     mockSpawn.mockImplementationOnce(() => { throw new Error('ENOENT'); });
     const client = new AppServerClient({ autoRestart: false, logger: quietLogger });

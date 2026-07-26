@@ -217,7 +217,7 @@ async function gatherSignals({
       lastLine: lastNonEmptyLines(tail, 1)[0] || '',
       repeatedLineCount: maxLineRepeat(tail),
       git,
-      tier: Number(record?.tier) || null,
+      tier: Number.isFinite(Number(record?.tier)) ? Number(record.tier) : null,
       ticketTitle: record?.ticketTitle || null
     };
 

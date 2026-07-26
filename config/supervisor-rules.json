@@ -136,6 +136,7 @@
       "resolve": { "handler": "nudge", "text": "status? If you are blocked, say what on, then resolve it yourself if you can." },
       "when": {
         "status": ["busy"],
+        "agentPresent": true,
         "minQuietSeconds": 900,
         "tailNotMatches": ["limit reached", "Do you want to (proceed|make this edit)"]
       },
@@ -164,6 +165,7 @@
       "resolve": { "handler": "nudge", "text": "You have local commits that are not pushed. Push the branch and open a PR, then say what you shipped." },
       "when": {
         "status": ["idle"],
+        "agentPresent": true,
         "minQuietSeconds": 300,
         "git": { "aheadMin": 1 }
       },
@@ -178,6 +180,7 @@
       "resolve": { "handler": "nudge", "text": "You have uncommitted changes. Commit them with a descriptive message, or say why they should not be committed." },
       "when": {
         "status": ["idle"],
+        "agentPresent": true,
         "minQuietSeconds": 900,
         "git": { "dirty": true, "aheadMax": 0 }
       },
