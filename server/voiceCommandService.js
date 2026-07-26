@@ -1580,10 +1580,32 @@ JSON:`;
    * `forwardUnmatched` defaults on for spoken input: if no rule and no LLM can
    * turn the utterance into a command, the words themselves are still useful.
    */
+  setBrain(brain) {
+    this.brain = brain || null;
+    return Boolean(this.brain);
+  }
+
   async processVoiceCommand(transcript, { forwardUnmatched = true } = {}) {
     const parsed = await this.parseCommand(transcript);
 
     if (!parsed.success) {
+      // No command matched. If the brain is wired, let it try a fast fact answer
+      // from live orchestrator state, then fall back to the Commander agent —
+      // both spoken. This is what makes voice more than a fixed phrasebook.
+      if (this.brain?.handleUnmatched) {
+        const outcome = await this.brain.handleUnmatched(transcript);
+        return {
+          success: outcome.handled,
+          method: outcome.route,
+          command: null,
+          params: {},
+          transcript,
+          executed: outcome.handled,
+          spoken: outcome.spoken,
+          forwardedToCommander: outcome.route === 'commander'
+        };
+      }
+
       if (!forwardUnmatched || !this.commanderForwarder) return parsed;
 
       const forward = await this.forwardToCommander(transcript);
@@ -1602,11 +1624,14 @@ JSON:`;
     }
 
     const result = await this.executeCommand(parsed.command, parsed.params);
+    // Speak a short confirmation so the fast command lane talks back too.
+    const spoken = this.brain?.confirmCommand ? this.brain.confirmCommand(parsed.command) : undefined;
 
     return {
       ...parsed,
       executed: true,
-      result
+      result,
+      spoken
     };
   }
 

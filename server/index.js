@@ -118,6 +118,7 @@ const { SpeechService } = require('./speechService');
 const { createSpeechRoutes } = require('./routes/speechRoutes');
 const { VoiceProviderService } = require('./voice/voiceProviderService');
 const { createVoiceProviderRoutes } = require('./routes/voiceProviderRoutes');
+const { VoiceBrainService } = require('./voice/voiceBrainService');
 const { DiscordWatchService } = require('./discordWatchService');
 const { createDiscordWatchRoutes } = require('./routes/discordWatchRoutes');
 const { AppServerService } = require('./appServerService');
@@ -493,6 +494,22 @@ if (discordWatchStarted.running) logger.info('Discord watch', discordWatchStarte
 // Speech that no rule matched is still useful: hand the raw words to the
 // active Commander so the fallback is an agent, not an error.
 voiceCommandService.setCommanderForwarder(sendToCommander);
+
+// The voice brain routes unmatched speech: a fast fact answer from live
+// orchestrator state, else the Commander agent — both spoken. This is what
+// makes voice an extension of Commander rather than a fixed phrasebook.
+const voiceBrainService = VoiceBrainService.getInstance({ logger });
+voiceBrainService.init({
+  voiceCommandService,
+  speechService,
+  commanderContextService,
+  workspaceManager,
+  commanderService,
+  commandRegistry,
+  supervisorService,
+  discordWatchService,
+  commanderForwarder: sendToCommander
+});
 
 const loadPlugins = async () => {
   const status = await pluginLoaderService.loadAll({
