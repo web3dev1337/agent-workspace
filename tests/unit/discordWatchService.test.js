@@ -71,6 +71,47 @@ describe('workExtractor', () => {
     );
     expect(result.text).toBe('@sam please add the leaderboard');
   });
+
+  test('a negated completion is not treated as done', () => {
+    expect(extractor.extractFromMessage(message({ content: 'that bug is not done yet, still crashing' }), { config }).action).not.toBe('complete');
+    expect(extractor.extractFromMessage(message({ content: "the payment flow isn't fixed, more work needed" }), { config }).action).not.toBe('complete');
+    // A punctuation break resets the negation, so this is still a completion.
+    expect(extractor.extractFromMessage(message({ content: 'not a problem, that one is done and merged' }), { config }).action).toBe('complete');
+  });
+});
+
+describe('workExtractor loadConfig', () => {
+  const withConfig = (obj, fn) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'disc-cfg-'));
+    const file = path.join(dir, 'discord-watch.json');
+    fs.writeFileSync(file, JSON.stringify(obj));
+    try { return fn(extractor.loadConfig({ configPath: file })); }
+    finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  };
+
+  test('a minimal override keeps the shipped pattern tables instead of wiping them', () => {
+    withConfig({ enabled: true, channels: ['123'] }, (cfg) => {
+      expect(cfg.enabled).toBe(true);
+      expect(cfg.channels).toEqual(['123']);
+      // These come from the defaults — a wholesale replace would have emptied them.
+      expect(cfg.priority.length).toBeGreaterThan(0);
+      expect(cfg.kinds.length).toBeGreaterThan(0);
+      expect(cfg.donePatterns.length).toBeGreaterThan(0);
+    });
+  });
+
+  test('a missing numeric field falls back to its default rather than NaN', () => {
+    withConfig({ enabled: true, channels: ['123'] }, (cfg) => {
+      expect(cfg.backfillMessages).toBe(50);
+      expect(cfg.minLength).toBe(12);
+    });
+  });
+
+  test('an explicit backfill of 0 (never look back) is preserved', () => {
+    withConfig({ enabled: true, channels: ['123'], backfillMessages: 0 }, (cfg) => {
+      expect(cfg.backfillMessages).toBe(0);
+    });
+  });
 });
 
 describe('DiscordClient', () => {

@@ -30,17 +30,30 @@ function readJson(filePath) {
   }
 }
 
+// `Number(undefined)` is NaN and `NaN ?? fallback` is still NaN (?? only catches
+// null/undefined), so a missing numeric field must be caught explicitly. An
+// explicit 0 (e.g. backfillMessages: 0 = "never look back") is preserved.
+function numberOr(value, fallback) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
 function loadConfig({ configPath = null } = {}) {
-  const override = configPath || overrideConfigPath();
-  const raw = readJson(override) || readJson(DEFAULT_CONFIG_PATH) || {};
-  const source = readJson(override) ? override : DEFAULT_CONFIG_PATH;
+  const overridePath = configPath || overrideConfigPath();
+  const override = readJson(overridePath);
+  const defaults = readJson(DEFAULT_CONFIG_PATH) || {};
+  // Layer the per-machine override on top of the shipped defaults. Picking one
+  // file wholesale meant the documented minimal override ({enabled, channels})
+  // silently wiped every priority/kind/claim/done/drop pattern table.
+  const raw = override ? { ...defaults, ...override } : defaults;
+  const source = override ? overridePath : DEFAULT_CONFIG_PATH;
 
   return {
     source,
     enabled: raw.enabled === true,
-    pollSeconds: Math.max(5, Number(raw.pollSeconds) || 15),
+    pollSeconds: Math.max(5, numberOr(raw.pollSeconds, 15)),
     channels: Array.isArray(raw.channels) ? raw.channels.map(String).filter(Boolean) : [],
-    backfillMessages: Math.max(0, Number(raw.backfillMessages) ?? 50),
+    backfillMessages: Math.max(0, numberOr(raw.backfillMessages, 50)),
     publishStatus: raw.publishStatus !== false,
     priority: (Array.isArray(raw.priority) ? raw.priority : []).map((row) => ({
       level: String(row.level || 'normal'),
@@ -61,8 +74,18 @@ function loadConfig({ configPath = null } = {}) {
     dropPatterns: compile(raw.dropPatterns),
     ignoreBots: raw.ignoreBots !== false,
     ignorePrefixes: Array.isArray(raw.ignorePrefixes) ? raw.ignorePrefixes.map(String) : [],
-    minLength: Math.max(0, Number(raw.minLength) ?? 12)
+    minLength: Math.max(0, numberOr(raw.minLength, 12))
   };
+}
+
+// A completion/claim keyword directly preceded by a negator means the opposite
+// ("not done yet", "isn't fixed"). A punctuation break resets it, so "not a
+// problem, it's done" is still a completion. Drop patterns are left alone —
+// their negatives ("not needed", "won't do") are intentional.
+const NEGATED_SIGNAL_RE = /\b(not|isn'?t|aren'?t|wasn'?t|weren'?t|haven'?t|hasn'?t|hadn'?t|didn'?t|don'?t|doesn'?t|won'?t|can'?t|never|no longer)\b[\s\w']{0,20}?\b(done|shipped?|merged?|fixed?|completed?|ready|live|handled|taking|starting|on it)\b/i;
+
+function isNegatedSignal(text) {
+  return NEGATED_SIGNAL_RE.test(String(text || ''));
 }
 
 const MENTION_RE = /<@!?(\d+)>/g;
@@ -125,14 +148,15 @@ function extractFromMessage(message, { config, guildId = '', memberNames = {} } 
   const mentions = extractMentions(message);
 
   // A signal about existing work beats creating new work — "done" following an
-  // assignment is a status change, not a new task.
-  if (config.donePatterns.some((re) => re.test(text))) {
+  // assignment is a status change, not a new task. A negated signal ("not done
+  // yet") is neither, so it falls through to normal classification.
+  if (config.donePatterns.some((re) => re.test(text)) && !isNegatedSignal(text)) {
     return { action: 'complete', messageId: message.id, authorId: message.author?.id, text, mentions };
   }
   if (config.dropPatterns.some((re) => re.test(text))) {
     return { action: 'drop', messageId: message.id, authorId: message.author?.id, text, mentions };
   }
-  if (config.claimPatterns.some((re) => re.test(text))) {
+  if (config.claimPatterns.some((re) => re.test(text)) && !isNegatedSignal(text)) {
     return { action: 'claim', messageId: message.id, authorId: message.author?.id, text, mentions };
   }
 
@@ -184,6 +208,7 @@ module.exports = {
   classifyPriority,
   classifyKind,
   shouldIgnore,
+  isNegatedSignal,
   extractFromMessage,
   extractBatch
 };
