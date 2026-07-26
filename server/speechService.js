@@ -204,7 +204,15 @@ class SpeechService {
       result = { spoken: false, reason: error.message };
     }
 
-    if (result.spoken) this.lastSpokenAt.set(text, Date.now());
+    if (result.spoken) {
+      const now = Date.now();
+      // Entries older than the repeat window are dead weight — prune them so
+      // this dedup map can't grow unbounded over a long-lived server.
+      for (const [key, at] of this.lastSpokenAt) {
+        if (now - at >= REPEAT_WINDOW_MS) this.lastSpokenAt.delete(key);
+      }
+      this.lastSpokenAt.set(text, now);
+    }
     return this.record({ text, backend, priority, at: new Date().toISOString(), ...result });
   }
 
