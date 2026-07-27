@@ -1482,12 +1482,15 @@ JSON:`;
           model: this.ollamaModel,
           prompt,
           stream: false,
+          // Constrain generation to valid JSON at the API level so even a small
+          // local model can't ramble prose instead of the {"command":...} shape.
+          format: 'json',
           options: {
             temperature: 0.1,
             num_predict: 100
           }
         }),
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(8000)
       });
 
       if (!response.ok) return null;
