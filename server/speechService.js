@@ -80,8 +80,10 @@ class SpeechService {
     // writes raw s16le PCM on stdout. Set by the provider registry when one of
     // those is the active engine; empty otherwise.
     this.cliEngine = String(process.env.SPEECH_CLI_ENGINE || '').trim();
-    // A warm piper HTTP server (model kept loaded) — ~0.2s synth vs ~5s cold.
+    // Warm neural TTS HTTP servers (model kept loaded, POST /synthesize -> WAV).
+    // piper: fast (~0.2s), decent. kokoro: natural (~2s CPU), the nicer voice.
     this.piperHttpUrl = String(process.env.PIPER_HTTP_URL || 'http://127.0.0.1:5959').replace(/\/$/, '');
+    this.kokoroHttpUrl = String(process.env.KOKORO_HTTP_URL || 'http://127.0.0.1:5960').replace(/\/$/, '');
     this.history = [];
     this.lastSpokenAt = new Map();
     this.backendCache = null;
@@ -110,7 +112,7 @@ class SpeechService {
     const backends = [
       { id: 'browser', label: 'Browser speech synthesis', available: true, local: false },
       { id: 'piper', label: 'Piper (local neural TTS)', available: commandExists('piper') && Boolean(this.piperModel), local: true },
-      { id: 'kokoro', label: 'Kokoro / generic local CLI TTS', available: Boolean(this.cliEngine) && commandExists(this.cliEngine), local: true },
+      { id: 'kokoro', label: 'Kokoro (local neural, natural)', available: Boolean(this.kokoroHttpUrl) || (Boolean(this.cliEngine) && commandExists(this.cliEngine)), local: true },
       { id: 'say', label: 'macOS say', available: os.platform() === 'darwin' && commandExists('say'), local: true },
       { id: 'sapi', label: 'Windows SAPI', available: os.platform() === 'win32', local: true },
       { id: 'espeak', label: 'espeak-ng', available: commandExists('espeak-ng') || commandExists('espeak'), local: true }
@@ -200,9 +202,12 @@ class SpeechService {
    * Returns {spoken:true} optimistically and does the synth in the background
    * (like the spawn path), emitting `speech-audio` when the WAV is ready.
    */
-  speakViaPiperBrowser(text, priority) {
+  speakViaNeuralBrowser(engine, text, priority) {
     if (!this.io) return { spoken: false, reason: 'no socket connection to a client' };
-    this.synthAndEmit(text, priority).catch((error) => this.logger.warn?.('Piper synth failed', { error: error.message }));
+    const httpUrl = engine === 'kokoro' ? this.kokoroHttpUrl : this.piperHttpUrl;
+    // Only piper has a local spawn fallback; kokoro is HTTP-only.
+    this.synthAndEmit(text, priority, httpUrl, engine !== 'kokoro')
+      .catch((error) => this.logger.warn?.(`${engine} synth failed`, { error: error.message }));
     return { spoken: true };
   }
 
@@ -211,25 +216,27 @@ class SpeechService {
     this.io?.emit('speech-audio', { wav: wavBuffer.toString('base64'), priority, at: new Date().toISOString() });
   }
 
-  async synthAndEmit(text, priority) {
-    // Fast path: a warm piper HTTP server keeps the model loaded (~0.2s synth
-    // vs ~5s for a cold `python -m piper` per call). Try it first.
-    if (this.piperHttpUrl) {
+  async synthAndEmit(text, priority, httpUrl = this.piperHttpUrl, allowSpawnFallback = true) {
+    // Fast path: a warm HTTP TTS server keeps the model loaded, so synth is
+    // ~0.2s (piper) / ~2s (kokoro) instead of a multi-second cold start.
+    if (httpUrl) {
       try {
-        const resp = await fetch(`${this.piperHttpUrl}/synthesize`, {
+        const resp = await fetch(`${httpUrl}/synthesize`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text }),
-          signal: AbortSignal.timeout(8000)
+          signal: AbortSignal.timeout(20000)
         });
         if (resp.ok) {
           this.emitAudio(Buffer.from(await resp.arrayBuffer()), priority);
           return;
         }
       } catch {
-        // Server down/unreachable — fall back to spawning piper.
+        // Server down/unreachable — fall back to spawning piper (if allowed).
       }
     }
+
+    if (!allowSpawnFallback) return;
 
     // Fallback: spawn piper once (cold, slower) and wrap its raw PCM as WAV.
     await new Promise((resolve) => {
@@ -329,13 +336,16 @@ class SpeechService {
       return this.spawnQuiet(binary, [text]);
     }
     // On WSL, server-side PulseAudio usually can't reach the speakers, so when a
-    // browser is connected, stream piper's audio there (reliably audible). Only
-    // fall back to server-side paplay when nothing is listening in a browser.
+    // browser is connected, stream the neural audio there (reliably audible).
+    const hasClient = Number(this.io?.engine?.clientsCount ?? 0) > 0;
     if (backendId === 'piper') {
-      const hasClient = Number(this.io?.engine?.clientsCount ?? 0) > 0;
-      return hasClient ? this.speakViaPiperBrowser(text) : this.speakViaPiper(text);
+      return hasClient ? this.speakViaNeuralBrowser('piper', text) : this.speakViaPiper(text);
     }
-    if (backendId === 'kokoro') return this.speakViaCli(this.cliEngine, text);
+    if (backendId === 'kokoro') {
+      // kokoro is a warm HTTP neural server streamed to the browser.
+      if (hasClient) return this.speakViaNeuralBrowser('kokoro', text);
+      return this.speakViaCli(this.cliEngine, text); // headless fallback if a CLI engine is set
+    }
     if (backendId === 'sapi') {
       // Text is already sanitized to printable ASCII with no shell metacharacters;
       // single quotes are doubled because PowerShell escapes them that way.

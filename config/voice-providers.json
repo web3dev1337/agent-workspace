@@ -30,13 +30,14 @@
     {
       "id": "kokoro",
       "kind": "tts",
-      "label": "Kokoro-82M (local, Apache-2.0)",
+      "label": "Kokoro (local neural, natural — warm HTTP server)",
       "engine": "kokoro",
       "local": true,
-      "quality": 4,
-      "requires": { "command": "kokoro-tts" },
-      "install": "pip install --user kokoro-onnx (or the `kokoro` package); ~300MB model. Runs on CPU or GPU.",
-      "notes": "Best lightweight open TTS of 2026 — natural voice at tiny compute. Recommended local default once installed."
+      "quality": 5,
+      "endpoint": "http://127.0.0.1:5960",
+      "requires": { "server": "http://127.0.0.1:5960" },
+      "install": "pip install --user kokoro-onnx soundfile flask; model+voices in ~/.local/share/kokoro; run ~/.local/bin/kokoro-server.py (started by start-voice-stack.sh).",
+      "notes": "Natural neural voice; ~2s synth on CPU (faster on GPU). Streamed to the browser like piper. The nicer-sounding local default."
     },
     {
       "id": "chatterbox",
