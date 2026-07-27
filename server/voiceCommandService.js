@@ -17,7 +17,9 @@ class VoiceCommandService {
   constructor() {
     // Ollama config (local LLM)
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
-    this.ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2:1b'; // Small, fast model
+    // 3b is the accuracy sweet spot for command classification — the 1b rambles
+    // and jams chit-chat into commands. Still fast, and kept warm in VRAM.
+    this.ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2:3b';
     this.useOllama = false;
 
     // Claude API config (external, fast)
@@ -1143,15 +1145,20 @@ class VoiceCommandService {
         console.log('[Voice] Ollama available with models:', models);
         this.useOllama = true;
 
-        // Check if our preferred model is available
-        const hasPreferred = models.some(m => m.startsWith(this.ollamaModel.split(':')[0]));
-        if (!hasPreferred && models.length > 0) {
-          // Use first available small model
-          const smallModel = models.find(m =>
-            m.includes('llama3.2:1b') || m.includes('phi') || m.includes('qwen')
-          ) || models[0];
-          console.log(`[Voice] Using model: ${smallModel}`);
-          this.ollamaModel = smallModel;
+        // Use the configured model if it's actually installed; otherwise pick
+        // the best available. Bigger llama3.2 / qwen beats the tiny 1b for
+        // command accuracy, so prefer those before degrading to 1b/phi.
+        if (!models.includes(this.ollamaModel) && models.length > 0) {
+          const preference = [
+            (m) => /qwen2\.5.*(7b|3b)/.test(m),
+            (m) => m.startsWith('llama3.2:3b'),
+            (m) => m.includes('qwen'),
+            (m) => m.startsWith('llama3.2'),
+            (m) => m.includes('phi')
+          ];
+          const chosen = preference.map((pick) => models.find(pick)).find(Boolean) || models[0];
+          console.log(`[Voice] Configured model not installed; using: ${chosen}`);
+          this.ollamaModel = chosen;
         }
       }
     } catch (err) {
@@ -1233,6 +1240,14 @@ class VoiceCommandService {
     // handed to the Commander, which understands "don't".
     if (/^(don'?t\b|do not\b|never\b|stop\b|cancel\b|no,?\s|nope\b)/.test(text)) {
       return { success: false, error: 'negation is not a command', transcript: text };
+    }
+
+    // A single stray word that matched no rule and no fact is almost always
+    // mis-heard speech ("uh", "hmm"), never a fuzzy command — the command
+    // vocabulary is already covered by rules. Skip the ~1s LLM round-trip and
+    // let it fall through fast to "didn't catch that".
+    if (text.split(/\s+/).filter(Boolean).length <= 1) {
+      return { success: false, error: 'too short to classify', transcript: text };
     }
 
     // Try Ollama first (local, private)

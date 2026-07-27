@@ -388,4 +388,12 @@ describe('VoiceCommandService (free-form routing)', () => {
     expect(result.method).toBe('commander');
     expect(forwarded).toEqual(["don't open the queue"]);
   });
+
+  test('a single stray word skips the LLM classifier (mis-heard speech)', async () => {
+    // "uh" matches no rule and no fact; it must not pay an LLM round-trip only
+    // to fail — it falls through fast so the brain says "didn't catch that".
+    const parsed = await voiceCommandService.parseCommand('uh');
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toMatch(/too short/i);
+  });
 });
