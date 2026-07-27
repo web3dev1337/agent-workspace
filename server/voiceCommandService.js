@@ -1201,7 +1201,7 @@ class VoiceCommandService {
     // Try Ollama first (local, private)
     if (this.useOllama) {
       const ollamaResult = await this.parseWithOllama(text);
-      if (ollamaResult) {
+      if (ollamaResult && this.isGrounded(ollamaResult.command, text)) {
         return {
           success: true,
           method: 'ollama',
@@ -1213,7 +1213,7 @@ class VoiceCommandService {
     // Try Claude API as fallback (fast, cheap)
     if (this.useClaude) {
       const claudeResult = await this.parseWithClaude(text);
-      if (claudeResult) {
+      if (claudeResult && this.isGrounded(claudeResult.command, text)) {
         return {
           success: true,
           method: 'claude',
@@ -1227,6 +1227,29 @@ class VoiceCommandService {
       error: 'Could not understand command',
       transcript: text
     };
+  }
+
+  /**
+   * Grounding guard against LLM hallucination. A small local model, forced to
+   * emit JSON, will sometimes pick a command for input that isn't one ("thanks
+   * that is cool" -> open-project-chats). Only trust a classified command if the
+   * utterance actually shares a keyword with it — otherwise treat it as no match
+   * so it flows to the brain's fact/greeting/agent lanes instead of firing a
+   * random command.
+   */
+  isGrounded(command, text) {
+    if (!command) return false;
+    const t = String(text || '').toLowerCase();
+    const synonyms = {
+      queue: ['queue'], workspace: ['workspace', 'project', 'switch'], settings: ['setting', 'config', 'preference'],
+      tasks: ['task', 'todo'], commander: ['commander'], worktree: ['worktree', 'work'], focus: ['focus', 'show'],
+      pager: ['pager', 'ping'], advice: ['advice', 'recommend', 'suggest'], chats: ['chat', 'message'],
+      project: ['project'], claude: ['claude'], all: ['all', 'everything'], mode: ['mode'], tier: ['tier'],
+      new: ['new', 'create', 'start'], open: ['open', 'show', 'pull up', 'bring up', 'go to'], start: ['start', 'launch', 'run'],
+      stop: ['stop', 'kill', 'end'], status: ['status', 'state']
+    };
+    const parts = String(command).split(/[-_]/).filter((w) => w.length > 2);
+    return parts.some((w) => t.includes(w) || (synonyms[w] || []).some((s) => t.includes(s)));
   }
 
   /**
@@ -1441,7 +1464,17 @@ Worktree matching:
 - Match partial names: "zoo" could match "zoo-game"
 
 Return JSON: {"command": "command-name", "params": {"key": "value"}}
-Return {"command": null} if unclear.
+
+CRITICAL: Only return a command when the user is CLEARLY asking to perform one of the
+actions above. If the input is a greeting, a question, small talk, a status query, or
+anything that is not obviously one of the listed commands, you MUST return {"command": null}.
+Never guess. When in doubt, return {"command": null}.
+
+Examples of {"command": null}:
+- "hello", "hey jarvis", "can you hear me", "are you there" (greetings)
+- "how many agents are working", "what needs my attention", "what's the status" (questions)
+- "thanks", "cool", "never mind", "what can you do" (chit-chat)
+- "write a note summarising the fleet" (a task, not a listed command)
 
 JSON:`;
   }
