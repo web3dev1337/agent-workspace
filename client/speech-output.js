@@ -12,7 +12,8 @@
   const state = {
     enabled: localStorage.getItem('speechOutputEnabled') !== 'false',
     voiceName: localStorage.getItem('speechOutputVoice') || '',
-    rate: Number(localStorage.getItem('speechOutputRate')) || 1.05
+    rate: Number(localStorage.getItem('speechOutputRate')) || 1.05,
+    currentAudio: null
   };
 
   function pickVoice() {
@@ -42,10 +43,31 @@
     return true;
   }
 
+  // Play server-synthesized neural audio (piper/kokoro) streamed as a WAV. On
+  // WSL the server can't reach the speakers, so it hands the bytes to us — and
+  // browser audio always reaches the user. A high-priority clip interrupts.
+  function playAudio(payload) {
+    const b64 = payload?.wav;
+    if (!b64) return false;
+    try {
+      if (payload.priority === 'high' && state.currentAudio) {
+        state.currentAudio.pause();
+        state.currentAudio = null;
+      }
+      const audio = new Audio(`data:audio/wav;base64,${b64}`);
+      state.currentAudio = audio;
+      audio.play().catch(() => { /* autoplay blocked until a user gesture */ });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function attach(socket) {
     if (!socket || socket.__speechOutputAttached) return;
     socket.__speechOutputAttached = true;
     socket.on('speech-speak', (payload) => speak(payload?.text, { priority: payload?.priority }));
+    socket.on('speech-audio', (payload) => playAudio(payload));
   }
 
   window.SpeechOutput = {

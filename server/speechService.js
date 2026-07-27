@@ -67,6 +67,14 @@ class SpeechService {
     this.enabled = String(process.env.SPEECH_ENABLED || 'true').toLowerCase() !== 'false';
     this.preferredBackend = String(process.env.SPEECH_BACKEND || '').trim().toLowerCase();
     this.piperModel = String(process.env.PIPER_MODEL || '').trim() || discoverPiperModel();
+    // Piper models declare their sample rate in the companion .onnx.json.
+    this.piperSampleRate = 22050;
+    try {
+      if (this.piperModel && fs.existsSync(`${this.piperModel}.json`)) {
+        const cfg = JSON.parse(fs.readFileSync(`${this.piperModel}.json`, 'utf8'));
+        this.piperSampleRate = Number(cfg?.audio?.sample_rate) || 22050;
+      }
+    } catch { /* keep the default */ }
     this.voice = String(process.env.SPEECH_VOICE || '').trim();
     // A generic local TTS CLI (kokoro-tts, chatterbox, …): reads text on stdin,
     // writes raw s16le PCM on stdout. Set by the provider registry when one of
@@ -162,6 +170,53 @@ class SpeechService {
     return { spoken: true };
   }
 
+  /** Wrap raw s16le mono PCM in a minimal WAV container for browser playback. */
+  pcmToWav(pcm, sampleRate = 22050) {
+    const header = Buffer.alloc(44);
+    header.write('RIFF', 0);
+    header.writeUInt32LE(36 + pcm.length, 4);
+    header.write('WAVE', 8);
+    header.write('fmt ', 12);
+    header.writeUInt32LE(16, 16);       // PCM chunk size
+    header.writeUInt16LE(1, 20);        // format = PCM
+    header.writeUInt16LE(1, 22);        // mono
+    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt32LE(sampleRate * 2, 28); // byte rate (16-bit mono)
+    header.writeUInt16LE(2, 32);        // block align
+    header.writeUInt16LE(16, 34);       // bits per sample
+    header.write('data', 36);
+    header.writeUInt32LE(pcm.length, 40);
+    return Buffer.concat([header, pcm]);
+  }
+
+  /**
+   * Synthesize with piper and STREAM the audio to the browser to play, instead
+   * of server-side paplay. On WSL, server-side PulseAudio (WSLg) often doesn't
+   * reach the user's speakers, but browser audio always does — so this is the
+   * reliable way to hear a local neural voice. Falls back to nothing if piper
+   * or the model is missing (resolveBackend won't pick this backend then).
+   */
+  speakViaPiperBrowser(text, priority) {
+    if (!this.io) return { spoken: false, reason: 'no socket connection to a client' };
+    try {
+      const env = augmentProcessEnv(process.env);
+      const piper = spawn('piper', ['--model', this.piperModel, '--output-raw'], { stdio: ['pipe', 'pipe', 'ignore'], env });
+      const chunks = [];
+      piper.stdout.on('data', (d) => chunks.push(d));
+      piper.on('error', (error) => this.logger.warn?.('Piper (browser) failed', { error: error.message }));
+      piper.on('close', () => {
+        const pcm = Buffer.concat(chunks);
+        if (!pcm.length) return;
+        const wav = this.pcmToWav(pcm, this.piperSampleRate || 22050).toString('base64');
+        this.io.emit('speech-audio', { wav, priority, at: new Date().toISOString() });
+      });
+      piper.stdin.end(`${text}\n`);
+      return { spoken: true };
+    } catch (error) {
+      return { spoken: false, reason: error.message };
+    }
+  }
+
   spawnQuiet(command, args) {
     try {
       const child = spawn(command, args, {
@@ -240,7 +295,13 @@ class SpeechService {
       const binary = commandExists('espeak-ng') ? 'espeak-ng' : 'espeak';
       return this.spawnQuiet(binary, [text]);
     }
-    if (backendId === 'piper') return this.speakViaPiper(text);
+    // On WSL, server-side PulseAudio usually can't reach the speakers, so when a
+    // browser is connected, stream piper's audio there (reliably audible). Only
+    // fall back to server-side paplay when nothing is listening in a browser.
+    if (backendId === 'piper') {
+      const hasClient = Number(this.io?.engine?.clientsCount ?? 0) > 0;
+      return hasClient ? this.speakViaPiperBrowser(text) : this.speakViaPiper(text);
+    }
     if (backendId === 'kokoro') return this.speakViaCli(this.cliEngine, text);
     if (backendId === 'sapi') {
       // Text is already sanitized to printable ASCII with no shell metacharacters;
