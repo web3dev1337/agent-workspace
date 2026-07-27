@@ -97,14 +97,6 @@ class VoiceBrainService {
       return null;
     }
 
-    // Greetings / presence checks — answer as a person would, not with a command.
-    if (/^(hi|hey|hello|yo|howdy|greetings)\b|are you (there|awake|up|listening)|can you hear me|you there/.test(t)) {
-      const c = this.countSessions(ctx.sessions);
-      return c.total
-        ? `Yes, I'm here. ${c.busy} agent${c.busy === 1 ? '' : 's'} working right now. What do you need?`
-        : "Yes, I'm here and listening. What do you need?";
-    }
-
     // What needs me / what's wrong / status of the fleet
     if (/(needs?|need)\s+(me|my|your)|attention|anything (wrong|broken|stuck|urgent)|what.*(should i|do i need)/.test(t)) {
       return ctx.supervisor?.spoken || 'Nothing needs you right now. Everything else was handled.';
@@ -145,6 +137,15 @@ class VoiceBrainService {
     // What can you do
     if (/what can you do|what commands|help me|what.*(you|can i) (say|ask)/.test(t)) {
       return `I can run about ${ctx.capabilities || 'a set of'} orchestrator commands directly, answer questions about your fleet, and hand anything else to the Commander to work on.`;
+    }
+
+    // Greetings / presence checks — LAST, so a real question that merely opens
+    // with "hey" ("hey what needs me") is matched by the specific lanes first.
+    if (/^(hi|hey|hello|yo|howdy|greetings|good (morning|afternoon|evening))\b|are you (there|awake|up|listening|around)|can you hear me|you (there|up)/.test(t)) {
+      const c = this.countSessions(ctx.sessions);
+      return c.total
+        ? `Yes, I'm here. ${c.busy} agent${c.busy === 1 ? '' : 's'} working right now. What do you need?`
+        : "Yes, I'm here and listening. What do you need?";
     }
 
     return null;

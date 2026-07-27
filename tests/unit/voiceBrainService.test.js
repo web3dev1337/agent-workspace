@@ -60,6 +60,14 @@ describe('VoiceBrainService — fact lane', () => {
     expect(b.answerFromContext('spin up a reviewer for PR 12 and ping me when done')).toBeNull();
   });
 
+  test('a pure greeting gets a friendly reply, but "hey <question>" still hits the question lane', () => {
+    const { b } = brain({ sessions: [{ sessionId: 'a', status: 'busy' }], briefing: { spoken: 'work3 is waiting on a permission.' } });
+    expect(b.answerFromContext('hello can you hear me')).toMatch(/i'm here/i);
+    expect(b.answerFromContext('are you there')).toMatch(/i'm here/i);
+    // A real question that merely opens with "hey" must not be swallowed as a greeting.
+    expect(b.answerFromContext('hey what needs me right now')).toMatch(/waiting on a permission/);
+  });
+
   test('an action phrasing is never hijacked by the fact lane', () => {
     const { b } = brain({ queue: [{ id: '1', title: 'x' }] });
     // "open the queue" is a command/action, not a "how big is the queue" question.
