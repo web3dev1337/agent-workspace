@@ -211,3 +211,51 @@ keep a warm piper process, or use the piper C++ binary, or move to Kokoro/Person
 Temp files under `/tmp/pr1029-*` and `/tmp/ollama-*` are throwaway. The isolated data dir
 `~/.agent-workspace-jarvis-test` and the Ollama/Piper installs under `~/.local` are intentional
 (the working local voice stack) — keep them.
+
+---
+
+## SESSION 2 UPDATE (2026-07-27, later) — natural voice + routing hardening
+
+Continued the same branch. **Tests now 868 green / 120 suites.** All changes committed + pushed.
+
+### 1. Kokoro natural voice — INSTALLED and ACTIVE (supersedes the "not installed" note above)
+- `kokoro-onnx` installed; a warm Flask HTTP server at **:5960** (`~/.local/bin/kokoro-server.py`)
+  keeps the model loaded (POST `/synthesize` → WAV, voice `af_sarah`, ~2s CPU synth).
+- `config/voice-providers.json` kokoro is now `engine:kokoro, quality:5, requires.server:5960`.
+  `speechService` streams its WAV to the browser exactly like piper (WSL audio fix). Kokoro is the
+  resolved active TTS (verified: `GET /api/voice-providers` → `active.tts.resolved = kokoro`).
+- **Piper is also warmed** now: HTTP server at **:5959** (`python3 -m piper.http_server`), ~0.2s
+  synth vs the old ~5s cold `python -m piper`. `synthAndEmit` hits the warm server first.
+- **Start the whole voice stack** (ollama + warm piper + warm kokoro), idempotent:
+  `bash ~/.local/bin/start-voice-stack.sh`
+
+### 2. Routing hardening — bugs found by live stress-testing, all fixed + unit-tested
+Verified live via `POST /api/voice/parse` (classifier only, no side effects). All now 50-72ms:
+- **Negations no longer do the opposite.** `"don't open the queue"` used to be classified into a
+  queue command; now short-circuited to the Commander (`voiceCommandService.parseCommand`).
+- **Dismissals ack instantly.** `"never mind"` / `"actually never mind"` → "Okay, forget it."
+  (was a Commander round-trip; the action guard had been swallowing the leading "never").
+- **Stray single words skip the LLM.** `"uh"` → "didn't catch that" instantly (was ~900ms).
+- **`open the <panel>` is rule-matched**, not LLM-guessed. `"open the queue"` was misfiling as
+  `queue-select-by-pr-ref` on the 3b model; added deterministic rules for open-queue / open-tasks
+  / open-advice / open-settings (they require their object noun, so they don't shadow the specific
+  queue rules like "open blockers" / "triage queue").
+- **Natural fleet-status questions** (`"how's the fleet doing"`) now hit the instant fact lane
+  instead of the Commander.
+- **Default LLM is now `llama3.2:3b`** (was silently using 1b even when 3b was installed — the
+  model-preference check matched any llama3.2 tag). Selection degrades gracefully to the best
+  installed model (qwen/3b before 1b/phi).
+
+### 3. Live server as left
+- **JARVIS running on :5857** from this worktree (`work1`), env: `ORCHESTRATOR_PORT=5857
+  AGENT_WORKSPACE_DIR=~/.agent-workspace-jarvis-test OLLAMA_MODEL=llama3.2:3b
+  PIPER_HTTP_URL=http://127.0.0.1:5959 KOKORO_HTTP_URL=http://127.0.0.1:5960`. It serves its own
+  UI at `http://localhost:5857`. It is a **static node process** (not nodemon) — code changes
+  need a manual relaunch (kill the pid on :5857, re-run with the same env). Log: `/tmp/jarvis-server.log`.
+
+### Still open (unchanged, lower priority)
+- Genuine gibberish (`"purple monkey dishwasher"`) still routes to the Commander (~0.8s) — the
+  Commander just says it doesn't understand. Reliable gibberish detection isn't worth the
+  false-reject risk on real requests.
+- Multi-part commands (`"open the queue AND approve everything"`) execute the first clause only.
+- True full-duplex (PersonaPlex on the 5090) is still the next real build — see above.
