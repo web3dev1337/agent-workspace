@@ -80,6 +80,8 @@ class SpeechService {
     // writes raw s16le PCM on stdout. Set by the provider registry when one of
     // those is the active engine; empty otherwise.
     this.cliEngine = String(process.env.SPEECH_CLI_ENGINE || '').trim();
+    // A warm piper HTTP server (model kept loaded) — ~0.2s synth vs ~5s cold.
+    this.piperHttpUrl = String(process.env.PIPER_HTTP_URL || 'http://127.0.0.1:5959').replace(/\/$/, '');
     this.history = [];
     this.lastSpokenAt = new Map();
     this.backendCache = null;
@@ -193,28 +195,59 @@ class SpeechService {
    * Synthesize with piper and STREAM the audio to the browser to play, instead
    * of server-side paplay. On WSL, server-side PulseAudio (WSLg) often doesn't
    * reach the user's speakers, but browser audio always does — so this is the
-   * reliable way to hear a local neural voice. Falls back to nothing if piper
-   * or the model is missing (resolveBackend won't pick this backend then).
+   * reliable way to hear a local neural voice.
+   *
+   * Returns {spoken:true} optimistically and does the synth in the background
+   * (like the spawn path), emitting `speech-audio` when the WAV is ready.
    */
   speakViaPiperBrowser(text, priority) {
     if (!this.io) return { spoken: false, reason: 'no socket connection to a client' };
-    try {
-      const env = augmentProcessEnv(process.env);
-      const piper = spawn('piper', ['--model', this.piperModel, '--output-raw'], { stdio: ['pipe', 'pipe', 'ignore'], env });
-      const chunks = [];
-      piper.stdout.on('data', (d) => chunks.push(d));
-      piper.on('error', (error) => this.logger.warn?.('Piper (browser) failed', { error: error.message }));
-      piper.on('close', () => {
-        const pcm = Buffer.concat(chunks);
-        if (!pcm.length) return;
-        const wav = this.pcmToWav(pcm, this.piperSampleRate || 22050).toString('base64');
-        this.io.emit('speech-audio', { wav, priority, at: new Date().toISOString() });
-      });
-      piper.stdin.end(`${text}\n`);
-      return { spoken: true };
-    } catch (error) {
-      return { spoken: false, reason: error.message };
+    this.synthAndEmit(text, priority).catch((error) => this.logger.warn?.('Piper synth failed', { error: error.message }));
+    return { spoken: true };
+  }
+
+  emitAudio(wavBuffer, priority) {
+    if (!wavBuffer?.length) return;
+    this.io?.emit('speech-audio', { wav: wavBuffer.toString('base64'), priority, at: new Date().toISOString() });
+  }
+
+  async synthAndEmit(text, priority) {
+    // Fast path: a warm piper HTTP server keeps the model loaded (~0.2s synth
+    // vs ~5s for a cold `python -m piper` per call). Try it first.
+    if (this.piperHttpUrl) {
+      try {
+        const resp = await fetch(`${this.piperHttpUrl}/synthesize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+          signal: AbortSignal.timeout(8000)
+        });
+        if (resp.ok) {
+          this.emitAudio(Buffer.from(await resp.arrayBuffer()), priority);
+          return;
+        }
+      } catch {
+        // Server down/unreachable — fall back to spawning piper.
+      }
     }
+
+    // Fallback: spawn piper once (cold, slower) and wrap its raw PCM as WAV.
+    await new Promise((resolve) => {
+      try {
+        const env = augmentProcessEnv(process.env);
+        const piper = spawn('piper', ['--model', this.piperModel, '--output-raw'], { stdio: ['pipe', 'pipe', 'ignore'], env });
+        const chunks = [];
+        piper.stdout.on('data', (d) => chunks.push(d));
+        piper.on('error', () => resolve());
+        piper.on('close', () => {
+          this.emitAudio(this.pcmToWav(Buffer.concat(chunks), this.piperSampleRate || 22050), priority);
+          resolve();
+        });
+        piper.stdin.end(`${text}\n`);
+      } catch {
+        resolve();
+      }
+    });
   }
 
   spawnQuiet(command, args) {
