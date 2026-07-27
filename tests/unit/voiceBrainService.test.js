@@ -81,6 +81,28 @@ describe('VoiceBrainService — fact lane', () => {
     expect(b.answerFromContext('open the queue')).toBeNull();
     expect(b.answerFromContext('start a reviewer on the queue')).toBeNull();
   });
+
+  test('a dismissal is acked instantly, even with a leading filler word', () => {
+    const { b } = brain();
+    expect(b.answerFromContext('never mind')).toMatch(/forget it/i);
+    expect(b.answerFromContext('actually never mind')).toMatch(/forget it/i);
+    expect(b.answerFromContext('ok forget it')).toMatch(/forget it/i);
+    expect(b.answerFromContext('forget about it')).toMatch(/forget it/i);
+  });
+
+  test('thanks gets a friendly ack, not a Commander round-trip', () => {
+    const { b } = brain();
+    expect(b.answerFromContext('thanks so much')).toMatch(/welcome/i);
+    expect(b.answerFromContext('cheers')).toMatch(/welcome/i);
+  });
+
+  test('a negated action ("don\'t open the queue") is not a fact and falls through', () => {
+    const { b } = brain({ queue: [{ id: '1', title: 'x' }] });
+    // The fact lane must not answer it — it falls through so the command layer's
+    // negation guard can hand it to the Commander instead of opening the queue.
+    expect(b.answerFromContext("don't open the queue")).toBeNull();
+    expect(b.answerFromContext('do not merge that pr')).toBeNull();
+  });
 });
 
 describe('VoiceBrainService — routing', () => {

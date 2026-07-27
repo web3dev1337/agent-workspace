@@ -90,11 +90,26 @@ class VoiceBrainService {
     const t = String(transcript || '').toLowerCase().trim();
     if (!t) return null;
 
+    // A dismissal ("never mind", "forget it", "actually never mind") is a quick
+    // ack, not a Commander job. This MUST run before the action/negation guard
+    // below — "never mind" starts with "never", so the guard would otherwise
+    // swallow it as a negated action and send it to the Commander.
+    if (/^(ok(ay)?|actually|uh+|um+|well|hmm|so|yeah|nah|no)?[\s,]*(never ?mind|forget it|forget about it)\b/.test(t)) {
+      return 'Okay, forget it.';
+    }
+
     // An action request ("open the queue", "start a reviewer") is never a fact
     // to read back — it belongs to the command lane or the agent. Only answer
     // questions here, so the fact lane can't hijack a thing you asked it to DO.
-    if (/^(open|show|hide|close|focus|switch|go to|goto|start|stop|run|create|make|spawn|launch|kill|delete|remove|add|set|move|approve|reject|merge|push|pull|commit|clear|refresh|reload|new)\b/.test(t)) {
+    // Negations ("don't open the queue") aren't facts either.
+    if (/^(open|show|hide|close|focus|switch|go to|goto|start|stop|run|create|make|spawn|launch|kill|delete|remove|add|set|move|approve|reject|merge|push|pull|commit|clear|refresh|reload|new)\b/.test(t)
+        || /^(don'?t|do not|never)\b/.test(t)) {
       return null;
+    }
+
+    // Thanks / acknowledgement — a quick reply, never a Commander job.
+    if (/^(thanks|thank you|thankyou|cheers|ta|much appreciated|nice one|good (job|work|stuff)|awesome|great|cool|ok|okay|kk|got it|sounds good|perfect|no worries)\b/.test(t)) {
+      return "You're welcome.";
     }
 
     // What needs me / what's wrong / status of the fleet
@@ -135,18 +150,21 @@ class VoiceBrainService {
     }
 
     // Identity — instant, not a job for the Commander agent.
-    if (/what.?s? your name|who are you|what are you|your name|introduce yourself/.test(t)) {
+    if (/what.?s? your name|who are you|what are you|your name|introduce yourself|are you (an? )?(ai|bot|robot|real|human|person)/.test(t)) {
       return "I'm JARVIS, your fleet supervisor. I keep an eye on your agents, answer questions about what's going on, run commands, and hand bigger jobs to the Commander.";
     }
 
-    // What can you do
-    if (/what can you do|what commands|help me|what.*(you|can i) (say|ask)/.test(t)) {
+    // What can you do (not bare "help me" — that's a real request, let it flow on)
+    if (/what can you do|what commands|what.*(you|can i) (say|ask)|how do (i|you) work/.test(t)) {
       return `I can run about ${ctx.capabilities || 'a set of'} orchestrator commands directly, answer questions about your fleet, and hand anything else to the Commander to work on.`;
     }
 
-    // Greetings / presence checks — LAST, so a real question that merely opens
-    // with "hey" ("hey what needs me") is matched by the specific lanes first.
-    if (/^(hi|hey|hello|yo|howdy|greetings|good (morning|afternoon|evening))\b|are you (there|awake|up|listening|around)|can you hear me|you (there|up)/.test(t)) {
+    // Greetings / presence checks — LAST, and only when it's actually a greeting,
+    // not "hey <request>" (which should hit the command/agent lane). A request
+    // verb anywhere in the utterance disqualifies it as a pure greeting.
+    const hasRequestVerb = /\b(show|open|tell|give|create|start|stop|switch|run|make|find|set|pull|bring|list|check|fix|build|write|add|do)\b/.test(t);
+    if (!hasRequestVerb
+        && (/^(hi|hey|hello|yo|howdy|greetings|good (morning|afternoon|evening))\b|are you (there|awake|up|listening|around)|can you hear me|you (there|up)/.test(t))) {
       const c = this.countSessions(ctx.sessions);
       return c.total
         ? `Yes, I'm here. ${c.busy} agent${c.busy === 1 ? '' : 's'} working right now. What do you need?`
@@ -225,6 +243,14 @@ class VoiceBrainService {
     if (fact) {
       this.speak(fact);
       return { handled: true, route: 'fact', spoken: fact };
+    }
+
+    // A single stray word ("uh", "hmm") isn't a request — don't wake the
+    // Commander for it.
+    if (String(transcript || '').trim().split(/\s+/).filter(Boolean).length <= 1) {
+      const miss = "Sorry, I didn't catch that.";
+      this.speak(miss);
+      return { handled: false, route: 'unclear', spoken: miss };
     }
 
     // Agent lane: the Commander has the whole API and can do anything.

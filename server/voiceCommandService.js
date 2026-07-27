@@ -1217,11 +1217,22 @@ class VoiceCommandService {
     // ("how many agents are working") should be answered instantly from a
     // snapshot, not pay the multi-second LLM command-classification cost first.
     // Action phrasings ("open the queue") return null here and fall through.
+    // The brain also owns the ack lane ("never mind" -> "Okay, forget it"), so
+    // this MUST run before the negation guard below or that ack regresses to a
+    // Commander round-trip.
     if (!options.skipFact && this.brain?.answerFromContext) {
       try {
         const fact = this.brain.answerFromContext(text);
         if (fact) return { success: false, fact, transcript: text };
       } catch { /* fall through to the classifier */ }
+    }
+
+    // A negation ("don't open the queue", "cancel that") must never be turned
+    // into the command it negates. The fact lane already handled bare acks
+    // ("never mind"); anything still negating here skips the classifier and is
+    // handed to the Commander, which understands "don't".
+    if (/^(don'?t\b|do not\b|never\b|stop\b|cancel\b|no,?\s|nope\b)/.test(text)) {
+      return { success: false, error: 'negation is not a command', transcript: text };
     }
 
     // Try Ollama first (local, private)

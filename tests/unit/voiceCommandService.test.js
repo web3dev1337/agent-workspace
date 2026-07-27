@@ -373,4 +373,19 @@ describe('VoiceCommandService (free-form routing)', () => {
     expect(result.success).toBe(false);
     expect(result.forwardedToCommander).toBeUndefined();
   });
+
+  test('a negated action is never turned into the command it negates', async () => {
+    // "don't open the queue" must not resolve to a queue command; the classifier
+    // is short-circuited so it falls through to the Commander (which understands
+    // "don't") rather than doing the opposite of what was said.
+    const parsed = await voiceCommandService.parseCommand("don't open the queue");
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toMatch(/negation/i);
+
+    const forwarded = [];
+    voiceCommandService.setCommanderForwarder(async (text) => { forwarded.push(text); return 'sent'; });
+    const result = await voiceCommandService.processVoiceCommand("don't open the queue");
+    expect(result.method).toBe('commander');
+    expect(forwarded).toEqual(["don't open the queue"]);
+  });
 });
