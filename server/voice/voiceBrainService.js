@@ -134,6 +134,11 @@ class VoiceBrainService {
       return ctx.workspace ? `You're in the ${ctx.workspace} workspace.` : 'No workspace is open right now.';
     }
 
+    // Identity — instant, not a job for the Commander agent.
+    if (/what.?s? your name|who are you|what are you|your name|introduce yourself/.test(t)) {
+      return "I'm JARVIS, your fleet supervisor. I keep an eye on your agents, answer questions about what's going on, run commands, and hand bigger jobs to the Commander.";
+    }
+
     // What can you do
     if (/what can you do|what commands|help me|what.*(you|can i) (say|ask)/.test(t)) {
       return `I can run about ${ctx.capabilities || 'a set of'} orchestrator commands directly, answer questions about your fleet, and hand anything else to the Commander to work on.`;

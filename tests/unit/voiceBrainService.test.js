@@ -55,6 +55,13 @@ describe('VoiceBrainService — fact lane', () => {
     expect(b.answerFromContext('what workspace am i in')).toMatch(/Zoo Game/);
   });
 
+  test('identity questions answer instantly instead of going to the Commander', () => {
+    const { b } = brain();
+    expect(b.answerFromContext('what is your name')).toMatch(/JARVIS/);
+    expect(b.answerFromContext("what's your name")).toMatch(/JARVIS/);
+    expect(b.answerFromContext('who are you')).toMatch(/JARVIS/);
+  });
+
   test('an open-ended request is NOT a fact and falls through', () => {
     const { b } = brain();
     expect(b.answerFromContext('spin up a reviewer for PR 12 and ping me when done')).toBeNull();
