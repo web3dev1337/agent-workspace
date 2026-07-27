@@ -152,6 +152,31 @@ and the Commander's reply is spoken ~4s after its output settles.
 
 ---
 
+## LATENCY + VOICE STACK (added late in the session)
+
+- **Restart the voice backends** with `~/.local/bin/start-voice-stack.sh` — starts Ollama
+  (`:11434`, fuzzy commands) and a **warm Piper HTTP server** (`:5959`, fast TTS). Launch
+  JARVIS with `PIPER_HTTP_URL=http://127.0.0.1:5959 OLLAMA_MODEL=llama3.2:3b` (see the relaunch
+  command above).
+- **Routing is now fast-lane-first:** rules → **fact lane** (instant, from a live snapshot) →
+  LLM command classifier → agent. Measured: fact questions **~20ms** (were 8034ms — they used
+  to pay the LLM cost first), fuzzy commands ~1.2s (warm model), TTS synth **~0.24s** (warm
+  piper HTTP server; was ~5s spawning `python -m piper` per call). Each utterance is logged:
+  `heard / route / command / reply / ms`.
+- **Commander auto-starts** (`ensureCommander` in index.js) — an open-ended request no longer
+  dead-ends on "no Commander"; the launch queue buffers the request through boot.
+- **Commander DOES speak back:** the brain captures its PTY reply once output settles
+  (`captureCommanderReply` + `extractAssistantReply`) and speaks it (~4s+ after a cold boot).
+
+### Remaining latency/quality items
+- **Command accuracy:** the 3B model sometimes picks a WRONG command ("pull up the queue" ->
+  a different queue command). The fact lane is reliable; the fuzzy *command* lane is model-
+  limited. Fix: a better model (e.g. `qwen2.5:7b-instruct`, fits the 16GB laptop) — pull it and
+  set `OLLAMA_MODEL`. The grounding guard (`isGrounded`) blocks unrelated commands but can't
+  distinguish two commands in the same family.
+- **Kokoro / PersonaPlex** for a nicer / full-duplex voice — registered in the config, not
+  installed. PersonaPlex serves its own browser audio (sidesteps the WSLg issue entirely).
+
 ## AUDIO ON WSL (important — the "I don't hear anything" fix)
 
 Server-side PulseAudio (WSLg → RDPSink) reliably plays a test tone but often does **not**
