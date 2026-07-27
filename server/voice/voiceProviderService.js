@@ -194,15 +194,19 @@ class VoiceProviderService {
     const key = this.activeKey(kind);
     if (key === 'none') return null;
 
-    const withHealth = await this.listWithHealth(kind);
-    const available = withHealth.filter((p) => p.available);
-
+    // A pin only needs its own health check — cheap, and avoids HTTP-probing
+    // every other model server just to confirm the one you chose.
     if (key && key !== 'auto') {
-      const pinned = withHealth.find((p) => p.id === key);
-      if (pinned?.available) return pinned;
-      // fall through to auto
+      const pinned = this.get(key);
+      if (pinned && pinned.kind === kind) {
+        const health = await this.checkAvailability(pinned);
+        if (health.available) return { ...pinned, ...health };
+      }
+      // pinned is gone/unavailable — fall back to auto rather than muting.
     }
-    return available.sort((a, b) => b.quality - a.quality)[0] || null;
+
+    const withHealth = await this.listWithHealth(kind);
+    return withHealth.filter((p) => p.available).sort((a, b) => b.quality - a.quality)[0] || null;
   }
 
   /**

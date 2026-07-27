@@ -23,7 +23,31 @@ const service = (over = {}) => {
   return s;
 };
 
-afterEach(() => { delete process.env.AGENT_WORKSPACE_DIR; });
+// A hermetic service whose provider set is fixed, so resolution assertions
+// don't depend on which real model servers (kokoro/piper HTTP) happen to be up
+// on the machine running the tests.
+const tmpDirs = [];
+const controlledService = (providers, actives = {}) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-ctl-'));
+  tmpDirs.push(dir);
+  fs.writeFileSync(path.join(dir, 'voice-providers.json'), JSON.stringify({
+    activeTts: actives.tts || 'auto', activeStt: actives.stt || 'auto', activeDuplex: actives.duplex || 'none',
+    providers
+  }));
+  process.env.AGENT_WORKSPACE_DIR = dir;
+  return new VoiceProviderService({ logger: { warn() {}, error() {} } });
+};
+
+// Two TTS providers whose availability the fake speech service controls.
+const TTS_SET = [
+  { id: 'browser', kind: 'tts', engine: 'browser', quality: 2 },
+  { id: 'piper', kind: 'tts', engine: 'piper', quality: 3 }
+];
+
+afterEach(() => {
+  delete process.env.AGENT_WORKSPACE_DIR;
+  while (tmpDirs.length) fs.rmSync(tmpDirs.pop(), { recursive: true, force: true });
+});
 
 describe('VoiceProviderService', () => {
   test('loads the shipped registry with tts/stt/duplex providers', () => {
@@ -59,28 +83,23 @@ describe('VoiceProviderService', () => {
   });
 
   test('auto resolves to the highest-quality AVAILABLE provider', async () => {
-    const s = service();
+    const s = controlledService(TTS_SET);
     s.init({ speechService: fakeSpeech({ piper: true }) });
     // piper (quality 3) beats browser (quality 2) when it is available.
     expect((await s.resolveActive('tts'))?.id).toBe('piper');
 
-    const s2 = service();
+    const s2 = controlledService(TTS_SET);
     s2.init({ speechService: fakeSpeech({ piper: false }) });
     // With piper unavailable it falls back to browser rather than nothing.
     expect((await s2.resolveActive('tts'))?.id).toBe('browser');
   });
 
   test('a pin to an unavailable provider falls back to auto, never silently mutes', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-'));
-    fs.writeFileSync(path.join(dir, 'voice-providers.json'), JSON.stringify({
-      activeTts: 'personaplex', // duplex id pinned as tts + unavailable anyway
-      providers: JSON.parse(fs.readFileSync(DEFAULT_CONFIG_PATH, 'utf8')).providers
-    }));
-    const s = service({ env: dir });
+    // Pin a nonexistent provider; only browser+piper exist and piper is down.
+    const s = controlledService(TTS_SET, { tts: 'no-such-model' });
     s.init({ speechService: fakeSpeech({ piper: false }) });
     const resolved = await s.resolveActive('tts');
     expect(resolved?.id).toBe('browser'); // fell back to the best available
-    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   test('duplex defaults to none (off) until a model is explicitly chosen', async () => {
@@ -112,7 +131,7 @@ describe('VoiceProviderService', () => {
   });
 
   test('getStatus reports selected + resolved per capability', async () => {
-    const s = service();
+    const s = controlledService(TTS_SET);
     s.init({ speechService: fakeSpeech({ piper: true }) });
     const status = await s.getStatus();
     expect(status.active.tts.resolved).toBe('piper');
