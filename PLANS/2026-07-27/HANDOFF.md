@@ -152,6 +152,18 @@ and the Commander's reply is spoken ~4s after its output settles.
 
 ---
 
+## AUDIO ON WSL (important — the "I don't hear anything" fix)
+
+Server-side PulseAudio (WSLg → RDPSink) reliably plays a test tone but often does **not**
+reach the user's Windows speakers; **browser audio always does**. So the local neural voice
+(piper) is synthesized server-side and the **WAV is streamed over the socket** (`speech-audio`
+event) for the browser to play — see `speechService.speakViaPiperBrowser` +
+`client/speech-output.js playAudio`. It only falls back to server-side `paplay` when no browser
+client is connected. Requires the browser tab open + one prior user gesture (autoplay policy).
+Caveat: the piper CLI here is `python3 -m piper` (wrapper at `~/.local/bin/piper`), which
+cold-starts ~4-9s per utterance — functional but not snappy. **Responsiveness fix for later:**
+keep a warm piper process, or use the piper C++ binary, or move to Kokoro/PersonaPlex.
+
 ## WHAT'S LEFT / KNOWN LIMITS
 
 - **The 5090 models** (PersonaPlex full-duplex, Qwen omni, Kokoro/Parakeet) are registered +
