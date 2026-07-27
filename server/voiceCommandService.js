@@ -79,6 +79,39 @@ class VoiceCommandService {
           return { behavior: 'always' };
         }
       },
+      // Open a panel by name. These are fixed phrases with an exact intent, so
+      // match them deterministically here instead of letting the fuzzy LLM
+      // misfile "open the queue" as a specific queue action (e.g. select-by-pr).
+      // Each requires its object noun, so they never shadow the more specific
+      // queue rules below ("open blockers", "triage queue", "open next review").
+      {
+        patterns: [
+          /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|go\s+to|jump\s+to)\s+(?:the\s+)?(?:review\s+|pr\s+)?queue\b/i,
+        ],
+        command: 'open-queue',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|go\s+to)\s+(?:the\s+)?(?:task\s+list|tasks?|to-?dos?)\b/i,
+        ],
+        command: 'open-tasks',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|go\s+to)\s+(?:the\s+)?(?:advice|recommendations?|suggestions?)\b/i,
+        ],
+        command: 'open-advice',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|go\s+to)\s+(?:the\s+)?settings\b/i,
+        ],
+        command: 'open-settings',
+        extractParams: () => ({})
+      },
       // Open Queue
       {
         patterns: [

@@ -36,6 +36,19 @@ describe('VoiceCommandService (rule parsing)', () => {
     expect(always.params).toEqual({ behavior: 'always' });
   });
 
+  test('natural "open the ..." phrasings resolve to a panel, never the LLM', () => {
+    for (const phrase of ['open the queue', 'pull up the queue', 'show me the queue', 'open the review queue', 'go to the pr queue']) {
+      expect(voiceCommandService.parseWithRules(phrase)?.command).toBe('open-queue');
+    }
+    expect(voiceCommandService.parseWithRules('open the tasks')?.command).toBe('open-tasks');
+    expect(voiceCommandService.parseWithRules('show me the recommendations')?.command).toBe('open-advice');
+    expect(voiceCommandService.parseWithRules('open the settings')?.command).toBe('open-settings');
+    // Must NOT shadow the more specific queue rules.
+    expect(voiceCommandService.parseWithRules('show blockers')?.command).toBe('queue-blockers');
+    expect(voiceCommandService.parseWithRules('triage queue')?.command).toBe('queue-triage');
+    expect(voiceCommandService.parseWithRules('start next review')?.command).toBe('queue-next');
+  });
+
   test('parses open process panels', () => {
     const queue = voiceCommandService.parseWithRules('open queue');
     expect(queue.command).toBe('open-queue');
