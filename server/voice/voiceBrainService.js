@@ -181,7 +181,7 @@ class VoiceBrainService {
     return lines.slice(-2).join(' ').slice(0, 360);
   }
 
-  async captureCommanderReply(beforeText, { maxWaitMs = 25000, settleMs = 2500, pollMs = 1000 } = {}) {
+  async captureCommanderReply(beforeText, { maxWaitMs = 45000, settleMs = 2500, pollMs = 1000 } = {}) {
     const cs = this.deps.commanderService;
     if (!cs?.getRecentOutput) return null;
 

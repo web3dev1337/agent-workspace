@@ -447,9 +447,33 @@ threadService.init({ workspaceManager, sessionManager });
 intentHaikuService.setSessionManager(sessionManager);
 serviceStackRuntimeService.init({ workspaceManager, sessionManager, configPromoterService, io });
 auditExportService.init({ activityFeed, schedulerService, userSettingsService });
+// Self-healing: if no Commander is running, start one automatically rather than
+// dead-ending. The launch queue buffers input during boot and flushes it once
+// Claude is interactive (trust prompt auto-accepted), so the request lands even
+// on a cold start — the assistant just does what it needs instead of reporting
+// a missing Commander.
+let commanderStarting = null;
+const ensureCommander = async () => {
+  try {
+    if (!commanderService?.start) return false;
+    if (!commanderService.session) {
+      if (!commanderStarting) commanderStarting = commanderService.start().finally(() => { commanderStarting = null; });
+      await commanderStarting;
+    }
+    if (!commanderService.claudeStarted) {
+      await commanderService.startClaude('fresh', true);
+    }
+    return true;
+  } catch (error) {
+    logger.warn('ensureCommander failed', { error: error.message });
+    return false;
+  }
+};
+
 // Two writes: agent CLIs treat "text\r" in one chunk as a bracketed paste.
 const sendToCommander = async (text) => {
   if (!commanderService?.sendInput) return false;
+  await ensureCommander();
   if (commanderService.sendInput(text) === false) return false;
   await new Promise((resolve) => setTimeout(resolve, 300));
   commanderService.sendInput('\r');
@@ -8401,7 +8425,17 @@ app.post('/api/voice/command', async (req, res) => {
     if (!transcript) {
       return res.status(400).json({ error: 'transcript is required' });
     }
+    const startedAt = Date.now();
     const result = await voiceCommandService.processVoiceCommand(transcript);
+    // Log what was heard, how it routed, what JARVIS said back, and how long it
+    // took — so the whole conversation + latency is visible in the log.
+    logger.info('Voice', {
+      heard: transcript,
+      route: result.method || (result.success ? 'command' : 'unmatched'),
+      command: result.command || null,
+      reply: result.spoken || null,
+      ms: Date.now() - startedAt
+    });
     res.json(result);
   } catch (error) {
     logger.error('Failed to process voice command', { error: error.message });

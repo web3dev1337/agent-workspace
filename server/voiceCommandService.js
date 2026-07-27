@@ -1168,6 +1168,21 @@ class VoiceCommandService {
     if (!this.useOllama && !this.useClaude) {
       console.log('[Voice] No LLM available - using rule-based parsing only');
     }
+
+    // Pre-warm the model so the FIRST real command doesn't eat the ~8s cold
+    // model-load. Fire-and-forget; keep_alive holds it in VRAM afterwards.
+    if (this.useOllama) this.warmUpOllama();
+  }
+
+  warmUpOllama() {
+    if (this._warmed) return;
+    this._warmed = true;
+    fetch(`${this.ollamaUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: this.ollamaModel, prompt: 'ok', stream: false, keep_alive: '30m', options: { num_predict: 1 } }),
+      signal: AbortSignal.timeout(60000)
+    }).then(() => console.log('[Voice] Ollama model warmed:', this.ollamaModel)).catch(() => { this._warmed = false; });
   }
 
   /**
@@ -1196,6 +1211,17 @@ class VoiceCommandService {
         error: 'Command not recognized',
         transcript: text
       };
+    }
+
+    // Fast fact lane BEFORE the LLM classifier: a question about live state
+    // ("how many agents are working") should be answered instantly from a
+    // snapshot, not pay the multi-second LLM command-classification cost first.
+    // Action phrasings ("open the queue") return null here and fall through.
+    if (!options.skipFact && this.brain?.answerFromContext) {
+      try {
+        const fact = this.brain.answerFromContext(text);
+        if (fact) return { success: false, fact, transcript: text };
+      } catch { /* fall through to the classifier */ }
     }
 
     // Try Ollama first (local, private)
@@ -1518,6 +1544,7 @@ JSON:`;
           // Constrain generation to valid JSON at the API level so even a small
           // local model can't ramble prose instead of the {"command":...} shape.
           format: 'json',
+          keep_alive: '30m', // keep the model warm between commands
           options: {
             temperature: 0.1,
             num_predict: 100
@@ -1623,6 +1650,12 @@ JSON:`;
 
   async processVoiceCommand(transcript, { forwardUnmatched = true } = {}) {
     const parsed = await this.parseCommand(transcript);
+
+    // Fast fact/greeting answer (matched before the LLM classifier) — speak and done.
+    if (parsed.fact) {
+      this.brain?.speak?.(parsed.fact);
+      return { success: true, method: 'fact', command: null, params: {}, transcript, executed: true, spoken: parsed.fact };
+    }
 
     if (!parsed.success) {
       // No command matched. If the brain is wired, let it try a fast fact answer
