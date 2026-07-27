@@ -40,6 +40,13 @@ describe('VoiceBrainService — fact lane', () => {
     expect(answer).toMatch(/1 waiting/);
   });
 
+  test('natural fleet-status phrasings answer instantly instead of going to the Commander', () => {
+    const { b } = brain({ sessions: [{ sessionId: 'a', status: 'busy' }, { sessionId: 'b', status: 'idle' }] });
+    for (const phrase of ["how's the fleet doing", 'how is the fleet', 'how are the agents doing', "how's it going with the sessions"]) {
+      expect(b.answerFromContext(phrase)).toMatch(/2 agents/);
+    }
+  });
+
   test('queue question summarizes the top items', () => {
     const { b } = brain({ queue: [{ id: '1', title: 'fix the crash' }, { id: '2', title: 'add leaderboard' }] });
     expect(b.answerFromContext('what is on the queue')).toMatch(/2 items.*fix the crash/);

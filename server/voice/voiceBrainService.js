@@ -117,8 +117,8 @@ class VoiceBrainService {
       return ctx.supervisor?.spoken || 'Nothing needs you right now. Everything else was handled.';
     }
 
-    // How many agents / sessions working
-    if (/(how many|number of).*(agent|session|running|working|busy)|what.*(agents|sessions).*(doing|status)|fleet status|are (they|the agents) (busy|working)/.test(t)) {
+    // How many agents / sessions working / how the fleet is doing
+    if (/(how many|number of).*(agent|session|running|working|busy)|what.*(agents|sessions).*(doing|status)|\bfleet\b|how('?s| is| are)\b.*\b(agents?|sessions?)\b|are (they|the agents) (busy|working)/.test(t)) {
       const c = this.countSessions(ctx.sessions);
       if (!c.total) return 'No agent sessions are open right now.';
       const parts = [];
