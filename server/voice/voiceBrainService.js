@@ -142,6 +142,54 @@ class VoiceBrainService {
     return null;
   }
 
+  /**
+   * Pull the Commander's actual reply out of its PTY buffer and reduce it to
+   * something speakable. Claude Code renders a full-screen TUI, so this strips
+   * ANSI + box-drawing + chrome and keeps the last few lines of real prose.
+   */
+  extractAssistantReply(fullText, beforeText = '') {
+    let text = String(fullText || '');
+    // Only the output produced AFTER the request was sent.
+    if (beforeText && text.startsWith(beforeText)) text = text.slice(beforeText.length);
+
+    const cleaned = text
+      .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '') // OSC sequences
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')       // CSI (colour/cursor)
+      .replace(/\x1b[()][AB0]/g, '')                    // charset selects
+      .replace(/[│┃─━╭╮╰╯├┤┬┴┼█▀▄▌▐░▒▓·]/g, ' ')        // box-drawing/blocks
+      .replace(/\r/g, '\n');
+
+    const noise = /^(>|\?|·|✢|✳|✻|✽|\*|╭|╰|\||\s*esc |\s*⏵|\s*⎿|\s*⧉|tokens|context|auto-|\/|shift\+|ctrl\+|\d+ tokens|✔|✳️)/i;
+    const lines = cleaned.split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length >= 12 && /[a-z]{4,}/i.test(l) && !noise.test(l))
+      // Drop obvious UI/status strings that slip through. Match whole
+      // status phrases, not bare words like "working" that appear in real prose.
+      .filter((l) => !/dangerously|skip permissions|welcome to claude|bypassing permissions|esc to interrupt|press up|for shortcuts|^\s*(thinking|working|processing)[.…\s]*$/i.test(l));
+
+    if (!lines.length) return null;
+    // The final assistant answer is at the tail; take the last couple of prose lines.
+    return lines.slice(-2).join(' ').slice(0, 360);
+  }
+
+  async captureCommanderReply(beforeText, { maxWaitMs = 25000, settleMs = 2500, pollMs = 1000 } = {}) {
+    const cs = this.deps.commanderService;
+    if (!cs?.getRecentOutput) return null;
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const startedAt = Date.now();
+    let last = '';
+    let lastChangeAt = Date.now();
+
+    while (Date.now() - startedAt < maxWaitMs) {
+      await sleep(pollMs);
+      const now = cs.getRecentOutput(150) || '';
+      if (now !== last) { last = now; lastChangeAt = Date.now(); }
+      else if (last && Date.now() - lastChangeAt >= settleMs) break; // output settled
+    }
+    return this.extractAssistantReply(last, beforeText);
+  }
+
   speak(text, { priority = 'normal' } = {}) {
     if (!text) return { spoken: false };
     try {
@@ -168,14 +216,28 @@ class VoiceBrainService {
     // Agent lane: the Commander has the whole API and can do anything.
     const forwarder = this.deps.commanderForwarder;
     if (typeof forwarder === 'function') {
-      const brief = `[voice] ${String(transcript || '').trim()}\n\nAnswer or act using the orchestrator API (GET /api/commander/context, /capabilities, POST /execute). Keep any spoken reply to one or two sentences.`;
+      const brief = `[voice] ${String(transcript || '').trim()}\n\nAnswer or act using the orchestrator API (GET /api/commander/context, /capabilities, POST /execute). Keep your reply to one or two sentences of plain prose so it can be read aloud.`;
+      const before = this.deps.commanderService?.getRecentOutput?.(150) || '';
       let delivered = false;
       try { delivered = (await forwarder(brief)) !== false; } catch (error) {
         this.logger.warn?.('voice brain: commander forward failed', { error: error.message });
       }
-      const ack = delivered ? 'On it — working on that now.' : 'No Commander is running to take that.';
-      this.speak(ack);
-      return { handled: delivered, route: 'commander', spoken: ack };
+
+      if (!delivered) {
+        const miss = 'No Commander is running to take that.';
+        this.speak(miss);
+        return { handled: false, route: 'commander', spoken: miss };
+      }
+
+      // Immediate ack, then speak the Commander's actual reply once it settles —
+      // in the background, so the request returns now and the answer arrives when
+      // the agent is done. This is the two-way loop.
+      this.speak('On it.');
+      this.captureCommanderReply(before)
+        .then((reply) => { if (reply) this.speak(reply, { priority: 'high' }); })
+        .catch((error) => this.logger.warn?.('voice brain: reply capture failed', { error: error.message }));
+
+      return { handled: true, route: 'commander', spoken: 'On it.' };
     }
 
     const miss = "I couldn't do that myself and there's no Commander running to hand it to.";

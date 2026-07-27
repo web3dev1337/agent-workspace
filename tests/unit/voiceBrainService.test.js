@@ -102,3 +102,42 @@ describe('VoiceBrainService — routing', () => {
     expect(spoken[0]).toMatch(/done.*open queue/i);
   });
 });
+
+describe('VoiceBrainService — Commander reply capture', () => {
+  test('extracts the assistant prose out of a noisy Claude Code TUI buffer', () => {
+    const { b } = brain();
+    // A realistic-ish PTY buffer: ANSI colour, box-drawing chrome, a spinner
+    // line, and the actual answer at the tail.
+    const buf = [
+      '\x1b[2m╭──────────────────────────────────────╮\x1b[0m',
+      '\x1b[2m│ > [voice] how is the fleet doing     │\x1b[0m',
+      '\x1b[2m╰──────────────────────────────────────╯\x1b[0m',
+      '\x1b[33m✻ Thinking…\x1b[0m',
+      '⏵⏵ bypassing permissions',
+      '\x1b[1mThree agents are working and one is waiting on a permission prompt.\x1b[0m',
+      'Nothing needs you right now.',
+      '\x1b[2m  esc to interrupt · ⏵ for shortcuts\x1b[0m'
+    ].join('\n');
+    const reply = b.extractAssistantReply(buf);
+    expect(reply).toMatch(/Three agents are working/);
+    expect(reply).toMatch(/Nothing needs you/);
+    expect(reply).not.toMatch(/esc to interrupt|bypassing|Thinking|╭|│/);
+  });
+
+  test('a buffer with no prose yields null rather than speaking garbage', () => {
+    const { b } = brain();
+    expect(b.extractAssistantReply('\x1b[2m╭───╮\x1b[0m\n│ > │\n╰───╯\n✻ Thinking…')).toBeNull();
+  });
+
+  test('open-ended request acks immediately and captures the reply in the background', async () => {
+    const { b, spoken } = brain();
+    // Buffer is empty when the request is sent, then the answer appears and settles.
+    let calls = 0;
+    b.deps.commanderService = { getRecentOutput: () => (calls++ === 0 ? '' : 'The build passed and the PR is open.') };
+    const out = await b.handleUnmatched('run the tests and tell me if they pass');
+    expect(out.route).toBe('commander');
+    expect(spoken[0]).toMatch(/on it/i);        // immediate ack returned synchronously
+    await new Promise((r) => setTimeout(r, 5200)); // poll(1s) + settle(2.5s) -> reply ~4s later
+    expect(spoken.some((s) => /build passed/i.test(s))).toBe(true); // reply spoken later
+  }, 30000);
+});

@@ -504,7 +504,7 @@ voiceBrainService.init({
   speechService,
   commanderContextService,
   workspaceManager,
-  commanderService,
+  commanderService, // used to read the Commander's PTY buffer for spoken replies
   commandRegistry,
   supervisorService,
   discordWatchService,
