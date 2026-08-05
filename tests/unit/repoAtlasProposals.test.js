@@ -20,15 +20,15 @@ describe('Atlas write-back', () => {
   });
 
   test('a proposal does not touch the map until it is approved', () => {
-    atlas.proposeHighlight({ repoId: 'zoo-game', topic: 'testing', quality: 5, proposedBy: 'work1-claude' });
+    atlas.proposeHighlight({ repoId: 'acme-tycoon', topic: 'testing', quality: 5, proposedBy: 'work1-claude' });
 
     expect(atlas.find('testing')).toEqual([]);
     expect(atlas.listProposals()).toHaveLength(1);
   });
 
   test('approving writes through the same path manual curation uses', () => {
-    atlas.proposeHighlight({ repoId: 'zoo-game', topic: 'testing', quality: 5, notes: 'good harness' });
-    const result = atlas.approveProposal('zoo-game:testing');
+    atlas.proposeHighlight({ repoId: 'acme-tycoon', topic: 'testing', quality: 5, notes: 'good harness' });
+    const result = atlas.approveProposal('acme-tycoon:testing');
 
     expect(result.ok).toBe(true);
     const hits = atlas.find('testing');
@@ -38,8 +38,8 @@ describe('Atlas write-back', () => {
   });
 
   test('rejecting leaves the map untouched and clears the queue', () => {
-    atlas.proposeHighlight({ repoId: 'zoo-game', topic: 'testing', quality: 5 });
-    expect(atlas.rejectProposal('zoo-game:testing').ok).toBe(true);
+    atlas.proposeHighlight({ repoId: 'acme-tycoon', topic: 'testing', quality: 5 });
+    expect(atlas.rejectProposal('acme-tycoon:testing').ok).toBe(true);
 
     expect(atlas.find('testing')).toEqual([]);
     expect(atlas.listProposals()).toEqual([]);
@@ -47,8 +47,8 @@ describe('Atlas write-back', () => {
   });
 
   test('a second proposal for the same topic supersedes the first rather than stacking', () => {
-    atlas.proposeHighlight({ repoId: 'zoo-game', topic: 'testing', quality: 3 });
-    atlas.proposeHighlight({ repoId: 'zoo-game', topic: 'testing', quality: 5 });
+    atlas.proposeHighlight({ repoId: 'acme-tycoon', topic: 'testing', quality: 3 });
+    atlas.proposeHighlight({ repoId: 'acme-tycoon', topic: 'testing', quality: 5 });
 
     const pending = atlas.listProposals();
     expect(pending).toHaveLength(1);
@@ -57,25 +57,25 @@ describe('Atlas write-back', () => {
   });
 
   test('topic aliases are normalized so proposals do not fragment the vocabulary', () => {
-    atlas.proposeHighlight({ repoId: 'zoo-game', topic: 'unit-tests', quality: 4 });
+    atlas.proposeHighlight({ repoId: 'acme-tycoon', topic: 'unit-tests', quality: 4 });
     expect(atlas.listProposals()[0].topic).toBe('testing');
   });
 
   test('an avoid proposal records a do-not-copy note when approved', () => {
-    atlas.proposeHighlight({ repoId: 'zoo-game', topic: 'ui', kind: 'avoid', notes: 'hand-rolled, superseded' });
-    atlas.approveProposal('zoo-game:ui');
+    atlas.proposeHighlight({ repoId: 'acme-tycoon', topic: 'ui', kind: 'avoid', notes: 'hand-rolled, superseded' });
+    atlas.approveProposal('acme-tycoon:ui');
 
-    expect(atlas.getEntry('zoo-game').avoid).toEqual([{ topic: 'ui', reason: 'hand-rolled, superseded' }]);
+    expect(atlas.getEntry('acme-tycoon').avoid).toEqual([{ topic: 'ui', reason: 'hand-rolled, superseded' }]);
   });
 
   test('quality is clamped, so an over-eager agent cannot invent a 9/5', () => {
-    atlas.proposeHighlight({ repoId: 'zoo-game', topic: 'testing', quality: 9 });
+    atlas.proposeHighlight({ repoId: 'acme-tycoon', topic: 'testing', quality: 9 });
     expect(atlas.listProposals()[0].quality).toBe(5);
   });
 
   test('proposals without a repo or topic are refused', () => {
     expect(() => atlas.proposeHighlight({ topic: 'testing' })).toThrow(/repo id/);
-    expect(() => atlas.proposeHighlight({ repoId: 'zoo-game' })).toThrow(/topic/);
+    expect(() => atlas.proposeHighlight({ repoId: 'acme-tycoon' })).toThrow(/topic/);
   });
 
   test('deciding an unknown proposal reports it instead of failing silently', () => {
@@ -85,7 +85,7 @@ describe('Atlas write-back', () => {
 
   test('evidence travels with the proposal so review takes seconds', () => {
     atlas.proposeHighlight({
-      repoId: 'zoo-game',
+      repoId: 'acme-tycoon',
       topic: 'testing',
       quality: 4,
       evidence: 'added 40 tests in tests/unit, all green',
@@ -107,7 +107,7 @@ describe('Atlas write-back', () => {
   });
 
   test('proposal stats surface in atlas status', () => {
-    atlas.proposeHighlight({ repoId: 'zoo-game', topic: 'testing', quality: 4 });
+    atlas.proposeHighlight({ repoId: 'acme-tycoon', topic: 'testing', quality: 4 });
     expect(atlas.getStatus().proposals.pending).toBe(1);
   });
 });

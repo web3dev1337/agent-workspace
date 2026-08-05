@@ -12,16 +12,16 @@ describe('RepoAtlasService', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-test-'));
-    repoDir = path.join(tmpDir, 'repos', 'zoo-game');
+    repoDir = path.join(tmpDir, 'repos', 'acme-tycoon');
     fs.mkdirSync(repoDir, { recursive: true });
     process.env.AGENT_WORKSPACE_ATLAS_DIR = path.join(tmpDir, 'atlas');
 
     atlas = new RepoAtlasService();
     store.saveDiscoveryCache([{
       __source: 'discovery',
-      id: 'zoo-game',
-      name: 'zoo-game',
-      repo: 'owner/zoo-game',
+      id: 'acme-tycoon',
+      name: 'acme-tycoon',
+      repo: 'owner/acme-tycoon',
       kind: 'game',
       languages: ['TypeScript'],
       localPath: repoDir,
@@ -36,7 +36,7 @@ describe('RepoAtlasService', () => {
   });
 
   test('discovery alone produces a usable entry', () => {
-    const entry = atlas.getEntry('zoo-game');
+    const entry = atlas.getEntry('acme-tycoon');
     expect(entry.kind).toBe('game');
     expect(entry.visibility).toBe('private');
     expect(entry.sources).toEqual(['discovery']);
@@ -44,13 +44,13 @@ describe('RepoAtlasService', () => {
 
   test('an in-repo manifest layers over discovery', () => {
     fs.writeFileSync(path.join(repoDir, '.repo-atlas.json'), JSON.stringify({
-      id: 'zoo-game',
+      id: 'acme-tycoon',
       summary: 'Multiplayer zoo tycoon',
       highlights: [{ topic: 'data-compression', quality: 5, notes: 'bitpacked saves' }]
     }));
     atlas.invalidate();
 
-    const entry = atlas.getEntry('zoo-game');
+    const entry = atlas.getEntry('acme-tycoon');
     expect(entry.summary).toBe('Multiplayer zoo tycoon');
     expect(entry.kind).toBe('game');
     expect(entry.highlights[0].topic).toBe('data-compression');
@@ -59,31 +59,31 @@ describe('RepoAtlasService', () => {
 
   test('the registry overrides the manifest — your opinion wins', () => {
     fs.writeFileSync(path.join(repoDir, '.repo-atlas.json'), JSON.stringify({
-      id: 'zoo-game',
+      id: 'acme-tycoon',
       summary: 'From the repo',
       maturity: 'production'
     }));
-    atlas.setEntry('zoo-game', { summary: 'From you', maturity: 'prototype' });
+    atlas.setEntry('acme-tycoon', { summary: 'From you', maturity: 'prototype' });
 
-    const entry = atlas.getEntry('zoo-game');
+    const entry = atlas.getEntry('acme-tycoon');
     expect(entry.summary).toBe('From you');
     expect(entry.maturity).toBe('prototype');
     expect(entry.sources).toEqual(['discovery', 'manifest', 'registry']);
   });
 
   test('addHighlight persists and replaces the same topic', () => {
-    atlas.addHighlight('zoo-game', { topic: 'multiplayer', quality: 3, notes: 'chatty' });
-    atlas.addHighlight('zoo-game', { topic: 'networking', quality: 5, paths: ['src/net'], notes: 'rewritten' });
+    atlas.addHighlight('acme-tycoon', { topic: 'multiplayer', quality: 3, notes: 'chatty' });
+    atlas.addHighlight('acme-tycoon', { topic: 'networking', quality: 5, paths: ['src/net'], notes: 'rewritten' });
 
-    const entry = new RepoAtlasService().getEntry('zoo-game');
+    const entry = new RepoAtlasService().getEntry('acme-tycoon');
     expect(entry.highlights).toEqual([
       { topic: 'networking', quality: 5, paths: ['src/net'], notes: 'rewritten' }
     ]);
   });
 
   test('addAvoid records a do-not-copy note without removing the repo', () => {
-    atlas.addAvoid('zoo-game', { topic: 'ui', reason: 'hand-rolled' });
-    const entry = atlas.getEntry('zoo-game');
+    atlas.addAvoid('acme-tycoon', { topic: 'ui', reason: 'hand-rolled' });
+    const entry = atlas.getEntry('acme-tycoon');
     expect(entry.avoid).toEqual([{ topic: 'ui', reason: 'hand-rolled' }]);
     expect(atlas.find('ui')).toEqual([]);
   });
@@ -104,20 +104,20 @@ describe('RepoAtlasService', () => {
 
   test('compile writes an audience bundle and withholds private entries', () => {
     atlas.setAudience({ id: 'core-team', label: 'Core team' });
-    atlas.setEntry('zoo-game', { visibility: 'team', groups: ['core-team'] });
+    atlas.setEntry('acme-tycoon', { visibility: 'team', groups: ['core-team'] });
     atlas.setEntry('secret-thing', { name: 'secret', visibility: 'private' });
 
     const result = atlas.compile('core-team');
     expect(result.counts.included).toBe(1);
-    expect(result.bundle.entries[0].id).toBe('zoo-game');
+    expect(result.bundle.entries[0].id).toBe('acme-tycoon');
 
     const written = JSON.parse(fs.readFileSync(result.written[0], 'utf8'));
-    expect(written.entries.map((e) => e.id)).toEqual(['zoo-game']);
+    expect(written.entries.map((e) => e.id)).toEqual(['acme-tycoon']);
     expect(JSON.stringify(written)).not.toContain(repoDir);
   });
 
   test('compile --dry-run writes nothing', () => {
-    atlas.setEntry('zoo-game', { visibility: 'public' });
+    atlas.setEntry('acme-tycoon', { visibility: 'public' });
     const result = atlas.compile('core-team', { write: false });
     expect(result.written).toEqual([]);
     expect(fs.existsSync(store.bundlesDir())).toBe(false);
@@ -126,7 +126,7 @@ describe('RepoAtlasService', () => {
   test('initManifest seeds a manifest from what is already known', () => {
     const { path: manifestPath, entry } = atlas.initManifest(repoDir);
     expect(fs.existsSync(manifestPath)).toBe(true);
-    expect(entry.id).toBe('zoo-game');
+    expect(entry.id).toBe('acme-tycoon');
     expect(entry.kind).toBe('game');
     expect(entry.visibility).toBe('private');
   });
@@ -138,7 +138,7 @@ describe('RepoAtlasService', () => {
   });
 
   test('getStatus reports where data lives and how much is curated', () => {
-    atlas.addHighlight('zoo-game', { topic: 'testing', quality: 4 });
+    atlas.addHighlight('acme-tycoon', { topic: 'testing', quality: 4 });
     const status = atlas.getStatus();
     expect(status.entryCount).toBe(1);
     expect(status.clonedCount).toBe(1);

@@ -23,10 +23,10 @@ describe('atlasSchema', () => {
   });
 
   test('normalizeEntry keeps only supplied keys unless strict', () => {
-    const partial = normalizeEntry({ id: 'zoo-game', quality: 9 });
-    expect(partial).toEqual({ id: 'zoo-game', quality: 5 });
+    const partial = normalizeEntry({ id: 'acme-tycoon', quality: 9 });
+    expect(partial).toEqual({ id: 'acme-tycoon', quality: 5 });
 
-    const strict = normalizeEntry({ id: 'zoo-game' }, { strict: true });
+    const strict = normalizeEntry({ id: 'acme-tycoon' }, { strict: true });
     expect(strict.visibility).toBe('private');
     expect(strict.highlights).toEqual([]);
   });
@@ -59,7 +59,7 @@ describe('atlasSchema', () => {
 
   test('mergeEntries lets later layers win per field without wiping earlier ones', () => {
     const merged = mergeEntries(
-      { __source: 'discovery', id: 'zoo-game', name: 'zoo-game', kind: 'game', languages: ['TypeScript'] },
+      { __source: 'discovery', id: 'acme-tycoon', name: 'acme-tycoon', kind: 'game', languages: ['TypeScript'] },
       { __source: 'manifest', summary: 'Multiplayer zoo tycoon', highlights: [{ topic: 'networking', quality: 3 }] },
       { __source: 'registry', visibility: 'team', groups: ['core-team'] }
     );

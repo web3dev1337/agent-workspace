@@ -32,16 +32,16 @@ describe('Repo Atlas multi-machine sync', () => {
 
   test('curated entries are one file per repo so machines cannot conflict', () => {
     const atlas = machine('a');
-    atlas.addHighlight('box2d-luau', { topic: 'testing', quality: 5 });
-    atlas.addHighlight('zoo-game', { topic: 'networking', quality: 3 });
+    atlas.addHighlight('physics-kit', { topic: 'testing', quality: 5 });
+    atlas.addHighlight('acme-tycoon', { topic: 'networking', quality: 3 });
 
-    expect(fs.readdirSync(store.entriesDir()).sort()).toEqual(['box2d-luau.json', 'zoo-game.json']);
+    expect(fs.readdirSync(store.entriesDir()).sort()).toEqual(['acme-tycoon.json', 'physics-kit.json']);
   });
 
   test('judgement travels between machines; local discovery does not', async () => {
     const a = machine('a');
     await a.setRemote(remote);
-    a.addHighlight('box2d-luau', { topic: 'testing', quality: 5, notes: 'best harness we have' });
+    a.addHighlight('physics-kit', { topic: 'testing', quality: 5, notes: 'best harness we have' });
     store.saveDiscoveryCache([{ id: 'only-on-a', name: 'only-on-a', localPath: '/machine/a/only-on-a', cloned: true }]);
     expect((await a.sync()).ok).toBe(true);
 

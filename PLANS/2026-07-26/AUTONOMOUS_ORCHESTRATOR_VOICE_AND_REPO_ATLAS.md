@@ -110,7 +110,7 @@ Hard invariants regardless of level:
 
 ### Why this is the Iron Man bit
 
-The Jarvis experience isn't a nicer chat box — it's that **the assistant noticed first**. "Sir, `work3` has been waiting on a file-write permission for four minutes, and `zoo-game/work1` pushed eleven minutes ago without opening a PR." That is entirely a sensors-and-rules problem, and it is now solved with zero tokens.
+The Jarvis experience isn't a nicer chat box — it's that **the assistant noticed first**. "Sir, `work3` has been waiting on a file-write permission for four minutes, and `acme-tycoon/work1` pushed eleven minutes ago without opening a PR." That is entirely a sensors-and-rules problem, and it is now solved with zero tokens.
 
 ---
 
@@ -138,16 +138,16 @@ Plus: `briefing` (spoken fleet summary assembled from supervisor findings + advi
 
 ### Three properties that make it work
 
-**1. Cloned-ness is irrelevant.** An entry describes a repo whether or not it's on this disk. `drain-the-lake` can be a first-class breadcrumb with a clone hint attached. This is the whole point — the map must cover the territory, not the local cache of it.
+**1. Cloned-ness is irrelevant.** An entry describes a repo whether or not it's on this disk. `puzzle-proto` can be a first-class breadcrumb with a clone hint attached. This is the whole point — the map must cover the territory, not the local cache of it.
 
-**2. Quality is a first-class field, per-topic.** The ask is explicit and correct: Epic Survivors and HyFire2 are early work but *fully functioning*, and Drain the Lake is a rough prototype that might still have the best testing setup you've written. So quality is not a repo-level star rating; it's **per highlight**:
+**2. Quality is a first-class field, per-topic.** The ask is explicit and correct: Acme Shooter and Acme Arena are early work but *fully functioning*, and Puzzle Proto is a rough prototype that might still have the best testing setup you've written. So quality is not a repo-level star rating; it's **per highlight**:
 
 ```jsonc
 "highlights": [
   { "topic": "testing",   "quality": 5, "paths": ["tests/"], "notes": "best harness we have" },
   { "topic": "worldgen",  "quality": 2, "notes": "prototype spaghetti — read for ideas, not patterns" }
 ],
-"avoid": [ { "topic": "ui", "reason": "hand-rolled, superseded by roblox-game-kit" } ]
+"avoid": [ { "topic": "ui", "reason": "hand-rolled, superseded by game-kit" } ]
 ```
 
 A repo can be simultaneously "don't copy this" and "copy exactly this one thing", which is the truth about real codebases and something a flat rating cannot express.
@@ -172,7 +172,7 @@ Each entry carries `visibility` (`private|team|public`) and `groups: [...]`. A b
 
 Layer 1 — **in-repo manifest**, `.repo-atlas.json`, committed. The repo describes itself; it travels with the code; the agent working in that repo maintains it (same discipline as `CODEBASE_DOCUMENTATION.md`).
 
-Layer 2 — **central registry**, `~/.agent-workspace/atlas/registry.json`. Curated entries for repos with no manifest (forks, references, archived, never-cloned). This is where you write "drain-the-lake: rough, but the testing is worth reading."
+Layer 2 — **central registry**, `~/.agent-workspace/atlas/registry.json`. Curated entries for repos with no manifest (forks, references, archived, never-cloned). This is where you write "puzzle-proto: rough, but the testing is worth reading."
 
 Layer 3 — **auto-discovery**, zero-effort baseline. Scan `~/GitHub` for git repos + `gh repo list` for the rest; infer kind, language, activity, fork/archive status. Produces a draft you curate rather than a blank page. Curated fields always win over inferred ones.
 
@@ -182,12 +182,12 @@ The token-efficiency argument is the point, so the primary interface is a **dige
 
 ```
 $ atlas digest --topics
-roblox/luau   box2d-luau(physics:5, testing:5) roblox-game-kit(mechanics:4) sabot-fps(fps-net:3)
-hytopia       zoo-game(data-compression:5, worldgen:4) hyfire2(matchmaking:3 ⚠ old)
-monogame/c#   epic-survivors(save-system:4 ⚠ old) beat-em-up-engine(input:4)
+roblox/luau   physics-kit(physics:5, testing:5) game-kit(mechanics:4) acme-fps(fps-net:3)
+hytopia       acme-tycoon(data-compression:5, worldgen:4) acme-arena(matchmaking:3 ⚠ old)
+monogame/c#   acme-shooter(save-system:4 ⚠ old) example-engine(input:4)
 ```
 
-Paste that into a prompt (or a `CLAUDE.md`) and the agent *has the map* — it never needs to search to know that `box2d-luau` is where the good tests live. Then `atlas show box2d-luau` for detail and `atlas find testing --min-quality 4` when it needs to look sideways.
+Paste that into a prompt (or a `CLAUDE.md`) and the agent *has the map* — it never needs to search to know that `physics-kit` is where the good tests live. Then `atlas show physics-kit` for detail and `atlas find testing --min-quality 4` when it needs to look sideways.
 
 Surfaces shipped: standalone CLI (`scripts/atlas.js`, no server required — symlink into `~/.claude/scripts/`), orchestrator REST API (`/api/atlas/*`), and an agent skill so any Claude/Codex session can query it without being told how.
 
@@ -223,8 +223,8 @@ confirming differential redaction, no private entries, and no local paths in the
 
 ### Seeded atlas state
 
-Only highlights with actual evidence behind them were recorded — `box2d-luau` (physics, testing) and
-`roblox-mechanics-encyclopedia` (architecture), all sourced from the repos' own descriptions. **No
+Only highlights with actual evidence behind them were recorded — `physics-kit` (physics, testing) and
+`mechanics-encyclopedia` (architecture), all sourced from the repos' own descriptions. **No
 quality scores were invented for the other 230.** The map is built; the judgement is deliberately
 left to you, because a fabricated 4/5 is worse than a blank field — it sends agents somewhere on a
 false promise.

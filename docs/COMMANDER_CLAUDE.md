@@ -189,11 +189,11 @@ curl -sS "$BASE_URL/api/atlas/find?topic=data-compression" -H "X-Auth-Token: $AU
 # Compact map worth pasting into a prompt
 curl -sS "$BASE_URL/api/atlas/digest" -H "X-Auth-Token: $AUTH_TOKEN" | jq -r .digest
 
-curl -sS "$BASE_URL/api/atlas/entries/zoo-game" -H "X-Auth-Token: $AUTH_TOKEN" | jq -r .description
+curl -sS "$BASE_URL/api/atlas/entries/acme-tycoon" -H "X-Auth-Token: $AUTH_TOKEN" | jq -r .description
 curl -sS "$BASE_URL/api/atlas/topics" -H "X-Auth-Token: $AUTH_TOKEN" | jq
 
 # Record what a repo turned out to be good at
-curl -sS -X POST "$BASE_URL/api/atlas/entries/zoo-game/highlights" \
+curl -sS -X POST "$BASE_URL/api/atlas/entries/acme-tycoon/highlights" \
   -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"topic": "data-compression", "quality": 5, "paths": ["src/data/"], "notes": "bitpacked saves"}'
 ```
@@ -231,10 +231,10 @@ After substantial work, propose what you learned. You cannot write to the map di
 ```bash
 curl -sS -X POST "$BASE_URL/api/atlas/proposals" \
   -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"repoId":"zoo-game","topic":"data-compression","quality":5,
+  -d '{"repoId":"acme-tycoon","topic":"data-compression","quality":5,
        "paths":["src/data/"],"notes":"bitpacked saves",
        "evidence":"12x smaller than the JSON it replaced, benchmarked",
-       "proposedBy":"zoo-game-work1-claude"}'
+       "proposedBy":"acme-tycoon-work1-claude"}'
 ```
 
 Always include `evidence`. Proposals without it get rejected, and rightly so.
@@ -253,7 +253,7 @@ curl -sS "$BASE_URL/api/discord-watch/status" -H "X-Auth-Token: $AUTH_TOKEN" | j
 # Bind a work item to the session doing it — this is what makes agent status visible to the team
 curl -sS -X POST "$BASE_URL/api/discord-watch/items/discord:123/link" \
   -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"sessionId": "zoo-game-work1-claude"}'
+  -d '{"sessionId": "acme-tycoon-work1-claude"}'
 ```
 
 Link a work item whenever you start a session for one — an unlinked item looks untouched to everyone else. Work item tiers come from how urgently the message was phrased, and they flow into the task record, so linking also sets the session's tier correctly.
