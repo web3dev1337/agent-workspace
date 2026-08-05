@@ -158,6 +158,36 @@ class RepoAtlasService {
     return entries;
   }
 
+  /**
+   * Entries as YOU may share them: merged WITHOUT the subscription layer, so a
+   * teammate's highlights/summary can never ride into a bundle you compile.
+   * The `foreign` flag alone is not enough — it clears the moment discovery
+   * also knows the repo (you cloned it, or `gh` can list it), and cloning a
+   * repo someone shared with you must not declassify THEIR judgement of it.
+   * Entries whose existence you only know from a subscription (even if you
+   * annotated them locally) are skipped outright.
+   */
+  getOwnEntries() {
+    const { byId, registry } = this.loadLayers();
+    const entries = [];
+
+    for (const [id, layers] of byId.entries()) {
+      if (layers.subscription && !layers.discovery && !layers.manifest) continue;
+      const merged = schema.mergeEntries(
+        { id, visibility: registry.defaults?.visibility, groups: registry.defaults?.groups, __source: 'defaults' },
+        layers.discovery,
+        layers.manifest,
+        layers.registry
+      );
+      merged.id = id;
+      merged.sources = (merged.sources || []).filter((s) => s !== 'defaults');
+      entries.push(merged);
+    }
+
+    entries.sort((a, b) => a.id.localeCompare(b.id));
+    return entries;
+  }
+
   getEntry(id, options = {}) {
     const key = schema.kebab(id);
     return this.getEntries(options).find((entry) => entry.id === key) || null;
@@ -254,8 +284,11 @@ class RepoAtlasService {
   compile(audience, { write = true } = {}) {
     const meta = this.listAudiences().find((a) => a.id === schema.kebab(audience)) || {};
     // Never re-share what someone else shared with you — attribution and
-    // permission both belong to whoever published it.
-    const own = this.getEntries().filter((entry) => entry.foreign !== true);
+    // permission both belong to whoever published it. getOwnEntries() merges
+    // without the subscription layer, so this holds even for a subscribed
+    // repo you later cloned (the old `foreign` filter alone let that case
+    // republish the teammate's fields as if they were yours).
+    const own = this.getOwnEntries().filter((entry) => entry.foreign !== true);
     const result = compiler.compileBundle(own, {
       audience,
       label: meta.label,

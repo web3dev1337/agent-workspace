@@ -243,6 +243,33 @@ describe('Repo Atlas multi-machine sync', () => {
       expect(compiled.bundle.entries.map((e) => e.id)).not.toContain('shared-repo');
     });
 
+    test('cloning a repo a teammate shared must not republish their judgement of it', async () => {
+      const shared = publishBundle(root, [{
+        id: 'shared-repo',
+        name: 'shared-repo',
+        summary: 'their description',
+        visibility: 'public',
+        highlights: [{ topic: 'auth', quality: 4, notes: 'their private assessment' }]
+      }]);
+
+      const me = machine('me');
+      await me.subscribe({ name: 'them', source: shared });
+      // Later the repo shows up in local discovery too (you cloned it, or gh
+      // can list it). That used to clear `foreign` — and compile() would then
+      // republish the teammate's summary/highlights as if they were yours.
+      store.saveDiscoveryCache([{ id: 'shared-repo', name: 'shared-repo', localPath: '/machine/me/shared-repo', cloned: true }]);
+      me.invalidate();
+      me.setEntry('shared-repo', { visibility: 'public' });
+
+      const compiled = me.compile('anyone', { write: false });
+      const entry = compiled.bundle.entries.find((e) => e.id === 'shared-repo');
+      // The repo itself is yours to describe now (you actually have it)…
+      expect(entry).toBeDefined();
+      // …but nothing the teammate authored may ride along into your bundle.
+      expect(entry.summary || '').not.toBe('their description');
+      expect((entry.highlights || []).map((h) => h.topic)).not.toContain('auth');
+    });
+
     test('subscribing to something that is not a bundle fails loudly', async () => {
       const notABundle = path.join(root, 'nope.json');
       store.writeJson(notABundle, { hello: 'world' });

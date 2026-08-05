@@ -2,10 +2,10 @@ const { normalizeTopic, kebab } = require('./atlasSchema');
 
 const STALE_AFTER_DAYS = 365;
 
-// `null`, `''` and `undefined` all mean "no floor" — Number() turns the first
-// two into 0, which would silently drop every uncurated repo.
+// `null`, `''`, `undefined` and bare booleans all mean "no floor" — Number()
+// turns them into 0, which would silently drop every uncurated repo.
 function qualityFloor(value) {
-  if (value === null || value === undefined || value === '' || value === true) return null;
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
 }

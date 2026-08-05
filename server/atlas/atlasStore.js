@@ -260,10 +260,13 @@ function loadManifest(projectRoot) {
 }
 
 function writeManifest(projectRoot, entry) {
-  const target = fs.existsSync(path.join(projectRoot, 'master'))
-    ? path.join(projectRoot, 'master')
-    : projectRoot;
-  return writeJson(path.join(target, MANIFEST_FILENAME), entry);
+  // Worktree layouts collapse to the parent dir during discovery, but the
+  // manifest must land inside the checkout (master/ or main/) — the parent is
+  // not a git repo, so a manifest written there could never be committed.
+  const checkout = ['master', 'main']
+    .map((dir) => path.join(projectRoot, dir))
+    .find((candidate) => fs.existsSync(candidate));
+  return writeJson(path.join(checkout || projectRoot, MANIFEST_FILENAME), entry);
 }
 
 function saveBundle(audienceId, bundle, outputPath = '') {

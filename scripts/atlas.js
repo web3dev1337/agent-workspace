@@ -70,6 +70,11 @@ const qualityFlag = (value) => {
   return Number.isFinite(num) ? num : QUALITY_INVALID;
 };
 
+// A value-less `--topic` parses as boolean `true`, which passes a truthiness
+// usage check and would be recorded as the literal topic "true". Only a
+// non-empty string counts as a given topic.
+const topicFlag = (value) => (typeof value === 'string' && value.trim() ? value : null);
+
 const out = (text) => process.stdout.write(`${text}\n`);
 const fail = (message) => {
   process.stderr.write(`atlas: ${message}\n`);
@@ -213,11 +218,12 @@ const commands = {
 
   note(positionals, flags) {
     const id = positionals[0];
-    if (!id || !flags.topic) return fail('usage: atlas note <id> --topic <topic> [--quality 1-5] [--paths a,b] [--notes "..."]');
+    const topic = topicFlag(flags.topic);
+    if (!id || !topic) return fail('usage: atlas note <id> --topic <topic> [--quality 1-5] [--paths a,b] [--notes "..."]');
     const quality = qualityFlag(flags.quality);
     if (quality === QUALITY_INVALID) return fail('--quality needs a number 1-5');
     const saved = atlas.addHighlight(id, {
-      topic: flags.topic,
+      topic,
       quality,
       paths: listFlag(flags.paths),
       notes: flags.notes === true ? '' : String(flags.notes || '')
@@ -227,8 +233,9 @@ const commands = {
 
   avoid(positionals, flags) {
     const id = positionals[0];
-    if (!id || !flags.topic) return fail('usage: atlas avoid <id> --topic <topic> --reason "..."');
-    const saved = atlas.addAvoid(id, { topic: flags.topic, reason: flags.reason === true ? '' : flags.reason });
+    const topic = topicFlag(flags.topic);
+    if (!id || !topic) return fail('usage: atlas avoid <id> --topic <topic> --reason "..."');
+    const saved = atlas.addAvoid(id, { topic, reason: flags.reason === true ? '' : flags.reason });
     return out(`Marked do-not-copy: ${saved.id} → ${(saved.avoid || []).map((a) => a.topic).join(', ')}`);
   },
 
@@ -285,14 +292,15 @@ const commands = {
 
   propose(positionals, flags) {
     const id = positionals[0];
-    if (!id || !flags.topic) {
+    const topic = topicFlag(flags.topic);
+    if (!id || !topic) {
       return fail('usage: atlas propose <repo-id> --topic <topic> [--quality 1-5] [--paths a,b] [--notes "..."] [--evidence "why"] [--avoid]');
     }
     const quality = qualityFlag(flags.quality);
     if (quality === QUALITY_INVALID) return fail('--quality needs a number 1-5');
     const proposal = atlas.proposeHighlight({
       repoId: id,
-      topic: flags.topic,
+      topic,
       kind: flags.avoid === true ? 'avoid' : 'highlight',
       quality,
       paths: listFlag(flags.paths),
