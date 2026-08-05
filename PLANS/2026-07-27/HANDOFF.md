@@ -259,3 +259,53 @@ Verified live via `POST /api/voice/parse` (classifier only, no side effects). Al
   false-reject risk on real requests.
 - Multi-part commands (`"open the queue AND approve everything"`) execute the first clause only.
 - True full-duplex (PersonaPlex on the 5090) is still the next real build — see above.
+
+---
+
+## SESSION 3 UPDATE (2026-08-05) — full-PR review pass (Fable) + fixes
+
+Re-reviewed the whole PR: 7 read-only subsystem scouts + an independent Codex pass over the
+unreviewed 07-27 voice commits; every finding verified against the actual code before fixing.
+**Tests now 893 green / 120 suites** (was 868). Nine fix commits, all pushed.
+
+Fixed, worst first:
+- **voice CRITICAL** — rules matched BEFORE the negation guard and destructive rule patterns are
+  unanchored: `"don't stop all claudes"` actually executed `stop-all-claudes` (verified live).
+  Negation now short-circuits rule matching. Also: "stop the server" no longer swallowed as a
+  negation; `/what.*sessions/` no longer steals fact questions; `isGrounded` requires the
+  destructive VERB, not an incidental noun; Commander-reply captures serialized (shared-buffer race).
+- **supervisor CRITICAL** — auto-approve deny list was case-sensitive (`Write(.ENV)`, lowercase SQL
+  passed) and only knew `~/`-style credential paths (`Write(/home/x/.ssh/...)` auto-approved).
+  Deny patterns compile case-insensitive now; absolute `/home|/Users|/root` credential paths,
+  quoted build-file paths and `git push -f` denied. `forgetHealed` clears cooldowns (stale cooldown
+  blocked action on fresh recurrences + unbounded map); `reload-rules` writes an audit entry.
+- **speech** — kokoro was hardcoded "available" (URL has a default) with a silent no-op failure
+  path: a dead kokoro server muted the voice permanently while `speak()` reported success.
+  Availability is now an explicit signal (env set / registry-verified); failed neural synth falls
+  back to browser speech; TTS `none` actually mutes; priority reaches the streamed-audio path;
+  client queues clips instead of overlapping, respects mute, and replays autoplay-blocked audio on
+  the first user gesture.
+- **atlas** — `compile()` re-shared a teammate's subscribed highlights once the repo also appeared
+  in local discovery (cloning it declassified their content). Bundles now merge WITHOUT the
+  subscription layer (`getOwnEntries`). Also: `writeManifest` knows `main/` checkouts; CLI
+  value-less `--topic` rejected; `qualityFloor` boolean guard.
+- **app-server** — stdio pipes had no error listeners (a non-EPIPE stream error would take down the
+  whole orchestrator); restart backoff reset at spawn, so a spawn-then-die binary was hammered at
+  the 1s floor forever (resets only after 30s uptime now); an undelivered approval answer keeps the
+  approval pending instead of vanishing.
+- **discord** — permalinks always rendered the DM-only `/channels/@me/...` form (guild id now
+  fetched once per channel + cached); backfills >100 silently capped at 100 (now page `before=`
+  backward); channels added over the API now persist to the override config; `linkSession` awaits
+  its task-record write (its catch was dead code); `numberOr(null)` falls back instead of becoming
+  0; explicit `tier: 0` honored.
+- **privacy** — files NEW in this PR (the design doc, COMMANDER_CLAUDE.md examples, atlas test
+  fixtures) shipped real private repo names into this public repo; scrubbed to the established
+  `acme-*` placeholder vocabulary. Names remain in this branch's earlier commit history;
+  pre-existing references on main are left as a separate decision.
+
+Consciously left as-is: `POST /api/atlas/proposals` stays read-level (agents must be able to
+propose; approving is what writes and stays write-gated); `speech-speak`/`speech-audio` are
+fleet-wide broadcasts by design (two open browser windows will both narrate);
+`extractAssistantReply` remains heuristic (the structured replacement is the Codex app-server
+path); `package.json` `engines >=16` predates this PR even though server code now uses fetch —
+Node 18+ is the real floor.
