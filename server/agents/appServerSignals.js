@@ -182,6 +182,12 @@ class AppServerSignalSource extends EventEmitter {
     if (!entry) return { ok: false, error: `no pending approval "${requestId}"` };
 
     const sent = this.client?.respond(entry.requestId, { decision: approved ? 'approved' : 'denied', note });
+    // An undelivered answer (app-server mid-restart) must keep the approval
+    // pending and retryable — deleting it here made the request vanish from
+    // the UI while the real codex thread stayed blocked on it forever.
+    if (!sent) {
+      return { ok: false, error: 'app-server is not running — answer not delivered, approval still pending', approved, threadId: entry.threadId };
+    }
     this.pendingApprovals.delete(key);
 
     const state = this.threads.get(entry.threadId);
@@ -189,7 +195,7 @@ class AppServerSignalSource extends EventEmitter {
       state.status = 'busy';
       state.activeFlags = [];
     }
-    return { ok: Boolean(sent), approved, threadId: entry.threadId };
+    return { ok: true, approved, threadId: entry.threadId };
   }
 
   listPendingApprovals() {

@@ -6,6 +6,10 @@ const { augmentProcessEnv, getHiddenProcessOptions } = require('../utils/process
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const RESTART_BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000];
 const MAX_LINE_BYTES = 8 * 1024 * 1024;
+// Uptime below this is a crash, not a run — only sustained uptime resets the
+// restart-backoff counter, otherwise a spawn-then-die-immediately binary would
+// read attempt 0 on every cycle and be hammered at the shortest delay forever.
+const STABLE_UPTIME_MS = 30_000;
 
 /**
  * JSON-RPC client for `codex app-server`.
@@ -73,6 +77,7 @@ class AppServerClient extends EventEmitter {
       // A partial line left over from a previous process must not prefix the
       // new stream — it would corrupt the first frame the new child sends.
       this.buffer = '';
+      const spawnedAtMs = Date.now();
 
       // Every handler below is bound to THIS child and bails if a newer one
       // has replaced it. A SIGTERM'd child's 'exit' event arrives on a later
@@ -89,6 +94,26 @@ class AppServerClient extends EventEmitter {
         if (text) this.logger.debug?.('[app-server]', text);
       });
 
+      // The stdio pipes surface their own errors (an async EPIPE from writing
+      // to a child that closed its stdin, a destroyed pipe). Without listeners
+      // those throw uncaught — and any code other than the literal EPIPE the
+      // global handler swallows would take the whole orchestrator down. A
+      // stream error means this child is broken: kill it so the normal
+      // exit/restart path takes over instead of pending requests timing out.
+      const onStreamError = (error) => {
+        if (this.child !== child) return;
+        this.lastError = error.message;
+        this.logger.warn?.('[app-server] stdio stream error', { error: error.message });
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // Already gone.
+        }
+      };
+      child.stdin?.on?.('error', onStreamError);
+      child.stdout?.on?.('error', onStreamError);
+      child.stderr?.on?.('error', onStreamError);
+
       child.on('error', (error) => {
         if (this.child !== child) return;
         this.lastError = error.message;
@@ -99,12 +124,15 @@ class AppServerClient extends EventEmitter {
         if (this.child !== child) return;
         this.rejectAllPending(new Error(`app-server exited (code ${code}, signal ${signal})`));
         this.child = null;
+        // Sustained uptime is what proves the binary works, so the backoff
+        // counter resets here — never at spawn time, where a crash-looping
+        // binary would clear it right before every death.
+        if (Date.now() - spawnedAtMs >= STABLE_UPTIME_MS) this.restartAttempts = 0;
         this.emit('exit', { code, signal });
         if (!this.stopped && this.autoRestart) this.scheduleRestart();
       });
 
-      this.startedAt = new Date().toISOString();
-      this.restartAttempts = 0;
+      this.startedAt = new Date(spawnedAtMs).toISOString();
       this.emit('started', { pid: child.pid });
       resolve({ running: true, pid: child.pid });
     });

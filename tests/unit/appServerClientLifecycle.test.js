@@ -16,7 +16,7 @@ function makeChild(pid = 4242) {
   child.stdout.setEncoding = () => {};
   child.stderr = new EventEmitter();
   child.stderr.setEncoding = () => {};
-  child.stdin = { write: jest.fn() };
+  child.stdin = Object.assign(new EventEmitter(), { write: jest.fn() });
   child.kill = jest.fn(() => { child.killed = true; });
   return child;
 }
@@ -116,6 +116,70 @@ describe('AppServerClient lifecycle', () => {
     // The complete frame was handled; the oversized incomplete line was dropped.
     expect(seen).toEqual(['turn/completed']);
     expect(client.buffer).toBe('');
+  });
+
+  test('a stdio stream error is contained and retires the child instead of throwing uncaught', async () => {
+    const child = makeChild();
+    mockSpawn.mockReturnValue(child);
+    const client = new AppServerClient({ autoRestart: false, logger: quietLogger });
+    await client.start();
+
+    // An async EPIPE from a half-dead child arrives on the STREAM, not the
+    // process object — before the fix nothing listened and it threw uncaught.
+    expect(() => child.stdin.emit('error', new Error('write EPIPE'))).not.toThrow();
+    expect(client.lastError).toMatch(/EPIPE/);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  test('immediate crash-exits climb the restart backoff ladder instead of resetting it', async () => {
+    jest.useFakeTimers();
+    try {
+      mockSpawn.mockImplementation(() => makeChild());
+      const client = new AppServerClient({ autoRestart: true, logger: quietLogger });
+      await client.start();
+
+      // The binary spawns fine but dies instantly, over and over. Before the
+      // fix, restartAttempts was zeroed at every spawn, so every cycle read
+      // the shortest delay and hammered the broken binary once a second.
+      client.child.emit('exit', 1, null);
+      expect(client.restartAttempts).toBe(1);
+
+      await jest.advanceTimersByTimeAsync(1_000);
+      expect(client.isRunning()).toBe(true);
+      client.child.emit('exit', 1, null);
+      expect(client.restartAttempts).toBe(2);
+
+      await jest.advanceTimersByTimeAsync(2_000);
+      client.child.emit('exit', 1, null);
+      expect(client.restartAttempts).toBe(3);
+
+      client.stop();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('sustained uptime is what resets the backoff ladder', async () => {
+    jest.useFakeTimers();
+    try {
+      mockSpawn.mockImplementation(() => makeChild());
+      const client = new AppServerClient({ autoRestart: true, logger: quietLogger });
+      await client.start();
+
+      client.child.emit('exit', 1, null);
+      expect(client.restartAttempts).toBe(1);
+
+      // The replacement stays alive well past the stability window before
+      // dying — that proves the binary works, so the ladder starts over.
+      await jest.advanceTimersByTimeAsync(1_000);
+      await jest.advanceTimersByTimeAsync(31_000);
+      client.child.emit('exit', 1, null);
+      expect(client.restartAttempts).toBe(1);
+
+      client.stop();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('a spawn failure resolves cleanly and leaves start() retryable', async () => {

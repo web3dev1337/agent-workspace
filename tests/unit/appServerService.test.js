@@ -152,6 +152,27 @@ describe('AppServerSignalSource', () => {
     expect(signals.listPendingApprovals()).toEqual([]);
   });
 
+  test('an approval answer that cannot be delivered keeps the approval pending', () => {
+    const { client, signals } = source();
+    client.emitRequest(5, 'item/commandExecution/requestApproval', { threadId: 't1', command: 'npm test' });
+    expect(signals.listPendingApprovals()).toHaveLength(1);
+
+    // The app-server is mid-restart: the wire write fails.
+    client.respond = () => false;
+    const failed = signals.answerApproval(5, true);
+    expect(failed.ok).toBe(false);
+    // Before the fix the entry was deleted anyway — the approval vanished from
+    // the UI while the real codex thread stayed blocked on it forever.
+    expect(signals.listPendingApprovals()).toHaveLength(1);
+
+    // Once the server is back, the SAME approval is still answerable.
+    client.respond = (id, result) => { client.responses.push({ id, result }); return true; };
+    const retried = signals.answerApproval(5, true);
+    expect(retried.ok).toBe(true);
+    expect(client.responses[0].result.decision).toBe('approved');
+    expect(signals.listPendingApprovals()).toEqual([]);
+  });
+
   test('a closed thread stops producing signals', () => {
     const { client, signals } = source();
     client.emitNotification('thread/status/changed', { threadId: 't1', status: { type: 'idle' } });
