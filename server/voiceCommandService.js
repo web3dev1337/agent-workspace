@@ -1270,8 +1270,12 @@ class VoiceCommandService {
     // A negation ("don't open the queue", "cancel that") must never be turned
     // into the command it negates. The fact lane already handled bare acks
     // ("never mind"); anything still negating here skips the classifier and is
-    // handed to the Commander, which understands "don't".
-    if (/^(don'?t\b|do not\b|never\b|stop\b|cancel\b|no,?\s|nope\b)/.test(text)) {
+    // handed to the Commander, which understands "don't". Bare "stop …" and
+    // "cancel …" are NOT negations though — they are imperative commands
+    // ("stop the server") that just missed an exact rule phrasing, so only
+    // their dismissal forms ("stop that", "cancel it") short-circuit.
+    if (/^(don'?t\b|do not\b|never\b|no,?\s|nope\b)/.test(text)
+      || /^(stop|cancel|forget)\s+(that|it)\b/.test(text)) {
       return { success: false, error: 'negation is not a command', transcript: text };
     }
 

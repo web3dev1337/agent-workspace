@@ -409,4 +409,19 @@ describe('VoiceCommandService (free-form routing)', () => {
     expect(parsed.success).toBe(false);
     expect(parsed.error).toMatch(/too short/i);
   });
+
+  test('an imperative "stop/cancel <thing>" is not swallowed as a negation', async () => {
+    // "stop the server" is a command that merely missed an exact rule phrasing.
+    // The old guard treated any leading stop/cancel as negation, so it was
+    // short-circuited away from the classifier and misrouted to the Commander.
+    const parsed = await voiceCommandService.parseCommand('stop the server');
+    expect(parsed.error).not.toMatch(/negation/i);
+
+    // The dismissal forms still short-circuit.
+    for (const dismissal of ['stop that', 'cancel it', 'forget that']) {
+      const dismissed = await voiceCommandService.parseCommand(dismissal);
+      expect(dismissed.success).toBe(false);
+      expect(dismissed.error).toMatch(/negation/i);
+    }
+  });
 });
