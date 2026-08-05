@@ -87,6 +87,9 @@ class SpeechService {
     this.history = [];
     this.lastSpokenAt = new Map();
     this.backendCache = null;
+    // Backends the provider registry has actually health-checked (its server
+    // probe is async and lives there) — sync detection below can trust these.
+    this.verifiedBackends = new Set();
   }
 
   static getInstance(options = {}) {
@@ -109,10 +112,30 @@ class SpeechService {
   detectBackends({ force = false } = {}) {
     if (this.backendCache && !force) return this.backendCache;
 
+    // The warm HTTP servers can't be probed synchronously here, so they count
+    // as available only on an explicit opt-in signal: the env var was set, or
+    // the provider registry health-checked the server (verifiedBackends). The
+    // old `Boolean(this.kokoroHttpUrl)` was ALWAYS true (the URL has a
+    // default), which reported kokoro available on every machine and made a
+    // dead kokoro selectable — with no fallback, that was total silence.
     const backends = [
       { id: 'browser', label: 'Browser speech synthesis', available: true, local: false },
-      { id: 'piper', label: 'Piper (local neural TTS)', available: commandExists('piper') && Boolean(this.piperModel), local: true },
-      { id: 'kokoro', label: 'Kokoro (local neural, natural)', available: Boolean(this.kokoroHttpUrl) || (Boolean(this.cliEngine) && commandExists(this.cliEngine)), local: true },
+      {
+        id: 'piper',
+        label: 'Piper (local neural TTS)',
+        available: (commandExists('piper') && Boolean(this.piperModel))
+          || Boolean(process.env.PIPER_HTTP_URL)
+          || this.verifiedBackends.has('piper'),
+        local: true
+      },
+      {
+        id: 'kokoro',
+        label: 'Kokoro (local neural, natural)',
+        available: Boolean(process.env.KOKORO_HTTP_URL)
+          || this.verifiedBackends.has('kokoro')
+          || (Boolean(this.cliEngine) && commandExists(this.cliEngine)),
+        local: true
+      },
       { id: 'say', label: 'macOS say', available: os.platform() === 'darwin' && commandExists('say'), local: true },
       { id: 'sapi', label: 'Windows SAPI', available: os.platform() === 'win32', local: true },
       { id: 'espeak', label: 'espeak-ng', available: commandExists('espeak-ng') || commandExists('espeak'), local: true }
@@ -123,6 +146,9 @@ class SpeechService {
   }
 
   resolveBackend() {
+    // 'none' is an explicit "voice off" from the provider registry, not a
+    // backend to fall back from.
+    if (this.preferredBackend === 'none') return 'none';
     const backends = this.detectBackends();
     if (this.preferredBackend) {
       const preferred = backends.find((b) => b.id === this.preferredBackend);
@@ -148,10 +174,21 @@ class SpeechService {
    * model speaks, and a generic-CLI engine (kokoro/chatterbox) changes what is
    * available. `engine` is the provider's engine; `command` its CLI binary.
    */
-  setActiveEngine(engine, { command = '' } = {}) {
+  setActiveEngine(engine, { command = '', verified = false } = {}) {
+    if (engine === 'none') {
+      // The registry chose "voice off" — that must actually silence TTS, not
+      // leave whatever backend was previously active still speaking.
+      this.preferredBackend = 'none';
+      this.backendCache = null;
+      return 'none';
+    }
     const map = { browser: 'browser', piper: 'piper', espeak: 'espeak', say: 'say', sapi: 'sapi', kokoro: 'kokoro' };
     const backend = map[engine] || 'browser';
     if (backend === 'kokoro' && command) this.cliEngine = command;
+    // The registry health-checks its providers (including HTTP-server
+    // reachability) before applying one — remember that so the sync
+    // availability detection above doesn't veto a probe that already passed.
+    if (verified) this.verifiedBackends.add(backend);
     this.preferredBackend = backend;
     this.backendCache = null;
     return this.resolveBackend();
@@ -232,29 +269,36 @@ class SpeechService {
           return;
         }
       } catch {
-        // Server down/unreachable — fall back to spawning piper (if allowed).
+        // Server down/unreachable — fall through to the next option.
       }
     }
 
-    if (!allowSpawnFallback) return;
-
     // Fallback: spawn piper once (cold, slower) and wrap its raw PCM as WAV.
-    await new Promise((resolve) => {
-      try {
-        const env = augmentProcessEnv(process.env);
-        const piper = spawn('piper', ['--model', this.piperModel, '--output-raw'], { stdio: ['pipe', 'pipe', 'ignore'], env });
-        const chunks = [];
-        piper.stdout.on('data', (d) => chunks.push(d));
-        piper.on('error', () => resolve());
-        piper.on('close', () => {
-          this.emitAudio(this.pcmToWav(Buffer.concat(chunks), this.piperSampleRate || 22050), priority);
-          resolve();
-        });
-        piper.stdin.end(`${text}\n`);
-      } catch {
-        resolve();
+    if (allowSpawnFallback && this.piperModel && commandExists('piper')) {
+      const pcm = await new Promise((resolve) => {
+        try {
+          const env = augmentProcessEnv(process.env);
+          const piper = spawn('piper', ['--model', this.piperModel, '--output-raw'], { stdio: ['pipe', 'pipe', 'ignore'], env });
+          const chunks = [];
+          piper.stdout.on('data', (d) => chunks.push(d));
+          piper.on('error', () => resolve(Buffer.alloc(0)));
+          piper.on('close', () => resolve(Buffer.concat(chunks)));
+          piper.stdin.end(`${text}\n`);
+        } catch {
+          resolve(Buffer.alloc(0));
+        }
+      });
+      if (pcm.length) {
+        this.emitAudio(this.pcmToWav(pcm, this.piperSampleRate || 22050), priority);
+        return;
       }
-    });
+    }
+
+    // Neural synthesis failed outright (server down, spawn produced nothing).
+    // Never go silent — hand the text to the browser's own speech synthesis so
+    // the utterance is still heard, and leave a trace of why.
+    this.logger.warn?.('Neural TTS failed — falling back to browser speech', { httpUrl });
+    this.io?.emit('speech-speak', { text, priority, at: new Date().toISOString() });
   }
 
   spawnQuiet(command, args) {
@@ -327,7 +371,7 @@ class SpeechService {
     }
   }
 
-  speakLocally(backendId, text) {
+  speakLocally(backendId, text, priority) {
     if (backendId === 'say') {
       return this.spawnQuiet('say', this.voice ? ['-v', this.voice, text] : [text]);
     }
@@ -339,11 +383,11 @@ class SpeechService {
     // browser is connected, stream the neural audio there (reliably audible).
     const hasClient = Number(this.io?.engine?.clientsCount ?? 0) > 0;
     if (backendId === 'piper') {
-      return hasClient ? this.speakViaNeuralBrowser('piper', text) : this.speakViaPiper(text);
+      return hasClient ? this.speakViaNeuralBrowser('piper', text, priority) : this.speakViaPiper(text);
     }
     if (backendId === 'kokoro') {
       // kokoro is a warm HTTP neural server streamed to the browser.
-      if (hasClient) return this.speakViaNeuralBrowser('kokoro', text);
+      if (hasClient) return this.speakViaNeuralBrowser('kokoro', text, priority);
       return this.speakViaCli(this.cliEngine, text); // headless fallback if a CLI engine is set
     }
     if (backendId === 'sapi') {
@@ -371,9 +415,12 @@ class SpeechService {
     }
 
     const backend = this.resolveBackend();
+    if (backend === 'none') {
+      return this.record({ text, backend, at: new Date().toISOString(), spoken: false, reason: 'tts provider set to none' });
+    }
     let result;
     try {
-      result = backend === 'browser' ? this.speakViaBrowser(text, priority) : this.speakLocally(backend, text);
+      result = backend === 'browser' ? this.speakViaBrowser(text, priority) : this.speakLocally(backend, text, priority);
     } catch (error) {
       result = { spoken: false, reason: error.message };
     }

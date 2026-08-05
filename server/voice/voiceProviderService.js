@@ -90,7 +90,15 @@ class VoiceProviderService {
   async applyActiveTts() {
     if (!this.speechService?.setActiveEngine) return null;
     const provider = await this.resolveActive('tts');
-    if (provider) this.speechService.setActiveEngine(provider.engine, { command: provider.requires?.command || '' });
+    if (provider) {
+      // resolveActive just health-checked this provider (including any HTTP
+      // model server), so the speech service can trust it as available.
+      this.speechService.setActiveEngine(provider.engine, { command: provider.requires?.command || '', verified: true });
+    } else if (this.activeKey('tts') === 'none') {
+      // An explicit "none" must actually mute TTS — doing nothing here left
+      // the previously active backend still speaking.
+      this.speechService.setActiveEngine('none');
+    }
     return provider;
   }
 

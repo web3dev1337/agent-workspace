@@ -13,7 +13,10 @@
     enabled: localStorage.getItem('speechOutputEnabled') !== 'false',
     voiceName: localStorage.getItem('speechOutputVoice') || '',
     rate: Number(localStorage.getItem('speechOutputRate')) || 1.05,
-    currentAudio: null
+    currentAudio: null,
+    audioQueue: [],
+    pendingGesture: null,
+    gestureArmed: false
   };
 
   function pickVoice() {
@@ -43,20 +46,72 @@
     return true;
   }
 
+  // Autoplay is blocked until the page has seen a user gesture, and losing the
+  // very first spoken reply to that policy is a silent failure. Hold the most
+  // recent blocked clip and replay it on the first interaction.
+  function armGestureRetry() {
+    if (state.gestureArmed) return;
+    state.gestureArmed = true;
+    const retry = () => {
+      state.gestureArmed = false;
+      const pending = state.pendingGesture;
+      state.pendingGesture = null;
+      if (pending) playAudio(pending);
+    };
+    window.addEventListener('pointerdown', retry, { once: true, capture: true });
+    window.addEventListener('keydown', retry, { once: true, capture: true });
+  }
+
+  function stopAudio() {
+    state.audioQueue.length = 0;
+    if (state.currentAudio) {
+      state.currentAudio.pause();
+      state.currentAudio = null;
+    }
+  }
+
+  function startClip(payload) {
+    const audio = new Audio(`data:audio/wav;base64,${payload.wav}`);
+    state.currentAudio = audio;
+    const advance = () => {
+      if (state.currentAudio !== audio) return;
+      state.currentAudio = null;
+      const next = state.audioQueue.shift();
+      if (next) startClip(next);
+    };
+    audio.addEventListener('ended', advance);
+    audio.addEventListener('error', advance);
+    audio.play().catch(() => {
+      // Autoplay blocked — everything queued would fail the same way, so keep
+      // only the newest utterance and replay it on the first user gesture.
+      state.pendingGesture = state.audioQueue.pop() || payload;
+      state.audioQueue.length = 0;
+      if (state.currentAudio === audio) state.currentAudio = null;
+      armGestureRetry();
+    });
+  }
+
   // Play server-synthesized neural audio (piper/kokoro) streamed as a WAV. On
   // WSL the server can't reach the speakers, so it hands the bytes to us — and
-  // browser audio always reaches the user. A high-priority clip interrupts.
+  // browser audio always reaches the user. A high-priority clip interrupts;
+  // normal clips queue behind whatever is already playing instead of talking
+  // over it.
   function playAudio(payload) {
-    const b64 = payload?.wav;
-    if (!b64) return false;
+    if (!payload?.wav || !state.enabled) return false;
     try {
-      if (payload.priority === 'high' && state.currentAudio) {
-        state.currentAudio.pause();
-        state.currentAudio = null;
+      if (payload.priority === 'high') {
+        stopAudio();
+        if (synth?.speaking) synth.cancel();
+        startClip(payload);
+        return true;
       }
-      const audio = new Audio(`data:audio/wav;base64,${b64}`);
-      state.currentAudio = audio;
-      audio.play().catch(() => { /* autoplay blocked until a user gesture */ });
+      if (state.currentAudio) {
+        state.audioQueue.push(payload);
+        // A stale backlog reads like a haunted radio — keep it short.
+        if (state.audioQueue.length > 5) state.audioQueue.shift();
+        return true;
+      }
+      startClip(payload);
       return true;
     } catch {
       return false;
@@ -78,7 +133,12 @@
     setEnabled(enabled) {
       state.enabled = enabled !== false;
       localStorage.setItem('speechOutputEnabled', String(state.enabled));
-      if (!state.enabled && synth?.speaking) synth.cancel();
+      if (!state.enabled) {
+        if (synth?.speaking) synth.cancel();
+        // Muting must silence the streamed neural audio too, not just Web Speech.
+        stopAudio();
+        state.pendingGesture = null;
+      }
       return state.enabled;
     },
     setVoice(name) {

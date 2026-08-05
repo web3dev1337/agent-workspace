@@ -91,4 +91,70 @@ describe('SpeechService', () => {
     expect(status.connectedClients).toBe(2);
     expect(status.recent[0].text).toBe('one');
   });
+
+  test('kokoro is not "available" merely because its URL has a default', () => {
+    const withoutEnv = { ...process.env };
+    delete withoutEnv.KOKORO_HTTP_URL;
+    const original = process.env;
+    process.env = withoutEnv;
+    try {
+      const service = new SpeechService({ logger: { warn: () => {} } });
+      service.cliEngine = '';
+      const kokoro = service.detectBackends({ force: true }).find((b) => b.id === 'kokoro');
+      // Before the fix this was unconditionally true (the URL always defaults),
+      // so a dead kokoro was selectable and speech went permanently silent.
+      expect(kokoro.available).toBe(false);
+      expect(() => service.setBackend('kokoro')).toThrow(/not available/);
+    } finally {
+      process.env = original;
+    }
+  });
+
+  test('a registry-verified engine counts as available for sync detection', () => {
+    const service = new SpeechService({ logger: { warn: () => {} } });
+    service.cliEngine = '';
+    service.setActiveEngine('kokoro', { verified: true });
+    const kokoro = service.detectBackends({ force: true }).find((b) => b.id === 'kokoro');
+    expect(kokoro.available).toBe(true);
+    expect(service.resolveBackend()).toBe('kokoro');
+  });
+
+  test('the "none" engine actually mutes TTS instead of leaving the old backend live', () => {
+    const { service, emitted } = browserSpeech();
+    expect(service.speak('audible').spoken).toBe(true);
+
+    service.setActiveEngine('none');
+    const result = service.speak('should be silent', { force: true });
+    expect(result.spoken).toBe(false);
+    expect(result.backend).toBe('none');
+    expect(emitted).toHaveLength(1);
+  });
+
+  test('a failed neural synth falls back to browser speech instead of silence', async () => {
+    const emitted = [];
+    const service = new SpeechService({ logger: { warn: () => {} } });
+    service.setIO({ emit: (event, payload) => emitted.push({ event, payload }) });
+    service.piperModel = '';
+
+    // Nothing listens on this port and there is no spawn fallback — before the
+    // fix this returned silently while speak() had already reported success.
+    await service.synthAndEmit('still audible', 'high', 'http://127.0.0.1:1', false);
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].event).toBe('speech-speak');
+    expect(emitted[0].payload.text).toBe('still audible');
+    expect(emitted[0].payload.priority).toBe('high');
+  });
+
+  test('priority survives the local neural path so a high clip can interrupt', () => {
+    const service = new SpeechService({ logger: { warn: () => {} } });
+    service.setIO({ emit: () => {}, engine: { clientsCount: 1 } });
+    const seen = [];
+    service.speakViaNeuralBrowser = (engine, text, priority) => {
+      seen.push({ engine, priority });
+      return { spoken: true };
+    };
+    service.speakLocally('kokoro', 'urgent thing', 'high');
+    expect(seen).toEqual([{ engine: 'kokoro', priority: 'high' }]);
+  });
 });
