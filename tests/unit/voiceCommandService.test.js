@@ -410,6 +410,34 @@ describe('VoiceCommandService (free-form routing)', () => {
     expect(parsed.error).toMatch(/too short/i);
   });
 
+  test('a negated destructive phrase never executes the rule it contains', async () => {
+    // Many rule patterns are unanchored substrings, so "don't stop all
+    // claudes" CONTAINS a perfect "stop all claudes" match. Before the fix,
+    // rules ran ahead of the negation guard and these executed for real —
+    // fleet-wide, with no confirmation gate.
+    for (const phrase of ["don't stop all claudes", "don't kill work 3", "don't destroy work 3", 'never stop work 2']) {
+      const parsed = await voiceCommandService.parseCommand(phrase);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toMatch(/negation/i);
+    }
+  });
+
+  test('natural session-status questions are left for the fact lane', () => {
+    // /what.*sessions/ was greedy enough to steal these from the fact lane,
+    // answering a real question with a spoken "Done — list sessions."
+    expect(voiceCommandService.parseWithRules('what are my sessions doing')).toBeFalsy();
+    // Enumerative phrasings still resolve to the command.
+    expect(voiceCommandService.parseWithRules('list sessions')?.command).toBe('list-sessions');
+    expect(voiceCommandService.parseWithRules('what sessions do i have')?.command).toBe('list-sessions');
+  });
+
+  test('a destructive command must be grounded by its verb, not an incidental noun', () => {
+    expect(voiceCommandService.isGrounded('kill-session', 'is my session about to time out')).toBe(false);
+    expect(voiceCommandService.isGrounded('kill-session', 'kill the session on work 3')).toBe(true);
+    expect(voiceCommandService.isGrounded('stop-server', 'is the server up')).toBe(false);
+    expect(voiceCommandService.isGrounded('stop-server', 'shut down the server, kill it')).toBe(true);
+  });
+
   test('an imperative "stop/cancel <thing>" is not swallowed as a negation', async () => {
     // "stop the server" is a command that merely missed an exact rule phrasing.
     // The old guard treated any leading stop/cancel as negation, so it was

@@ -849,12 +849,15 @@ class VoiceCommandService {
           return { worktreeId: `work${num}` };
         }
       },
-      // List sessions
+      // List sessions. The old /what.*sessions/ variant was greedy enough to
+      // steal natural fact questions ("what are my sessions doing") from the
+      // fact lane, which answers them properly — so only the enumerative
+      // phrasings match here.
       {
         patterns: [
           /list\s+sessions/i,
           /show\s+sessions/i,
-          /what.*sessions/i,
+          /^what\s+sessions\b/i,
         ],
         command: 'list-sessions',
         extractParams: () => ({})
@@ -1232,14 +1235,25 @@ class VoiceCommandService {
     // Clean up transcript
     const text = transcript.toLowerCase().trim();
 
+    // A negation must be detected BEFORE rule matching, not after: many rule
+    // patterns are unanchored substrings, so "don't stop all claudes" contains
+    // a perfectly matching "stop all claudes" — and with no confirmation gate
+    // between parse and execute, the spoken sentence would do the exact
+    // opposite of what was said. Bare "stop …"/"cancel …" are imperative
+    // commands, not negations; only their dismissal forms short-circuit.
+    const negated = /^(don'?t\b|do not\b|never\b|no,?\s|nope\b)/.test(text)
+      || /^(stop|cancel|forget)\s+(that|it)\b/.test(text);
+
     // Try rule-based parsing first (instant, free)
-    const ruleResult = this.parseWithRules(text);
-    if (ruleResult) {
-      return {
-        success: true,
-        method: 'rules',
-        ...ruleResult
-      };
+    if (!negated) {
+      const ruleResult = this.parseWithRules(text);
+      if (ruleResult) {
+        return {
+          success: true,
+          method: 'rules',
+          ...ruleResult
+        };
+      }
     }
 
     // Typed input (e.g. Commander panel slash commands) wants a fast,
@@ -1267,15 +1281,10 @@ class VoiceCommandService {
       } catch { /* fall through to the classifier */ }
     }
 
-    // A negation ("don't open the queue", "cancel that") must never be turned
-    // into the command it negates. The fact lane already handled bare acks
-    // ("never mind"); anything still negating here skips the classifier and is
-    // handed to the Commander, which understands "don't". Bare "stop …" and
-    // "cancel …" are NOT negations though — they are imperative commands
-    // ("stop the server") that just missed an exact rule phrasing, so only
-    // their dismissal forms ("stop that", "cancel it") short-circuit.
-    if (/^(don'?t\b|do not\b|never\b|no,?\s|nope\b)/.test(text)
-      || /^(stop|cancel|forget)\s+(that|it)\b/.test(text)) {
+    // A negation that wasn't a bare ack (the fact lane above owns "never
+    // mind") skips the classifier and is handed to the Commander, which
+    // understands "don't".
+    if (negated) {
       return { success: false, error: 'negation is not a command', transcript: text };
     }
 
@@ -1335,9 +1344,19 @@ class VoiceCommandService {
       pager: ['pager', 'ping'], advice: ['advice', 'recommend', 'suggest'], chats: ['chat', 'message'],
       project: ['project'], claude: ['claude'], all: ['all', 'everything'], mode: ['mode'], tier: ['tier'],
       new: ['new', 'create', 'start'], open: ['open', 'show', 'pull up', 'bring up', 'go to'], start: ['start', 'launch', 'run'],
-      stop: ['stop', 'kill', 'end'], status: ['status', 'state']
+      stop: ['stop', 'kill', 'end'], status: ['status', 'state'],
+      kill: ['kill', 'stop', 'end', 'terminate'], destroy: ['destroy', 'delete', 'remove'],
+      remove: ['remove', 'delete', 'drop'], close: ['close', 'shut'], merge: ['merge'], approve: ['approve', 'accept']
     };
     const parts = String(command).split(/[-_]/).filter((w) => w.length > 2);
+    // A destructive command must be grounded by its VERB, not by an incidental
+    // noun — "is my session about to time out?" mentions a session but must
+    // never ground a hallucinated kill-session from the small local model.
+    const destructive = ['kill', 'stop', 'destroy', 'remove', 'delete', 'close', 'merge', 'approve'];
+    if (destructive.includes(parts[0])) {
+      const verbHeard = t.includes(parts[0]) || (synonyms[parts[0]] || []).some((s) => t.includes(s));
+      if (!verbHeard) return false;
+    }
     return parts.some((w) => t.includes(w) || (synonyms[w] || []).some((s) => t.includes(s)));
   }
 

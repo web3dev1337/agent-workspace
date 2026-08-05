@@ -23,6 +23,10 @@ class VoiceBrainService {
   constructor({ logger = console } = {}) {
     this.logger = logger;
     this.deps = {};
+    // Reply captures poll ONE shared Commander buffer, so they must run one
+    // at a time — two interleaved polling loops would each take the newest
+    // tail and speak one utterance's answer for the other.
+    this.captureChain = Promise.resolve();
   }
 
   static getInstance(options = {}) {
@@ -273,7 +277,8 @@ class VoiceBrainService {
       // in the background, so the request returns now and the answer arrives when
       // the agent is done. This is the two-way loop.
       this.speak('On it.');
-      this.captureCommanderReply(before)
+      this.captureChain = this.captureChain
+        .then(() => this.captureCommanderReply(before))
         .then((reply) => { if (reply) this.speak(reply, { priority: 'high' }); })
         .catch((error) => this.logger.warn?.('voice brain: reply capture failed', { error: error.message }));
 
