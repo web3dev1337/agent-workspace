@@ -33,15 +33,15 @@
     ],
     "$comment_deny_paths": "A permission prompt to Edit/Write is auto-approvable in general, but NOT for targets that execute on the next ordinary operation — a poisoned build script, git hook, CI workflow or shell rc turns an approved edit plus an already-allowlisted `npm run build`/`git commit` into arbitrary code execution. Any write to these fails closed to a human.",
     "permissionDenyPatterns": [
-      "\\brm\\s+-[rf]", "\\bsudo\\b", "\\bgit (push --force|reset --hard|clean)\\b",
+      "\\brm\\s+-[rf]", "\\bsudo\\b", "\\bgit (push\\s+(--force|-f\\b)|reset --hard|clean)\\b",
       "\\bgh (pr merge|release|repo delete|repo edit)\\b", "\\bDROP\\b", "\\bTRUNCATE\\b",
       "\\bDELETE FROM\\b", "\\bcurl\\b[^\\n]*\\|\\s*(sh|bash)", "\\bchmod\\s+777\\b",
       "\\bkill(all)?\\b", "\\bnpm publish\\b", "\\bdd\\s+if=", "\\bmkfs\\b",
-      "~/\\.(ssh|aws|config|codex|claude)\\b", "\\.env\\b",
+      "(~|/home/[^/\\s\"']+|/Users/[^/\\s\"']+|/root)/\\.(ssh|aws|config|codex|claude)\\b", "\\.env\\b",
       "\\.git/(hooks|config)", "\\.github/(workflows|actions)\\b",
-      "(^|[/(])(package(-lock)?\\.json|pnpm-lock\\.yaml|yarn\\.lock)\\b",
-      "(^|[/(])(Makefile|Rakefile|Gemfile|Cargo\\.toml|pyproject\\.toml|setup\\.py|build\\.gradle|pom\\.xml)\\b",
-      "(^|[/(.])(bashrc|zshrc|bash_profile|zshenv|profile|gitconfig|npmrc|pre-commit-config\\.yaml)\\b",
+      "(^|[/(\"'\\s=])(package(-lock)?\\.json|pnpm-lock\\.yaml|yarn\\.lock)\\b",
+      "(^|[/(\"'\\s=])(Makefile|Rakefile|Gemfile|Cargo\\.toml|pyproject\\.toml|setup\\.py|build\\.gradle|pom\\.xml)\\b",
+      "(^|[/(.\"'\\s=])(bashrc|zshrc|bash_profile|zshenv|profile|gitconfig|npmrc|pre-commit-config\\.yaml)\\b",
       "(^|[\\s(])/etc/"
     ]
   },

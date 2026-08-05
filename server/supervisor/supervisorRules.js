@@ -25,11 +25,11 @@ function overrideRulesPath() {
   return path.join(getAgentWorkspaceDir(), 'supervisor-rules.json');
 }
 
-function compilePatterns(patterns) {
+function compilePatterns(patterns, flags = '') {
   const out = [];
   for (const pattern of Array.isArray(patterns) ? patterns : []) {
     try {
-      out.push(new RegExp(String(pattern)));
+      out.push(new RegExp(String(pattern), flags));
     } catch {
       // A bad pattern must not take the whole supervisor down with it.
     }
@@ -125,7 +125,11 @@ function loadRules({ rulesPath = null } = {}) {
     safety: {
       allowedHandlers: Array.isArray(safety.allowedHandlers) ? safety.allowedHandlers.map(String) : [],
       permissionAllowPatterns: compilePatterns(safety.permissionAllowPatterns),
-      permissionDenyPatterns: compilePatterns(safety.permissionDenyPatterns)
+      // Deny patterns are case-insensitive on purpose (fail closed): the
+      // case-sensitive form let `Write(.ENV)` and lowercase `drop table`
+      // sail past denies written as `\.env` and `\bDROP\b`. Allow patterns
+      // stay exact — widening what auto-approves is the wrong direction.
+      permissionDenyPatterns: compilePatterns(safety.permissionDenyPatterns, 'i')
     },
     conditions: (Array.isArray(raw.conditions) ? raw.conditions : []).map(normalizeCondition).filter(Boolean)
   };

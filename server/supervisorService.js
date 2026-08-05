@@ -123,6 +123,9 @@ class SupervisorService {
     this.budget.setPolicy(this.rules.interruption);
     this.digest.setInterval(this.rules.interruption.digestIntervalMinutes);
     if (this.running) this.restartTimer();
+    // A reload can swap autonomy and the entire safety table — that must be
+    // as traceable as setAutonomy() is.
+    this.appendAudit({ event: 'rules-reloaded', source: this.rules.source, autonomy: this.rules.autonomy });
     return this.rules;
   }
 
@@ -238,6 +241,13 @@ class SupervisorService {
       if (this.digest.resolve(id)) {
         this.appendAudit({ event: 'self-healed', id });
       }
+    }
+    // Cooldowns are cleared separately: they are keyed like attempts but can
+    // exist without an attempts entry (interrupt path). A stale cooldown from
+    // an already-healed occurrence silently blocked action on a genuinely new
+    // recurrence of the same finding — and grew this map without bound.
+    for (const id of [...this.cooldowns.keys()]) {
+      if (!activeFindingIds.has(id)) this.cooldowns.delete(id);
     }
   }
 

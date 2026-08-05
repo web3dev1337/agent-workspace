@@ -299,4 +299,20 @@ describe('SupervisorService', () => {
     supervisor.stop();
     expect(supervisor.resumeTimers.size).toBe(0);
   });
+
+  test('a healed finding releases its cooldown so a fresh recurrence can be acted on', () => {
+    const { supervisor } = harness();
+    supervisor.attempts.set('f1', 2);
+    supervisor.cooldowns.set('f1', Date.now());
+    // A cooldown can exist without an attempts entry (interrupt path).
+    supervisor.cooldowns.set('f2', Date.now());
+
+    supervisor.forgetHealed(new Set());
+
+    expect(supervisor.attempts.size).toBe(0);
+    // Before the fix these stale timestamps survived healing, silently
+    // classifying a genuinely new recurrence as 'cooling-down' for up to the
+    // full window — and the map grew without bound.
+    expect(supervisor.cooldowns.size).toBe(0);
+  });
 });

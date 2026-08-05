@@ -88,6 +88,31 @@ describe('permission classification', () => {
   test('an empty prompt is not safe', () => {
     expect(classifyPermissionPrompt('', rules.safety).safe).toBe(false);
   });
+
+  test('case cannot be used to slip past the deny list', () => {
+    // The classifier used to be fully case-sensitive: Write(.ENV) and
+    // lowercase SQL sailed past denies written as \.env and \bDROP\b.
+    expect(classifyPermissionPrompt('Write(.ENV)', rules.safety).safe).toBe(false);
+    expect(classifyPermissionPrompt('Bash(psql -c "drop table users")', rules.safety).safe).toBe(false);
+    expect(classifyPermissionPrompt('Bash(mysql -e "delete from accounts")', rules.safety).safe).toBe(false);
+  });
+
+  test('credential paths are denied in absolute form, not only the ~/ form', () => {
+    // Claude/Codex render out-of-repo paths absolute — that is the realistic
+    // rendering, and it used to auto-approve.
+    expect(classifyPermissionPrompt('Write(/home/someone/.ssh/authorized_keys)', rules.safety).safe).toBe(false);
+    expect(classifyPermissionPrompt('Edit(/Users/someone/.aws/credentials)', rules.safety).safe).toBe(false);
+    expect(classifyPermissionPrompt('Read(~/.ssh/id_rsa)', rules.safety).safe).toBe(false);
+  });
+
+  test('quoting a build-file path does not evade the exec-on-next-op denies', () => {
+    expect(classifyPermissionPrompt('Write("package.json")', rules.safety).safe).toBe(false);
+    expect(classifyPermissionPrompt("Edit('Makefile')", rules.safety).safe).toBe(false);
+  });
+
+  test('git push -f is denied like git push --force', () => {
+    expect(classifyPermissionPrompt('Bash(git push -f origin main)', rules.safety).safe).toBe(false);
+  });
 });
 
 describe('parseResetTime', () => {
