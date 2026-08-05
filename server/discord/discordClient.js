@@ -69,18 +69,19 @@ class DiscordClient {
    * so pages are reversed into chronological order — work items should be
    * created in the order the conversation actually happened.
    *
-   * With no cursor (first-sight backfill) there is nothing to page forward from,
-   * so a single newest-first page is taken and trimmed to the most recent N.
-   * Trimming the oldest N instead would silently skip the newest messages —
-   * exactly the ones a backfill is meant to catch.
+   * With no cursor (first-sight backfill) there is nothing to page forward
+   * from, and `after` pages can never reach past the newest 100 — history is
+   * gathered by paging BACKWARD instead (fetchBackfill).
    */
   async fetchMessagesAfter(channelId, afterId, { maxMessages = 400 } = {}) {
+    if (!afterId) return this.fetchBackfill(channelId, maxMessages);
+
     const collected = [];
     let cursor = afterId;
 
     while (collected.length < maxMessages) {
       const query = new URLSearchParams({ limit: String(MAX_PAGE) });
-      if (cursor) query.set('after', cursor);
+      query.set('after', cursor);
 
       const result = await this.request(`/channels/${channelId}/messages?${query}`);
       if (!result.ok) return { ok: false, error: result.error, status: result.status, messages: collected };
@@ -93,10 +94,40 @@ class DiscordClient {
       if (page.length < MAX_PAGE) break;
     }
 
-    // Forward paging keeps the oldest N after the cursor; a backfill keeps the
-    // most recent N (the tail of the chronological list).
-    const messages = afterId ? collected.slice(0, maxMessages) : collected.slice(-maxMessages);
-    return { ok: true, messages, cursor: messages.length ? messages[messages.length - 1].id : (cursor || afterId) };
+    const messages = collected.slice(0, maxMessages);
+    return { ok: true, messages, cursor: messages.length ? messages[messages.length - 1].id : afterId };
+  }
+
+  /**
+   * First-sight backfill: keep the most recent N. Trimming the oldest N
+   * instead would silently skip the newest messages — exactly the ones a
+   * backfill is meant to catch. Beyond one page this must walk `before=` into
+   * history; the old forward walk re-queried after the NEWEST message and got
+   * an empty page back, silently capping every backfill at 100.
+   */
+  async fetchBackfill(channelId, maxMessages) {
+    const newestFirst = [];
+    let before = null;
+
+    while (newestFirst.length < maxMessages) {
+      const query = new URLSearchParams({ limit: String(MAX_PAGE) });
+      if (before) query.set('before', before);
+
+      const result = await this.request(`/channels/${channelId}/messages?${query}`);
+      if (!result.ok) {
+        return { ok: false, error: result.error, status: result.status, messages: newestFirst.slice(0, maxMessages).reverse() };
+      }
+
+      const page = Array.isArray(result.data) ? result.data : []; // newest-first
+      if (!page.length) break;
+
+      newestFirst.push(...page);
+      before = page[page.length - 1].id;
+      if (page.length < MAX_PAGE) break;
+    }
+
+    const messages = newestFirst.slice(0, maxMessages).reverse();
+    return { ok: true, messages, cursor: messages.length ? messages[messages.length - 1].id : null };
   }
 
   async getLatestMessageId(channelId) {

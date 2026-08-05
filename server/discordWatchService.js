@@ -67,10 +67,11 @@ class DiscordWatchService {
       return {
         cursors: raw.cursors && typeof raw.cursors === 'object' ? raw.cursors : {},
         items: Array.isArray(raw.items) ? raw.items : [],
-        memberNames: raw.memberNames && typeof raw.memberNames === 'object' ? raw.memberNames : {}
+        memberNames: raw.memberNames && typeof raw.memberNames === 'object' ? raw.memberNames : {},
+        channelGuilds: raw.channelGuilds && typeof raw.channelGuilds === 'object' ? raw.channelGuilds : {}
       };
     } catch {
-      return { cursors: {}, items: [], memberNames: {} };
+      return { cursors: {}, items: [], memberNames: {}, channelGuilds: {} };
     }
   }
 
@@ -101,6 +102,7 @@ class DiscordWatchService {
     const id = String(channelId || '').trim();
     if (!/^\d+$/.test(id)) throw new Error('A Discord channel id is a numeric snowflake');
     if (!this.config.channels.includes(id)) this.config.channels.push(id);
+    this.persistChannels();
     return this.config.channels;
   }
 
@@ -109,7 +111,34 @@ class DiscordWatchService {
     this.config.channels = this.config.channels.filter((existing) => existing !== id);
     delete this.state.cursors[id];
     this.saveState();
+    this.persistChannels();
     return this.config.channels;
+  }
+
+  /**
+   * Channels changed over the API must land in the override config file —
+   * in-memory-only meant a channel added via POST vanished on the next
+   * reload-config or restart, contradicting the config's own comment that
+   * the two paths are equivalent.
+   */
+  persistChannels() {
+    try {
+      const target = extractor.overrideConfigPath();
+      let existing = {};
+      try {
+        existing = JSON.parse(fs.readFileSync(target, 'utf8')) || {};
+      } catch {
+        // No override yet — channels become its first key; loadConfig layers
+        // the override on the shipped defaults, so nothing else is lost.
+      }
+      existing.channels = [...this.config.channels];
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      const tmp = `${target}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, `${JSON.stringify(existing, null, 2)}\n`, 'utf8');
+      fs.renameSync(tmp, target);
+    } catch (error) {
+      this.logger.warn?.('Discord watch could not persist channel config', { error: error.message });
+    }
   }
 
   findItemByMessage(messageId) {
@@ -217,6 +246,7 @@ class DiscordWatchService {
     });
     if (!fetched.ok) return { channelId, ok: false, error: fetched.error };
 
+    const guildId = await this.resolveGuildId(channelId);
     const created = [];
     const updated = [];
     for (const message of fetched.messages) {
@@ -225,6 +255,7 @@ class DiscordWatchService {
       }
       const extraction = extractor.extractFromMessage(message, {
         config: this.config,
+        guildId,
         memberNames: this.state.memberNames
       });
       const result = this.applyExtraction(extraction, { channelId });
@@ -239,6 +270,23 @@ class DiscordWatchService {
     this.saveState();
 
     return { channelId, ok: true, messages: fetched.messages.length, created: created.length, updated: updated.length, items: created };
+  }
+
+  /**
+   * REST message objects do not carry guild_id (only gateway events do), so
+   * it is looked up once per channel and cached — without it every permalink
+   * rendered as the DM-only `/channels/@me/...` form, which is a dead link
+   * for guild channels, the primary use case.
+   */
+  async resolveGuildId(channelId) {
+    if (Object.prototype.hasOwnProperty.call(this.state.channelGuilds, channelId)) {
+      return this.state.channelGuilds[channelId];
+    }
+    const info = await this.client.getChannel?.(channelId);
+    // Only cache on success — a transient lookup failure retries next poll.
+    if (!info?.ok) return '';
+    this.state.channelGuilds[channelId] = String(info.channel?.guild_id || '');
+    return this.state.channelGuilds[channelId];
   }
 
   async poll() {
@@ -288,7 +336,10 @@ class DiscordWatchService {
     this.saveState();
 
     try {
-      this.taskRecordService?.upsert?.(`session:${sessionId}`, {
+      // upsert is async — without the await, a rejection skipped this catch
+      // entirely (unhandled rejection) and the record wasn't guaranteed
+      // written before this method returned.
+      await this.taskRecordService?.upsert?.(`session:${sessionId}`, {
         tier: item.tier,
         ticketProvider: 'discord',
         ticketCardId: item.messageId,

@@ -31,9 +31,13 @@ function readJson(filePath) {
 }
 
 // `Number(undefined)` is NaN and `NaN ?? fallback` is still NaN (?? only catches
-// null/undefined), so a missing numeric field must be caught explicitly. An
-// explicit 0 (e.g. backfillMessages: 0 = "never look back") is preserved.
+// null/undefined), so a missing numeric field must be caught explicitly. And
+// `Number(null)`/`Number('')` are 0, not NaN — an explicit null/empty in an
+// override must fall back, not silently zero the setting (a null minLength
+// would disable the spam filter entirely). An explicit 0 (e.g.
+// backfillMessages: 0 = "never look back") is preserved.
 function numberOr(value, fallback) {
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 }
@@ -57,12 +61,12 @@ function loadConfig({ configPath = null } = {}) {
     publishStatus: raw.publishStatus !== false,
     priority: (Array.isArray(raw.priority) ? raw.priority : []).map((row) => ({
       level: String(row.level || 'normal'),
-      tier: Number(row.tier) || 3,
+      tier: numberOr(row.tier, 3),
       patterns: compile(row.patterns)
     })),
     defaultPriority: {
       level: String(raw.defaultPriority?.level || 'normal'),
-      tier: Number(raw.defaultPriority?.tier) || 3
+      tier: numberOr(raw.defaultPriority?.tier, 3)
     },
     kinds: (Array.isArray(raw.kinds) ? raw.kinds : []).map((row) => ({
       kind: String(row.kind || 'fyi'),

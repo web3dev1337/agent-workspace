@@ -112,6 +112,27 @@ describe('workExtractor loadConfig', () => {
       expect(cfg.backfillMessages).toBe(0);
     });
   });
+
+  test('an explicit null in an override falls back instead of silently becoming 0', () => {
+    // Number(null) === 0, so a null minLength used to disable the
+    // short-message spam filter entirely rather than defaulting to 12.
+    withConfig({ enabled: true, channels: ['123'], minLength: null, backfillMessages: null }, (cfg) => {
+      expect(cfg.minLength).toBe(12);
+      expect(cfg.backfillMessages).toBe(50);
+    });
+  });
+
+  test('an explicit tier of 0 is honored, not coerced to 3', () => {
+    withConfig({
+      enabled: true,
+      channels: ['123'],
+      priority: [{ level: 'now', tier: 0, patterns: ['\\bnow\\b'] }],
+      defaultPriority: { level: 'normal', tier: 0 }
+    }, (cfg) => {
+      expect(cfg.priority[0].tier).toBe(0);
+      expect(cfg.defaultPriority.tier).toBe(0);
+    });
+  });
 });
 
 describe('DiscordClient', () => {
@@ -155,6 +176,29 @@ describe('DiscordClient', () => {
     expect(result.messages).toHaveLength(50);
     expect(result.messages[result.messages.length - 1].id).toBe('150');
     expect(result.messages[0].id).toBe('101');
+  });
+
+  test('a backfill larger than one page walks BACKWARD through history', async () => {
+    // 150 messages, newest-first (ids 150..1), served in URL-aware pages.
+    const all = Array.from({ length: 150 }, (_, i) => ({ id: String(150 - i) }));
+    const seen = [];
+    const client = new DiscordClient({
+      token: 't',
+      fetchImpl: async (url) => {
+        seen.push(url);
+        const before = new URL(url).searchParams.get('before');
+        const start = before ? all.findIndex((m) => m.id === before) + 1 : 0;
+        return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(all.slice(start, start + 100)) };
+      }
+    });
+
+    const result = await client.fetchMessagesAfter('chan1', null, { maxMessages: 150 });
+    // The old forward walk re-queried after the NEWEST message, got an empty
+    // page, and silently capped every backfill at 100.
+    expect(result.messages).toHaveLength(150);
+    expect(result.messages[0].id).toBe('1');
+    expect(result.messages[149].id).toBe('150');
+    expect(seen[1]).toContain('before=51');
   });
 
   test('a 429 backs off instead of hammering', async () => {
@@ -331,5 +375,47 @@ describe('DiscordWatchService', () => {
     const result = await service.poll();
     expect(result.channels[0].ok).toBe(false);
     expect(service.getStatus().lastError).toBe('HTTP 503');
+  });
+
+  test('guild-channel permalinks carry the real guild id, not the DM-only @me', async () => {
+    const { service } = harness({ messages: [message({ id: '10', content: '<@2002> please fix the crash on level three' })] });
+    let lookups = 0;
+    service.client.getChannel = async () => { lookups += 1; return { ok: true, channel: { guild_id: 'g777' } }; };
+
+    await service.poll();
+    expect(service.getItems()[0].permalink).toContain('/channels/g777/chan1/10');
+    expect(service.getItems()[0].permalink).not.toContain('@me');
+
+    // The lookup is cached — a second poll must not re-fetch channel info.
+    service.client.fetchMessagesAfter = async () => ({ ok: true, messages: [] });
+    await service.poll();
+    expect(lookups).toBe(1);
+  });
+
+  test('a failing task-record write is logged, not an unhandled rejection', async () => {
+    const warnings = [];
+    const { service } = harness({ messages: [message({ id: '10', content: '<@2002> please fix the crash on level three' })] });
+    service.logger = { warn: (msg) => warnings.push(msg), error: () => {}, info: () => {} };
+    service.init({ taskRecordService: { upsert: async () => { throw new Error('disk full'); } } });
+    await service.poll();
+
+    // Without the await, the rejection skipped the catch entirely.
+    const item = await service.linkSession('discord:10', 'work1-claude', { announce: false });
+    expect(item.status).toBe('in-progress');
+    expect(warnings.some((w) => /task record/i.test(w))).toBe(true);
+  });
+
+  test('channels added or removed over the API survive a config reload', async () => {
+    const { service } = harness();
+    service.addChannel('424242424242');
+
+    // reload-config rebuilds this.config from disk — the in-memory-only
+    // version of addChannel lost the channel right here.
+    service.reloadConfig();
+    expect(service.getChannels()).toContain('424242424242');
+
+    service.removeChannel('424242424242');
+    service.reloadConfig();
+    expect(service.getChannels()).not.toContain('424242424242');
   });
 });
