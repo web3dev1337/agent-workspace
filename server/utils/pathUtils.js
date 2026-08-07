@@ -484,11 +484,23 @@ function getTrailingPathLabel(value, count = 2) {
   return splitPathSegments(value).slice(-safeCount).join('/');
 }
 
+/**
+ * Claude Code stores conversations under ~/.claude/projects/<sanitized-cwd>,
+ * sanitizing EVERY character outside [a-zA-Z0-9-] to '-'
+ * ('C:\Users\x\.app' -> 'C--Users-x--app', '/home/x/.app' -> '-home-x--app').
+ * Replacing only slashes leaves ':' and '.' behind, so lookups silently miss.
+ * Single shared implementation — this exact regex has been gotten wrong before.
+ */
+function claudeProjectFolderName(targetPath) {
+  return String(targetPath || '').replace(/[^a-zA-Z0-9-]/g, '-');
+}
+
 module.exports = {
   normalizePathSlashes,
   splitPathSegments,
   getPathBasename,
   getTrailingPathLabel,
+  claudeProjectFolderName,
   getAgentWorkspaceDir,
   getDefaultAgentWorkspaceDir,
   getLegacyAgentWorkspaceDir,

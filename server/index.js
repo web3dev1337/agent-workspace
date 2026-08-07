@@ -2843,9 +2843,14 @@ app.get('/api/sessions/model-config', (req, res) => {
       const type = String(session?.type || '').trim().toLowerCase();
       if (type !== 'claude' && type !== 'codex') continue;
       const cwd = sessionManager.getSessionCwd(session);
+      // Live transcript detection only applies while a Claude agent is actually
+      // running in this terminal; otherwise the badge shows the launch config.
+      const workspaceId = String(session?.workspace || '').trim();
+      const recovery = workspaceId ? sessionRecoveryService.getSession(workspaceId, sessionId) : null;
+      const claudeAgentRunning = recovery?.lastAgent === 'claude' && recovery?.lastAgentActive !== false;
       sessions[sessionId] = {
         cwd,
-        claude: agentModelConfigService.resolveClaudeConfig(cwd)
+        claude: agentModelConfigService.resolveClaudeConfig(cwd, { agentRunning: claudeAgentRunning })
       };
     }
     return res.json({

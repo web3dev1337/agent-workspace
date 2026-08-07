@@ -9,7 +9,7 @@ const fs = require('fs').promises;
 const os = require('os');
 const path = require('path');
 const winston = require('winston');
-const { getAgentWorkspaceDir } = require('./utils/pathUtils');
+const { getAgentWorkspaceDir, claudeProjectFolderName } = require('./utils/pathUtils');
 
 const HOME_DIR = process.env.HOME || os.homedir();
 const RECOVERY_DIR = path.join(getAgentWorkspaceDir(), 'session-recovery');
@@ -98,16 +98,10 @@ class SessionRecoveryService {
     return path.join(RECOVERY_DIR, `${safeId}.json`);
   }
 
-  /**
-   * Claude Code stores conversations under ~/.claude/projects/<sanitized-cwd>,
-   * sanitizing EVERY character outside [a-zA-Z0-9-] to '-'
-   * ('C:\Users\x\.app' -> 'C--Users-x--app', '/home/x/.app' -> '-home-x--app').
-   * Replacing only slashes leaves ':' and '.' behind, so conversation lookups
-   * never matched and recovery silently downgraded "resume conversation" to
-   * "start fresh".
-   */
+  // Delegates to the shared implementation in utils/pathUtils (see the scar-tissue
+  // comment there: replacing only slashes silently broke conversation lookups once).
   claudeProjectFolderName(targetPath) {
-    return String(targetPath || '').replace(/[^a-zA-Z0-9-]/g, '-');
+    return claudeProjectFolderName(targetPath);
   }
 
   /**
