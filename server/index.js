@@ -111,7 +111,7 @@ const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
 const { RecommendationsService } = require('./recommendationsService');
 const { ProductLauncherService } = require('./productLauncherService');
-const { CommanderService } = require('./commanderService');
+const { CommanderManager } = require('./commanderManager');
 const { ConversationService } = require('./conversationService');
 const { AgentProviderService } = require('./agentProviderService');
 const { WorktreeMetadataService } = require('./worktreeMetadataService');
@@ -139,6 +139,12 @@ const { TaskTicketingService } = require('./taskTicketingService');
 const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const { PrReviewAutomationService } = require('./prReviewAutomationService');
+const { EvidenceService } = require('./evidenceService');
+const { ReviewWorkflowService } = require('./reviewWorkflowService');
+const visibilityPresets = require('./visibilityPresetService');
+const { ContextSwitchTelemetryService } = require('./contextSwitchTelemetryService');
+const contextSwitchTelemetry = ContextSwitchTelemetryService.getInstance();
+const { resolveServerLaunchCommand } = require('./serverLaunchCommandResolver');
 const { GitHubRepoService } = require('./githubRepoService');
 const { GitHubCloneWorktreeService } = require('./githubCloneWorktreeService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
@@ -404,10 +410,18 @@ const policyBundleService = PolicyBundleService.getInstance({ policyService, use
 const configPromoterService = ConfigPromoterService.getInstance({ logger });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
-const commanderService = CommanderService.getInstance({
+const commanderManager = CommanderManager.getInstance({
   sessionManager,
   io
 });
+// The primary commander preserves the exact prior single-Commander behavior;
+// `commanderService` is kept as an alias so existing route handlers that don't
+// need multi-commander are untouched. Handlers that DO support a second
+// commander resolve via commanderFor(req).
+const commanderService = commanderManager.primary();
+const commanderFor = (req) => commanderManager.resolve(
+  req?.query?.commanderId || req?.body?.commanderId || req?.params?.commanderId
+);
 
 // Initialize Command Registry for Commander UI control
 commandRegistry.init({
@@ -658,7 +672,7 @@ io.on('connection', (socket) => {
       // Clear any existing input first with Ctrl+C, then send command
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C to clear
 
-      setTimeout(() => {
+      setTimeout(async () => {
         // Build command with NODE_ENV and custom settings
         const nodeEnv = environment === 'production' ? 'production' : 'development';
 
@@ -674,24 +688,31 @@ io.on('connection', (socket) => {
           Object.assign(env, parseEnvAssignments(launchSettings.envVars));
         }
 
-        // Build command (cross-shell).
         // Use NODE_OPTIONS for node flags so this works on both bash and PowerShell.
         // (Avoids bash-only `$(which hytopia)` and Windows `.cmd` wrapper issues.)
-        let runCommand = 'hytopia start';
         const nodeOptions = String(launchSettings?.nodeOptions || '').trim();
         if (nodeOptions) {
           env.NODE_OPTIONS = nodeOptions;
         }
 
-        const gameArgs = String(launchSettings?.gameArgs || '').trim();
-        if (gameArgs) {
-          runCommand += ` ${gameArgs}`;
-        }
-
         const cwd = session?.config?.cwd || null;
-        const command = buildShellCommand({ shellKind, cwd, env, command: runCommand }) + '\n';
 
-        logger.info('Starting server with command', { sessionId, command, port, nodeEnv, repoPath, worktreeId });
+        // Launch command comes from the cascaded config (serverCommand +
+        // gameModes/commonFlags templating), not a hardcoded binary.
+        const resolved = await resolveServerLaunchCommand({
+          workspaceManager,
+          sessionId,
+          cwd,
+          environment,
+          launchSettings
+        });
+
+        const command = buildShellCommand({ shellKind, cwd, env, command: resolved.command }) + '\n';
+
+        logger.info('Starting server with command', {
+          sessionId, command, port, nodeEnv, repoPath, worktreeId,
+          repositoryType: resolved.repositoryType, gameMode: resolved.usedGameMode
+        });
 
         const written = sessionManager.writeToSession(sessionId, command);
         if (!written) {
@@ -3888,6 +3909,24 @@ const prReviewAutomationService = PrReviewAutomationService.getInstance({
   io
 });
 
+const evidenceService = EvidenceService.getInstance({
+  taskRecordService,
+  pullRequestService,
+  gitHelper,
+  workspaceManager
+});
+
+const reviewWorkflowService = ReviewWorkflowService.getInstance({
+  taskRecordService,
+  pullRequestService,
+  sessionManager,
+  workspaceManager,
+  evidenceService,
+  io
+});
+// Resume polling for any runs that were mid-flight when the server restarted.
+if (reviewWorkflowService.listActiveRuns().length) reviewWorkflowService.startPolling();
+
 // Register pr-review-poll command so the scheduler can invoke it
 commandRegistry.register('pr-review-poll', {
   category: 'process',
@@ -4083,6 +4122,27 @@ app.get('/api/user-settings', (req, res) => {
   } catch (error) {
     logger.error('Failed to get user settings', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get user settings' });
+  }
+});
+
+// Visibility presets: one-click Simple ↔ Power/Process UI switch.
+app.get('/api/user-settings/visibility-presets', (req, res) => {
+  try {
+    const current = userSettingsService.getAllSettings()?.global?.ui?.visibilityPreset || 'simple';
+    res.json({ presets: visibilityPresets.listPresets(), current });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to list visibility presets' });
+  }
+});
+
+app.post('/api/user-settings/visibility-preset', express.json(), (req, res) => {
+  try {
+    const result = visibilityPresets.applyPreset(userSettingsService, String(req.body?.preset || ''));
+    activityFeed.track('settings.visibility-preset', { preset: result.preset });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to apply visibility preset', { error: error.message });
+    res.status(400).json({ error: error.message || 'Failed to apply visibility preset' });
   }
 });
 
@@ -6024,6 +6084,27 @@ app.get('/api/process/telemetry', async (req, res) => {
   }
 });
 
+// Context-switch telemetry (local JSONL, never leaves the machine).
+app.post('/api/process/telemetry/context-switch', express.json(), (req, res) => {
+  try {
+    const result = contextSwitchTelemetry.track(req.body || {});
+    if (!result.ok) return res.status(400).json(result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to record context switch' });
+  }
+});
+
+app.get('/api/process/telemetry/context-switches', (req, res) => {
+  try {
+    const hours = req.query.hours ? Number(req.query.hours) : 24;
+    res.json(contextSwitchTelemetry.getSummary({ hours }));
+  } catch (error) {
+    logger.error('Failed to summarize context switches', { error: error.message });
+    res.status(500).json({ error: 'Failed to summarize context switches' });
+  }
+});
+
 app.get('/api/process/telemetry/details', async (req, res) => {
   try {
     const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
@@ -6268,6 +6349,100 @@ app.get('/api/process/task-records/:id', (req, res) => {
   } catch (error) {
     logger.error('Failed to get task record', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get task record' });
+  }
+});
+
+// Evidence: collected proof (tests/app-run/reviews/media/data) per task.
+app.post('/api/process/evidence/:id/refresh', express.json(), async (req, res) => {
+  try {
+    const result = await evidenceService.refresh(req.params.id, {
+      worktreePath: req.body?.worktreePath
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to refresh evidence', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: error.message || 'Failed to refresh evidence' });
+  }
+});
+
+app.put('/api/process/evidence/:id', express.json(), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const evidence = Object.prototype.hasOwnProperty.call(body, 'evidence') ? body.evidence : body;
+    const result = await evidenceService.setDirect(req.params.id, evidence);
+    res.json({ id: req.params.id, evidence: result });
+  } catch (error) {
+    logger.error('Failed to set evidence', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: error.message || 'Failed to set evidence' });
+  }
+});
+
+// Review workflows: data-driven multi-agent review chains per task.
+app.get('/api/process/review-workflows', (req, res) => {
+  try {
+    const cfg = reviewWorkflowService.getConfig({ force: req.query.force === '1' });
+    res.json({
+      workflows: Object.entries(cfg.workflows || {}).map(([id, w]) => ({
+        id,
+        label: w.label || id,
+        description: w.description || '',
+        stages: (w.stages || []).map(s => ({ role: s.role, agentId: s.agentId, model: s.model || null, effort: s.effort || null }))
+      })),
+      riskDefaults: cfg.riskDefaults || {},
+      roles: Object.fromEntries(Object.entries(cfg.roles || {}).map(([id, r]) => [id, { label: r.label || id }]))
+    });
+  } catch (error) {
+    logger.error('Failed to read review workflow config', { error: error.message });
+    res.status(500).json({ error: 'Failed to read review workflow config' });
+  }
+});
+
+app.post('/api/process/review-workflows/:id/start', express.json(), async (req, res) => {
+  try {
+    const run = await reviewWorkflowService.startWorkflow(req.params.id, req.body?.workflowId, {
+      standards: Array.isArray(req.body?.standards) ? req.body.standards : []
+    });
+    res.json({ id: req.params.id, run });
+  } catch (error) {
+    logger.error('Failed to start review workflow', { id: req.params.id, error: error.message });
+    res.status(400).json({ error: error.message || 'Failed to start review workflow' });
+  }
+});
+
+app.post('/api/process/review-workflows/:id/advance', express.json(), async (req, res) => {
+  try {
+    const run = await reviewWorkflowService.advanceWorkflow(req.params.id);
+    if (!run) return res.status(404).json({ error: 'No workflow run for this task' });
+    res.json({ id: req.params.id, run });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to advance review workflow' });
+  }
+});
+
+app.post('/api/process/review-workflows/:id/cancel', express.json(), async (req, res) => {
+  try {
+    const run = await reviewWorkflowService.cancelWorkflow(req.params.id);
+    if (!run) return res.status(404).json({ error: 'No workflow run for this task' });
+    res.json({ id: req.params.id, run });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to cancel review workflow' });
+  }
+});
+
+app.get('/api/process/evidence/:id/media/:idx', (req, res) => {
+  try {
+    const resolved = evidenceService.resolveMediaPath(req.params.id, req.params.idx);
+    if (resolved.error) return res.status(resolved.status || 400).json({ error: resolved.error });
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // SVG can carry scripts that would run in the orchestrator's own origin on
+    // direct navigation; force download for it (embedding via <img> is unaffected).
+    if (resolved.path.toLowerCase().endsWith('.svg')) {
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+    res.sendFile(resolved.path);
+  } catch (error) {
+    logger.error('Failed to serve evidence media', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: 'Failed to serve evidence media' });
   }
 });
 
@@ -7768,10 +7943,40 @@ app.post('/api/pager/jobs/:id/stop', express.json(), (req, res) => {
 // Commander Service API (Claude Code Terminal)
 // ============================================
 
+// List commander instances (primary + any additional)
+app.get('/api/commander/list', (req, res) => {
+  try {
+    res.json({ commanders: commanderManager.list() });
+  } catch (error) {
+    logger.error('Failed to list commanders', { error: error.message });
+    res.status(500).json({ error: 'Failed to list commanders' });
+  }
+});
+
+// Spawn an additional commander instance
+app.post('/api/commander/spawn', express.json(), (req, res) => {
+  try {
+    const instance = commanderManager.spawn(req.body?.id);
+    res.json({ id: instance.id, commanders: commanderManager.list() });
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Failed to spawn commander' });
+  }
+});
+
+// Remove an additional commander instance (primary cannot be removed)
+app.post('/api/commander/remove', express.json(), async (req, res) => {
+  try {
+    const result = await commanderManager.remove(req.body?.id);
+    res.json({ ...result, commanders: commanderManager.list() });
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Failed to remove commander' });
+  }
+});
+
 // Get Commander status
 app.get('/api/commander/status', (req, res) => {
   try {
-    const status = commanderService.getStatus();
+    const status = commanderFor(req).getStatus();
     res.json(status);
   } catch (error) {
     logger.error('Failed to get commander status', { error: error.message });
@@ -7782,7 +7987,7 @@ app.get('/api/commander/status', (req, res) => {
 // Start Commander terminal
 app.post('/api/commander/start', async (req, res) => {
   try {
-    const result = await commanderService.start();
+    const result = await commanderFor(req).start();
     res.json(result);
   } catch (error) {
     logger.error('Failed to start commander', { error: error.message });
@@ -7795,7 +8000,7 @@ app.post('/api/commander/start-claude', async (req, res) => {
   try {
     const { mode, yolo } = req.body;
     // yolo defaults to true for Commander (YOLO mode enabled by default)
-    const result = await commanderService.startClaude(mode || 'fresh', yolo !== false);
+    const result = await commanderFor(req).startClaude(mode || 'fresh', yolo !== false);
     res.json(result);
   } catch (error) {
     logger.error('Failed to start Claude in commander', { error: error.message });
@@ -7811,7 +8016,7 @@ app.post('/api/commander/input', (req, res) => {
       return res.status(400).json({ error: 'Input is required' });
     }
 
-    const success = commanderService.sendInput(input);
+    const success = commanderFor(req).sendInput(input);
     res.json({ success });
   } catch (error) {
     logger.error('Commander input failed', { error: error.message });
@@ -7835,7 +8040,7 @@ app.post('/api/commander/resize', (req, res) => {
       });
     }
 
-    const success = commanderService.resize(cols, rows);
+    const success = commanderFor(req).resize(cols, rows);
     res.json({ success, cols, rows });
   } catch (error) {
     logger.error('Commander resize failed', { error: error.message });
@@ -7846,7 +8051,7 @@ app.post('/api/commander/resize', (req, res) => {
 // Stop Commander terminal
 app.post('/api/commander/stop', (req, res) => {
   try {
-    const result = commanderService.stop();
+    const result = commanderFor(req).stop();
     res.json(result);
   } catch (error) {
     logger.error('Failed to stop commander', { error: error.message });
@@ -7857,7 +8062,7 @@ app.post('/api/commander/stop', (req, res) => {
 // Restart Commander terminal
 app.post('/api/commander/restart', async (req, res) => {
   try {
-    const result = await commanderService.restart();
+    const result = await commanderFor(req).restart();
     res.json(result);
   } catch (error) {
     logger.error('Failed to restart commander', { error: error.message });
@@ -7869,7 +8074,7 @@ app.post('/api/commander/restart', async (req, res) => {
 app.get('/api/commander/output', (req, res) => {
   try {
     const { lines } = req.query;
-    const output = commanderService.getRecentOutput(lines ? parseInt(lines) : 50);
+    const output = commanderFor(req).getRecentOutput(lines ? parseInt(lines) : 50);
     res.json({ output });
   } catch (error) {
     logger.error('Failed to get commander output', { error: error.message });
@@ -7880,7 +8085,7 @@ app.get('/api/commander/output', (req, res) => {
 // Clear Commander buffer
 app.post('/api/commander/clear', (req, res) => {
   try {
-    commanderService.clearBuffer();
+    commanderFor(req).clearBuffer();
     res.json({ success: true });
   } catch (error) {
     logger.error('Failed to clear commander buffer', { error: error.message });

@@ -157,7 +157,7 @@
           "forceKill": true,
           "launchSettings": false,
           "serverLaunchMenu": false,
-          "startServer": true
+          "startServer": false
         },
         "dashboard": {
           "processBanner": false,
@@ -203,7 +203,8 @@
           "startClaude": false,
           "advice": false,
           "sessions": true,
-          "modeSelect": false
+          "modeSelect": false,
+          "tabs": false
         }
       },
       "desktop": {

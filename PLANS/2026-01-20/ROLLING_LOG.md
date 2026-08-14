@@ -681,3 +681,15 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Docs: remove old Q-tier terminology (merged)
 - Process docs now refer to tiers as `T1–T4` and interactive pressure as `T1+T2`.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/219 (merged 2026-01-25)
+
+## 2026-07-15 — Evidence + Review Workflows + Process Layer v2 (branch feature/review-inbox-and-tier-workflows)
+
+Research synthesis from `optimal-agent-orcestration-system` + 6-scout code audit → PLANS/2026-07-15/EVIDENCE_REVIEW_WORKFLOWS_PLAN.md. Shipped in one PR:
+- Evidence system: task-record `evidence` field, evidenceService (PR fenced blocks + worktree file + diff stats + safe media serving), Queue evidence card, docs/agents/EVIDENCE_PROTOCOL.md + auto-injected prompt snippet
+- Review workflows: config/review-workflows.json chains (standard/hardened/full-gate), reviewWorkflowService stage runner (per-role agent/model/effort, GitHub verdict polling, evidence.reviews recording), Queue workflow block
+- Fixed: reviewer/batch spawn config was invalid (never launched); commander slash-commands (/clear) sent as paste chunk; plugin POST routes had no body parser; server launch hardcoded `hytopia start`
+- UI Mode visibility presets (simple ↔ power) + Settings section; Review Hub button un-hidden
+- Prompt-cache freshness: fresh-window fixer + cache-cold chip
+- Local context-switch telemetry + dashboard surfacing
+- Plugins made real: youtube-transcript example, post_route action, commander.tools slot, Settings admin, README slot docs
+- Multi-commander: feasibility note (PLANS/2026-07-15/MULTI_COMMANDER_FEASIBILITY.md), follow-up PR

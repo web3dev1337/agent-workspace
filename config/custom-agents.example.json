@@ -1,0 +1,54 @@
+{
+  "_comment": "Copy this file to ~/.agent-workspace/custom-agents.json to register additional CLI agents (Gemini, OpenCode, Grok, aider, anything). No code changes needed: registered agents appear in the agent picker (/api/agents), can be launched from tasks/batch flows, and can be used as review-workflow stages with their own model/effort. VERIFY each command/flag against YOUR installed CLI version before enabling — these entries are documented starting points, not tested guarantees. Set \"override\": true to replace a built-in (claude/codex).",
+  "agents": {
+    "gemini": {
+      "name": "Gemini CLI",
+      "icon": "♊",
+      "description": "Google Gemini CLI (verify flags: gemini --help)",
+      "baseCommand": "gemini",
+      "modes": {
+        "fresh": { "command": "gemini", "description": "Start new session" }
+      },
+      "flags": {
+        "yolo": {
+          "flag": "--yolo",
+          "label": "🚀 YOLO Mode",
+          "description": "Auto-approve all actions",
+          "category": "permissions",
+          "default": true
+        }
+      },
+      "defaultFlags": ["yolo"],
+      "modelFlag": "-m {model}",
+      "models": ["gemini-2.5-pro", "gemini-2.5-flash"],
+      "defaultModel": "gemini-2.5-pro",
+      "initDelayMs": 10000
+    },
+    "opencode": {
+      "name": "OpenCode",
+      "icon": "🧩",
+      "description": "OpenCode TUI (verify flags: opencode --help; permissions are configured in opencode.json, not CLI flags)",
+      "baseCommand": "opencode",
+      "modes": {
+        "fresh": { "command": "opencode", "description": "Start new session" },
+        "continue": { "command": "opencode --continue", "description": "Continue most recent session" }
+      },
+      "flags": {},
+      "defaultFlags": [],
+      "modelFlag": "--model {model}",
+      "initDelayMs": 10000
+    },
+    "grok": {
+      "name": "Grok CLI",
+      "icon": "⚡",
+      "description": "SKELETON — fill in from your installed grok CLI's --help (several 'grok cli' projects exist with different flags)",
+      "baseCommand": "grok",
+      "modes": {
+        "fresh": { "command": "grok", "description": "Start new session" }
+      },
+      "flags": {},
+      "defaultFlags": [],
+      "initDelayMs": 10000
+    }
+  }
+}

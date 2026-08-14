@@ -61,3 +61,43 @@ module.exports = async function register({ router, registerCommand }) {
 - `GET /api/plugins` shows loaded/failed plugins.
 - `POST /api/plugins/reload` reloads plugins from disk.
 - Plugin routes are mounted under `/api/plugins/<pluginId>/*`.
+
+## Client UI slots (`client.slots`)
+
+A plugin can add buttons to named UI slots via the manifest — no client JavaScript needed:
+
+```json
+{
+  "client": {
+    "slots": [
+      {
+        "id": "open-board",
+        "slot": "commander.tools",
+        "label": "🎬 My Tool",
+        "description": "Tooltip text",
+        "order": 10,
+        "action": { "type": "post_route", "route": "/api/plugins/my-plugin/run", "prompt": "Input value:", "field": "value" }
+      }
+    ]
+  }
+}
+```
+
+Slots the client currently renders:
+- `commander.tools` — button strip in the Commander panel (between toolbar and terminal).
+- `dashboard.telemetry.actions` — action row in the dashboard Telemetry overlay.
+
+Action types:
+- `open_url` `{ url }` — opens an external `https?://` URL in a new tab.
+- `open_route` `{ route }` — opens a local route (must start with `/`).
+- `copy_text` `{ text }` — copies text to the clipboard.
+- `commander_action` `{ commanderAction, payload? }` — runs a command-catalog action.
+- `post_route` `{ route, prompt?, field?, payload? }` — POSTs JSON to a local route; if `prompt` is set the user is asked for one input first, sent as `field` (default `value`). The route's JSON response `message`/`error` is surfaced in the UI.
+
+## Example plugin
+
+`plugins/youtube-transcript/` is a complete working example: a `post_route` button in `commander.tools` plus a `youtube-transcript-transcribe` command that fetches a video's subtitles via `yt-dlp` and saves a plain-text transcript to `~/Downloads/transcripts/`.
+
+## Managing plugins
+
+Settings → Plugins lists loaded and **failed** plugins (a bad manifest no longer fails silently) and has a Reload button.

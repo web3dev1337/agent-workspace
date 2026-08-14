@@ -14,7 +14,7 @@ class PluginLoaderService {
     this.lastLoadedAt = null;
     this.supportedManifestVersions = new Set([1]);
     this.allowedCommandSurfaces = new Set(['commander', 'voice', 'ui', 'scheduler']);
-    this.allowedClientActionTypes = new Set(['open_url', 'open_route', 'copy_text', 'commander_action']);
+    this.allowedClientActionTypes = new Set(['open_url', 'open_route', 'copy_text', 'commander_action', 'post_route']);
     this.orchestratorVersion = this.loadOrchestratorVersion();
   }
 
@@ -134,6 +134,9 @@ class PluginLoaderService {
       }
 
       const router = express.Router();
+      // Plugin routes get JSON bodies parsed for them (the host app uses
+      // per-route parsers, so plugins would otherwise see req.body undefined).
+      router.use(express.json({ limit: '1mb' }));
       const routeBase = `/api/plugins/${encodeURIComponent(id)}`;
       const commandPrefix = `${id}-`;
       const capabilities = manifest?.capabilities || {};
@@ -285,7 +288,7 @@ class PluginLoaderService {
     return out;
   }
 
-  normalizeClientSlots(input) {
+  normalizeClientSlots(input, pluginId = '') {
     if (!Array.isArray(input)) return [];
     const out = [];
     const seenIds = new Set();
@@ -327,6 +330,29 @@ class PluginLoaderService {
         const commanderAction = String(action.commanderAction || action.action || '').trim();
         if (!commanderAction) throw new Error(`Missing commanderAction for slot id: ${id}`);
         normalizedAction.commanderAction = commanderAction;
+        if (action.payload && typeof action.payload === 'object' && !Array.isArray(action.payload)) {
+          normalizedAction.payload = action.payload;
+        }
+      }
+      if (type === 'post_route') {
+        // POST to a local route, optionally prompting the user for one input
+        // field first (e.g. paste a URL). Restricted to the plugin's OWN route
+        // namespace so a manifest can't POST prompted user input to arbitrary
+        // app endpoints, and "//host" scheme-relative URLs (which the browser
+        // treats as cross-origin) are rejected.
+        const route = String(action.route || '').trim();
+        const ownPrefix = pluginId ? `/api/plugins/${pluginId}/` : '/api/plugins/';
+        if (!route.startsWith('/') || route.startsWith('//') || !route.startsWith(ownPrefix)) {
+          throw new Error(`post_route action route must start with ${ownPrefix} for slot id: ${id}`);
+        }
+        normalizedAction.route = route;
+        const promptLabel = String(action.prompt || '').trim();
+        if (promptLabel) {
+          normalizedAction.prompt = promptLabel.slice(0, 200);
+          const field = String(action.field || 'value').trim();
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]{0,39}$/.test(field)) throw new Error(`Invalid post_route field name for slot id: ${id}`);
+          normalizedAction.field = field;
+        }
         if (action.payload && typeof action.payload === 'object' && !Array.isArray(action.payload)) {
           normalizedAction.payload = action.payload;
         }
@@ -408,7 +434,7 @@ class PluginLoaderService {
         throw new Error('Manifest client must be an object');
       }
       normalized.client = {
-        slots: this.normalizeClientSlots(client.slots || [])
+        slots: this.normalizeClientSlots(client.slots || [], normalized.id)
       };
     }
 
