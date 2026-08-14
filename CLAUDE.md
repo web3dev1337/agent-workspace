@@ -839,3 +839,14 @@ All commands run these 4 services:
 
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
+
+## In-Place Production Update (deferred restart)
+
+To update the running production `master/` without killing sessions mid-update (full write-up: `PLANS/2026-08-15/PROD_UPDATE.md`):
+
+1. `pgrep -af nodemon` — find the nodemon pid watching `server/`.
+2. `kill -STOP <nodemon pid>` — server keeps running old code from memory; ptys/sessions survive.
+3. Update files (`git pull` / `git checkout`); file-change events queue but do not fire.
+4. `kill -CONT <nodemon pid>` when ready for downtime — queued events fire, server restarts, ALL sessions die at that chosen moment. Verify with `ss -tlnp | grep :3000` + a `curl` to an API endpoint.
+
+Rules: never leave nodemon STOPped across a stack shutdown (pending signals unprocessed → orphans). Client-only changes (`client/*.js`/`*.css`) need NO restart — just Ctrl+F5 the browser.
