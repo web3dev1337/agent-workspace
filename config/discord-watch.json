@@ -1,0 +1,40 @@
+{
+  "$comment": "Ambient Discord watching: what counts as work, and how urgent. Override per-machine with ~/.agent-workspace/discord-watch.json.",
+  "schemaVersion": 1,
+
+  "enabled": false,
+  "pollSeconds": 15,
+  "$comment_channels": "Channel ids to watch. Add via `POST /api/discord-watch/channels` or here.",
+  "channels": [],
+  "$comment_backfill": "On first sight of a channel, how far back to read. 0 = start from now and never look back.",
+  "backfillMessages": 50,
+
+  "$comment_publish": "Post status updates back into the channel so nobody has to ask whether an agent picked something up.",
+  "publishStatus": true,
+
+  "$comment_priority": "First match wins, most urgent first. Matched against the message text, case-insensitively.",
+  "priority": [
+    { "level": "urgent", "tier": 1, "patterns": ["\\burgent\\b", "\\basap\\b", "\\bcritical\\b", "\\bblocker\\b", "\\bprod(uction)? (is )?(down|broken)\\b", "\\bp0\\b", "🚨"] },
+    { "level": "high", "tier": 2, "patterns": ["\\bimportant\\b", "\\bhigh priority\\b", "\\btoday\\b", "\\bbefore (the )?(demo|release|launch)\\b", "\\bp1\\b"] },
+    { "level": "low", "tier": 4, "patterns": ["\\bwhen you (get a chance|have time)\\b", "\\bno rush\\b", "\\blow priority\\b", "\\bsomeday\\b", "\\bnice to have\\b", "\\bbacklog\\b"] }
+  ],
+  "defaultPriority": { "level": "normal", "tier": 3 },
+
+  "$comment_kind": "What sort of message this is. Drives whether it becomes trackable work at all.",
+  "kinds": [
+    { "kind": "bug", "trackable": true, "patterns": ["\\bbug\\b", "\\bbroken\\b", "\\bcrash(ing|ed)?\\b", "\\berror\\b", "\\bfail(ing|ed|s)\\b", "\\bregression\\b", "doesn'?t work"] },
+    { "kind": "assignment", "trackable": true, "patterns": ["\\b(can|could|would) you\\b", "\\bplease\\b", "\\bneed(s)? (you )?to\\b", "\\blet'?s\\b", "\\bmake sure\\b", "\\badd\\b", "\\bfix\\b", "\\bbuild\\b", "\\bimplement\\b", "\\bupdate\\b", "\\bship\\b", "\\bcreate\\b", "\\bwrite\\b"] },
+    { "kind": "question", "trackable": false, "patterns": ["\\?\\s*$", "^(what|why|how|when|where|who|is|are|do|does|did|can|should)\\b"] },
+    { "kind": "idea", "trackable": false, "patterns": ["\\bidea\\b", "\\bwhat if\\b", "\\bmaybe we (should|could)\\b", "\\bthinking about\\b"] }
+  ],
+
+  "$comment_signals": "Phrases that update an existing item rather than creating a new one.",
+  "claimPatterns": ["\\bon it\\b", "\\bi'?ll (do|take|handle|look at)\\b", "\\btaking (this|that|it)\\b", "\\bstarting (this|that|it|on)\\b", "\\bpicking (this|that|it) up\\b"],
+  "donePatterns": ["\\bdone\\b", "\\bshipped\\b", "\\bmerged\\b", "\\bfixed\\b", "\\bcompleted?\\b", "\\bthat'?s live\\b", "✅"],
+  "dropPatterns": ["\\bnevermind\\b", "\\bnever mind\\b", "\\bignore (that|this)\\b", "\\bcancel(led)? (that|this)\\b", "\\bnot needed\\b", "\\bwon'?t do\\b"],
+
+  "$comment_ignore": "Never create work from these — bots talking to bots is how a queue fills with noise.",
+  "ignoreBots": true,
+  "ignorePrefixes": ["!", "/", "```"],
+  "minLength": 12
+}

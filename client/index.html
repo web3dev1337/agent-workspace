@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="styles/tabs.css">
     <link rel="stylesheet" href="styles/projects-board.css">
+    <link rel="stylesheet" href="styles/jarvis.css">
     
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="assets/agent-workspace-logo.png?v=circle">
@@ -67,6 +68,9 @@
             </button>
             <button id="ports-btn" class="header-btn header-nav-btn" title="View running services" data-ui-visibility="header.ports">
                 <span class="header-nav-icon">🔌</span> Ports
+            </button>
+            <button id="jarvis-btn" class="header-btn header-nav-btn" title="JARVIS — what was handled, what needs you (Ctrl+J or Alt+J)" data-ui-visibility="header.jarvis" aria-controls="jarvis-panel" aria-expanded="false">
+                <span class="header-nav-icon">🤖</span> JARVIS
             </button>
             <div class="header-actions">
                 <button id="greenfield-btn" class="header-btn" title="Create new project" data-ui-visibility="header.newProject">
@@ -548,6 +552,9 @@
     <script src="greenfield-wizard.js"></script>
     <script src="workspace-tab-manager.js"></script>
     <script src="voice-control.js"></script>
+    <script src="speech-output.js"></script>
+    <script src="realtime-voice.js"></script>
+    <script src="jarvis-panel.js"></script>
     <script src="conversation-browser.js"></script>
     <script src="activity-feed.js"></script>
     <script src="/bootstrap/setup-state.js"></script>

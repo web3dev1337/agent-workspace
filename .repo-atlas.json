@@ -1,0 +1,50 @@
+{
+  "id": "agent-workspace",
+  "name": "Agent Workspace",
+  "summary": "Multi-workspace orchestrator for running many CLI coding agents in parallel across repos and git worktrees. Express + Socket.IO backend, web client, Tauri desktop app.",
+  "kind": "tool",
+  "platforms": ["node"],
+  "languages": ["JavaScript"],
+  "dimension": "n/a",
+  "tags": ["orchestration", "agents", "worktrees"],
+  "status": "active",
+  "maturity": "production",
+  "visibility": "public",
+  "groups": [],
+  "highlights": [
+    {
+      "topic": "agent-workflow",
+      "quality": 5,
+      "paths": ["server/agentManager.js", "server/agentSpawnHelper.js", "config/custom-agents.example.json"],
+      "notes": "Agent-agnostic launch registry — new CLI agents are pure config (flags, model/effort syntax, init delay), no code changes."
+    },
+    {
+      "topic": "tooling",
+      "quality": 5,
+      "paths": ["server/repoAtlasService.js", "server/atlas/", "scripts/atlas.js"],
+      "notes": "The Repo Atlas itself: layered discovery/manifest/registry model with audience-scoped bundle compilation."
+    },
+    {
+      "topic": "testing",
+      "quality": 4,
+      "paths": ["tests/unit/", "jest.config.js"],
+      "notes": "700+ fast unit tests over services; Playwright e2e runs on a dedicated port via scripts/run-e2e-safe.js."
+    },
+    {
+      "topic": "ci",
+      "quality": 4,
+      "paths": ["scripts/release/", "scripts/tauri/run-tauri-build.js"],
+      "notes": "Cross-platform Tauri packaging with version-drift guards and bundle filename verification before release upload."
+    },
+    {
+      "topic": "security",
+      "quality": 4,
+      "paths": ["server/utils/shellSafety.js", "server/policyService.js", "server/networkSecurityPolicy.js"],
+      "notes": "Allowlist validators for anything interpolated into a shell command, plus role policy and loopback-by-default bind rules."
+    }
+  ],
+  "avoid": [
+    { "topic": "architecture", "reason": "server/index.js is a ~9k-line route god-file; follow server/routes/ and the service modules instead" }
+  ],
+  "seeAlso": []
+}

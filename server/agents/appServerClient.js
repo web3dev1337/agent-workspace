@@ -1,0 +1,304 @@
+const { EventEmitter } = require('events');
+const { spawn } = require('child_process');
+
+const { augmentProcessEnv, getHiddenProcessOptions } = require('../utils/processUtils');
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const RESTART_BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000];
+const MAX_LINE_BYTES = 8 * 1024 * 1024;
+// Uptime below this is a crash, not a run — only sustained uptime resets the
+// restart-backoff counter, otherwise a spawn-then-die-immediately binary would
+// read attempt 0 on every cycle and be hammered at the shortest delay forever.
+const STABLE_UPTIME_MS = 30_000;
+
+/**
+ * JSON-RPC client for `codex app-server`.
+ *
+ * This is the interface the Codex app and VS Code extension speak. It matters
+ * because it replaces guesswork with facts: instead of matching "Do you want to
+ * proceed" in a byte stream, a thread reports `active` with an explicit
+ * `waitingOnApproval` flag; instead of spotting a cost line, a turn completes.
+ *
+ * Per the protocol README the `"jsonrpc":"2.0"` header is omitted on the wire;
+ * framing is newline-delimited JSON over stdio.
+ */
+class AppServerClient extends EventEmitter {
+  constructor({ command = 'codex', args = ['app-server'], cwd = null, logger = console, autoRestart = true } = {}) {
+    super();
+    this.command = command;
+    this.args = args;
+    this.cwd = cwd;
+    this.logger = logger;
+    this.autoRestart = autoRestart;
+
+    this.child = null;
+    this.buffer = '';
+    this.nextId = 1;
+    this.pending = new Map();
+    this.starting = null;
+    this.stopped = false;
+    this.restartAttempts = 0;
+    this.lastError = null;
+    this.startedAt = null;
+
+    // EventEmitter throws on an 'error' emit with no listener, which would take
+    // the whole orchestrator down via uncaughtException. A default listener
+    // turns a client-level error into a recorded fact instead of a crash.
+    this.on('error', (error) => {
+      this.lastError = error?.message || String(error);
+      this.logger.warn?.('[app-server] client error', { error: this.lastError });
+    });
+  }
+
+  isRunning() {
+    return Boolean(this.child && !this.child.killed && this.child.exitCode === null);
+  }
+
+  async start() {
+    if (this.isRunning()) return { running: true, alreadyRunning: true };
+    if (this.starting) return this.starting;
+
+    this.stopped = false;
+    const startPromise = new Promise((resolve) => {
+      let child;
+      try {
+        child = spawn(this.command, this.args, {
+          ...getHiddenProcessOptions({ stdio: ['pipe', 'pipe', 'pipe'] }),
+          cwd: this.cwd || undefined,
+          env: augmentProcessEnv(process.env)
+        });
+      } catch (error) {
+        this.lastError = error.message;
+        resolve({ running: false, error: error.message });
+        return;
+      }
+
+      this.child = child;
+      // A partial line left over from a previous process must not prefix the
+      // new stream — it would corrupt the first frame the new child sends.
+      this.buffer = '';
+      const spawnedAtMs = Date.now();
+
+      // Every handler below is bound to THIS child and bails if a newer one
+      // has replaced it. A SIGTERM'd child's 'exit' event arrives on a later
+      // tick — without the guard, a quick stop()+start() let the OLD child's
+      // exit reject the NEW child's pending requests (killing the initialize
+      // handshake), null the new child, and schedule a spurious extra respawn.
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (chunk) => {
+        if (this.child === child) this.consume(chunk);
+      });
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk) => {
+        const text = String(chunk).trim();
+        if (text) this.logger.debug?.('[app-server]', text);
+      });
+
+      // The stdio pipes surface their own errors (an async EPIPE from writing
+      // to a child that closed its stdin, a destroyed pipe). Without listeners
+      // those throw uncaught — and any code other than the literal EPIPE the
+      // global handler swallows would take the whole orchestrator down. A
+      // stream error means this child is broken: kill it so the normal
+      // exit/restart path takes over instead of pending requests timing out.
+      const onStreamError = (error) => {
+        if (this.child !== child) return;
+        this.lastError = error.message;
+        this.logger.warn?.('[app-server] stdio stream error', { error: error.message });
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // Already gone.
+        }
+      };
+      child.stdin?.on?.('error', onStreamError);
+      child.stdout?.on?.('error', onStreamError);
+      child.stderr?.on?.('error', onStreamError);
+
+      child.on('error', (error) => {
+        if (this.child !== child) return;
+        this.lastError = error.message;
+        this.emit('error', error);
+      });
+
+      child.on('exit', (code, signal) => {
+        if (this.child !== child) return;
+        this.rejectAllPending(new Error(`app-server exited (code ${code}, signal ${signal})`));
+        this.child = null;
+        // Sustained uptime is what proves the binary works, so the backoff
+        // counter resets here — never at spawn time, where a crash-looping
+        // binary would clear it right before every death.
+        if (Date.now() - spawnedAtMs >= STABLE_UPTIME_MS) this.restartAttempts = 0;
+        this.emit('exit', { code, signal });
+        if (!this.stopped && this.autoRestart) this.scheduleRestart();
+      });
+
+      this.startedAt = new Date(spawnedAtMs).toISOString();
+      this.emit('started', { pid: child.pid });
+      resolve({ running: true, pid: child.pid });
+    });
+
+    // Clear the in-flight marker once it settles. The Promise executor runs
+    // synchronously, so nulling `this.starting` from inside it would be
+    // clobbered by the assignment below — leaving a stale resolved promise that
+    // makes every later start() (auto-restart included) a permanent no-op.
+    this.starting = startPromise;
+    startPromise.finally(() => {
+      if (this.starting === startPromise) this.starting = null;
+    });
+
+    return startPromise;
+  }
+
+  scheduleRestart() {
+    const delay = RESTART_BACKOFF_MS[Math.min(this.restartAttempts, RESTART_BACKOFF_MS.length - 1)];
+    this.restartAttempts += 1;
+    const timer = setTimeout(() => {
+      if (!this.stopped) this.start().catch(() => {});
+    }, delay);
+    if (typeof timer.unref === 'function') timer.unref();
+  }
+
+  stop() {
+    this.stopped = true;
+    this.buffer = '';
+    this.rejectAllPending(new Error('app-server client stopped'));
+    if (this.child) {
+      try {
+        this.child.kill('SIGTERM');
+      } catch {
+        // Already gone.
+      }
+      this.child = null;
+    }
+    return { running: false };
+  }
+
+  rejectAllPending(error) {
+    for (const [, entry] of this.pending) {
+      clearTimeout(entry.timer);
+      entry.reject(error);
+    }
+    this.pending.clear();
+  }
+
+  consume(chunk) {
+    this.buffer += chunk;
+
+    let index = this.buffer.indexOf('\n');
+    while (index !== -1) {
+      const line = this.buffer.slice(0, index).trim();
+      this.buffer = this.buffer.slice(index + 1);
+      if (line) this.handleLine(line);
+      index = this.buffer.indexOf('\n');
+    }
+
+    // Only an unterminated trailing line can remain. Drop it if it alone blows
+    // the cap — the complete messages ahead of it were already handled, so this
+    // no longer discards queued-but-parseable frames along with the oversized one.
+    if (this.buffer.length > MAX_LINE_BYTES) {
+      this.logger.warn?.('app-server line exceeded the buffer; dropping the incomplete line');
+      this.buffer = '';
+    }
+  }
+
+  handleLine(line) {
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      // The app-server occasionally logs non-JSON on stdout during startup.
+      return;
+    }
+
+    if (message.id !== undefined && (message.result !== undefined || message.error !== undefined)) {
+      const entry = this.pending.get(message.id);
+      if (!entry) return;
+      clearTimeout(entry.timer);
+      this.pending.delete(message.id);
+      if (message.error) entry.reject(Object.assign(new Error(message.error.message || 'app-server error'), { data: message.error }));
+      else entry.resolve(message.result);
+      return;
+    }
+
+    if (message.method && message.id !== undefined) {
+      // A server->client request (approvals, elicitation). Emit it so a policy
+      // layer can answer; unanswered requests are the caller's problem, not ours.
+      this.emit('request', { id: message.id, method: message.method, params: message.params || {} });
+      return;
+    }
+
+    if (message.method) {
+      this.emit('notification', { method: message.method, params: message.params || {} });
+      // Re-emit under the method name so listeners can subscribe to a specific
+      // notification (realtime events do this). Never for 'error': that is a
+      // reserved EventEmitter event that throws without a listener, and the
+      // 'error' *notification* is already delivered via 'notification' above.
+      if (message.method !== 'error') this.emit(message.method, message.params || {});
+    }
+  }
+
+  send(payload) {
+    if (!this.isRunning()) return false;
+    try {
+      this.child.stdin.write(`${JSON.stringify(payload)}\n`);
+      return true;
+    } catch (error) {
+      this.lastError = error.message;
+      return false;
+    }
+  }
+
+  request(method, params = {}, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
+    return new Promise((resolve, reject) => {
+      if (!this.isRunning()) {
+        reject(new Error('app-server is not running'));
+        return;
+      }
+
+      const id = this.nextId;
+      this.nextId += 1;
+
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`app-server request "${method}" timed out`));
+      }, timeoutMs);
+      if (typeof timer.unref === 'function') timer.unref();
+
+      this.pending.set(id, { resolve, reject, timer, method });
+      if (!this.send({ id, method, params })) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(new Error(`could not write "${method}" to app-server`));
+      }
+    });
+  }
+
+  notify(method, params = {}) {
+    return this.send({ method, params });
+  }
+
+  /**
+   * Answer a server->client request, which is how approvals are granted over the
+   * protocol instead of by typing "1" into a terminal and hoping.
+   */
+  respond(id, result) {
+    return this.send({ id, result });
+  }
+
+  respondError(id, message, code = -32000) {
+    return this.send({ id, error: { code, message } });
+  }
+
+  getStatus() {
+    return {
+      running: this.isRunning(),
+      pid: this.child?.pid || null,
+      startedAt: this.startedAt,
+      pendingRequests: this.pending.size,
+      restartAttempts: this.restartAttempts,
+      lastError: this.lastError
+    };
+  }
+}
+
+module.exports = { AppServerClient, DEFAULT_REQUEST_TIMEOUT_MS };

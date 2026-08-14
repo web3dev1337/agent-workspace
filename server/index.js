@@ -110,6 +110,19 @@ const { ProjectTypeService } = require('./projectTypeService');
 const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
 const { RecommendationsService } = require('./recommendationsService');
+const { RepoAtlasService } = require('./repoAtlasService');
+const { createAtlasRoutes } = require('./routes/atlasRoutes');
+const { SupervisorService } = require('./supervisorService');
+const { createSupervisorRoutes } = require('./routes/supervisorRoutes');
+const { SpeechService } = require('./speechService');
+const { createSpeechRoutes } = require('./routes/speechRoutes');
+const { VoiceProviderService } = require('./voice/voiceProviderService');
+const { createVoiceProviderRoutes } = require('./routes/voiceProviderRoutes');
+const { VoiceBrainService } = require('./voice/voiceBrainService');
+const { DiscordWatchService } = require('./discordWatchService');
+const { createDiscordWatchRoutes } = require('./routes/discordWatchRoutes');
+const { AppServerService } = require('./appServerService');
+const { createAppServerRoutes } = require('./routes/appServerRoutes');
 const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
@@ -349,6 +362,17 @@ greenfieldService.setProjectTypeService(projectTypeService);
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
 const recommendationsService = RecommendationsService.getInstance();
+const repoAtlasService = RepoAtlasService.getInstance({ logger });
+const speechService = SpeechService.getInstance({ logger });
+speechService.setIO(io);
+const voiceProviderService = VoiceProviderService.getInstance({ logger });
+voiceProviderService.init({ speechService });
+// Apply the persisted active TTS choice at boot so the registry and the speech
+// service agree on which model speaks.
+voiceProviderService.applyActiveTts().catch((error) => logger.warn('Voice provider apply failed', { error: error.message }));
+const supervisorService = SupervisorService.getInstance({ logger });
+const discordWatchService = DiscordWatchService.getInstance({ logger });
+const appServerService = AppServerService.getInstance({ logger });
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
 activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 9460) });
@@ -423,6 +447,93 @@ threadService.init({ workspaceManager, sessionManager });
 intentHaikuService.setSessionManager(sessionManager);
 serviceStackRuntimeService.init({ workspaceManager, sessionManager, configPromoterService, io });
 auditExportService.init({ activityFeed, schedulerService, userSettingsService });
+// Self-healing: if no Commander is running, start one automatically rather than
+// dead-ending. The launch queue buffers input during boot and flushes it once
+// Claude is interactive (trust prompt auto-accepted), so the request lands even
+// on a cold start — the assistant just does what it needs instead of reporting
+// a missing Commander.
+let commanderStarting = null;
+const ensureCommander = async () => {
+  try {
+    if (!commanderService?.start) return false;
+    if (!commanderService.session) {
+      if (!commanderStarting) commanderStarting = commanderService.start().finally(() => { commanderStarting = null; });
+      await commanderStarting;
+    }
+    if (!commanderService.claudeStarted) {
+      await commanderService.startClaude('fresh', true);
+    }
+    return true;
+  } catch (error) {
+    logger.warn('ensureCommander failed', { error: error.message });
+    return false;
+  }
+};
+
+// Two writes: agent CLIs treat "text\r" in one chunk as a bracketed paste.
+const sendToCommander = async (text) => {
+  if (!commanderService?.sendInput) return false;
+  await ensureCommander();
+  if (commanderService.sendInput(text) === false) return false;
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  commanderService.sendInput('\r');
+  return true;
+};
+
+supervisorService.init({
+  sessionManager,
+  gitHelper,
+  agentManager,
+  sessionRecoveryService,
+  taskRecordService,
+  activityFeed,
+  notificationService,
+  speechService,
+  // Facts beat inference: where the Codex app-server knows a thread's state,
+  // it replaces the scraped guess. Null means "no better information", and the
+  // PTY scraper stays authoritative.
+  structuredSource: appServerService,
+  // When rules cannot fix something, the Commander gets a written problem brief
+  // before you do — it is a full agent with the whole API, and it only costs
+  // tokens when something is actually wrong.
+  commanderSender: sendToCommander
+});
+
+if (String(process.env.SUPERVISOR_AUTOSTART || 'true').toLowerCase() !== 'false') {
+  const started = supervisorService.start();
+  logger.info('Supervisor', started);
+}
+
+// Opt-in via CODEX_APP_SERVER=true; everything degrades to PTY scraping without it.
+appServerService.init({ io, speechService });
+appServerService.start().then((started) => {
+  if (started.running) logger.info('Codex app-server', started);
+}).catch((error) => logger.warn('Codex app-server did not start', { error: error.message }));
+
+// Off unless explicitly configured — it needs a bot token and channel ids.
+discordWatchService.init({ taskRecordService, activityFeed });
+const discordWatchStarted = discordWatchService.start();
+if (discordWatchStarted.running) logger.info('Discord watch', discordWatchStarted);
+
+// Speech that no rule matched is still useful: hand the raw words to the
+// active Commander so the fallback is an agent, not an error.
+voiceCommandService.setCommanderForwarder(sendToCommander);
+
+// The voice brain routes unmatched speech: a fast fact answer from live
+// orchestrator state, else the Commander agent — both spoken. This is what
+// makes voice an extension of Commander rather than a fixed phrasebook.
+const voiceBrainService = VoiceBrainService.getInstance({ logger });
+voiceBrainService.init({
+  voiceCommandService,
+  speechService,
+  commanderContextService,
+  workspaceManager,
+  commanderService, // used to read the Commander's PTY buffer for spoken replies
+  commandRegistry,
+  supervisorService,
+  discordWatchService,
+  commanderForwarder: sendToCommander
+});
 
 const loadPlugins = async () => {
   const status = await pluginLoaderService.loadAll({
@@ -1335,6 +1446,49 @@ app.get('/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+
+app.use('/api/atlas', createAtlasRoutes({
+  repoAtlasService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/supervisor', createSupervisorRoutes({
+  supervisorService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/app-server', createAppServerRoutes({
+  appServerService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/discord-watch', createDiscordWatchRoutes({
+  discordWatchService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/speech', createSpeechRoutes({
+  speechService,
+  supervisorService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
+
+app.use('/api/voice-providers', createVoiceProviderRoutes({
+  voiceProviderService,
+  logger,
+  requireRead: requirePolicyAction('read'),
+  requireWrite: requirePolicyAction('write')
+}));
 
 app.get('/api/app-info', (req, res) => {
   res.json(readAppInfo());
@@ -8271,7 +8425,17 @@ app.post('/api/voice/command', async (req, res) => {
     if (!transcript) {
       return res.status(400).json({ error: 'transcript is required' });
     }
+    const startedAt = Date.now();
     const result = await voiceCommandService.processVoiceCommand(transcript);
+    // Log what was heard, how it routed, what JARVIS said back, and how long it
+    // took — so the whole conversation + latency is visible in the log.
+    logger.info('Voice', {
+      heard: transcript,
+      route: result.method || (result.success ? 'command' : 'unmatched'),
+      command: result.command || null,
+      reply: result.spoken || null,
+      ms: Date.now() - startedAt
+    });
     res.json(result);
   } catch (error) {
     logger.error('Failed to process voice command', { error: error.message });
@@ -8628,7 +8792,23 @@ function shutdown(signal = 'unknown') {
 
   isShuttingDown = true;
   logger.info('Shutting down server...', { signal });
-  
+
+  // Stop the services this branch added. The app-server one owns a real child
+  // process (`codex app-server`) that survives a parent restart otherwise —
+  // nodemon reloads would then leak one orphaned process each. The others only
+  // clear unref'd JS intervals, stopped here for symmetry.
+  for (const [name, service] of [
+    ['appServerService', appServerService],
+    ['discordWatchService', discordWatchService],
+    ['supervisorService', supervisorService]
+  ]) {
+    try {
+      service?.stop?.();
+    } catch (error) {
+      logger.warn(`Failed to stop ${name} during shutdown`, { error: error.message });
+    }
+  }
+
   // Clean up sessions first
   sessionManager.cleanup();
   

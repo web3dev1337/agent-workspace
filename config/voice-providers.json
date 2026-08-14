@@ -1,0 +1,144 @@
+{
+  "$comment": "Swappable voice models. A model is DATA here, not code — add one by adding an entry. `kind`: tts (speak) | stt (listen) | duplex (full-duplex speak+listen at once). `active*` picks the current provider per capability; 'auto' = best available that passes its health check; 'none' = off. Override per-machine at ~/.agent-workspace/voice-providers.json.",
+  "schemaVersion": 1,
+
+  "activeTts": "auto",
+  "activeStt": "auto",
+  "activeDuplex": "none",
+
+  "providers": [
+    {
+      "id": "browser",
+      "kind": "tts",
+      "label": "Browser speech synthesis",
+      "engine": "browser",
+      "local": false,
+      "quality": 2,
+      "notes": "Zero install — the page speaks via the Web Speech API. Works on a fresh clone; the fallback when nothing local is set up."
+    },
+    {
+      "id": "piper",
+      "kind": "tts",
+      "label": "Piper (local neural TTS)",
+      "engine": "piper",
+      "local": true,
+      "quality": 3,
+      "requires": { "command": "piper", "env": "PIPER_MODEL" },
+      "install": "pip install --user piper-tts && download a voice .onnx (e.g. en_US-amy-medium) then set PIPER_MODEL to its path",
+      "notes": "Small, fast, fully offline. Good default local voice on modest hardware."
+    },
+    {
+      "id": "kokoro",
+      "kind": "tts",
+      "label": "Kokoro (local neural, natural — warm HTTP server)",
+      "engine": "kokoro",
+      "local": true,
+      "quality": 5,
+      "endpoint": "http://127.0.0.1:5960",
+      "requires": { "server": "http://127.0.0.1:5960" },
+      "install": "pip install --user kokoro-onnx soundfile flask; model+voices in ~/.local/share/kokoro; run ~/.local/bin/kokoro-server.py (started by start-voice-stack.sh).",
+      "notes": "Natural neural voice; ~2s synth on CPU (faster on GPU). Streamed to the browser like piper. The nicer-sounding local default."
+    },
+    {
+      "id": "chatterbox",
+      "kind": "tts",
+      "label": "Chatterbox (Resemble, real-time + cloning)",
+      "engine": "kokoro",
+      "local": true,
+      "quality": 4,
+      "requires": { "command": "chatterbox" },
+      "install": "pip install --user chatterbox-tts; needs a GPU for real-time.",
+      "notes": "Real-time generative audio with voice cloning, permissive license. Uses the same generic CLI adapter as kokoro."
+    },
+    {
+      "id": "espeak",
+      "kind": "tts",
+      "label": "espeak-ng (robotic, always-there fallback)",
+      "engine": "espeak",
+      "local": true,
+      "quality": 1,
+      "requires": { "command": "espeak-ng" },
+      "notes": "Last-resort offline voice; robotic but never fails."
+    },
+
+    {
+      "id": "whisper-cpp",
+      "kind": "stt",
+      "label": "whisper.cpp (local, GPU-accelerated)",
+      "engine": "whisper",
+      "local": true,
+      "quality": 4,
+      "requires": { "env": "WHISPER_CPP_PATH" },
+      "notes": "The existing STT path. Accurate, fully offline."
+    },
+    {
+      "id": "faster-whisper",
+      "kind": "stt",
+      "label": "faster-whisper (CTranslate2)",
+      "engine": "whisper",
+      "local": true,
+      "quality": 4,
+      "requires": { "command": "faster-whisper" },
+      "install": "pip install --user faster-whisper; runs on GPU or CPU.",
+      "notes": "Faster Whisper reimplementation. Drop-in for the whisper engine."
+    },
+    {
+      "id": "parakeet",
+      "kind": "stt",
+      "label": "NVIDIA Parakeet TDT (streaming, ultra-low latency)",
+      "engine": "parakeet",
+      "local": true,
+      "quality": 5,
+      "requires": { "command": "parakeet-stt" },
+      "install": "NVIDIA NeMo + parakeet-tdt checkpoint; best on the 5090. RNN-T, RTFx > 2000, true streaming.",
+      "notes": "The pick for the streaming pipeline lane. Lights up when NeMo + the checkpoint are present."
+    },
+    {
+      "id": "moonshine",
+      "kind": "stt",
+      "label": "Moonshine (edge/CPU)",
+      "engine": "whisper",
+      "local": true,
+      "quality": 3,
+      "requires": { "command": "moonshine" },
+      "notes": "Smallest footprint; good for the laptop or CPU-only."
+    },
+
+    {
+      "id": "codex",
+      "kind": "duplex",
+      "label": "Codex app-server realtime (remote)",
+      "engine": "codex",
+      "local": false,
+      "quality": 4,
+      "requires": { "env": "CODEX_APP_SERVER" },
+      "notes": "The full-duplex path that ships today — browser STT -> appendText -> Codex thread -> spoken back. Reasoning + tools, remote."
+    },
+    {
+      "id": "personaplex",
+      "kind": "duplex",
+      "label": "NVIDIA PersonaPlex (full-duplex, LOCAL)",
+      "engine": "personaplex",
+      "local": true,
+      "quality": 5,
+      "transport": "websocket",
+      "endpoint": "http://localhost:8998",
+      "requires": { "server": "http://localhost:8998" },
+      "install": "git clone github.com/NVIDIA/personaplex; ~19GB BF16 (fits the 5090), 8-16GB quantized via moshi.cpp (fits the 16GB laptop). Serves a web UI at localhost:8998.",
+      "notes": "Best OPEN local full-duplex: ~70ms speaker-switch. Voice-only (no tools). Lights up when the server is reachable."
+    },
+    {
+      "id": "xtalk",
+      "kind": "duplex",
+      "label": "X-Talk (open full-duplex framework)",
+      "engine": "personaplex",
+      "local": true,
+      "quality": 4,
+      "transport": "websocket",
+      "endpoint": "http://localhost:8080",
+      "requires": { "server": "http://localhost:8080" },
+      "install": "Pure-Python cascaded full-duplex framework (STT+LLM+TTS with barge-in). Lighter than PersonaPlex.",
+      "notes": "Newer (mid-2026) open framework; swap the endpoint and it works through the same adapter."
+    }
+  ]
+}

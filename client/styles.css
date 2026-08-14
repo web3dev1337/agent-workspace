@@ -10999,12 +10999,22 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .voice-transcript {
-  font-size: 11px;
-  color: #718096;
-  max-width: 200px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  max-width: 340px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Only show the pill when there is something to read. */
+.voice-transcript:not(:empty) {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #1a212b;
+  border: 1px solid #2f7a4c;
+  color: #a8d8f0;
 }
 
 /* Voice Backend Menu */

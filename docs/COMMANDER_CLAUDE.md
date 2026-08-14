@@ -118,6 +118,146 @@ curl -sS "$BASE_URL/api/commander/execute" \
 
 ---
 
+## Supervisor (the fleet watchdog)
+
+A rule-driven loop classifies every agent session every 30s from zero-token signals (PTY tail, status, quiet time, git state — plus structured app-server events for Codex threads) and tries to fix what it finds. Ask it what needs attention instead of reading 16 terminals yourself.
+
+```bash
+# What needs a human right now — start here
+curl -sS "$BASE_URL/api/supervisor/briefing" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Everything recorded recently (filter by severity or session)
+curl -sS "$BASE_URL/api/supervisor/findings?severity=critical" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Loop config: autonomy level, tick rate, which conditions are armed
+curl -sS "$BASE_URL/api/supervisor/status" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Force a pass now (dryRun reports findings without acting on them)
+curl -sS -X POST "$BASE_URL/api/supervisor/tick" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"dryRun": true}' | jq
+```
+
+**Autonomy levels** — `off` (nothing runs) | `observe` (record only) | `assist` (may repair things itself) | `autopilot` (default: may also delegate to a Commander).
+
+Autonomy governs what JARVIS may **fix**, not what it may say. Reaching a human is gated separately: a finding must exhaust its repair attempts, then clear an urgency threshold weighted by the task's tier, then fit inside an interruption budget. Everything else batches into a digest.
+
+**You may be on the receiving end of this.** When rules cannot fix something, the problem is delegated to a Commander as a `[JARVIS]` problem brief with the session, branch, tier and output tail. That is a request to diagnose and fix it — not to relay it to the user. Escalate to a human only if you are genuinely blocked on a decision only they can make.
+
+```bash
+# What is waiting but did not earn an interruption
+curl -sS "$BASE_URL/api/supervisor/digest" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# "Catch me up" — deliver the batch now
+curl -sS -X POST "$BASE_URL/api/supervisor/digest/deliver" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{}' | jq
+```
+
+```bash
+curl -sS -X POST "$BASE_URL/api/supervisor/autonomy" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"level": "assist"}'
+```
+
+**Never change the autonomy level on your own** — raising or lowering it is the user's decision. Rules live in `config/supervisor-rules.json`, overridable at `~/.agent-workspace/supervisor-rules.json` and by `SUPERVISOR_AUTONOMY`; every action is appended to `~/.agent-workspace/logs/supervisor-audit.jsonl`.
+
+## Speech
+
+```bash
+# Say something out loud
+curl -sS -X POST "$BASE_URL/api/speech/say" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"text": "Work three is waiting on permission."}'
+
+# Speak the fleet briefing
+curl -sS -X POST "$BASE_URL/api/speech/briefing" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{}' | jq
+
+curl -sS "$BASE_URL/api/speech/status" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+```
+
+Default backend is the browser's own synthesis (nothing to install); piper/`say`/SAPI/espeak take over when present. Keep spoken text to one or two short sentences — it is read aloud, not displayed.
+
+## Repo Atlas (cross-repo prior art)
+
+The map of every repo the user owns, cloned or not, with per-topic quality scores. Query it before searching the filesystem for "how did we do X before".
+
+```bash
+# The main query: who did this well?
+curl -sS "$BASE_URL/api/atlas/find?topic=data-compression" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Compact map worth pasting into a prompt
+curl -sS "$BASE_URL/api/atlas/digest" -H "X-Auth-Token: $AUTH_TOKEN" | jq -r .digest
+
+curl -sS "$BASE_URL/api/atlas/entries/acme-tycoon" -H "X-Auth-Token: $AUTH_TOKEN" | jq -r .description
+curl -sS "$BASE_URL/api/atlas/topics" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Record what a repo turned out to be good at
+curl -sS -X POST "$BASE_URL/api/atlas/entries/acme-tycoon/highlights" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"topic": "data-compression", "quality": 5, "paths": ["src/data/"], "notes": "bitpacked saves"}'
+```
+
+Also available as a CLI anywhere: `node scripts/atlas.js find <topic>`.
+
+**Do not change a repo's `visibility` or `groups`, and do not compile or publish sharing bundles, without being asked.** Those decide what leaves the machine.
+
+The registry syncs between machines via a private git repo (`GET/POST /api/atlas/sync`). Entries marked `foreign: true` were shared with you by someone else — read them, never re-share them.
+
+## Codex app-server (structured signals + realtime voice)
+
+Opt-in via `CODEX_APP_SERVER=true`. When on, Codex threads report state as facts instead of being scraped, and approvals arrive with the command attached.
+
+```bash
+curl -sS "$BASE_URL/api/app-server/status" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+curl -sS "$BASE_URL/api/app-server/approvals" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Grant or refuse an approval over the wire
+curl -sS -X POST "$BASE_URL/api/app-server/approvals/<requestId>" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"approved": true}'
+
+# Full-duplex voice on a thread
+curl -sS -X POST "$BASE_URL/api/app-server/realtime/<threadId>/start" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{}'
+```
+
+Only approve something you would approve yourself — the same fail-closed rules apply, and the command is right there in the request.
+
+## Atlas write-back
+
+After substantial work, propose what you learned. You cannot write to the map directly.
+
+```bash
+curl -sS -X POST "$BASE_URL/api/atlas/proposals" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"repoId":"acme-tycoon","topic":"data-compression","quality":5,
+       "paths":["src/data/"],"notes":"bitpacked saves",
+       "evidence":"12x smaller than the JSON it replaced, benchmarked",
+       "proposedBy":"acme-tycoon-work1-claude"}'
+```
+
+Always include `evidence`. Proposals without it get rejected, and rightly so.
+
+## Discord (ambient team work)
+
+The watcher reads whole channels rather than waiting to be addressed, turns assignments into tracked work with a priority, and publishes status back so nobody has to ask whether an agent picked something up.
+
+```bash
+# Asked for, nobody started — ordered by priority
+curl -sS "$BASE_URL/api/discord-watch/untracked" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+curl -sS "$BASE_URL/api/discord-watch/items?status=in-progress" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+curl -sS "$BASE_URL/api/discord-watch/status" -H "X-Auth-Token: $AUTH_TOKEN" | jq
+
+# Bind a work item to the session doing it — this is what makes agent status visible to the team
+curl -sS -X POST "$BASE_URL/api/discord-watch/items/discord:123/link" \
+  -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"sessionId": "acme-tycoon-work1-claude"}'
+```
+
+Link a work item whenever you start a session for one — an unlinked item looks untouched to everyone else. Work item tiers come from how urgently the message was phrased, and they flow into the task record, so linking also sets the session's tier correctly.
+
 ## Session Control
 
 ```bash

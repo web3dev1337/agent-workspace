@@ -1,0 +1,205 @@
+{
+  "$comment": "Condition table for JARVIS, the fleet supervisor. Evaluated every tick against zero-token signals (PTY tail, status, quiet time, git state). Override per-machine with ~/.agent-workspace/supervisor-rules.json.",
+  "schemaVersion": 2,
+
+  "$comment_autonomy": "off = nothing runs. observe = record only. assist = may resolve things itself. autopilot = may also delegate to the Commander. Interrupting a human is gated separately by interruption policy, NOT by autonomy — the point is to act, not to narrate.",
+  "autonomy": "autopilot",
+  "tickSeconds": 30,
+  "maxFindingsRetained": 500,
+
+  "$comment_interruption": "The human is the most expensive resource in the system and every interruption costs a context switch. A finding only reaches you if it scores above the threshold AND fits the budget; everything else self-heals silently or waits for the digest.",
+  "interruption": {
+    "threshold": 60,
+    "alwaysInterruptAbove": 90,
+    "maxPerHour": 2,
+    "minSecondsBetween": 900,
+    "digestIntervalMinutes": 120,
+    "quietHours": { "enabled": false, "startHour": 22, "endHour": 7 },
+    "$comment_tiers": "Tier weights come from the task record. T1 is what you are actually working on; T3/T4 is background work that should never pull you out of flow — fix it or park it.",
+    "tierWeights": { "1": 1.5, "2": 1.15, "3": 0.6, "4": 0.35, "none": 0.8 },
+    "severityBase": { "info": 10, "warn": 40, "critical": 80 }
+  },
+
+  "safety": {
+    "$comment": "Resolve/delegate handlers are named functions in server/supervisor/supervisorActions.js. Rules select a handler; they cannot inject shell.",
+    "allowedHandlers": ["nudge", "answer-permission", "relaunch-agent", "schedule-resume", "commit-and-push", "open-pull-request", "delegate-to-commander"],
+    "$comment_permission": "An auto-answered permission prompt must match one of these AND none of the deny patterns. Anything else is escalated, never guessed.",
+    "permissionAllowPatterns": [
+      "\\b(Read|Glob|Grep|NotebookRead|WebFetch|WebSearch|TodoWrite)\\b",
+      "\\b(Edit|Write|Update)\\([^)]*\\)",
+      "\\bgit (status|diff|log|show|branch|fetch|add|commit)\\b",
+      "\\b(npm|pnpm|yarn) (test|run test|run lint|run typecheck|run build)\\b",
+      "\\bjest\\b", "\\bplaywright\\b", "\\bpytest\\b", "\\bcargo (test|check|clippy)\\b"
+    ],
+    "$comment_deny_paths": "A permission prompt to Edit/Write is auto-approvable in general, but NOT for targets that execute on the next ordinary operation — a poisoned build script, git hook, CI workflow or shell rc turns an approved edit plus an already-allowlisted `npm run build`/`git commit` into arbitrary code execution. Any write to these fails closed to a human.",
+    "permissionDenyPatterns": [
+      "\\brm\\s+-[rf]", "\\bsudo\\b", "\\bgit (push\\s+(--force|-f\\b)|reset --hard|clean)\\b",
+      "\\bgh (pr merge|release|repo delete|repo edit)\\b", "\\bDROP\\b", "\\bTRUNCATE\\b",
+      "\\bDELETE FROM\\b", "\\bcurl\\b[^\\n]*\\|\\s*(sh|bash)", "\\bchmod\\s+777\\b",
+      "\\bkill(all)?\\b", "\\bnpm publish\\b", "\\bdd\\s+if=", "\\bmkfs\\b",
+      "(~|/home/[^/\\s\"']+|/Users/[^/\\s\"']+|/root)/\\.(ssh|aws|config|codex|claude)\\b", "\\.env\\b",
+      "\\.git/(hooks|config)", "\\.github/(workflows|actions)\\b",
+      "(^|[/(\"'\\s=])(package(-lock)?\\.json|pnpm-lock\\.yaml|yarn\\.lock)\\b",
+      "(^|[/(\"'\\s=])(Makefile|Rakefile|Gemfile|Cargo\\.toml|pyproject\\.toml|setup\\.py|build\\.gradle|pom\\.xml)\\b",
+      "(^|[/(.\"'\\s=])(bashrc|zshrc|bash_profile|zshenv|profile|gitconfig|npmrc|pre-commit-config\\.yaml)\\b",
+      "(^|[\\s(])/etc/"
+    ]
+  },
+
+  "$comment_conditions": "Ordered by urgency — the first match per session wins. `resolve` is what JARVIS does about it without asking. `escalateAfterAttempts` is how many failed self-heals before it is allowed to reach you at all.",
+  "conditions": [
+    {
+      "id": "structured-approval",
+      "label": "Waiting on an approval (reported, not guessed)",
+      "severity": "warn",
+      "cooldownSeconds": 60,
+      "escalateAfterAttempts": 1,
+      "urgency": { "blocksWork": true },
+      "resolve": { "handler": "answer-permission" },
+      "$comment": "The Codex app-server reports waitingOnApproval as a fact, so this fires in seconds rather than waiting out a quiet-time threshold to be confident a prompt is really stuck.",
+      "when": {
+        "awaitingApproval": true,
+        "minQuietSeconds": 10
+      },
+      "advice": "An agent reported it is blocked on an approval that could not be auto-granted safely."
+    },
+    {
+      "id": "thread-system-error",
+      "label": "Thread reported a system error",
+      "severity": "critical",
+      "cooldownSeconds": 600,
+      "escalateAfterAttempts": 1,
+      "urgency": { "blocksWork": true },
+      "resolve": { "handler": "delegate-to-commander" },
+      "when": { "status": ["error"] },
+      "advice": "The agent runtime itself reported a system error — this is not something a nudge fixes."
+    },
+    {
+      "id": "awaiting-permission",
+      "label": "Waiting on a permission prompt",
+      "severity": "warn",
+      "cooldownSeconds": 120,
+      "escalateAfterAttempts": 1,
+      "urgency": { "blocksWork": true },
+      "resolve": { "handler": "answer-permission" },
+      "when": {
+        "status": ["waiting"],
+        "minQuietSeconds": 45,
+        "tailMatches": [
+          "Do you want to (proceed|make this edit|create)",
+          "❯\\s*1\\.\\s*Yes",
+          "Allow .* to run",
+          "\\[y/N\\]"
+        ]
+      },
+      "advice": "An agent is blocked on a permission prompt that could not be auto-approved safely."
+    },
+    {
+      "id": "usage-limit-reached",
+      "label": "Usage limit reached",
+      "severity": "info",
+      "cooldownSeconds": 3600,
+      "escalateAfterAttempts": 99,
+      "urgency": { "base": 5 },
+      "resolve": { "handler": "schedule-resume" },
+      "when": {
+        "tailMatches": [
+          "\\d+-hour limit reached",
+          "limit reached ∙ resets",
+          "You've reached your usage limit",
+          "rate.?limit(ed)? .*(retry|reset)"
+        ]
+      },
+      "advice": "Blocked until the window resets. Resume is scheduled automatically — there is nothing for you to do, so this never interrupts."
+    },
+    {
+      "id": "error-loop",
+      "label": "Repeating the same error",
+      "severity": "critical",
+      "cooldownSeconds": 900,
+      "escalateAfterAttempts": 1,
+      "urgency": { "blocksWork": true },
+      "resolve": { "handler": "delegate-to-commander" },
+      "when": {
+        "status": ["busy", "idle"],
+        "repeatedTailLine": 4,
+        "tailMatches": ["(?i)\\b(error|failed|exception|traceback|cannot find)\\b"]
+      },
+      "advice": "The same error keeps recurring — the agent is looping and cannot see it."
+    },
+    {
+      "id": "stalled",
+      "label": "Busy but silent",
+      "severity": "warn",
+      "cooldownSeconds": 600,
+      "escalateAfterAttempts": 3,
+      "resolve": { "handler": "nudge", "text": "status? If you are blocked, say what on, then resolve it yourself if you can." },
+      "when": {
+        "status": ["busy"],
+        "agentPresent": true,
+        "minQuietSeconds": 900,
+        "tailNotMatches": ["limit reached", "Do you want to (proceed|make this edit)"]
+      },
+      "advice": "Marked busy with no output for 15 minutes and did not respond to nudges."
+    },
+    {
+      "id": "agent-exited",
+      "label": "Agent exited, shell left behind",
+      "severity": "warn",
+      "cooldownSeconds": 600,
+      "escalateAfterAttempts": 2,
+      "resolve": { "handler": "relaunch-agent" },
+      "when": {
+        "status": ["idle"],
+        "agentPresent": false,
+        "minQuietSeconds": 180
+      },
+      "advice": "The agent CLI is gone and could not be relaunched."
+    },
+    {
+      "id": "unpushed-work",
+      "label": "Finished with unpushed commits",
+      "severity": "info",
+      "cooldownSeconds": 1200,
+      "escalateAfterAttempts": 3,
+      "resolve": { "handler": "nudge", "text": "You have local commits that are not pushed. Push the branch and open a PR, then say what you shipped." },
+      "when": {
+        "status": ["idle"],
+        "agentPresent": true,
+        "minQuietSeconds": 300,
+        "git": { "aheadMin": 1 }
+      },
+      "advice": "Finished work has not left the machine and nudges did not shift it."
+    },
+    {
+      "id": "uncommitted-work",
+      "label": "Idle with uncommitted changes",
+      "severity": "info",
+      "cooldownSeconds": 1800,
+      "escalateAfterAttempts": 3,
+      "resolve": { "handler": "nudge", "text": "You have uncommitted changes. Commit them with a descriptive message, or say why they should not be committed." },
+      "when": {
+        "status": ["idle"],
+        "agentPresent": true,
+        "minQuietSeconds": 900,
+        "git": { "dirty": true, "aheadMax": 0 }
+      },
+      "advice": "Edits sitting in the working tree with nothing recorded."
+    },
+    {
+      "id": "idle-capacity",
+      "label": "Idle worktree, nothing in flight",
+      "severity": "info",
+      "cooldownSeconds": 3600,
+      "escalateAfterAttempts": 99,
+      "urgency": { "base": 5 },
+      "resolve": { "handler": "observe" },
+      "when": {
+        "status": ["idle"],
+        "minQuietSeconds": 1800,
+        "git": { "dirty": false, "aheadMax": 0 }
+      },
+      "advice": "Free capacity — this worktree could take the next queue item."
+    }
+  ]
+}

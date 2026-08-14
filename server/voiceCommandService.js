@@ -17,13 +17,19 @@ class VoiceCommandService {
   constructor() {
     // Ollama config (local LLM)
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
-    this.ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2:1b'; // Small, fast model
+    // 3b is the accuracy sweet spot for command classification — the 1b rambles
+    // and jams chit-chat into commands. Still fast, and kept warm in VRAM.
+    this.ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2:3b';
     this.useOllama = false;
 
     // Claude API config (external, fast)
     this.claudeApiKey = process.env.ANTHROPIC_API_KEY || null;
     this.claudeModel = process.env.CLAUDE_VOICE_MODEL || 'claude-3-haiku-20240307';
     this.useClaude = false;
+
+    // Set by the server once a Commander instance exists; unmatched speech is
+    // handed to it rather than discarded.
+    this.commanderForwarder = null;
 
     // Current context (set by orchestrator)
     this.context = {
@@ -72,6 +78,39 @@ class VoiceCommandService {
           if (/^hide/i.test(match[0])) return { behavior: 'auto' };
           return { behavior: 'always' };
         }
+      },
+      // Open a panel by name. These are fixed phrases with an exact intent, so
+      // match them deterministically here instead of letting the fuzzy LLM
+      // misfile "open the queue" as a specific queue action (e.g. select-by-pr).
+      // Each requires its object noun, so they never shadow the more specific
+      // queue rules below ("open blockers", "triage queue", "open next review").
+      {
+        patterns: [
+          /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|go\s+to|jump\s+to)\s+(?:the\s+)?(?:review\s+|pr\s+)?queue\b/i,
+        ],
+        command: 'open-queue',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|go\s+to)\s+(?:the\s+)?(?:task\s+list|tasks?|to-?dos?)\b/i,
+        ],
+        command: 'open-tasks',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|go\s+to)\s+(?:the\s+)?(?:advice|recommendations?|suggestions?)\b/i,
+        ],
+        command: 'open-advice',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|go\s+to)\s+(?:the\s+)?settings\b/i,
+        ],
+        command: 'open-settings',
+        extractParams: () => ({})
       },
       // Open Queue
       {
@@ -810,12 +849,15 @@ class VoiceCommandService {
           return { worktreeId: `work${num}` };
         }
       },
-      // List sessions
+      // List sessions. The old /what.*sessions/ variant was greedy enough to
+      // steal natural fact questions ("what are my sessions doing") from the
+      // fact lane, which answers them properly — so only the enumerative
+      // phrasings match here.
       {
         patterns: [
           /list\s+sessions/i,
           /show\s+sessions/i,
-          /what.*sessions/i,
+          /^what\s+sessions\b/i,
         ],
         command: 'list-sessions',
         extractParams: () => ({})
@@ -1139,15 +1181,20 @@ class VoiceCommandService {
         console.log('[Voice] Ollama available with models:', models);
         this.useOllama = true;
 
-        // Check if our preferred model is available
-        const hasPreferred = models.some(m => m.startsWith(this.ollamaModel.split(':')[0]));
-        if (!hasPreferred && models.length > 0) {
-          // Use first available small model
-          const smallModel = models.find(m =>
-            m.includes('llama3.2:1b') || m.includes('phi') || m.includes('qwen')
-          ) || models[0];
-          console.log(`[Voice] Using model: ${smallModel}`);
-          this.ollamaModel = smallModel;
+        // Use the configured model if it's actually installed; otherwise pick
+        // the best available. Bigger llama3.2 / qwen beats the tiny 1b for
+        // command accuracy, so prefer those before degrading to 1b/phi.
+        if (!models.includes(this.ollamaModel) && models.length > 0) {
+          const preference = [
+            (m) => /qwen2\.5.*(7b|3b)/.test(m),
+            (m) => m.startsWith('llama3.2:3b'),
+            (m) => m.includes('qwen'),
+            (m) => m.startsWith('llama3.2'),
+            (m) => m.includes('phi')
+          ];
+          const chosen = preference.map((pick) => models.find(pick)).find(Boolean) || models[0];
+          console.log(`[Voice] Configured model not installed; using: ${chosen}`);
+          this.ollamaModel = chosen;
         }
       }
     } catch (err) {
@@ -1164,6 +1211,21 @@ class VoiceCommandService {
     if (!this.useOllama && !this.useClaude) {
       console.log('[Voice] No LLM available - using rule-based parsing only');
     }
+
+    // Pre-warm the model so the FIRST real command doesn't eat the ~8s cold
+    // model-load. Fire-and-forget; keep_alive holds it in VRAM afterwards.
+    if (this.useOllama) this.warmUpOllama();
+  }
+
+  warmUpOllama() {
+    if (this._warmed) return;
+    this._warmed = true;
+    fetch(`${this.ollamaUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: this.ollamaModel, prompt: 'ok', stream: false, keep_alive: '30m', options: { num_predict: 1 } }),
+      signal: AbortSignal.timeout(60000)
+    }).then(() => console.log('[Voice] Ollama model warmed:', this.ollamaModel)).catch(() => { this._warmed = false; });
   }
 
   /**
@@ -1173,14 +1235,25 @@ class VoiceCommandService {
     // Clean up transcript
     const text = transcript.toLowerCase().trim();
 
+    // A negation must be detected BEFORE rule matching, not after: many rule
+    // patterns are unanchored substrings, so "don't stop all claudes" contains
+    // a perfectly matching "stop all claudes" — and with no confirmation gate
+    // between parse and execute, the spoken sentence would do the exact
+    // opposite of what was said. Bare "stop …"/"cancel …" are imperative
+    // commands, not negations; only their dismissal forms short-circuit.
+    const negated = /^(don'?t\b|do not\b|never\b|no,?\s|nope\b)/.test(text)
+      || /^(stop|cancel|forget)\s+(that|it)\b/.test(text);
+
     // Try rule-based parsing first (instant, free)
-    const ruleResult = this.parseWithRules(text);
-    if (ruleResult) {
-      return {
-        success: true,
-        method: 'rules',
-        ...ruleResult
-      };
+    if (!negated) {
+      const ruleResult = this.parseWithRules(text);
+      if (ruleResult) {
+        return {
+          success: true,
+          method: 'rules',
+          ...ruleResult
+        };
+      }
     }
 
     // Typed input (e.g. Commander panel slash commands) wants a fast,
@@ -1194,10 +1267,39 @@ class VoiceCommandService {
       };
     }
 
+    // Fast fact lane BEFORE the LLM classifier: a question about live state
+    // ("how many agents are working") should be answered instantly from a
+    // snapshot, not pay the multi-second LLM command-classification cost first.
+    // Action phrasings ("open the queue") return null here and fall through.
+    // The brain also owns the ack lane ("never mind" -> "Okay, forget it"), so
+    // this MUST run before the negation guard below or that ack regresses to a
+    // Commander round-trip.
+    if (!options.skipFact && this.brain?.answerFromContext) {
+      try {
+        const fact = this.brain.answerFromContext(text);
+        if (fact) return { success: false, fact, transcript: text };
+      } catch { /* fall through to the classifier */ }
+    }
+
+    // A negation that wasn't a bare ack (the fact lane above owns "never
+    // mind") skips the classifier and is handed to the Commander, which
+    // understands "don't".
+    if (negated) {
+      return { success: false, error: 'negation is not a command', transcript: text };
+    }
+
+    // A single stray word that matched no rule and no fact is almost always
+    // mis-heard speech ("uh", "hmm"), never a fuzzy command — the command
+    // vocabulary is already covered by rules. Skip the ~1s LLM round-trip and
+    // let it fall through fast to "didn't catch that".
+    if (text.split(/\s+/).filter(Boolean).length <= 1) {
+      return { success: false, error: 'too short to classify', transcript: text };
+    }
+
     // Try Ollama first (local, private)
     if (this.useOllama) {
       const ollamaResult = await this.parseWithOllama(text);
-      if (ollamaResult) {
+      if (ollamaResult && this.isGrounded(ollamaResult.command, text)) {
         return {
           success: true,
           method: 'ollama',
@@ -1209,7 +1311,7 @@ class VoiceCommandService {
     // Try Claude API as fallback (fast, cheap)
     if (this.useClaude) {
       const claudeResult = await this.parseWithClaude(text);
-      if (claudeResult) {
+      if (claudeResult && this.isGrounded(claudeResult.command, text)) {
         return {
           success: true,
           method: 'claude',
@@ -1223,6 +1325,39 @@ class VoiceCommandService {
       error: 'Could not understand command',
       transcript: text
     };
+  }
+
+  /**
+   * Grounding guard against LLM hallucination. A small local model, forced to
+   * emit JSON, will sometimes pick a command for input that isn't one ("thanks
+   * that is cool" -> open-project-chats). Only trust a classified command if the
+   * utterance actually shares a keyword with it — otherwise treat it as no match
+   * so it flows to the brain's fact/greeting/agent lanes instead of firing a
+   * random command.
+   */
+  isGrounded(command, text) {
+    if (!command) return false;
+    const t = String(text || '').toLowerCase();
+    const synonyms = {
+      queue: ['queue'], workspace: ['workspace', 'project', 'switch'], settings: ['setting', 'config', 'preference'],
+      tasks: ['task', 'todo'], commander: ['commander'], worktree: ['worktree', 'work'], focus: ['focus', 'show'],
+      pager: ['pager', 'ping'], advice: ['advice', 'recommend', 'suggest'], chats: ['chat', 'message'],
+      project: ['project'], claude: ['claude'], all: ['all', 'everything'], mode: ['mode'], tier: ['tier'],
+      new: ['new', 'create', 'start'], open: ['open', 'show', 'pull up', 'bring up', 'go to'], start: ['start', 'launch', 'run'],
+      stop: ['stop', 'kill', 'end'], status: ['status', 'state'],
+      kill: ['kill', 'stop', 'end', 'terminate'], destroy: ['destroy', 'delete', 'remove'],
+      remove: ['remove', 'delete', 'drop'], close: ['close', 'shut'], merge: ['merge'], approve: ['approve', 'accept']
+    };
+    const parts = String(command).split(/[-_]/).filter((w) => w.length > 2);
+    // A destructive command must be grounded by its VERB, not by an incidental
+    // noun — "is my session about to time out?" mentions a session but must
+    // never ground a hallucinated kill-session from the small local model.
+    const destructive = ['kill', 'stop', 'destroy', 'remove', 'delete', 'close', 'merge', 'approve'];
+    if (destructive.includes(parts[0])) {
+      const verbHeard = t.includes(parts[0]) || (synonyms[parts[0]] || []).some((s) => t.includes(s));
+      if (!verbHeard) return false;
+    }
+    return parts.some((w) => t.includes(w) || (synonyms[w] || []).some((s) => t.includes(s)));
   }
 
   /**
@@ -1437,7 +1572,17 @@ Worktree matching:
 - Match partial names: "zoo" could match "zoo-game"
 
 Return JSON: {"command": "command-name", "params": {"key": "value"}}
-Return {"command": null} if unclear.
+
+CRITICAL: Only return a command when the user is CLEARLY asking to perform one of the
+actions above. If the input is a greeting, a question, small talk, a status query, or
+anything that is not obviously one of the listed commands, you MUST return {"command": null}.
+Never guess. When in doubt, return {"command": null}.
+
+Examples of {"command": null}:
+- "hello", "hey jarvis", "can you hear me", "are you there" (greetings)
+- "how many agents are working", "what needs my attention", "what's the status" (questions)
+- "thanks", "cool", "never mind", "what can you do" (chit-chat)
+- "write a note summarising the fleet" (a task, not a listed command)
 
 JSON:`;
   }
@@ -1478,12 +1623,16 @@ JSON:`;
           model: this.ollamaModel,
           prompt,
           stream: false,
+          // Constrain generation to valid JSON at the API level so even a small
+          // local model can't ramble prose instead of the {"command":...} shape.
+          format: 'json',
+          keep_alive: '30m', // keep the model warm between commands
           options: {
             temperature: 0.1,
             num_predict: 100
           }
         }),
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(8000)
       });
 
       if (!response.ok) return null;
@@ -1541,21 +1690,99 @@ JSON:`;
   }
 
   /**
-   * Parse and execute in one call
+   * Where unrecognized speech goes.
+   *
+   * Without this, anything outside the pattern table is a dead end — which is
+   * what makes a voice interface feel like a remote control instead of an
+   * assistant. The forwarder hands the raw utterance to the Commander agent,
+   * so the fallback for "I didn't match that" is a full agent with the entire
+   * orchestrator API rather than an error beep.
    */
-  async processVoiceCommand(transcript) {
+  setCommanderForwarder(forwarder) {
+    this.commanderForwarder = typeof forwarder === 'function' ? forwarder : null;
+    return Boolean(this.commanderForwarder);
+  }
+
+  hasCommanderForwarder() {
+    return Boolean(this.commanderForwarder);
+  }
+
+  async forwardToCommander(transcript) {
+    if (!this.commanderForwarder) {
+      return { forwarded: false, reason: 'no Commander is running to forward to' };
+    }
+    try {
+      const result = await this.commanderForwarder(transcript);
+      return { forwarded: result !== false, result };
+    } catch (error) {
+      return { forwarded: false, reason: error.message };
+    }
+  }
+
+  /**
+   * Parse and execute in one call.
+   *
+   * `forwardUnmatched` defaults on for spoken input: if no rule and no LLM can
+   * turn the utterance into a command, the words themselves are still useful.
+   */
+  setBrain(brain) {
+    this.brain = brain || null;
+    return Boolean(this.brain);
+  }
+
+  async processVoiceCommand(transcript, { forwardUnmatched = true } = {}) {
     const parsed = await this.parseCommand(transcript);
 
+    // Fast fact/greeting answer (matched before the LLM classifier) — speak and done.
+    if (parsed.fact) {
+      this.brain?.speak?.(parsed.fact);
+      return { success: true, method: 'fact', command: null, params: {}, transcript, executed: true, spoken: parsed.fact };
+    }
+
     if (!parsed.success) {
-      return parsed;
+      // No command matched. If the brain is wired, let it try a fast fact answer
+      // from live orchestrator state, then fall back to the Commander agent —
+      // both spoken. This is what makes voice more than a fixed phrasebook.
+      if (this.brain?.handleUnmatched) {
+        const outcome = await this.brain.handleUnmatched(transcript);
+        return {
+          success: outcome.handled,
+          method: outcome.route,
+          command: null,
+          params: {},
+          transcript,
+          executed: outcome.handled,
+          spoken: outcome.spoken,
+          forwardedToCommander: outcome.route === 'commander'
+        };
+      }
+
+      if (!forwardUnmatched || !this.commanderForwarder) return parsed;
+
+      const forward = await this.forwardToCommander(transcript);
+      if (!forward.forwarded) return { ...parsed, forward };
+
+      return {
+        success: true,
+        method: 'commander',
+        command: null,
+        params: {},
+        transcript,
+        executed: true,
+        forwardedToCommander: true,
+        result: forward.result
+      };
     }
 
     const result = await this.executeCommand(parsed.command, parsed.params);
+    // Speak a short confirmation so the fast command lane talks back too.
+    const spoken = this.brain?.confirmCommand ? this.brain.confirmCommand(parsed.command) : undefined;
 
     return {
       ...parsed,
       executed: true,
-      result
+      result,
+      spoken
     };
   }
 

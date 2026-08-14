@@ -125,6 +125,94 @@ server/portRegistry.js             - Port assignment + live service scanner (`/a
 server/commanderService.js         - Top-level Commander PTY (Claude/Codex) + launch buffering
 ├─ Packaged CWD: uses `ORCHESTRATOR_DATA_DIR/commander` so desktop users can edit `CLAUDE.md` / `AGENTS.md` safely
 └─ First-run seed: copies the packaged `docs/COMMANDER_CLAUDE.md` into the Commander data directory when missing
+server/repoAtlasService.js         - Repo Atlas facade: one queryable map of every repo you own, cloned or not
+├─ Layers (later wins): subscriptions (bundles others shared) < discovery (disk + `gh repo list`) < in-repo `.repo-atlas.json` < your registry override
+├─ Query: `find(topic)` ranked by per-topic quality 1-5, `digest()` compact paste-into-a-prompt map, `search()`, `topics()`
+├─ Curation: `addHighlight()` / `addAvoid()` persist into the registry — quality is scored per topic, so a rough repo can still be the best example of one thing
+└─ Sharing: `compile(audience)` emits audience-scoped bundles — `private` never leaves the machine, `team` needs a group match, `public` goes everywhere
+server/supervisorService.js        - Fleet supervisor: rule-driven watchdog over every agent session
+├─ Loop: rules run on a tick (default 30s) from zero-token signals; no model is called in the loop, only on escalation
+├─ Ordering: fix it itself → hand it to the Commander → only then interrupt a human
+├─ Autonomy (`off` | `observe` | `assist` | `autopilot`, default autopilot; `SUPERVISOR_AUTONOMY` overrides) governs what it may FIX, not what it may say
+├─ Escalation: a finding cannot reach a human until `escalateAfterAttempts` self-heals have failed
+├─ Interruption: urgency = severity x task tier + failed repairs; gated by a budget (2/hour, 15min apart, optional quiet hours); anything refused batches into a digest
+├─ Safety: named handlers only, so rules cannot inject shell; permission auto-approval fails closed on credentials/force-push/merge
+├─ Audit: every action appended to `~/.agent-workspace/logs/supervisor-audit.jsonl` with the finding that caused it
+└─ `getBriefing()` renders the spoken/at-a-glance "what needs you now" summary
+server/supervisor/supervisorSignals.js - Per-session signal collection (PTY tail, quiet-time tracker, repeated-line detection, git ahead/dirty for quiet sessions only)
+server/supervisor/supervisorRules.js   - Condition table loader/matcher (`config/supervisor-rules.json`, override `~/.agent-workspace/supervisor-rules.json`) + autonomy ceilings
+server/supervisor/supervisorActions.js - Ladder executor: notify/nudge/act, two-write submit, fail-closed permission-prompt classification
+server/routes/supervisorRoutes.js  - Express router for `/api/supervisor/*`
+config/supervisor-rules.json       - Shipped condition table (autonomy `autopilot`, permission allow/deny patterns incl. exec-on-next-op path denials, act-handler allowlist)
+tests/unit/supervisorRules.test.js, supervisorActions.test.js, supervisorService.test.js, supervisorUrgency.test.js - Supervisor coverage (matching, autonomy ceilings, cooldowns, fail-closed approvals, interruption budget, audit)
+
+server/speechService.js            - Speech output with degrading backends
+├─ Default `browser` backend emits a `speech-speak` socket event — works on a fresh clone with nothing installed
+├─ Local backends preferred when present: piper (piped straight to paplay/aplay), macOS `say`, Windows SAPI, espeak-ng
+└─ Sanitizes to printable ASCII with no shell metacharacters, caps length, suppresses back-to-back repeats
+server/routes/speechRoutes.js      - `/api/speech/*` (say, backend, enabled, spoken fleet briefing)
+client/speech-output.js            - Web Speech API listener for the browser backend (`window.SpeechOutput`)
+server/voiceCommandService.js      - (existing) rule/LLM voice parsing, now with `setCommanderForwarder()`: unmatched speech is handed to the Commander agent instead of dead-ending
+server/voice/voiceProviderService.js - Swappable voice-model registry (a model is DATA, not code)
+├─ Loads `config/voice-providers.json` (override `~/.agent-workspace/voice-providers.json`)
+├─ Health-checks each provider (command present? env set? model server reachable?) — all degrade, never throw
+├─ Resolves the ONE active provider per capability (tts/stt/duplex); `auto` = best-quality available, `none` = off; a broken pin falls back to auto so voice never silently mutes
+├─ `setActive(kind, id)` persists to the override and applies TTS to speechService immediately
+└─ speechService gained a Kokoro/generic-CLI backend + Piper voice auto-discovery (`~/.local/share/piper-voices`)
+server/voice/voiceBrainService.js  - The voice "brain": routes an utterance through three lanes, fastest first
+├─ COMMAND — a semantic command in the registry, run instantly (voiceCommandService)
+├─ FACT — a question answerable from live orchestrator state (sessions/supervisor briefing/queue/discord/workspace) answered straight from a commanderContextService snapshot: an API shortcut, no LLM turn, spoken in ~ms
+├─ AGENT — anything else handed to the Commander (full API, can do anything), acknowledged aloud
+└─ An action phrasing ("open the queue") never gets hijacked by the fact lane; wired via voiceCommandService.setBrain()
+server/routes/voiceProviderRoutes.js - `/api/voice-providers/*` (list+health, swap active per capability, reload)
+config/voice-providers.json        - The model catalogue: TTS (browser/piper/kokoro/chatterbox/espeak), STT (whisper-cpp/faster-whisper/parakeet/moonshine), duplex (codex/personaplex/xtalk) with install hints
+tests/unit/speechService.test.js, voiceProviderService.test.js - Sanitization/backends; registry load, health, auto-resolution, live swap
+PLANS/2026-07-27/LOCAL_VOICE_MODELS_RESEARCH.md - Full catalogue + how to add/swap a model on the 5090
+
+server/appServerService.js         - Codex app-server bridge: structured signals + realtime voice
+├─ Protocol: JSON-RPC 2.0 over stdio to `codex app-server` (Apache 2.0, ships in the CLI); `initialize` handshake required first
+├─ Signals: thread/status/changed, turn/started|completed, tokenUsage, rateLimits, and approval requests replace regex-scraped PTY output
+├─ Realtime: thread/realtime/* full-duplex voice (websocket + webrtc transports), transcripts relayed over Socket.IO
+└─ Degrades: `getSignalForSession` returning null means the PTY scraper stays authoritative; opt in with CODEX_APP_SERVER=true
+server/agents/appServerClient.js   - JSON-RPC client (newline-delimited framing, request/response correlation, restart backoff)
+server/agents/appServerSignals.js  - Notification -> supervisor-signal mapping; ThreadActiveFlag waitingOnApproval, over-the-wire approvals
+server/routes/appServerRoutes.js   - `/api/app-server/*` (threads, turns, approvals, realtime voice, transcripts)
+server/atlas/atlasProposals.js     - Write-back queue: agents propose highlights with evidence, the human approves
+client/jarvis-panel.js             - JARVIS panel (header button, Ctrl+J or Alt+J): what was handled, what needs you, untracked chat work, atlas proposals + search
+├─ Trigger: `#jarvis-btn` in the header stays in sync (active class + aria-expanded) however the panel is opened
+└─ Key handling: capture-phase listener so Alt+J works over a focused xterm; Ctrl+J is left to a focused terminal (it is line-feed to the shell)
+client/realtime-voice.js           - Browser side of the realtime loop (`window.RealtimeVoice`)
+client/styles/jarvis.css           - JARVIS panel styling
+tests/unit/appServerService.test.js, appServerClientLifecycle.test.js, repoAtlasProposals.test.js - App-server framing/signal mapping, child-process lifecycle (crash/restart/overflow), write-back approval flow
+
+server/supervisor/supervisorUrgency.js - Urgency scoring (severity x task tier + failed-repair weight), interruption budget, digest queue
+server/discordWatchService.js      - Ambient Discord watching: read the conversation, track the work, publish status back
+├─ Ingest: cursor-based polling (`?after=<lastSeenId>`), so a message missed while the process was down is not possible rather than retried
+├─ Extraction: rules over every message -> work items with assignee, priority and tier; claim/done/drop update existing items
+├─ Publishing: `linkSession()` binds an item to the session doing it, writes a task record, and announces it in-channel
+└─ State: `~/.agent-workspace/discord/discord-watch.json` (cursors + items + member names)
+server/discord/discordClient.js    - Minimal Discord REST client (paged `after` reads, rate-limit backoff, reply-threaded posts)
+server/discord/workExtractor.js    - Message -> work item classification (`config/discord-watch.json`, override `~/.agent-workspace/discord-watch.json`)
+server/routes/discordWatchRoutes.js - Express router for `/api/discord-watch/*`
+config/discord-watch.json          - Priority/kind/claim/done patterns, watched channels, poll cadence
+tests/unit/discordWatchService.test.js - Extraction, cursor durability, restart resume, status publishing
+
+server/atlas/atlasSync.js          - Git operations for the atlas: registry sync, audience publishing, subscriptions
+├─ Registry lives in a PRIVATE git repo (`atlas remote set` + `atlas sync`) so judgement follows you between machines
+├─ One file per repo under `entries/` — two machines curating different repos never conflict
+└─ `subscribe` reads a bundle someone else published; foreign entries are lowest precedence and are never re-shared
+server/atlas/atlasSchema.js        - Entry normalization, layered merge, topic-alias folding (`config/repo-atlas-topics.json`), validation
+server/atlas/atlasDiscovery.js     - Local git scan (worktree siblings collapse into one project entry) + `gh repo list` + source merge
+server/atlas/atlasStore.js         - Persistence under `~/.agent-workspace/atlas/` (registry, discovery cache, compiled bundles) + in-repo manifest read/write
+server/atlas/atlasQuery.js         - Filters, topic lookup, topic index, digest rendering, entry description
+server/atlas/atlasCompiler.js      - Audience bundle compilation: visibility/group decisions, per-audience field redaction, always strips local-only fields
+server/routes/atlasRoutes.js       - Express router for `/api/atlas/*` (reads policy-`read`; curation and compile policy-`write`)
+scripts/atlas.js                   - Standalone `atlas` CLI — runs without the server (`npm run atlas -- <command>`)
+config/repo-atlas-topics.json      - Canonical topic vocabulary + aliases
+config/repo-atlas.example.json     - Annotated manifest example
+.repo-atlas.json                   - This repo's own manifest
+skills/public/repo-atlas/SKILL.md  - Agent skill: query prior art instead of grepping the filesystem
+tests/unit/repoAtlasSchema.test.js, repoAtlasQuery.test.js, repoAtlasCompiler.test.js, repoAtlasService.test.js, repoAtlasSync.test.js - Atlas coverage (merge precedence, quality floors, sharing decisions, redaction, real-git multi-machine sync)
 scripts/tauri/prepare-backend-resources.js - Tauri backend packager
 ├─ Bundles: server/client/config/templates/scripts + optional Node runtime into `src-tauri/resources/backend`
 ├─ Commander instructions: copies `docs/COMMANDER_CLAUDE.md` into `resources/backend/{COMMANDER_CLAUDE.md,CLAUDE.md,AGENTS.md}` for desktop builds
@@ -466,6 +554,10 @@ git-change: {branch, status, commits}          - Git repository changes
 notification: {type, message, level}           - System notifications
 workspace-changed: {workspaceId, sessions}     - Workspace switch completed
 workspace-list: {workspaces}                   - Available workspaces update
+speech-speak: {text, priority, at}             - Say this out loud (browser speech backend)
+app-server-approval: {requestId, threadId, command} - A Codex thread is blocked on an approval
+app-server-realtime: {event, payload}          - Realtime voice lifecycle
+app-server-transcript: {threadId, role, text, done} - Realtime transcript delta
 ```
 
 ### Client → Server Events
@@ -648,6 +740,71 @@ GET /api/agent-providers/:providerId/sessions                 - List provider se
 POST /api/agent-providers/:providerId/resume-plan             - Build provider-specific resume command/config plan
 GET /api/agent-providers/:providerId/history/search           - Provider-scoped history search (conversation index source-aware)
 GET /api/agent-providers/:providerId/history/:id              - Provider-scoped transcript retrieval
+
+GET /api/atlas/status                                         - Repo Atlas health: where data lives, entry/highlight counts, discovery freshness
+GET /api/atlas/entries?kind=&platform=&group=&query=&minQuality= - Filtered repo list
+GET /api/atlas/entries/:id                                    - One repo, merged across all layers, plus a rendered description
+GET /api/atlas/find?topic=&minQuality=                        - "Who did this well?" — the primary query, ranked by per-topic quality
+GET /api/atlas/topics                                         - Topics in use and which repos hold them
+GET /api/atlas/digest?groupBy=platform|kind|status&max=       - Compact map intended for pasting into an agent prompt
+GET /api/atlas/doctor                                         - Validation report (errors + curation gaps)
+POST /api/atlas/refresh                                       - Re-run discovery (local scan + `gh repo list`)
+PUT /api/atlas/entries/:id                                    - Override entry fields in the registry
+DELETE /api/atlas/entries/:id                                 - Drop a registry override
+POST /api/atlas/entries/:id/highlights                        - Record "this repo is good at X" (topic + quality + paths + notes)
+POST /api/atlas/entries/:id/avoid                             - Record "do not copy X from this repo"
+GET|POST /api/atlas/audiences                                 - List/define sharing audiences
+POST /api/atlas/compile                                       - Compile an audience bundle (`dryRun: true` returns decisions without writing)
+
+GET /api/supervisor/status                                    - Loop state: running, autonomy, tick rate, armed conditions
+GET /api/supervisor/findings?severity=&sessionId=&limit=      - Recent findings
+GET /api/supervisor/briefing                                  - "What needs you now", with a spoken rendering
+POST /api/supervisor/tick                                     - Force one pass (`dryRun: true` evaluates without acting)
+POST /api/supervisor/start | /stop                            - Control the loop
+POST /api/supervisor/autonomy                                 - Set autonomy (`off` | `observe` | `assist` | `autopilot`)
+POST /api/supervisor/reload-rules                             - Re-read the condition table from disk
+
+GET /api/supervisor/digest                                    - What is waiting but did not earn an interruption
+POST /api/supervisor/digest/deliver                           - "Catch me up" — deliver the batch now
+POST /api/supervisor/interruption-policy                      - Tune threshold/budget/quiet hours
+
+GET /api/atlas/sync | POST /api/atlas/sync                    - Registry git status / pull+merge+push
+POST /api/atlas/remote                                        - Point the registry at a private git repo
+POST /api/atlas/publish                                       - Compile + commit an audience bundle where they can read it
+GET|POST /api/atlas/subscriptions                             - Read bundles other people published
+DELETE /api/atlas/subscriptions/:name                         - Stop reading one
+
+GET /api/discord-watch/status                                 - Watcher state, cursors, item counts
+GET /api/discord-watch/items?status=&assignee=&channelId=     - Tracked work extracted from chat
+GET /api/discord-watch/untracked                              - Asked for, nobody started — ordered by priority
+POST /api/discord-watch/poll | /start | /stop                 - Control the watcher
+GET|POST /api/discord-watch/channels                          - Which channels are watched
+POST /api/discord-watch/items/:id/link                        - Bind an item to the session doing it (and announce it)
+POST /api/discord-watch/items/:id/status                      - Post a status update back into the channel
+
+GET /api/atlas/proposals?status=&repoId=                      - Agent-proposed highlights waiting for review
+POST /api/atlas/proposals                                     - Propose a highlight (agents; changes nothing until approved)
+POST /api/atlas/proposals/:id/approve | /reject               - Decide a proposal (approve writes it into the registry)
+DELETE /api/atlas/proposals                                   - Clear decided proposals
+
+GET /api/app-server/status | /threads | /signals              - Bridge state, Codex threads, structured signals
+POST /api/app-server/start | /stop                            - Control the app-server process
+GET /api/app-server/approvals                                 - Approvals reported over the wire, with the command in hand
+POST /api/app-server/approvals/:requestId                     - Grant or refuse one
+POST /api/app-server/threads | /threads/:id/turn | /interrupt  - Start a thread, run a turn, interrupt it
+GET /api/app-server/realtime/voices | /realtime/transcripts   - Available voices, transcript history
+POST /api/app-server/realtime/:threadId/start|stop|text|audio - Full-duplex realtime voice
+
+GET /api/speech/status                                        - Enabled state, resolved backend, available backends, listeners
+POST /api/speech/say                                          - Speak text (`priority: high` interrupts, `force` skips repeat suppression)
+POST /api/speech/backend                                      - Choose a backend
+POST /api/speech/enabled                                      - Mute/unmute
+POST /api/speech/briefing                                     - Speak the supervisor briefing
+
+GET /api/voice-providers                                     - Every voice model with a live availability check + active tts/stt/duplex
+GET /api/voice-providers/:kind                               - Providers for one capability (tts|stt|duplex), with health
+POST /api/voice-providers/:kind/active                       - Swap the active model (id | 'auto' | 'none'); applies immediately
+POST /api/voice-providers/reload                             - Re-read the registry from disk
 ```
 
 ### WebSocket Events
