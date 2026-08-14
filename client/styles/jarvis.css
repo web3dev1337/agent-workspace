@@ -222,6 +222,15 @@
   color: #7fa3bd;
 }
 
+/* The header trigger reads as pressed while the panel is open, matching the
+   accent treatment the other stateful header buttons already use. */
+#jarvis-btn.active,
+#jarvis-btn.active:hover {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  border-color: var(--accent-primary);
+}
+
 @media (max-width: 640px) {
   .jarvis-panel {
     width: 100%;

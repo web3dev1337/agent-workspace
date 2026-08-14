@@ -178,7 +178,9 @@ server/agents/appServerClient.js   - JSON-RPC client (newline-delimited framing,
 server/agents/appServerSignals.js  - Notification -> supervisor-signal mapping; ThreadActiveFlag waitingOnApproval, over-the-wire approvals
 server/routes/appServerRoutes.js   - `/api/app-server/*` (threads, turns, approvals, realtime voice, transcripts)
 server/atlas/atlasProposals.js     - Write-back queue: agents propose highlights with evidence, the human approves
-client/jarvis-panel.js             - Alt+J panel: what was handled, what needs you, untracked chat work, atlas proposals + search
+client/jarvis-panel.js             - JARVIS panel (header button, Ctrl+J or Alt+J): what was handled, what needs you, untracked chat work, atlas proposals + search
+├─ Trigger: `#jarvis-btn` in the header stays in sync (active class + aria-expanded) however the panel is opened
+└─ Key handling: capture-phase listener so Alt+J works over a focused xterm; Ctrl+J is left to a focused terminal (it is line-feed to the shell)
 client/realtime-voice.js           - Browser side of the realtime loop (`window.RealtimeVoice`)
 client/styles/jarvis.css           - JARVIS panel styling
 tests/unit/appServerService.test.js, appServerClientLifecycle.test.js, repoAtlasProposals.test.js - App-server framing/signal mapping, child-process lifecycle (crash/restart/overflow), write-back approval flow

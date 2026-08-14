@@ -294,6 +294,7 @@
       this.mount();
       this.root.classList.add('jarvis-open');
       this.open = true;
+      this.syncTrigger();
       this.refresh();
       if (!this.timer) this.timer = setInterval(() => this.open && this.refresh(), REFRESH_MS);
     }
@@ -301,10 +302,20 @@
     hide() {
       this.open = false;
       this.root?.classList.remove('jarvis-open');
+      this.syncTrigger();
       if (this.timer) {
         clearInterval(this.timer);
         this.timer = null;
       }
+    }
+
+    // The header button reflects panel state however the panel was opened —
+    // hotkey, button, or the panel's own close control.
+    syncTrigger() {
+      const button = document.getElementById('jarvis-btn');
+      if (!button) return;
+      button.setAttribute('aria-expanded', String(this.open));
+      button.classList.toggle('active', this.open);
     }
 
     toggle() {
@@ -315,18 +326,35 @@
   const panel = new JarvisPanel();
   window.JarvisPanel = panel;
 
-  // Alt+J — the fleet summary should be one keystroke away, not buried.
+  document.getElementById('jarvis-btn')?.addEventListener('click', () => panel.toggle());
+
+  // Ctrl+J or Alt+J — the fleet summary should be one keystroke away, not
+  // buried. Ctrl+J is the discoverable one (it is what people try first);
+  // Alt+J stays because it matches every other Alt shortcut in the app.
   document.addEventListener('keydown', (event) => {
-    if (!event.altKey || event.ctrlKey || event.metaKey) return;
+    const ctrlChord = event.ctrlKey && !event.altKey;
+    const altChord = event.altKey && !event.ctrlKey;
+    if ((!ctrlChord && !altChord) || event.metaKey || event.shiftKey) return;
     if (event.key !== 'j' && event.key !== 'J') return;
 
-    // Don't hijack the key while the user is typing (the same guard every other
-    // Alt-shortcut in the app uses) — including the panel's own atlas search box.
+    // Don't hijack the key while the user is typing in a real field — including
+    // the panel's own atlas search box.
     const target = event.target;
     const tag = String(target?.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) return;
+    const inTerminal = Boolean(target?.classList?.contains('xterm-helper-textarea'));
+    const typing = !inTerminal && (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable);
+    if (typing) return;
+
+    // A focused terminal owns Ctrl+J: it is line-feed to the shell, so stealing
+    // it would break the terminal. Alt+J still works there, matching the app's
+    // other Alt shortcuts.
+    if (inTerminal && ctrlChord) return;
 
     event.preventDefault();
+    // xterm handles keys on the textarea and stops them propagating, so this
+    // listener runs in the capture phase to see Alt+J over a focused terminal;
+    // stop it here so the shell never also receives the chord.
+    event.stopPropagation();
     panel.toggle();
-  });
+  }, true);
 })();
