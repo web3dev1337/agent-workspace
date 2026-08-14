@@ -1776,17 +1776,17 @@ header {
   color: var(--text-primary);
 }
 
+/* Deliberately muted: the chip is reference info, not something to notice. */
 .terminal-model-badge {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-weight: 600;
   margin-left: var(--space-sm);
-  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-  padding: 2px 8px;
+  background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
+  padding: 1px 5px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  max-width: min(280px, 30vw);
+  max-width: min(200px, 22vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1796,25 +1796,7 @@ header {
   cursor: help;
 }
 
-/* Expensive effort levels stand out so token burn is visible at a glance. */
-.terminal-model-badge[data-effort="xhigh"],
-.terminal-model-badge[data-effort="ultra"],
-.terminal-model-badge[data-effort="ultra-code"],
-.terminal-model-badge[data-effort="ultracode"],
-.terminal-model-badge[data-effort="max"] {
-  color: var(--accent-warning);
-  border-color: color-mix(in srgb, var(--accent-warning) 45%, transparent);
-  background: color-mix(in srgb, var(--accent-warning) 10%, transparent);
-}
-
-.terminal-model-badge[data-effort="low"],
-.terminal-model-badge[data-effort="minimal"] {
-  color: var(--accent-success);
-  border-color: color-mix(in srgb, var(--accent-success) 40%, transparent);
-  background: color-mix(in srgb, var(--accent-success) 8%, transparent);
-}
-
-/* Narrow viewports: keep the (effort-first) chip from crowding out the
+/* Narrow viewports: keep the chip from crowding out the
    terminal title/branch in the header flex row. */
 @media (max-width: 640px) {
   .terminal-model-badge {

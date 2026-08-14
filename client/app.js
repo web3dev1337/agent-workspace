@@ -781,9 +781,8 @@ class ClaudeOrchestrator {
       return;
     }
     el.style.display = '';
-    el.textContent = `🧠 ${meta.text}`;
+    el.textContent = meta.text;
     el.title = meta.tooltip;
-    el.dataset.effort = meta.effortLevel;
   }
 
   getSessionModelBadgeMeta(sessionId) {
@@ -800,8 +799,7 @@ class ClaudeOrchestrator {
 
     const modelLabel = String(config.model || '').replace(/^claude-/i, '');
     const effortLevel = String(config.effortLevel || '').trim().toLowerCase();
-    // Effort first: it stays readable even when a narrow header truncates the chip.
-    const text = [effortLevel.toUpperCase(), modelLabel].filter(Boolean).join(' · ');
+    const text = [modelLabel, effortLevel].filter(Boolean).join(' ');
 
     const tooltipLines = ['Model & effort agent launches in this worktree will use (settings files + env overrides).'];
     const describeSource = (source) => {
@@ -815,7 +813,7 @@ class ClaudeOrchestrator {
       tooltipLines.push(`Effort: ${effortLevel} — from ${describeSource(config.effortSource)}`);
     }
     tooltipLines.push('Note: a /model pick for "this session only" is not written to disk and won\'t show here.');
-    return { text, tooltip: tooltipLines.join('\n'), effortLevel };
+    return { text, tooltip: tooltipLines.join('\n') };
   }
 
   hashStringToBase36(value) {
