@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis Lab</title>
+<style>
+  :root{--bg:#0b0e13;--card:#141922;--line:#232b38;--text:#fff;--dim:#9fb0c3;--ok:#4ade80;--bad:#f87171;--accent:#5cc8ff;--warn:#facc15}
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--text);font:0.9rem/1.5 system-ui,sans-serif;padding:1rem;max-width:75rem;margin:0 auto}
+  h1{font-size:1.05rem;color:var(--accent);letter-spacing:.08em;margin-bottom:1rem}
+  h2{font-size:.8rem;color:var(--dim);letter-spacing:.08em;margin:0 0 .5rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(22rem,1fr));gap:1rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:.7rem;padding:1rem}
+  .row{display:flex;justify-content:space-between;gap:.75rem;padding:.3rem 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:none}
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .dim{color:var(--dim)} .warn{color:var(--warn)}
+  pre{background:#0d1117;border:1px solid var(--line);border-radius:.5rem;padding:.75rem;white-space:pre-wrap;
+      word-break:break-word;font-size:.75rem;max-height:22rem;overflow-y:auto;color:#c9d5e3}
+  details{margin-bottom:.6rem} summary{cursor:pointer;color:var(--accent);font-size:.85rem}
+  table{width:100%;border-collapse:collapse;font-size:.8rem}
+  td,th{text-align:left;padding:.35rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600}
+  .lane{color:var(--accent);white-space:nowrap}
+  .full{grid-column:1/-1}
+</style>
+</head>
+<body>
+<h1>🔬 JARVIS LAB</h1>
+<div class="grid">
+  <div class="card"><h2>THE LADDER — WHO RUNS WHAT</h2><div id="tiers"></div></div>
+  <div class="card"><h2>LIVE SNAPSHOT (what the brain sees)</h2><pre id="snapshot"></pre>
+    <h2 style="margin-top:.8rem">REALTIME MANAGER</h2><div id="manager"></div></div>
+  <div class="card full"><h2>INSTRUCTIONS (the actual prompts, rendered live)</h2>
+    <details open><summary>Tier 2 — intent classifier prompt</summary><pre id="p2"></pre></details>
+    <details><summary>Tier 3 — chat brain system prompt</summary><pre id="p3"></pre></details>
+    <details><summary>Registry (people / projects / products)</summary><pre id="reg"></pre></details>
+    <details><summary>Feedback policy</summary><pre id="fb"></pre></details>
+  </div>
+  <div class="card full"><h2>UTTERANCE LOG (inputs → classification → outcome)</h2>
+    <table><thead><tr><th>when</th><th>you said</th><th>lane</th><th>entities</th><th>conf</th><th>ms</th></tr></thead>
+    <tbody id="log"></tbody></table></div>
+</div>
+<script>
+const el = (id) => document.getElementById(id);
+function badge(up){ return up ? '<span class="ok">● up</span>' : '<span class="bad">● down</span>'; }
+async function tick(){
+  try{
+    const d = await (await fetch('/api/voice/lab')).json();
+    const t = d.tiers;
+    el('tiers').innerHTML = `
+      <div class="row"><span>Tier 0 · ears</span><span class="dim">${t.tier0_stt.engine} · ${t.tier0_stt.model}</span></div>
+      <div class="row"><span>Tier 1 · reflex</span><span class="dim">${t.tier1_reflex.patterns} phrase patterns · 0ms</span></div>
+      <div class="row"><span>Tier 2 · intent</span><span class="dim">${t.tier2_intent.model} ${t.tier2_intent.gpu?'(GPU)':'(CPU)'} · conf≥${t.tier2_intent.threshold} ${badge(t.tier2_intent.up)}</span></div>
+      <div class="row"><span>Tier 3 · chat brain</span><span class="dim">${t.tier3_chat.model} ${badge(t.tier3_chat.up)}<br>fallback: ${t.tier3_chat.fallback}</span></div>
+      <div class="row"><span>Tier 4 · agent</span><span class="dim">${t.tier4_agent.engine}</span></div>
+      <div class="row"><span>Voice out</span><span class="dim">${t.voice_out.backend} ${badge(t.voice_out.up)}</span></div>`;
+    el('snapshot').textContent = JSON.stringify(d.snapshot, null, 1);
+    const m = d.manager;
+    el('manager').innerHTML = `
+      <div class="row"><span>enabled</span><span class="${m.enabled?'ok':'bad'}">${m.enabled}</span></div>
+      <div class="row"><span>mode</span><span class="dim">${m.mode}</span></div>
+      <div class="row"><span>last said</span><span class="dim">${m.lastSpokenLine || '—'}</span></div>
+      <div class="row"><span>pending lines</span><span class="dim">${m.pending}</span></div>`;
+    el('p2').textContent = d.instructions.tier2_prompt;
+    el('p3').textContent = d.instructions.tier3_prompt;
+    el('reg').textContent = JSON.stringify(d.registry, null, 1);
+    el('fb').textContent = JSON.stringify(d.feedback, null, 1);
+    el('log').innerHTML = (d.transcripts || []).slice().reverse().map((r) => {
+      const c = r.result || {};
+      const ents = [c.person, c.project, c.worktree, c.agent].filter(Boolean).join(' · ') || '—';
+      return `<tr><td class="dim">${(r.at||'').slice(11,19)}</td><td>${r.transcript}</td>
+        <td class="lane">${c.intent || '?'}${c.action && c.action !== c.intent ? ' / '+c.action : ''}</td>
+        <td class="dim">${ents}</td><td class="dim">${c.confidence ?? ''}</td><td class="dim">${c.latencyMs ?? ''}</td></tr>`;
+    }).join('');
+  }catch(e){ /* server restarting */ }
+  setTimeout(tick, 2500);
+}
+tick();
+</script>
+</body>
+</html>

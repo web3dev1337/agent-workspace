@@ -249,10 +249,10 @@ class VoiceBrainService {
     return this.extractAssistantReply(last, beforeText);
   }
 
-  speak(text, { priority = 'normal' } = {}) {
+  speak(text, { priority = 'normal', source = '' } = {}) {
     if (!text) return { spoken: false };
     try {
-      return this.deps.speechService?.speak?.(text, { priority }) || { spoken: false };
+      return this.deps.speechService?.speak?.(text, { priority, source }) || { spoken: false };
     } catch (error) {
       this.logger.warn?.('voice brain: speak failed', { error: error.message });
       return { spoken: false, reason: error.message };
@@ -275,7 +275,7 @@ class VoiceBrainService {
 
     const fact = this.answerFromContext(transcript, ctx);
     if (fact) {
-      this.speak(fact);
+      this.speak(fact, { source: 'fact' });
       return { handled: true, route: 'fact', spoken: fact };
     }
 
@@ -313,7 +313,7 @@ class VoiceBrainService {
     if (!wantsAction) {
       const chat = await this.chatLocally(transcript, ctx);
       if (chat) {
-        this.speak(chat);
+        this.speak(chat, { source: 'tier3-chat' });
         return { handled: true, route: 'local-chat', spoken: chat };
       }
       // Local model unavailable — fall through to the Commander rather than
@@ -411,7 +411,7 @@ class VoiceBrainService {
         try {
           const answer = await q.answer(transcript, cls, ctx);
           if (answer) {
-            this.speak(answer);
+            this.speak(answer, { source: 'query' });
             return { handled: true, route: 'query', spoken: answer };
           }
         } catch (error) {
@@ -422,7 +422,7 @@ class VoiceBrainService {
       // the live context in its prompt.
       const chat = await this.chatLocally(transcript, ctx);
       if (chat) {
-        this.speak(chat);
+        this.speak(chat, { source: 'tier3-chat' });
         return { handled: true, route: 'query-chat', spoken: chat };
       }
       return null;

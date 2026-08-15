@@ -6416,6 +6416,50 @@ app.get('/api/process/readiness/templates', (req, res) => {
 });
 
 // ============================================
+// Jarvis Lab: full transparency into the voice ladder
+// ============================================
+app.get('/api/voice/lab', async (req, res) => {
+  const os = require('os');
+  const fsMod = require('fs');
+  const probe = async (url) => {
+    try { return (await fetch(url, { signal: AbortSignal.timeout(1500) })).ok; } catch { return false; }
+  };
+  const t2 = tier2IntentService;
+  const ctx = voiceBrainService.buildContext();
+  const snapshot = voiceBrainService.tier2Snapshot(ctx);
+  let transcripts = [];
+  try {
+    transcripts = fsMod.readFileSync(path.join(os.homedir(), '.orchestrator', 'voice-transcripts.jsonl'), 'utf8')
+      .trim().split('\n').slice(-30).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  } catch { /* none yet */ }
+  const [t2up, t3up, ollamaUp, kokoroUp] = await Promise.all([
+    probe(`${t2.url}/health`),
+    probe(`${String(process.env.VOICE_CHAT_URL || 'http://127.0.0.1:18866/v1').replace(/\/$/, '')}/models`),
+    probe(`${String(process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, '')}/api/version`),
+    probe(`${String(process.env.KOKORO_HTTP_URL || 'http://127.0.0.1:5732').replace(/\/$/, '')}/v1/models`)
+  ]);
+  res.json({
+    tiers: {
+      tier0_stt: { engine: 'faster-whisper (in Open WebUI or /api/whisper)', model: process.env.WHISPER_MODEL || 'per-webui-config' },
+      tier1_reflex: { engine: 'regex phrasebook', patterns: voiceCommandService.getVoiceCommands?.()?.length ?? 'n/a' },
+      tier2_intent: { model: path.basename(t2.modelPath), url: t2.url, up: t2up, threshold: t2.confidenceThreshold, gpu: process.env.TIER2_NGL !== '0' },
+      tier3_chat: { model: process.env.VOICE_CHAT_MODEL || 'local', url: process.env.VOICE_CHAT_URL || 'http://127.0.0.1:18866/v1', up: t3up, fallback: `ollama ${process.env.OLLAMA_MODEL || 'llama3.1:8b'} (up: ${ollamaUp})` },
+      tier4_agent: { engine: 'Commander Claude session', note: 'model set inside that session (/model)' },
+      voice_out: { engine: 'kokoro', url: process.env.KOKORO_HTTP_URL || 'http://127.0.0.1:5732', up: kokoroUp, backend: speechService.resolveBackend() }
+    },
+    instructions: {
+      tier2_prompt: t2.buildPrompt(snapshot),
+      tier3_prompt: voiceBrainService.chatSystemPrompt(ctx)
+    },
+    registry: voiceRegistryService.load(),
+    snapshot,
+    feedback: voiceBrainService.feedbackPolicy(),
+    manager: RealtimeManagerService.getInstance().getState(),
+    transcripts
+  });
+});
+
+// ============================================
 // Review chains API (multi-agent PR review)
 // ============================================
 const ReviewChainService = require('./reviewChainService');

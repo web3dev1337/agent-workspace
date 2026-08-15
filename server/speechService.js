@@ -207,7 +207,7 @@ class SpeechService {
 
   speakViaBrowser(text, priority) {
     if (!this.io) return { spoken: false, reason: 'no socket connection to a client' };
-    this.io.emit('speech-speak', { text, priority, at: new Date().toISOString() });
+    this.io.emit('speech-speak', { text, priority, source: this.currentSource || '', at: new Date().toISOString() });
     return { spoken: true };
   }
 
@@ -250,7 +250,7 @@ class SpeechService {
 
   emitAudio(wavBuffer, priority, text = '') {
     if (!wavBuffer?.length) return;
-    this.io?.emit('speech-audio', { wav: wavBuffer.toString('base64'), priority, text, at: new Date().toISOString() });
+    this.io?.emit('speech-audio', { wav: wavBuffer.toString('base64'), priority, text, source: this.currentSource || '', at: new Date().toISOString() });
   }
 
   async synthAndEmit(text, priority, httpUrl = this.piperHttpUrl, allowSpawnFallback = true) {
@@ -298,7 +298,7 @@ class SpeechService {
     // Never go silent — hand the text to the browser's own speech synthesis so
     // the utterance is still heard, and leave a trace of why.
     this.logger.warn?.('Neural TTS failed — falling back to browser speech', { httpUrl });
-    this.io?.emit('speech-speak', { text, priority, at: new Date().toISOString() });
+    this.io?.emit('speech-speak', { text, priority, source: this.currentSource || '', at: new Date().toISOString() });
   }
 
   spawnQuiet(command, args) {
@@ -406,7 +406,8 @@ class SpeechService {
    * Say something. Never throws — speech failing must not take down whatever
    * was trying to talk.
    */
-  speak(rawText, { priority = 'normal', force = false } = {}) {
+  speak(rawText, { priority = 'normal', force = false, source = '' } = {}) {
+    this.currentSource = source;
     const text = sanitizeForSpeech(rawText);
     if (!text) return { spoken: false, reason: 'nothing to say' };
     if (!this.enabled) return this.record({ text, at: new Date().toISOString(), spoken: false, reason: 'speech disabled' });

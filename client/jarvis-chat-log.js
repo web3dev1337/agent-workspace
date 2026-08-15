@@ -85,7 +85,7 @@
   // Jarvis replies arrive as socket speech events regardless of which lane
   // produced them, so listening here catches everything that gets spoken.
   const seen = new Set();
-  function noteReply(text) {
+  function noteReply(text, source, via) {
     const clean = String(text || '').trim();
     if (!clean) return;
     // speech-speak and speech-audio can both fire for one reply; dedupe briefly.
@@ -93,14 +93,15 @@
     if (seen.has(key)) return;
     seen.add(key);
     setTimeout(() => seen.delete(key), 5000);
-    const latency = state.lastUserAt ? `${((Date.now() - state.lastUserAt) / 1000).toFixed(1)}s` : '';
-    add('jarvis', clean, latency && `answered in ${latency}`);
+    const latency = state.lastUserAt ? `answered in ${((Date.now() - state.lastUserAt) / 1000).toFixed(1)}s` : '';
+    const tags = [source, via, latency].filter(Boolean).join(' · ');
+    add('jarvis', clean, tags);
   }
 
   function bind(socket) {
     if (!socket?.on) return false;
-    socket.on('speech-speak', (p) => noteReply(p?.text));
-    socket.on('speech-audio', (p) => noteReply(p?.text));
+    socket.on('speech-speak', (p) => noteReply(p?.text, p?.source, 'browser voice'));
+    socket.on('speech-audio', (p) => noteReply(p?.text, p?.source, 'kokoro'));
     return true;
   }
   // The shared socket is created by app.js on init; poll briefly until it exists.

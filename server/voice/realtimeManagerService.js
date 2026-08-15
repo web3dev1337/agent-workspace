@@ -108,7 +108,20 @@ class RealtimeManagerService {
   }
 
   speakId(id) {
-    return String(id).replace(/-/g, ' ');
+    // "kpop-idol-empire-work1-claude" -> "kpop idol empire work1" — strip the
+    // agent-kind suffix so narration names the project, not the plumbing.
+    return String(id).replace(/-(claude|server|codex)$/i, '').replace(/-/g, ' ');
+  }
+
+  getState() {
+    return {
+      enabled: Boolean(this.config.enabled && this.timer),
+      mode: this.currentMode() || 'unset',
+      minSecondsBetweenUpdates: this.config.minSecondsBetweenUpdates,
+      lastSpokenAt: this.lastSpokenAt || null,
+      lastSpokenLine: this.lastSpokenLine || null,
+      pending: this.pendingLines.length
+    };
   }
 
   tick() {
@@ -135,7 +148,8 @@ class RealtimeManagerService {
     this.pendingLines = [];
     this.lastSpokenAt = Date.now();
     try {
-      this.deps.speechService?.speak?.(line, { priority: 'normal' });
+      this.lastSpokenLine = line;
+      this.deps.speechService?.speak?.(line, { priority: 'normal', source: 'manager' });
       this.logger.info?.('realtime manager spoke', { line });
     } catch (error) {
       this.logger.warn?.('realtime manager speak failed', { error: error.message });
