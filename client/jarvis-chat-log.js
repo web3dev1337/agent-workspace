@@ -93,7 +93,10 @@
     if (seen.has(key)) return;
     seen.add(key);
     setTimeout(() => seen.delete(key), 5000);
-    const latency = state.lastUserAt ? `answered in ${((Date.now() - state.lastUserAt) / 1000).toFixed(1)}s` : '';
+    // Only meaningful when this reply follows the user's OWN recent utterance;
+    // replies triggered elsewhere (API tests, the manager) get no timer.
+    const dt = state.lastUserAt ? (Date.now() - state.lastUserAt) / 1000 : null;
+    const latency = dt !== null && dt < 60 ? `answered in ${dt.toFixed(1)}s` : '';
     const tags = [source, via, latency].filter(Boolean).join(' · ');
     add('jarvis', clean, tags);
   }
