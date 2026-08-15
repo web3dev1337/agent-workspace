@@ -375,6 +375,23 @@ class StatusDetector {
       }
     }
 
+    // 3b. Claude Code v2 TUI markers. The modern UI has no "? for shortcuts"
+    // or "Cost:" lines and redraws its status line even while idle, so
+    // "recent output" alone can no longer imply busy. While a turn is
+    // actually running the TUI always shows "(esc to interrupt)"; when idle
+    // it shows a bare `❯` input prompt. Positioned TUI text can lose its
+    // spaces after control-sequence stripping, so match a
+    // whitespace-collapsed view for the phrase.
+    const compactRecent = recentAll.toLowerCase().replace(/\s+/g, '');
+    if (compactRecent.includes('esctointerrupt')) {
+      state.claudeLikely = true;
+      return 'busy';
+    }
+    if (this.getLastNonEmptyLines(lines, 10).some(line => String(line || '').trim() === '❯')) {
+      state.claudeLikely = true;
+      return 'waiting';
+    }
+
     // 4. Active tool usage (definitely busy)
     if (hasRecentOutput) {
       for (const pattern of this.toolPatterns) {
