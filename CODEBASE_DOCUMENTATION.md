@@ -98,7 +98,9 @@ server/pullRequestService.js       - `gh`-backed PR search/view/merge/review wra
 └─ Invalidation: local merge/review actions clear the cache so the UI reflects them immediately
 server/usageLimitsService.js       - Plan-usage limits for the header widget
 ├─ Claude: reads `~/.local/state/ai-usage-monitor/claude-live.json` (tapped by the user's Claude Code status line)
-└─ Codex: runs `~/.codex/scripts/codex_usage.py` (official app-server helper), 5min cache, text parsed defensively
+├─ Codex: runs `~/.codex/scripts/codex_usage.py` (official app-server helper), 5min cache, text parsed defensively
+├─ Grok: queries the CLI proxy billing endpoints with the grok CLI's own OAuth token (`~/.grok/auth.json`, NEVER refreshed here — expired token = stale until the grok CLI refreshes it)
+└─ Settings: per-provider toggles in user settings `global.ui.usageLimitsProviders.{claude,codex,grok}` (default on); whole-widget via `ui.visibility.header.usageLimits`
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)

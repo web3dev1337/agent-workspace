@@ -78,6 +78,19 @@ class UsageLimitsWidget {
         }
       }
     }
+    const grok = this.data.grok || {};
+    if (grok.available && Array.isArray(grok.windows) && grok.windows.length) {
+      const buckets = grok.windows
+        .map(w => this.formatBucket(w.window === '1 week' ? 'wk' : (w.window === '1 month' ? 'mo' : w.window), w))
+        .filter(Boolean);
+      if (buckets.length) {
+        parts.push(`Grok ${buckets.join('  ')}${grok.stale ? '?' : ''}`);
+        tips.push('Grok plan usage:');
+        for (const w of grok.windows) {
+          if (w.resetsAt) tips.push(`  ${w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
+        }
+      }
+    }
     if (!parts.length) {
       this.el.style.display = 'none';
       return;
