@@ -546,6 +546,17 @@ voiceBrainService.init({
   voiceQueryService
 });
 
+// Ambient narration: watches session/queue transitions and volunteers one
+// short spoken update at most every 30s. Config: voice-tiers.json.
+const RealtimeManagerService = require('./voice/realtimeManagerService');
+RealtimeManagerService.getInstance({ logger }).init({
+  commanderContextService,
+  workspaceManager,
+  commanderService,
+  commandRegistry,
+  speechService
+});
+
 const loadPlugins = async () => {
   const status = await pluginLoaderService.loadAll({
     app,
