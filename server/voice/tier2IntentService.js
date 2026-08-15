@@ -262,7 +262,7 @@ class Tier2IntentService {
         return low.includes(full) || (words.length >= 2 && low.includes(words.slice(0, 2).join(' ')));
       })
       .sort((a, b) => b.length - a.length)[0];
-    if (wsHit && /\b(open|switch|go to|goto|load|bring up)\b/.test(low)
+    if (wsHit && /\b(open|switch|go to|goto|load|bring up|back to|return to)\b/.test(low)
         && !/\bwork\s*(tree)?\s*\d/.test(low)) {
       action = 'switch-workspace';
       params = wsHit;
