@@ -635,8 +635,8 @@ class VoiceBrainService {
       + 'You are talking OUT LOUD with the operator, so reply in one or two short '
       + 'conversational sentences of plain prose — no markdown, no lists, no code. '
       + 'You know the system intimately; the reference below describes the Commander '
-      + 'API and orchestrator you front. You cannot execute anything yourself — actions '
-      + 'are handled by other lanes — so answer questions, advise, and converse.\n\n'
+      + 'API and orchestrator you front. Use your TOOLS for live data and safe actions; '
+      + 'bigger jobs are handled by the Commander lane.\n\n'
       + `${liveBlock}\n\n`
       + 'TOOLS: when you need data or to act, reply with ONLY a tool call on one line: '
       + '<tool>{"name":"...","args":{...}}</tool> and nothing else. Available tools: '

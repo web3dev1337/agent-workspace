@@ -45,6 +45,9 @@ class VoiceRegistryService {
         const data = JSON.parse(fs.readFileSync(file, 'utf8'));
         for (const key of ['people', 'projects', 'products']) {
           for (const entry of data[key] || []) {
+            // Placeholder shapes (github/repo like "<gh-login>") document the
+            // format; they must never pollute the real roster or the enums.
+            if (/^<.*>$/.test(String(entry.github || entry.repo || ''))) continue;
             const list = merged[key];
             const existing = list.findIndex((e) => e.name === entry.name);
             if (existing >= 0) list[existing] = entry;
