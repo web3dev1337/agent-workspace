@@ -1,0 +1,121 @@
+/**
+ * Jarvis conversation log — a persistent chat transcript for the voice layer.
+ *
+ * The push-to-talk flow was fire-and-forget: the utterance and the reply both
+ * vanished after a toast. This panel keeps the whole exchange visible like a
+ * chat window: what was heard, what lane handled it, what Jarvis said, and how
+ * long each step took. Other scripts feed it via window.jarvisChatLog.add().
+ */
+(function initJarvisChatLog() {
+  const state = { open: localStorage.getItem('jarvisChatLogOpen') !== 'false', lastUserAt: 0 };
+
+  const root = document.createElement('div');
+  root.id = 'jarvis-chat-log';
+  root.innerHTML = `
+    <div class="jcl-header">
+      <span>JARVIS LOG</span>
+      <button class="jcl-toggle" title="collapse">–</button>
+    </div>
+    <div class="jcl-messages"></div>
+  `;
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Hidden while orphaned; becomes a normal section once adopted into the Alt+J panel. */
+    #jarvis-chat-log { display: none; }
+    .jarvis-panel #jarvis-chat-log { max-height: 18rem;
+      background: #10151d; border: 1px solid #2a3444; border-radius: 0.6rem;
+      display: flex; flex-direction: column; font: 0.85rem/1.45 system-ui, sans-serif; color: #fff;
+      margin: 0.5rem 0; }
+    #jarvis-chat-log .jcl-header { display: flex; justify-content: space-between; align-items: center;
+      padding: 0.45rem 0.75rem; color: #5cc8ff; letter-spacing: 0.08em; font-size: 0.75rem;
+      border-bottom: 1px solid #2a3444; cursor: default; }
+    #jarvis-chat-log .jcl-toggle { background: none; border: none; color: #9fb0c3; cursor: pointer;
+      font-size: 1rem; line-height: 1; padding: 0 0.25rem; }
+    #jarvis-chat-log .jcl-messages { overflow-y: auto; padding: 0.6rem; display: flex;
+      flex-direction: column; gap: 0.45rem; }
+    #jarvis-chat-log .jcl-msg { padding: 0.4rem 0.65rem; border-radius: 0.55rem; max-width: 92%;
+      white-space: pre-wrap; word-break: break-word; }
+    #jarvis-chat-log .jcl-me { background: #1d3a55; align-self: flex-end; }
+    #jarvis-chat-log .jcl-jarvis { background: #1b2430; border: 1px solid #2a3444; align-self: flex-start; }
+    #jarvis-chat-log .jcl-status { color: #9fb0c3; font-size: 0.75rem; align-self: center;
+      background: none; padding: 0.1rem 0; }
+    #jarvis-chat-log .jcl-meta { display: block; margin-top: 0.2rem; font-size: 0.7rem; color: #9fb0c3; }
+    #jarvis-chat-log.jcl-collapsed .jcl-messages { display: none; }
+    #jarvis-chat-log.jcl-collapsed { max-height: none; width: auto; }
+  `;
+  document.head.appendChild(style);
+  document.body.appendChild(root);
+
+  const messagesEl = root.querySelector('.jcl-messages');
+  const toggleBtn = root.querySelector('.jcl-toggle');
+
+  function applyOpen() {
+    root.classList.toggle('jcl-collapsed', !state.open);
+    toggleBtn.textContent = state.open ? '–' : '+';
+    toggleBtn.title = state.open ? 'collapse' : 'expand';
+  }
+  toggleBtn.addEventListener('click', () => {
+    state.open = !state.open;
+    localStorage.setItem('jarvisChatLogOpen', String(state.open));
+    applyOpen();
+  });
+  applyOpen();
+
+  let lastStatusEl = null;
+  function add(role, text, meta = '') {
+    const clean = String(text || '').trim();
+    if (!clean) return;
+    // Statuses replace the previous status instead of stacking.
+    if (role === 'status' && lastStatusEl?.isConnected) lastStatusEl.remove();
+    const el = document.createElement('div');
+    el.className = `jcl-msg jcl-${role === 'me' ? 'me' : role === 'status' ? 'status' : 'jarvis'}`;
+    el.textContent = clean;
+    if (meta) {
+      const metaEl = document.createElement('span');
+      metaEl.className = 'jcl-meta';
+      metaEl.textContent = meta;
+      el.appendChild(metaEl);
+    }
+    messagesEl.appendChild(el);
+    lastStatusEl = role === 'status' ? el : null;
+    if (role === 'me') state.lastUserAt = Date.now();
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // Jarvis replies arrive as socket speech events regardless of which lane
+  // produced them, so listening here catches everything that gets spoken.
+  const seen = new Set();
+  function noteReply(text) {
+    const clean = String(text || '').trim();
+    if (!clean) return;
+    // speech-speak and speech-audio can both fire for one reply; dedupe briefly.
+    const key = clean.slice(0, 80);
+    if (seen.has(key)) return;
+    seen.add(key);
+    setTimeout(() => seen.delete(key), 5000);
+    const latency = state.lastUserAt ? `${((Date.now() - state.lastUserAt) / 1000).toFixed(1)}s` : '';
+    add('jarvis', clean, latency && `answered in ${latency}`);
+  }
+
+  function bind(socket) {
+    if (!socket?.on) return false;
+    socket.on('speech-speak', (p) => noteReply(p?.text));
+    socket.on('speech-audio', (p) => noteReply(p?.text));
+    return true;
+  }
+  // The shared socket is created by app.js on init; poll briefly until it exists.
+  const bindTimer = setInterval(() => {
+    if (bind(window.orchestrator?.socket || window.socket)) clearInterval(bindTimer);
+  }, 500);
+
+  // The Alt+J panel mounts lazily on first open — adopt the log into it as a
+  // section the moment it appears, so the transcript lives inside the panel
+  // instead of floating over it. Messages keep accumulating while orphaned.
+  const adoptTimer = setInterval(() => {
+    const sections = document.querySelector('.jarvis-panel .jarvis-sections');
+    if (sections && root.parentElement !== sections) sections.insertBefore(root, sections.firstChild);
+  }, 700);
+  void adoptTimer;
+
+  window.jarvisChatLog = { add };
+})();

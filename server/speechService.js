@@ -248,9 +248,9 @@ class SpeechService {
     return { spoken: true };
   }
 
-  emitAudio(wavBuffer, priority) {
+  emitAudio(wavBuffer, priority, text = '') {
     if (!wavBuffer?.length) return;
-    this.io?.emit('speech-audio', { wav: wavBuffer.toString('base64'), priority, at: new Date().toISOString() });
+    this.io?.emit('speech-audio', { wav: wavBuffer.toString('base64'), priority, text, at: new Date().toISOString() });
   }
 
   async synthAndEmit(text, priority, httpUrl = this.piperHttpUrl, allowSpawnFallback = true) {
@@ -265,7 +265,7 @@ class SpeechService {
           signal: AbortSignal.timeout(20000)
         });
         if (resp.ok) {
-          this.emitAudio(Buffer.from(await resp.arrayBuffer()), priority);
+          this.emitAudio(Buffer.from(await resp.arrayBuffer()), priority, text);
           return;
         }
       } catch {
@@ -289,7 +289,7 @@ class SpeechService {
         }
       });
       if (pcm.length) {
-        this.emitAudio(this.pcmToWav(pcm, this.piperSampleRate || 22050), priority);
+        this.emitAudio(this.pcmToWav(pcm, this.piperSampleRate || 22050), priority, text);
         return;
       }
     }

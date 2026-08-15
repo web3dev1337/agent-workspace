@@ -34,8 +34,8 @@
       "engine": "kokoro",
       "local": true,
       "quality": 5,
-      "endpoint": "http://127.0.0.1:5960",
-      "requires": { "server": "http://127.0.0.1:5960" },
+      "endpoint": "http://127.0.0.1:5732",
+      "requires": { "server": "http://127.0.0.1:5732" },
       "install": "pip install --user kokoro-onnx soundfile flask; model+voices in ~/.local/share/kokoro; run ~/.local/bin/kokoro-server.py (started by start-voice-stack.sh).",
       "notes": "Natural neural voice; ~2s synth on CPU (faster on GPU). Streamed to the browser like piper. The nicer-sounding local default."
     },

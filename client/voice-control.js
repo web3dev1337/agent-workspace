@@ -410,16 +410,19 @@ class VoiceControl {
 
       const result = await response.json();
 
+      if (result.transcript) window.jarvisChatLog?.add('me', result.transcript, `heard in ${result.transcriptionTime || '?'}ms`);
       if (result.success) {
         this.transcriptEl.textContent = result.transcript;
         // Unmatched speech is forwarded to the Commander and has no command name;
         // showing the literal "null" reads as a bug.
         const label = result.forwardedToCommander ? 'Sent to Commander' : (result.command || 'done');
         this.setStatus(`${label} (${result.transcriptionTime}ms)`, 'success');
+        window.jarvisChatLog?.add('status', `✓ ${label}`);
         this.showFeedback(result);
       } else {
         this.transcriptEl.textContent = result.transcript || '';
         this.setStatus(result.error || 'Command not recognized', 'error');
+        window.jarvisChatLog?.add('status', `✗ ${result.error || 'not recognized'}`);
       }
 
       setTimeout(() => {
@@ -484,6 +487,8 @@ class VoiceControl {
   }
 
   async processCommand(transcript) {
+    window.jarvisChatLog?.add('me', transcript);
+    window.jarvisChatLog?.add('status', 'thinking…');
     this.setStatus('Processing...', 'processing');
 
     try {
@@ -497,9 +502,11 @@ class VoiceControl {
 
       if (result.success) {
         this.setStatus(`${result.command}`, 'success');
+        window.jarvisChatLog?.add('status', `✓ ${result.command || 'done'}${result.lane ? ` · ${result.lane} lane` : ''}`);
         this.showFeedback(result);
       } else {
         this.setStatus(result.error || 'Command not recognized', 'error');
+        window.jarvisChatLog?.add('status', `✗ ${result.error || 'not recognized'}`);
       }
 
       // Clear status after delay

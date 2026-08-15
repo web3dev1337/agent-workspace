@@ -201,7 +201,24 @@ class VoiceBrainService {
       .filter((l) => l.length >= 12 && /[a-z]{4,}/i.test(l) && !noise.test(l))
       // Drop obvious UI/status strings that slip through. Match whole
       // status phrases, not bare words like "working" that appear in real prose.
-      .filter((l) => !/dangerously|skip permissions|welcome to claude|bypassing permissions|esc to interrupt|press up|for shortcuts|^\s*(thinking|working|processing)[.…\s]*$/i.test(l));
+      .filter((l) => !/dangerously|skip permissions|welcome to claude|bypassing permissions|esc to interrupt|press up|for shortcuts/i.test(l))
+      // Claude Code spinner statuses: "✢ still thinking with low effort",
+      // "Drizzling… (9s · thinking)", "thought for 1s" — spinner fragments can
+      // merge with counters into one garbled line, so match the phrases
+      // anywhere in the line, not just whole-line shapes.
+      .filter((l) => !/^\W*(still\s+)?\w+ing(\s+(on\s+it|with\s+\w+\s+effort))?[.…\s]*$/i.test(l))
+      .filter((l) => !/(thinking|working)\s+with\s+\w+\s+effort|thought\s+for\s+\d|\btokens\b|\d+s\s*·|interrupt\b/i.test(l));
+
+    // Claude Code prefixes real assistant text with a "⏺" bullet while the
+    // spinner uses an ever-changing random gerund ("Drizzling…", "Moseying…")
+    // that no blocklist can enumerate. When bullet lines exist, they ARE the
+    // answer — everything else is chrome.
+    const bulletLines = cleaned.split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /^[⏺●]\s*\S/.test(l))
+      .map((l) => l.replace(/^[⏺●]\s*/, ''))
+      .filter((l) => l.length >= 4 && /[a-z]{3,}/i.test(l));
+    if (bulletLines.length) return bulletLines.slice(-2).join(' ').slice(0, 360);
 
     if (!lines.length) return null;
     // The final assistant answer is at the tail; take the last couple of prose lines.
@@ -257,6 +274,21 @@ class VoiceBrainService {
       return { handled: false, route: 'unclear', spoken: miss };
     }
 
+    // Chat lane: conversation belongs to the LOCAL model — instant, free, and
+    // no Claude session woken up for "how's it going". Only utterances with an
+    // action verb (do/change something) earn the Commander handoff below.
+    const wantsAction = /\b(launch|run|open|start|stop|kill|restart|create|make|build|send|write|merge|review|deploy|switch|focus|add|remove|delete|spin|queue|commit|push|fix|test|install|update|move|execute|approve|cancel)\b/i
+      .test(String(transcript || ''));
+    if (!wantsAction) {
+      const chat = await this.chatLocally(transcript, ctx);
+      if (chat) {
+        this.speak(chat);
+        return { handled: true, route: 'local-chat', spoken: chat };
+      }
+      // Local model unavailable — fall through to the Commander rather than
+      // going silent.
+    }
+
     // Agent lane: the Commander has the whole API and can do anything.
     const forwarder = this.deps.commanderForwarder;
     if (typeof forwarder === 'function') {
@@ -288,6 +320,78 @@ class VoiceBrainService {
     const miss = "I couldn't do that myself and there's no Commander running to hand it to.";
     this.speak(miss);
     return { handled: false, route: 'none', spoken: miss };
+  }
+
+  /**
+   * Answer conversationally with the local Ollama model. This is the brain's
+   * own voice for anything that isn't a command, a fact, or a task — fast and
+   * entirely on-GPU. Returns null when Ollama is unreachable so the caller can
+   * fall back to the Commander.
+   */
+  /**
+   * The chat brain's standing knowledge: the Commander playbook plus voice
+   * framing. Loaded once — a static prefix keeps the local server's prompt
+   * cache warm, so only the utterance itself is new tokens each turn.
+   */
+  chatSystemPrompt(ctx = {}) {
+    if (!this._chatDoc) {
+      this._chatDoc = '';
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const docPath = path.join(__dirname, '..', '..', 'docs', 'COMMANDER_CLAUDE.md');
+        this._chatDoc = fs.readFileSync(docPath, 'utf8').slice(0, 20000);
+      } catch { /* doc optional — framing below still applies */ }
+    }
+    const sessions = Array.isArray(ctx.sessions) ? ctx.sessions.length : 0;
+    return 'You are JARVIS, the spoken voice interface of the Claude Orchestrator. '
+      + 'You are talking OUT LOUD with the operator, so reply in one or two short '
+      + 'conversational sentences of plain prose — no markdown, no lists, no code. '
+      + 'You know the system intimately; the reference below describes the Commander '
+      + 'API and orchestrator you front. You cannot execute anything yourself — actions '
+      + 'are handled by other lanes — so answer questions, advise, and converse.\n\n'
+      + `Live state right now: ${sessions} active agent sessions.\n\n`
+      + (this._chatDoc ? `--- ORCHESTRATOR REFERENCE ---\n${this._chatDoc}` : '');
+  }
+
+  async chatLocally(transcript, ctx = {}) {
+    // Best local brain first (OpenAI-compatible, e.g. Qwen on 18866), Ollama
+    // as the fallback when it is down.
+    const openaiUrl = String(process.env.VOICE_CHAT_URL || 'http://127.0.0.1:18866/v1').replace(/\/$/, '');
+    const messages = [
+      { role: 'system', content: this.chatSystemPrompt(ctx) },
+      { role: 'user', content: String(transcript || '').trim() }
+    ];
+    try {
+      const resp = await fetch(`${openaiUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: process.env.VOICE_CHAT_MODEL || 'local', messages, max_tokens: 160 }),
+        signal: AbortSignal.timeout(20000)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const text = String(data?.choices?.[0]?.message?.content || '').trim();
+        if (text) return text.slice(0, 360);
+      }
+    } catch { /* fall through to ollama */ }
+
+    const url = String(process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, '');
+    const model = String(process.env.OLLAMA_MODEL || 'llama3.1:8b');
+    try {
+      const resp = await fetch(`${url}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, stream: false, keep_alive: '30m', messages, options: { num_predict: 160 } }),
+        signal: AbortSignal.timeout(20000)
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const text = String(data?.message?.content || '').trim();
+      return text ? text.slice(0, 360) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** A short spoken confirmation after a command lane hit. */
