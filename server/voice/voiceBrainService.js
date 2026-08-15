@@ -615,14 +615,32 @@ class VoiceBrainService {
    * cache warm, so only the utterance itself is new tokens each turn.
    */
   chatSystemPrompt(ctx = {}) {
-    if (!this._chatDoc) {
-      this._chatDoc = '';
+    // A LITE commander guide generated from the live command registry —
+    // descriptions and params, no curl/bash (this model speaks, it doesn't shell).
+    if (!this._chatDoc || Date.now() - (this._chatDocAt || 0) > 60_000) {
+      const lines = [
+        'WHAT THIS SYSTEM IS: the Claude Orchestrator runs fleets of AI coding agents.',
+        'Concepts: a WORKSPACE groups git WORKTREES (work1..workN per repo); each worktree runs an agent SESSION (claude/codex) plus a dev server. The QUEUE is the review inbox of finished work (PRs/sessions) awaiting the operator. TIERS 1-4 rank task priority (1=focus ... 4=background). Workflow MODES: focus, review, background. The COMMANDER is a full Claude agent with the complete API - anything you cannot do, it can.',
+        '',
+        'YOUR RUNNABLE COMMANDS (via run_command):'
+      ];
       try {
-        const fs = require('fs');
-        const path = require('path');
-        const docPath = path.join(__dirname, '..', '..', 'docs', 'COMMANDER_CLAUDE.md');
-        this._chatDoc = fs.readFileSync(docPath, 'utf8').slice(0, 20000);
-      } catch { /* doc optional — framing below still applies */ }
+        const caps = this.deps.commandRegistry?.getCapabilities?.() || {};
+        const safe = new Set(this.safeCommands());
+        for (const [category, cmds] of Object.entries(caps)) {
+          const mine = cmds.filter((c) => safe.has(c.name));
+          if (!mine.length) continue;
+          lines.push(`[${category}]`);
+          for (const c of mine) {
+            const params = (c.params || []).map((p) => `${p.name}${p.required ? '' : '?'}`).join(', ');
+            lines.push(`- ${c.name}${params ? ` {${params}}` : ''}: ${c.description || ''}`);
+          }
+        }
+      } catch { /* registry optional */ }
+      lines.push('',
+        'DELEGATE TO THE COMMANDER (say so and the task lane handles it): launching or killing agents, sending prompts to sessions, git/PR operations, merges, deploys, anything destructive, anything not listed above.');
+      this._chatDoc = lines.join('\n');
+      this._chatDocAt = Date.now();
     }
     const sessions = Array.isArray(ctx.sessions) ? ctx.sessions : [];
     const sessionLines = sessions.slice(0, 10)

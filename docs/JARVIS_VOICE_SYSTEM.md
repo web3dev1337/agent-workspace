@@ -1,6 +1,6 @@
 # JARVIS Voice System — Full Prompts & Logic
 
-Snapshot rendered live from `/api/voice/lab` on 2026-08-15 17:32. The `{{...}}` slots you see in templates are filled per utterance; this document shows them FILLED with the state at snapshot time. Live version: `http://<host>:<port>/jarvis-lab.html`.
+Snapshot rendered live from `/api/voice/lab` on 2026-08-15 17:38. The `{{...}}` slots you see in templates are filled per utterance; this document shows them FILLED with the state at snapshot time. Live version: `http://<host>:<port>/jarvis-lab.html`.
 
 ## The ladder (what happens to every utterance)
 
@@ -44,21 +44,122 @@ LIVE STATE RIGHT NOW:
   none
 - queue: empty
 
-TOOLS: when you need data or to act, reply with ONLY a tool call on one line: <tool>{"name":"...","args":{...}}</tool> and nothing else. Available tools: list_sessions{}, queue{}, prs{person?,project?}, run_command{command,params}. run_command accepts: focus-worktree, set-workflow-mode, set-focus-tier2, open-queue, open-tasks, open-advice, open-settings, queue-next, pager-status, pager-stop, pager-start, queue-blockers, queue-triage, open-review-route, queue-conveyor-t2, queue-conveyor-t3, queue-open-console, review-console-set-preset, review-console-set-window, review-console-toggle-section, review-console-files-view, review-console-diff-embed, review-console-diff-open, queue-open-diff, queue-prev, queue-open-inspector, queue-spawn-reviewer, queue-spawn-fixer, queue-spawn-recheck, queue-spawn-overnight, queue-review-timer-start, queue-review-timer-stop, queue-set-tier, queue-set-risk, queue-set-pfail, queue-set-verify, queue-set-prompt-ref, queue-set-ticket, queue-open-ticket, queue-set-outcome. (focus-worktree wants {worktreeId}, set-workflow-mode wants {mode}.) You will get the result back and can then answer in speech. Use a tool instead of saying you cannot check something.
+TOOLS: when you need data or to act, reply with ONLY a tool call on one line: <tool>{"name":"...","args":{...}}</tool> and nothing else. Available tools: list_sessions{}, queue{}, prs{person?,project?}, run_command{command,params}. run_command accepts: pager-start, pager-status, refresh-all, start-all-claudes, discord-ensure-services, discord-open-services, discord-process-queue, discord-status, open-diff-viewer, open-folder, git-pull-all, git-status-all, open-history, open-activity, open-advice, open-queue, open-review-route, open-tasks, open-telemetry, pr-review-poll, queue-approve, queue-blockers, queue-claim, queue-conflicts-refresh, queue-conveyor-t2, queue-conveyor-t3, queue-deps-graph, queue-next, queue-open-console, queue-open-diff, queue-open-inspector, queue-open-prompt, queue-open-ticket, queue-pairing, queue-prev, queue-refresh, queue-release, queue-request-changes, queue-review-timer-start, queue-review-timer-stop. (focus-worktree wants {worktreeId}, set-workflow-mode wants {mode}.) You will get the result back and can then answer in speech. Use a tool instead of saying you cannot check something.
 
 --- ORCHESTRATOR REFERENCE ---
-# Commander Claude - API Reference
+WHAT THIS SYSTEM IS: the Claude Orchestrator runs fleets of AI coding agents.
+Concepts: a WORKSPACE groups git WORKTREES (work1..workN per repo); each worktree runs an agent SESSION (claude/codex) plus a dev server. The QUEUE is the review inbox of finished work (PRs/sessions) awaiting the operator. TIERS 1-4 rank task priority (1=focus ... 4=background). Workflow MODES: focus, review, background. The COMMANDER is a full Claude agent with the complete API - anything you cannot do, it can.
 
-You are Commander (Claude or Codex). You can control the Claude Orchestrator by calling these HTTP APIs via `curl`.
+YOUR RUNNABLE COMMANDS (via run_command):
+[sessions]
+- list-sessions: List all active sessions with their status
+[workspaces]
+- switch-workspace {name}: Switch to a different workspace tab
+[ui]
+- open-commander: Open the Commander panel
+- open-new-project: Open the New Project / Greenfield wizard
+- open-settings: Open the settings panel
+- open-dashboard: Open the Dashboard (home)
+- open-prs: Open the PRs panel
+- open-project-chats: Open the simple Projects + Chats shell
+- project-chats-new {workspace?, repository?}: Create a new chat in the Projects + Chats shell
+- highlight-worktree {worktreeId}: Scroll to and highlight a worktree in the sidebar
+- focus-worktree {worktreeId}: Show only this worktree's terminals (hide all others)
+- show-all-worktrees: Show all worktrees (unfocus/reset view)
+[discord]
+- discord-status: Get Discord bot + queue status
+- discord-process-queue: Trigger Discord queue processing in the dedicated processor session
+- discord-open-services: Ensure and open the Services workspace
+[history]
+- open-history {source?, query?, repo?, branch?, dateFilter?}: Open conversation history (Claude + Codex) with optional filters
+- resume-history {id, source?, project?}: Resume a specific conversation/session by id (Claude or Codex)
+[review-console]
+- review-console-set-preset {preset}: Set Review Console preset layout (Default/Review/Throughput/Deep/Terminals/Code)
+- review-console-set-window {mode}: Set Review Console window mode (fullscreen or docked)
+- review-console-toggle-section {section}: Toggle a Review Console section
+- review-console-files-view {view}: Switch Files panel view (tree or list)
+- review-console-diff-open: Open Advanced Diff Viewer (new tab) from the Review Console
+- review-console-diff-embed {enabled}: Embed/close the Advanced Diff Viewer iframe in the Review Console
+[process]
+- open-telemetry: Open Telemetry details (Dashboard overlay)
+- open-activity: Open the Activity feed panel
+- open-queue: Open the Queue (review inbox) panel
+- open-review-route: Open Queue in Review Route mode (Tier 3/4, unreviewed, auto-console, auto-next)
+- queue-next: Open Queue and jump to the next review item
+- queue-blockers: Open Queue filtered to dependency-blocked items
+- queue-triage: Open Queue in triage mode (ordering + snooze)
+- queue-conveyor-t2: Open Queue and start Conveyor T2 (one-at-a-time Tier 2 reviews)
+- queue-conveyor-t3: Open Queue and start Conveyor T3 (one-at-a-time Tier 3 reviews)
+- queue-open-console: Open the Review Console for the currently selected Queue item (PR-only supported)
+- queue-open-diff: Open the diff viewer for the currently selected Queue item (when it has a PR)
+- queue-spawn-reviewer: Spawn a reviewer agent for the selected Queue PR (Tier 3 reviewer)
+- queue-spawn-fixer: Spawn a fixer agent for the selected Queue PR (Tier 2 fixer; uses Notes as fix request)
+- queue-spawn-recheck: Spawn a recheck/reviewer agent for the selected Queue PR (Tier 3 recheck)
+- queue-spawn-overnight: Spawn an overnight runner for the selected Queue PR (Tier 4; long-running)
+- queue-set-pfail {pFailFirstPass}: Set pFailFirstPass for the selected Queue item
+- queue-set-verify {verifyMinutes}: Set verifyMinutes for the selected Queue item
+- queue-set-prompt-ref {promptRef}: Set promptRef (prompt artifact id) for the selected Queue item
+- queue-set-ticket {ticket}: Set Trello ticket for the selected Queue item (URL or trello:<shortLink>)
+- queue-open-ticket: Open the selected Queue item ticket in a new tab (if present)
+- queue-prev: Select the previous Queue item
+- queue-open-inspector: Open Worktree Inspector for the selected Queue item (when it has a session/worktree path)
+- queue-review-timer-start: Start the review timer for the selected Queue item
+- queue-review-timer-stop: Stop the review timer for the selected Queue item (if running)
+- queue-set-tier {tier}: Set tier for the selected Queue item
+- queue-set-risk {risk}: Set change risk for the selected Queue item
+- queue-set-outcome {outcome}: Set review outcome for the selected Queue item
+- queue-set-notes {notes}: Set Notes/Fix Request for the selected Queue item
+- queue-claim {who?}: Claim the selected Queue item for review
+- queue-release: Release claim for the selected Queue item
+- queue-assign {who}: Assign the selected Queue item
+- queue-unassign: Clear assignment for the selected Queue item
+- queue-refresh: Refresh Queue data (re-fetch tasks)
+- queue-select-by-pr-url {url}: Select a Queue item by PR URL
+- queue-select-by-pr-ref {number, repo?}: Select a Queue item by PR number with optional repo hint
+- queue-select-by-ticket {ticket}: Select a Queue item by ticket reference (trello URL / trello:<shortLink> / <shortLink>)
+- queue-open-prompt: Open the Prompt Artifact editor for the selected Queue item
+- queue-deps-add {dependencyIds}: Add dependency id(s) to the selected Queue item
+- queue-deps-graph {depth?, view?}: Open the dependency graph for the selected Queue item
+- queue-pairing: Open the Queue pairing recommendations modal
+- queue-conflicts-refresh: Refresh worktree conflicts analysis in Queue (best-effort)
+- queue-approve {body?}: Approve the selected Queue PR on GitHub (optional body)
+- queue-request-changes {body?}: Request changes for the selected Queue PR on GitHub (uses Notes/body)
+- open-tasks: Open the Tasks panel (Trello provider UI)
+- open-advice: Open the Advisor overlay (Commander → Advice)
+- set-workflow-mode {mode}: Set workflow mode: focus | review | background
+- set-focus-tier2 {behavior}: Set Focus Tier-2 behavior: auto | always
+[automation]
+- pager-start {sessionId?, sessionIds?, workspaceId?, tiers?, intervalSeconds?, maxPings?, maxRuntimeMinutes?, nudgeText?, customInstruction?, customInstructionMode?, doneCheckEnabled?, doneToken?}: Start pager/pollcat nudges for one or more sessions
+- pager-stop {id, reason?}: Stop a running pager/pollcat job
+- pager-status {id?}: Get pager/pollcat status
+[terminals]
+- start-claude {sessionId, yolo?}: Start Claude in a specific session
+- restart-session {sessionId}: Restart a terminal session
+[git]
+- git-pull-all: Pull latest changes in all worktrees
+- git-status-all: Show git status for all worktrees
+[coordination]
+- start-all-claudes {yolo?}: Start Claude in all sessions
+- refresh-all: Refresh all terminal connections
+[servers]
+- restart-server {sessionId}: Restart the dev server in a worktree
+- build-production {sessionId}: Build production version of a project
+[agents]
+- start-agent {sessionId, agentType?}: Start an AI agent (Aider, etc.) in a session
+[worktrees]
+- add-worktree {worktreeId?}: Add a new worktree to the current workspace
+[tabs]
+- close-tab {tabId?}: Close the current workspace tab
+- new-tab: Open a new workspace tab
+[files]
+- open-folder {path?, sessionId?}: Open a folder in the file explorer
+- open-diff-viewer {sessionId?}: Open the diff viewer for code review
+[navigation]
+- scroll-to-top {sessionId}: Scroll terminal to top
+- scroll-to-bottom {sessionId}: Scroll terminal to bottom
+- clear-terminal {sessionId}: Clear terminal output
 
-Runtime connection info (desktop builds pick a free port each launch):
-- Host: `ORCHESTRATOR_HOST` (default `127.0.0.1`)
-- Port: `ORCHESTRATOR_PORT` (default `9460` for `npm start`)
-- Auth: if `AUTH_TOKEN` is set, every request must include `-H "X-Auth-Token: $AUTH_TOKEN"` (or `?token=$AUTH_TOKEN`)
-
-**Base URL:** `http://${ORCHESTRATOR_HOST:-127.0.0.1}:${ORCHESTRATOR_PORT:-9460}`
-
-Optional helper (bash):
+DELEGATE TO THE COMMANDER (say so and the task lane handles it): launching or killing agents, sending prompts to sessions, git/PR operations, merges, deploys, anything destructive, anything not listed above.
 ```bash
 BASE_URL="http://${ORCHESTRATOR_HOST:-127.0.0.1}:${ORCHESTRATOR_PORT:-9460}"
 # If AUTH_TOKEN is set, add: -H "X-Auth-Token: $AUTH_TOKEN"
