@@ -8536,7 +8536,10 @@ app.post('/api/voice/command', async (req, res) => {
       return res.status(400).json({ error: 'transcript is required' });
     }
     const startedAt = Date.now();
-    const result = await voiceCommandService.processVoiceCommand(transcript);
+    // silent: evaluation/testing mode — full pipeline, no audio at the user.
+    if (req.body?.silent) voiceCommandService.brain && (voiceCommandService.brain.silent = true);
+    const result = await voiceCommandService.processVoiceCommand(transcript)
+      .finally(() => { if (voiceCommandService.brain) voiceCommandService.brain.silent = false; });
     // Log what was heard, how it routed, what JARVIS said back, and how long it
     // took — so the whole conversation + latency is visible in the log.
     logger.info('Voice', {

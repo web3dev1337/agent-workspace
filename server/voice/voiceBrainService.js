@@ -282,6 +282,7 @@ class VoiceBrainService {
 
   speak(text, { priority = 'normal', source = '' } = {}) {
     if (!text) return { spoken: false };
+    if (this.silent) return { spoken: false, reason: 'silent evaluation mode' };
     try {
       return this.deps.speechService?.speak?.(text, { priority, source }) || { spoken: false };
     } catch (error) {
@@ -650,20 +651,24 @@ class VoiceBrainService {
       .map((q) => q?.title || q?.id).filter(Boolean).join('; ') || 'empty';
     const registryBlock = this.deps.voiceRegistryService?.knowledgeBlock?.() || '';
     const liveBlock = `${registryBlock}\n\nLIVE STATE RIGHT NOW:\n- workspaces: ${workspaces}\n- active workspace: ${ctx.workspace || 'none'}\n- sessions:\n${sessionLines}\n- queue: ${queue}`;
-    return 'You are JARVIS, the spoken voice interface of the Claude Orchestrator. '
-      + 'You are talking OUT LOUD with the operator, so reply in one or two short '
-      + 'conversational sentences of plain prose — no markdown, no lists, no code. '
-      + 'You know the system intimately; the reference below describes the Commander '
-      + 'API and orchestrator you front. Use your TOOLS for live data and safe actions; '
-      + 'bigger jobs are handled by the Commander lane.\n\n'
-      + `${liveBlock}\n\n`
-      + 'TOOLS: when you need data or to act, reply with ONLY a tool call on one line: '
-      + '<tool>{"name":"...","args":{...}}</tool> and nothing else. Available tools: '
-      + 'list_sessions{}, queue{}, prs{person?,project?}, repo_info{project} (looks up what a project IS - repo, language, docs), run_command{command,params}. '
+    // The scaffold is DATA: config/voice-tier3-prompt.txt (+ ~/.orchestrator
+    // overlay wins). GEPA iterations edit the file, never this code.
+    let scaffold = '';
+    const fsMod = require('fs');
+    const pathMod = require('path');
+    const osMod = require('os');
+    for (const f of [pathMod.join(osMod.homedir(), '.orchestrator', 'voice-tier3-prompt.txt'),
+                     pathMod.join(__dirname, '..', '..', 'config', 'voice-tier3-prompt.txt')]) {
+      try { scaffold = fsMod.readFileSync(f, 'utf8'); break; } catch { /* next */ }
+    }
+    const toolsLine = 'list_sessions{}, queue{}, prs{person?,project?}, repo_info{project} (looks up what a project IS - repo, language, docs), run_command{command,params}. '
       + `run_command accepts: ${this.safeCommands().slice(0, 40).join(', ')}. `
-      + '(focus-worktree wants {worktreeId}, set-workflow-mode wants {mode}.) '
-      + 'You will get the result back and can then answer in speech. Use a tool instead of saying you cannot check something.\n\n'
-      + (this._chatDoc ? `--- ORCHESTRATOR REFERENCE ---\n${this._chatDoc}` : '');
+      + '(focus-worktree wants {worktreeId}, set-workflow-mode wants {mode}.)';
+    return scaffold
+      .split('{{KNOWLEDGE}}').join(registryBlock)
+      .split('{{LIVE}}').join(liveBlock)
+      .split('{{TOOLS}}').join(toolsLine)
+      .split('{{GUIDE}}').join(this._chatDoc ? `--- ORCHESTRATOR GUIDE ---\n${this._chatDoc}` : '');
   }
 
   async runVoiceTool(call, ctx) {
