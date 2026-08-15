@@ -710,6 +710,10 @@ class VoiceBrainService {
       }
       if (name === 'run_command') {
         const cmd = String(args.command || '');
+        // Models sometimes wrap a TOOL in run_command — just dispatch it.
+        if (['list_sessions', 'queue', 'prs', 'repo_info'].includes(cmd)) {
+          return this.runVoiceTool({ name: cmd, args: args.params || args }, ctx);
+        }
         // Every registry command EXCEPT destructive-sounding ones. Derived
         // live, so new commands become voice-runnable without code changes.
         if (!this.safeCommands().includes(cmd)) return `command ${cmd} is not allowed from the chat lane`;
@@ -770,8 +774,14 @@ class VoiceBrainService {
         { role: 'user', content: `TOOL RESULT: ${result}\nNow answer in one or two spoken sentences (no tool calls).` }
       ], ctx, depth + 1);
     }
-    // Never speak a raw tool call.
-    return call ? null : reply;
+    // Never speak raw tool syntax — neither a parsed call past the depth
+    // limit nor a malformed one the parser rejected.
+    if (call) return null;
+    if (/<\/?tool>|"name"\s*:/.test(reply)) {
+      this.logger.warn?.('voice brain: suppressed malformed tool syntax in reply');
+      return null;
+    }
+    return reply;
   }
 
   async chatCompletion(messages) {
