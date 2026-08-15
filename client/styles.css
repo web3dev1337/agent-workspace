@@ -16031,10 +16031,10 @@ body.dependency-onboarding-active #dependency-setup-modal {
   font-family: var(--font-mono);
   margin-left: var(--space-sm);
   background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
-  padding: 1px 6px;
+  padding: 1px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  white-space: nowrap;
+  white-space: pre;
   display: inline-flex;
   align-items: center;
   align-self: center;

@@ -54,7 +54,7 @@ class UsageLimitsWidget {
         this.formatBucket('7d', claude.sevenDay)
       ].filter(Boolean);
       if (buckets.length) {
-        parts.push(`CL ${buckets.join(' ')}${claude.stale ? '?' : ''}`);
+        parts.push(`Claude ${buckets.join('  ')}${claude.stale ? '?' : ''}`);
         tips.push(`Claude plan usage${claude.stale ? ' (stale — open any Claude session to refresh)' : ''}:`);
         if (claude.fiveHour?.resetsAt) tips.push(`  5-hour window: ${claude.fiveHour.usedPercentage}% used, resets ${new Date(claude.fiveHour.resetsAt * 1000).toLocaleString()}`);
         if (claude.sevenDay?.resetsAt) tips.push(`  7-day window: ${claude.sevenDay.usedPercentage}% used, resets ${new Date(claude.sevenDay.resetsAt * 1000).toLocaleString()}`);
@@ -71,7 +71,7 @@ class UsageLimitsWidget {
         })
         .filter(Boolean);
       if (buckets.length) {
-        parts.push(`CX ${buckets.join(' ')}${codex.stale ? '?' : ''}`);
+        parts.push(`Codex ${buckets.join('  ')}${codex.stale ? '?' : ''}`);
         tips.push('Codex plan usage:');
         for (const w of codex.windows) {
           if (w.resetsAt) tips.push(`  ${w.bucket || w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
@@ -83,7 +83,7 @@ class UsageLimitsWidget {
       return;
     }
     this.el.style.display = '';
-    this.el.textContent = `⏱ ${parts.join(' · ')}`;
+    this.el.textContent = `⏱ ${parts.join('  ·  ')}`;
     this.el.title = tips.join('\n');
   }
 }
