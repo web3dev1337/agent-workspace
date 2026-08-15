@@ -80,7 +80,8 @@ class ProcessTaskService {
       limit: params.limit || 50,
       query: params.query || '',
       repos: params.repos || [],
-      owners: params.owners || []
+      owners: params.owners || [],
+      refresh: params.refresh
     });
 
     return (result.prs || []).map(pr => {

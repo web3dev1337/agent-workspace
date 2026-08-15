@@ -87,6 +87,9 @@ server/utils/nodePtyCompat.js      - Runtime compatibility shim for the bundled 
 └─ Windows PTY guard: wraps stale ConPTY calls in memory (`startProcess`, `connect`, `resize`, `clear`, `kill`) via `loadNativeModule` when available or direct `conpty.node` patching when package internals differ, so packaged installs survive read-only app-resource layouts and mixed node-pty variants
 server/utils/pathUtils.js          - Shared slash-normalization + data-directory compatibility helpers for repo/worktree labels
 └─ Legacy migration: renames `~/.orchestrator` when possible, otherwise merges richer legacy state into `~/.agent-workspace` with conflict backups before falling back to the old directory
+server/pullRequestService.js       - `gh`-backed PR search/view/merge/review wrapper
+├─ Search cache: 30s TTL + in-flight coalescing for `gh search prs` (shared by /api/prs, /api/process/tasks, /api/process/distribution); bypass with `?refresh=1`
+└─ Invalidation: local merge/review actions clear the cache so the UI reflects them immediately
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)

@@ -5559,7 +5559,8 @@ app.get('/api/prs', async (req, res) => {
       limit: req.query.limit || '50',
       query,
       repos,
-      owners
+      owners,
+      refresh: req.query.refresh
     });
 
     res.json(result);
@@ -5657,7 +5658,8 @@ app.get('/api/process/tasks', async (req, res) => {
         limit: req.query.limit || '50',
         query,
         repos,
-        owners
+        owners,
+        refresh: req.query.refresh
       }
     });
 
@@ -5758,7 +5760,8 @@ app.get('/api/process/distribution', async (req, res) => {
         limit: req.query.limit || '50',
         query,
         repos,
-        owners
+        owners,
+        refresh: req.query.refresh
       }
     });
 
