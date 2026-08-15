@@ -1758,7 +1758,8 @@ JSON:`;
 
     // Destructive-sounding commands wait for a spoken yes REGARDLESS of which
     // matcher found them (exact rules, the legacy classifier, or tier 2).
-    if (parsed.success && this.brain?.isDestructive?.(transcript)) {
+    if (parsed.success && this.brain?.isDestructive?.(`${parsed.command} ${transcript}`)
+        && this.brain?.isDestructive?.(String(parsed.command || '').replace(/-/g, ' '))) {
       const outcome = this.brain.requestConfirmation(transcript, {
         intent: 'command', action: parsed.command,
         exec: { command: parsed.command, params: parsed.params }

@@ -299,6 +299,7 @@ class VoiceBrainService {
   async handleUnmatched(transcript) {
     const ctx = this.buildContext();
     let taskEntities = null;
+    let classifiedIntent = null;
 
     // Confirm-first: a pending destructive action waits for a yes/no before
     // anything else is interpreted.
@@ -334,6 +335,7 @@ class VoiceBrainService {
         const routed = await this.routeClassified(transcript, cls, ctx);
         if (routed && !routed.fallthrough) return routed;
         if (routed?.fallthrough) taskEntities = routed.entities;
+        classifiedIntent = cls.intent;
       }
     }
 
@@ -354,8 +356,10 @@ class VoiceBrainService {
 
     // Agent lane: the Commander has the whole API and can do anything — which
     // is exactly why a destructive-sounding request must not reach it without
-    // a spoken yes, even when tier 2 was down or unsure.
-    if (this.isDestructive(transcript)) {
+    // a spoken yes, even when tier 2 was down or unsure. But a CHAT/QUERY
+    // verdict from tier 2 vetoes this: "that deploy went just great" is
+    // commentary, and vocabulary alone must not interrogate the operator.
+    if (!['chat', 'query'].includes(classifiedIntent) && this.isDestructive(transcript)) {
       return this.requestConfirmation(transcript, { intent: 'task' });
     }
     const forwarder = this.deps.commanderForwarder;
@@ -665,6 +669,7 @@ class VoiceBrainService {
       + `run_command accepts: ${this.safeCommands().slice(0, 40).join(', ')}. `
       + '(focus-worktree wants {worktreeId}, set-workflow-mode wants {mode}.)';
     return scaffold
+      .split('{{MODEL}}').join(process.env.VOICE_CHAT_MODEL || 'a local')
       .split('{{KNOWLEDGE}}').join(registryBlock)
       .split('{{LIVE}}').join(liveBlock)
       .split('{{TOOLS}}').join(toolsLine)
@@ -770,13 +775,13 @@ class VoiceBrainService {
     const reply = await this.chatCompletion(messages);
     if (!reply) return null;
     const call = this.parseToolCall(reply);
-    // One tool round max — voice needs answers, not agent loops.
-    if (call && depth < 1) {
+    // Two tool rounds max — enough for "compare X and Y", still not an agent loop.
+    if (call && depth < 2) {
       const result = await this.runVoiceTool(call, ctx);
       this.logger.info?.('voice tool used', { tool: call.name, result: String(result).slice(0, 120) });
       return this.chatWithTools([...messages,
         { role: 'assistant', content: reply },
-        { role: 'user', content: `TOOL RESULT: ${result}\nNow answer in one or two spoken sentences (no tool calls).` }
+        { role: 'user', content: `TOOL RESULT: ${result}\nIf you need ONE more tool, call it; otherwise answer in one or two spoken sentences.` }
       ], ctx, depth + 1);
     }
     // Never speak raw tool syntax — neither a parsed call past the depth

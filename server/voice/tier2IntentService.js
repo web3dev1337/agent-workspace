@@ -241,6 +241,16 @@ class Tier2IntentService {
         && !/\b(review|merge|fix|spin|launch|rerun|restart|kill|kil|tell|ask|add)\b/.test(low)) {
       action = 'query';
     }
+    // Past-tense commentary is a REACTION, not a work order — "well that
+    // deploy went just great" must never trip the destructive gate.
+    if (/^(well|wow|great|nice|ugh|man|damn|so|huh|oh)\b/.test(low)
+        && /\b(went|was|were|did|didn'?t|failed|worked|finished|broke)\b/.test(low)
+        && action !== 'chat' && action !== 'query') {
+      action = 'chat';
+    }
+    // Meta questions about the assistant's own prompt/instructions belong to
+    // the chat brain (which refuses gracefully), not to any command.
+    if (/system prompt|your instructions|your prompt\b/.test(low)) action = 'chat';
     // Homophone: "cue" is the queue.
     if (/\bcue\b/.test(low) && action === 'open-tasks') action = 'open-queue';
 

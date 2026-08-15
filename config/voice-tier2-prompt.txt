@@ -46,6 +46,7 @@ Examples:
 "review the arcade pr with two reviewers" -> {"action":"agent-work","params":"","confidence":0.9}
 "restart the zoo server" -> {"action":"agent-work","params":"","confidence":0.9}
 "kill the stuck session on work two" -> {"action":"agent-work","params":"","confidence":0.9}
+"well that deploy went just great" -> {"action":"chat","params":"","confidence":0.9}
 "hey jarvis how's it going" -> {"action":"chat","params":"","confidence":0.95}
 "what do you think about local ai models" -> {"action":"chat","params":"","confidence":0.9}
 "hmm interesting" -> {"action":"chat","params":"","confidence":0.85}
