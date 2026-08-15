@@ -139,6 +139,7 @@ class ClaudeOrchestrator {
     this.intentHaikuPolicyBySession = new Map(); // sessionId -> milestone refresh state
     this.modelConfigBySession = new Map(); // sessionId -> { cwd, claude: {model, effortLevel, ...} }
     this.modelConfigCodex = null; // global codex config from /api/sessions/model-config
+    this.modelConfigGrok = null; // global grok config from /api/sessions/model-config
     this.modelConfigInFlight = false;
     this.modelConfigLastFetchedAt = 0;
     this.modelConfigRefreshMs = 20000; // fallback poll for idle terminals; activity refreshes sooner
@@ -760,6 +761,7 @@ class ClaudeOrchestrator {
       if (!response.ok || payload?.ok === false) return;
 
       this.modelConfigCodex = payload?.codex || null;
+      this.modelConfigGrok = payload?.grok || null;
       this.modelConfigBySession = new Map(Object.entries(payload?.sessions || {}));
       for (const sessionId of this.sessions.keys()) {
         this.renderSessionModelBadge(sessionId);
@@ -799,14 +801,20 @@ class ClaudeOrchestrator {
     const session = this.sessions.get(sid) || this.sessions.get(sessionId);
     const runningAgent = String(session?.agent || '').trim().toLowerCase();
     const sessionType = String(session?.type || '').trim().toLowerCase();
-    // Only Claude and Codex configs are resolved; other agents (gemini,
+    // Claude, Codex, and Grok configs are resolved; other agents (gemini,
     // opencode, aider) don't read these files — hide rather than mislabel.
-    if (runningAgent && runningAgent !== 'claude' && runningAgent !== 'codex') return null;
+    if (runningAgent && runningAgent !== 'claude' && runningAgent !== 'codex' && runningAgent !== 'grok') return null;
     const isCodex = runningAgent === 'codex' || (!runningAgent && sessionType === 'codex');
-    const config = isCodex ? this.modelConfigCodex : this.modelConfigBySession.get(sid)?.claude;
+    const isGrok = runningAgent === 'grok';
+    const config = isGrok
+      ? this.modelConfigGrok
+      : (isCodex ? this.modelConfigCodex : this.modelConfigBySession.get(sid)?.claude);
     if (!config || (!config.model && !config.effortLevel)) return null;
 
-    const modelLabel = String(config.model || '').replace(/^claude-/i, '');
+    // e.g. "grok-4.6" -> "Grok 4.6"; Claude models drop their "claude-" prefix.
+    const modelLabel = isGrok
+      ? String(config.model || '').replace(/^grok-/i, 'Grok ')
+      : String(config.model || '').replace(/^claude-/i, '');
     const effortLevel = String(config.effortLevel || '').trim().toLowerCase();
     const text = [modelLabel, effortLevel].filter(Boolean).join(' ');
 

@@ -117,7 +117,7 @@ server/threadService.js            - Workspace/project thread persistence (`~/.o
 server/projectBoardService.js      - Local projects kanban board persistence (`~/.orchestrator/project-board.json`) + APIs (`GET /api/projects/board`, `POST /api/projects/board/move`, `POST /api/projects/board/patch`)
 server/discordIntegrationService.js - Discord queue orchestration bridge (Services workspace ensure/start, signed queue verification, invocation idempotency, JSONL audit log for processing dispatch/replay/fail paths)
 server/intentHaikuService.js       - Session intent summarizer for context-switch hints (optional Anthropic Haiku model, heuristic fallback)
-server/agentModelConfigService.js  - Resolves the model + reasoning effort agent launches will use per worktree (Claude `.claude/settings*.json` cascade: local > project > user; Codex `~/.codex/config.toml`)
+server/agentModelConfigService.js  - Resolves the model + reasoning effort agent launches will use per worktree (Claude `.claude/settings*.json` cascade: local > project > user; Codex `~/.codex/config.toml`; Grok `~/.grok/config.toml` [models] section)
 tests/unit/agentModelConfigService.test.js - Coverage for settings-cascade precedence, malformed/missing files, short-lived file cache, and Codex config parsing
 server/threadWorktreeSelection.js  - Repository/worktree normalization + reuse-first candidate selection for thread creation
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
