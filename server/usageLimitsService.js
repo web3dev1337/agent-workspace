@@ -29,10 +29,22 @@ const CODEX_HELPER = process.env.CODEX_USAGE_HELPER
 const CODEX_CACHE_TTL_MS = 5 * 60 * 1000;
 const CODEX_TIMEOUT_MS = 60 * 1000;
 
+// Grok subscription usage comes from the CLI proxy's billing endpoints, using
+// the OAuth access token the grok CLI already keeps in ~/.grok/auth.json.
+// IMPORTANT: never refresh that token here — xAI rotates refresh tokens, and
+// an out-of-band refresh can log the user's grok CLI out. If the token is
+// expired we simply report stale until the CLI refreshes it on next use.
+const GROK_AUTH_FILE = path.join(os.homedir(), '.grok', 'auth.json');
+const GROK_BILLING_BASE = process.env.GROK_BILLING_BASE_URL || 'https://cli-chat-proxy.grok.com/v1';
+const GROK_CACHE_TTL_MS = 5 * 60 * 1000;
+const GROK_TIMEOUT_MS = 20 * 1000;
+
 class UsageLimitsService {
   constructor() {
     this.codexCache = null; // { at, data }
     this.codexInFlight = null;
+    this.grokCache = null; // { at, data }
+    this.grokInFlight = null;
   }
 
   static getInstance() {
@@ -123,18 +135,120 @@ class UsageLimitsService {
     return this.codexInFlight;
   }
 
-  async getLimits({ refresh = false } = {}) {
-    const claude = this.readClaudeLimits();
-    let codex;
-    if (!refresh && this.codexCache && Date.now() - this.codexCache.at < CODEX_CACHE_TTL_MS) {
-      codex = this.codexCache.data;
-    } else {
-      codex = await this.fetchCodexLimits();
-      if (!codex.available && this.codexCache) {
-        codex = { ...this.codexCache.data, stale: true };
+  readGrokToken() {
+    try {
+      const auth = JSON.parse(fs.readFileSync(GROK_AUTH_FILE, 'utf8'));
+      const account = Object.values(auth).find(a => a && typeof a === 'object' && a.key);
+      if (!account) return null;
+      const token = String(account.key);
+      // The access token is a JWT; check exp locally so we never send (or try
+      // to refresh) an expired credential.
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+        if (Number.isFinite(payload.exp) && payload.exp * 1000 < Date.now()) {
+          return { expired: true };
+        }
       }
+      return { token };
+    } catch {
+      return null;
     }
-    return { claude, codex };
+  }
+
+  grokFetch(pathSuffix, token) {
+    return fetch(`${GROK_BILLING_BASE}${pathSuffix}`, {
+      headers: {
+        authorization: `Bearer ${token}`,
+        'x-xai-token-auth': 'xai-grok-cli',
+        accept: 'application/json'
+      },
+      signal: AbortSignal.timeout(GROK_TIMEOUT_MS)
+    }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+  }
+
+  parseGrokWindows({ monthly, weekly }) {
+    const windows = [];
+    const num = (v) => (Number.isFinite(Number(v?.val)) ? Number(v.val) : null);
+    const epoch = (iso) => {
+      const t = Date.parse(iso);
+      return Number.isFinite(t) ? Math.floor(t / 1000) : null;
+    };
+    const wc = weekly?.config;
+    if (wc && wc.currentPeriod?.type === 'USAGE_PERIOD_TYPE_WEEKLY') {
+      const cap = num(wc.onDemandCap);
+      const used = num(wc.onDemandUsed);
+      windows.push({
+        bucket: 'grok',
+        name: 'weekly',
+        window: '1 week',
+        usedPercentage: cap > 0 && used !== null ? Math.min(100, Math.round((used / cap) * 100)) : 0,
+        resetsAt: epoch(wc.billingPeriodEnd)
+      });
+    }
+    const mc = monthly?.config;
+    const monthlyLimit = num(mc?.monthlyLimit);
+    if (monthlyLimit > 0) {
+      const used = num(mc.used) || 0;
+      windows.push({
+        bucket: 'grok',
+        name: 'monthly',
+        window: '1 month',
+        usedPercentage: Math.min(100, Math.round((used / monthlyLimit) * 100)),
+        resetsAt: epoch(mc.billingPeriodEnd)
+      });
+    }
+    return windows;
+  }
+
+  fetchGrokLimits() {
+    if (this.grokInFlight) return this.grokInFlight;
+    this.grokInFlight = (async () => {
+      const cred = this.readGrokToken();
+      if (!cred) return { available: false, reason: 'not-installed' };
+      if (cred.expired) return { available: false, reason: 'token-expired' };
+      const [monthly, weekly] = await Promise.all([
+        this.grokFetch('/billing', cred.token),
+        this.grokFetch('/billing?format=credits', cred.token)
+      ]);
+      if (!monthly && !weekly) return { available: false, reason: 'fetch-failed' };
+      const windows = this.parseGrokWindows({ monthly, weekly });
+      return { available: windows.length > 0, updatedAt: Math.floor(Date.now() / 1000), windows };
+    })().then((data) => {
+      if (data.available) this.grokCache = { at: Date.now(), data };
+      return data;
+    }).finally(() => {
+      this.grokInFlight = null;
+    });
+    return this.grokInFlight;
+  }
+
+  async getProviderCached({ enabled, cache, ttl, fetcher }) {
+    if (!enabled) return { available: false, reason: 'disabled' };
+    if (cache && Date.now() - cache.at < ttl) return cache.data;
+    const data = await fetcher();
+    if (!data.available && cache) return { ...cache.data, stale: true };
+    return data;
+  }
+
+  async getLimits({ refresh = false, providers = {} } = {}) {
+    const enabled = (name) => providers[name] !== false;
+    const claude = enabled('claude') ? this.readClaudeLimits() : { available: false, reason: 'disabled' };
+    const [codex, grok] = await Promise.all([
+      this.getProviderCached({
+        enabled: enabled('codex'),
+        cache: refresh ? null : this.codexCache,
+        ttl: CODEX_CACHE_TTL_MS,
+        fetcher: () => this.fetchCodexLimits()
+      }),
+      this.getProviderCached({
+        enabled: enabled('grok'),
+        cache: refresh ? null : this.grokCache,
+        ttl: GROK_CACHE_TTL_MS,
+        fetcher: () => this.fetchGrokLimits()
+      })
+    ]);
+    return { claude, codex, grok };
   }
 }
 

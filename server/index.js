@@ -4592,7 +4592,8 @@ app.post('/api/setup-actions/open-url', requirePolicyAction('write'), express.js
 app.get('/api/usage/limits', async (req, res) => {
   try {
     const usageLimitsService = UsageLimitsService.getInstance();
-    const result = await usageLimitsService.getLimits({ refresh: req.query.refresh === '1' });
+    const providers = userSettingsService.getAllSettings()?.global?.ui?.usageLimitsProviders || {};
+    const result = await usageLimitsService.getLimits({ refresh: req.query.refresh === '1', providers });
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });

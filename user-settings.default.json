@@ -123,7 +123,8 @@
           "commander": true,
           "recommendations": false,
           "settings": true,
-          "connectionStatus": true
+          "connectionStatus": true,
+          "usageLimits": true
         },
         "sidebar": {
           "viewPresets": false,
@@ -284,6 +285,11 @@
       },
       "diffViewer": {
         "theme": "dark"
+      },
+      "usageLimitsProviders": {
+        "claude": true,
+        "codex": true,
+        "grok": true
       }
     }
   },
