@@ -1,0 +1,29 @@
+{
+  "$comment": "Voice ladder configuration. Models per tier, thresholds, and feedback policy. Real identities do NOT live here - see ~/.orchestrator/voice-registry.json.",
+  "tier2": {
+    "url": "http://127.0.0.1:5742",
+    "model": "~/AI-Models/Bonsai-1.7B.gguf",
+    "confidenceThreshold": 0.6,
+    "autostart": true
+  },
+  "tier3": {
+    "url": "http://127.0.0.1:18866/v1",
+    "fallbackOllamaModel": "llama3.1:8b"
+  },
+  "tier4": {
+    "defaultModel": "sonnet",
+    "defaultEffort": "low"
+  },
+  "destructivePattern": "\\b(kill|kil|remove|delete|deploy|merge|force push|drop|wipe|shut ?down)\\b",
+  "feedback": {
+    "command": { "ack": "instant", "confirm": false },
+    "destructive": { "ack": "confirm-first" },
+    "task": { "ack": "instant", "progress": "on-change", "done": "speak" },
+    "query": { "ack": "none", "done": "speak" }
+  },
+  "realtimeManager": {
+    "enabled": true,
+    "minSecondsBetweenUpdates": 30,
+    "speakInBackgroundMode": false
+  }
+}

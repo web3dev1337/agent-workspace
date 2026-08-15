@@ -1,0 +1,13 @@
+{
+  "$comment": "SHAPE ONLY - placeholder identities. Your real people/projects go in ~/.orchestrator/voice-registry.json (untracked), which overrides entries here by name. aliases are what speech recognition actually hears.",
+  "people": [
+    { "name": "Rocky", "github": "<gh-login>", "aliases": ["rocky", "rock e", "rock ee"] }
+  ],
+  "projects": [
+    { "name": "Example Game", "repo": "<owner>/<repo>", "path": "~/GitHub/games/example", "aliases": ["example", "the example game"], "desc": "what it is, one line" }
+  ],
+  "products": [
+    { "name": "Spoken Game Name", "aliases": ["spoken game name"], "repo": "<owner>/<repo>", "subpath": "demos/folder-name", "$comment": "for games whose spoken name differs from their folder" }
+  ],
+  "defaults": { "launchAgent": "claude", "launchEffort": "low", "reviewAgent": "codex" }
+}

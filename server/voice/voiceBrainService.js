@@ -260,6 +260,12 @@ class VoiceBrainService {
    */
   async handleUnmatched(transcript) {
     const ctx = this.buildContext();
+
+    // Confirm-first: a pending destructive action waits for a yes/no before
+    // anything else is interpreted.
+    const pendingOutcome = await this.resolvePendingConfirmation(transcript);
+    if (pendingOutcome) return pendingOutcome;
+
     const fact = this.answerFromContext(transcript, ctx);
     if (fact) {
       this.speak(fact);
@@ -272,6 +278,23 @@ class VoiceBrainService {
       const miss = "Sorry, I didn't catch that.";
       this.speak(miss);
       return { handled: false, route: 'unclear', spoken: miss };
+    }
+
+    // Tier 2: the ~100ms grammar-constrained classifier. When it speaks with
+    // confidence, it routes; when it is down or unsure, the older heuristics
+    // below still work.
+    const t2 = this.deps.tier2IntentService;
+    if (t2?.classify) {
+      let cls = null;
+      try {
+        cls = await t2.classify(transcript, this.tier2Snapshot(ctx));
+      } catch (error) {
+        this.logger.warn?.('voice brain: tier2 classify threw', { error: error.message });
+      }
+      if (cls && cls.confidence >= (t2.confidenceThreshold ?? 0.6)) {
+        const routed = await this.routeClassified(transcript, cls, ctx);
+        if (routed) return routed;
+      }
     }
 
     // Chat lane: conversation belongs to the LOCAL model — instant, free, and
@@ -292,7 +315,12 @@ class VoiceBrainService {
     // Agent lane: the Commander has the whole API and can do anything.
     const forwarder = this.deps.commanderForwarder;
     if (typeof forwarder === 'function') {
-      const brief = `[voice] ${String(transcript || '').trim()}\n\nAnswer or act using the orchestrator API (GET /api/commander/context, /capabilities, POST /execute). Keep your reply to one or two sentences of plain prose so it can be read aloud.`;
+      const entities = this.pendingTaskEntities;
+      this.pendingTaskEntities = null;
+      const entityLine = entities
+        ? `\nResolved entities: project=${entities.project || '-'} person=${entities.person || '-'} worktree=${entities.worktree || '-'} agent=${entities.agent || '-'}`
+        : '';
+      const brief = `[voice] ${String(transcript || '').trim()}${entityLine}\n\nAnswer or act using the orchestrator API (GET /api/commander/context, /capabilities, POST /execute). Keep your reply to one or two sentences of plain prose so it can be read aloud.`;
       const before = this.deps.commanderService?.getRecentOutput?.(150) || '';
       let delivered = false;
       try { delivered = (await forwarder(brief)) !== false; } catch (error) {
@@ -320,6 +348,203 @@ class VoiceBrainService {
     const miss = "I couldn't do that myself and there's no Commander running to hand it to.";
     this.speak(miss);
     return { handled: false, route: 'none', spoken: miss };
+  }
+
+  tier2Snapshot(ctx) {
+    const sessions = Array.isArray(ctx?.sessions) ? ctx.sessions : [];
+    const worktrees = sessions
+      .map((s) => `${s.worktreeId || s.id || 'unknown'} (${s.status || 'active'})`)
+      .slice(0, 12)
+      .join(', ');
+    return {
+      workspace: ctx?.workspace?.name || ctx?.workspace || 'none',
+      worktrees: worktrees || 'none',
+      sessions: sessions.length
+    };
+  }
+
+  feedbackPolicy() {
+    if (!this._feedbackPolicy) {
+      try {
+        const path = require('path');
+        const fs = require('fs');
+        this._feedbackPolicy = JSON.parse(
+          fs.readFileSync(path.join(__dirname, '..', '..', 'config', 'voice-tiers.json'), 'utf8'));
+      } catch {
+        this._feedbackPolicy = {};
+      }
+    }
+    return this._feedbackPolicy;
+  }
+
+  isDestructive(transcript) {
+    const pattern = this.feedbackPolicy()?.destructivePattern
+      || '\\b(kill|kil|remove|delete|deploy|merge|force push|drop|wipe|shut ?down)\\b';
+    return new RegExp(pattern, 'i').test(String(transcript || ''));
+  }
+
+  /** Route a confident tier-2 classification to the right lane. */
+  async routeClassified(transcript, cls, ctx) {
+    const vcs = this.deps.voiceCommandService;
+
+    if (cls.intent === 'command') {
+      // Destructive-sounding commands wait for a spoken yes.
+      if (this.isDestructive(transcript)) return this.requestConfirmation(transcript, cls);
+      return this.executeClassifiedCommand(transcript, cls);
+    }
+
+    if (cls.intent === 'query') {
+      const q = this.deps.voiceQueryService;
+      if (q?.answer) {
+        try {
+          const answer = await q.answer(transcript, cls, ctx);
+          if (answer) {
+            this.speak(answer);
+            return { handled: true, route: 'query', spoken: answer };
+          }
+        } catch (error) {
+          this.logger.warn?.('voice brain: query lane failed', { error: error.message });
+        }
+      }
+      // Deterministic fetchers had nothing — let the local brain answer with
+      // the live context in its prompt.
+      const chat = await this.chatLocally(transcript, ctx);
+      if (chat) {
+        this.speak(chat);
+        return { handled: true, route: 'query-chat', spoken: chat };
+      }
+      return null;
+    }
+
+    if (cls.intent === 'chat') {
+      const chat = await this.chatLocally(transcript, ctx);
+      if (chat) {
+        this.speak(chat);
+        return { handled: true, route: 'local-chat', spoken: chat };
+      }
+      return null;
+    }
+
+    // task: fall through to the Commander lane, but enrich the brief with the
+    // entities tier 2 already resolved so the agent starts oriented.
+    if (cls.intent === 'task') {
+      if (this.isDestructive(transcript)) return this.requestConfirmation(transcript, cls);
+      this.pendingTaskEntities = cls;
+      return null; // Commander lane below handles it (with entity brief).
+    }
+    return null;
+  }
+
+  async executeClassifiedCommand(transcript, cls) {
+    const vcs = this.deps.voiceCommandService;
+    const paramMap = {
+      'focus-worktree': { worktreeId: cls.worktree || cls.params },
+      'set-workflow-mode': { mode: cls.params }
+    };
+
+    if (cls.action === 'catch-me-up') {
+      const digest = this.spokenDigest();
+      this.speak(digest);
+      return { handled: true, route: 'command', command: 'catch-me-up', spoken: digest };
+    }
+    if (cls.action === 'send-prompt' || cls.action === 'launch-agent') {
+      // These need the full orchestrator API — Commander executes, but the
+      // brief is STRUCTURED so nothing is re-derived from mumbled speech.
+      const reg = this.deps.voiceRegistryService;
+      const defaults = reg?.defaults?.() || {};
+      const agent = cls.agent || defaults.launchAgent || 'claude';
+      const brief = [
+        `[voice:${cls.action}] ${String(transcript || '').trim()}`,
+        `Resolved: project=${cls.project || 'unknown'} product=${cls.product || '-'} worktree=${cls.worktree || 'unspecified'} agent=${agent}`,
+        cls.params ? `Message/goal: ${cls.params}` : '',
+        cls.action === 'send-prompt'
+          ? 'Send this message to that session via POST /api/commander/send-to-session (text first, then \\r separately). Reply in one short sentence confirming.'
+          : `Launch a new ${agent} agent for that project/worktree via the orchestrator API. Reply in one short sentence confirming.`
+      ].filter(Boolean).join('\n');
+      return this.forwardBrief(brief, `${cls.action === 'send-prompt' ? 'Sending that over' : 'Spinning that up'}.`);
+    }
+
+    if (!vcs?.executeCommand) return null;
+    try {
+      await vcs.executeCommand(cls.action, paramMap[cls.action] || {});
+      const say = this.confirmCommand(cls.action);
+      return { handled: true, route: 'command', command: cls.action, spoken: say };
+    } catch (error) {
+      this.logger.warn?.('voice brain: classified command failed', { command: cls.action, error: error.message });
+      return null;
+    }
+  }
+
+  /** A deterministic spoken digest of live state, for catch-me-up. */
+  spokenDigest() {
+    const ctx = this.buildContext();
+    const sessions = Array.isArray(ctx.sessions) ? ctx.sessions : [];
+    const busy = sessions.filter((s) => !/idle/i.test(s.status || '')).length;
+    const queue = Array.isArray(ctx.queue) ? ctx.queue.length : 0;
+    const discord = Array.isArray(ctx.discord) ? ctx.discord.length : 0;
+    const parts = [`${sessions.length} session${sessions.length === 1 ? '' : 's'}, ${busy} busy`];
+    if (queue) parts.push(`${queue} in the queue`);
+    if (discord) parts.push(`${discord} Discord items`);
+    return `Here's where we are: ${parts.join(', ')}.`;
+  }
+
+  forwardBrief(brief, ack) {
+    const forwarder = this.deps.commanderForwarder;
+    if (typeof forwarder !== 'function') return null;
+    const before = this.deps.commanderService?.getRecentOutput?.(150) || '';
+    return Promise.resolve(forwarder(brief)).then((delivered) => {
+      if (delivered === false) {
+        const miss = 'No Commander is running to take that.';
+        this.speak(miss);
+        return { handled: false, route: 'commander', spoken: miss };
+      }
+      this.speak(ack);
+      this.captureChain = this.captureChain
+        .then(() => this.captureCommanderReply(before))
+        .then((reply) => { if (reply) this.speak(reply, { priority: 'high' }); })
+        .catch((error) => this.logger.warn?.('voice brain: reply capture failed', { error: error.message }));
+      return { handled: true, route: 'commander', spoken: ack };
+    }).catch((error) => {
+      this.logger.warn?.('voice brain: forward failed', { error: error.message });
+      return null;
+    });
+  }
+
+  requestConfirmation(transcript, cls) {
+    this.pendingConfirmation = { transcript, cls, at: Date.now() };
+    const say = `That sounds destructive — you want me to ${String(transcript || '').trim()}? Say yes to confirm.`;
+    this.speak(say);
+    return { handled: true, route: 'confirm', spoken: say };
+  }
+
+  async resolvePendingConfirmation(transcript) {
+    const pending = this.pendingConfirmation;
+    if (!pending) return null;
+    // A confirmation is only live for a short window.
+    if (Date.now() - pending.at > 30_000) {
+      this.pendingConfirmation = null;
+      return null;
+    }
+    const low = String(transcript || '').trim().toLowerCase();
+    if (/^(yes|yeah|yep|confirm|do it|go ahead|affirmative)\b/.test(low)) {
+      this.pendingConfirmation = null;
+      const { transcript: original, cls } = pending;
+      if (cls?.intent === 'command') return this.executeClassifiedCommand(original, cls);
+      // Destructive task: hand to Commander now that it is confirmed.
+      return this.forwardBrief(
+        `[voice:confirmed] ${original}\n\nThe operator confirmed this destructive request out loud. Execute it via the orchestrator API and reply in one short sentence.`,
+        'Confirmed — on it.'
+      );
+    }
+    if (/^(no|nope|cancel|stop|never ?mind|abort)\b/.test(low)) {
+      this.pendingConfirmation = null;
+      const say = 'Cancelled.';
+      this.speak(say);
+      return { handled: true, route: 'confirm-cancelled', spoken: say };
+    }
+    // Anything else falls through to normal handling and drops the pending ask.
+    this.pendingConfirmation = null;
+    return null;
   }
 
   /**

@@ -1,0 +1,79 @@
+You label ONE action for a voice transcript to a dev-agent orchestrator. Transcripts are speech-recognized and may contain typos or misheard words — judge by meaning.
+
+Actions:
+- open-queue: open the queue panel
+- open-tasks: open the tasks panel
+- focus-worktree: show a single worktree (params = which one, as heard)
+- show-all-worktrees: show everything / reset the view
+- set-workflow-mode: switch mode (params = focus, review, or background, as heard)
+- catch-me-up: speak the pending digest / brief me
+- send-prompt: relay a message/instruction to a specific EXISTING agent session. params = the message text to send
+- launch-agent: start a NEW agent/session on a project ("start a new kpop", "launch a codex on X", "spin up a claude"). params = the initial prompt/goal if given. agent = "codex" or "claude" ONLY if that word was said, else ""
+- query: they want information (people, PRs, sessions, status, history). Nothing executed.
+- agent-work: they want an agent to do work (launch, spin up, review, merge, fix, build, restart, kill, send, ask an agent).
+- chat: greeting, thanks, reaction, joke, or asking your opinion.
+
+params is "" except focus-worktree and set-workflow-mode.
+{{REGISTRY}}
+{{SNAPSHOT}}
+Asking what a PERSON is doing or what PRs exist is always query - even when phrased as "open/show someones prs" (PRs are information, not a panel). Asking to review/merge/fix a PR is always task.
+
+Examples:
+"pull up the queue" -> {"action":"open-queue","params":"","confidence":0.95}
+"open the cue" -> {"action":"open-queue","params":"","confidence":0.9}
+"open my tasks" -> {"action":"open-tasks","params":"","confidence":0.95}
+"opne my tasks panel" -> {"action":"open-tasks","params":"","confidence":0.85}
+"focus on work two" -> {"action":"focus-worktree","params":"work two","confidence":0.95}
+"can you focus on work one for me" -> {"action":"focus-worktree","params":"work one","confidence":0.95}
+"focus worktree six" -> {"action":"focus-worktree","params":"six","confidence":0.9}
+"focus work for" -> {"action":"focus-worktree","params":"for","confidence":0.8}
+"show everything again" -> {"action":"show-all-worktrees","params":"","confidence":0.9}
+"reset the view" -> {"action":"show-all-worktrees","params":"","confidence":0.9}
+"switch to review mode" -> {"action":"set-workflow-mode","params":"review","confidence":0.95}
+"go to focus mode" -> {"action":"set-workflow-mode","params":"focus","confidence":0.95}
+"ketch me up" -> {"action":"catch-me-up","params":"","confidence":0.85}
+"give me the digest" -> {"action":"catch-me-up","params":"","confidence":0.9}
+"show me rocky's prs from today" -> {"action":"query","params":"","confidence":0.9}
+"is work one busy" -> {"action":"query","params":"","confidence":0.9}
+"did blue push anything today" -> {"action":"query","params":"","confidence":0.9}
+"which agents are idle" -> {"action":"query","params":"","confidence":0.9}
+"whats blue doing" -> {"action":"query","params":"","confidence":0.9}
+"whats rock e up to" -> {"action":"query","params":"","confidence":0.85}
+"any reviews waiting on me" -> {"action":"query","params":"","confidence":0.85}
+"any tickets waiting on me" -> {"action":"query","params":"","confidence":0.85}
+"spin up a reviewer for pr 12" -> {"action":"agent-work","params":"","confidence":0.9}
+"get blues pr reviewed by someone" -> {"action":"agent-work","params":"","confidence":0.9}
+"review the arcade pr with two reviewers" -> {"action":"agent-work","params":"","confidence":0.9}
+"restart the zoo server" -> {"action":"agent-work","params":"","confidence":0.9}
+"kill the stuck session on work two" -> {"action":"agent-work","params":"","confidence":0.9}
+"hey jarvis how's it going" -> {"action":"chat","params":"","confidence":0.95}
+"what do you think about local ai models" -> {"action":"chat","params":"","confidence":0.9}
+"hmm interesting" -> {"action":"chat","params":"","confidence":0.85}
+
+Also extract entities when mentioned (else ""):
+- person: Rocky (heard: "rock e", "rock ee", "rockee", "rocky"), Blue, Green
+- project: Zoo Game ("zoo", "the zoo"), Arcade World ("arcade"), HyFire ("high fire", "hy fire"), Box2D ("box two d", "box 2 d", "box to d"), Kpop ("kpop", "k pop"), Toy Store ("toy store", "the toy store")
+- worktree: as heard ("work 1", "work won", "work for")
+
+Entity examples:
+"open the box two d work 1" -> {"action":"focus-worktree","params":"work 1","person":"","project":"Box2D","worktree":"work 1","confidence":0.9}
+"show me high fire work 2" -> {"action":"focus-worktree","params":"work 2","person":"","project":"HyFire","worktree":"work 2","confidence":0.9}
+"open greens prs" -> {"action":"query","params":"","person":"Green","project":"","worktree":"","confidence":0.9}
+"show me greens open prs" -> {"action":"query","params":"","person":"Green","project":"","worktree":"","confidence":0.9}
+"open blues prs on the zoo" -> {"action":"query","params":"","person":"Blue","project":"Zoo Game","worktree":"","confidence":0.9}
+"open the toy store work 2" -> {"action":"focus-worktree","params":"work 2","person":"","project":"Toy Store","worktree":"work 2","confidence":0.85}
+"whats happening on box to d" -> {"action":"query","params":"","person":"","project":"Box2D","worktree":"","confidence":0.85}
+"launch a codex on arcade world work 3" -> {"action":"agent-work","params":"","person":"","project":"Arcade World","worktree":"work 3","confidence":0.9}
+"review blues zoo pr" -> {"action":"agent-work","params":"","person":"Blue","project":"Zoo Game","worktree":"","confidence":0.9}
+"send this prompt to kpop work 2 tell her to polish the stage" -> {"action":"send-prompt","params":"tell her to polish the stage","person":"","project":"Kpop","worktree":"work 2","confidence":0.9}
+"tell arcade work won to rerun the build" -> {"action":"send-prompt","params":"rerun the build","person":"","project":"Arcade World","worktree":"work 1","confidence":0.85}
+"start a new toy store with the prompt restock the shelves" -> {"action":"launch-agent","params":"restock the shelves","person":"","project":"Toy Store","worktree":"","agent":"","confidence":0.9}
+"start a new arcade world agent to work on the leaderboard" -> {"action":"launch-agent","params":"the leaderboard","person":"","project":"Arcade World","worktree":"","agent":"","confidence":0.9}
+"launch a codex on high fire work 2" -> {"action":"launch-agent","params":"","person":"","project":"HyFire","worktree":"work 2","agent":"codex","confidence":0.9}
+"launch a codex on the kpop" -> {"action":"launch-agent","params":"","person":"","project":"Kpop","worktree":"","agent":"codex","confidence":0.9}
+"spin up a claude on the zoo" -> {"action":"launch-agent","params":"","person":"","project":"Zoo Game","worktree":"","agent":"claude","confidence":0.9}
+"show me greens open prs in arcade world" -> {"action":"query","params":"","person":"Green","project":"Arcade World","worktree":"","agent":"","confidence":0.9}
+
+In every example above the fields person/project/worktree/agent default to "" when absent. agent stays "" unless "claude" or "codex" was explicitly said — defaults are applied elsewhere.
+
+Respond ONLY with the JSON object.

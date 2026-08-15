@@ -523,6 +523,14 @@ voiceCommandService.setCommanderForwarder(sendToCommander);
 // orchestrator state, else the Commander agent — both spoken. This is what
 // makes voice an extension of Commander rather than a fixed phrasebook.
 const voiceBrainService = VoiceBrainService.getInstance({ logger });
+// The tier ladder: registry (spoken aliases -> canonical entities), tier-2
+// intent classifier (grammar-constrained tiny model), tier-2.5 query fetchers.
+const VoiceRegistryService = require('./voice/voiceRegistryService');
+const Tier2IntentService = require('./voice/tier2IntentService');
+const VoiceQueryService = require('./voice/voiceQueryService');
+const voiceRegistryService = VoiceRegistryService.getInstance({ logger });
+const tier2IntentService = Tier2IntentService.getInstance({ logger, registry: voiceRegistryService });
+const voiceQueryService = VoiceQueryService.getInstance({ logger, registry: voiceRegistryService });
 voiceBrainService.init({
   voiceCommandService,
   speechService,
@@ -532,7 +540,10 @@ voiceBrainService.init({
   commandRegistry,
   supervisorService,
   discordWatchService,
-  commanderForwarder: sendToCommander
+  commanderForwarder: sendToCommander,
+  voiceRegistryService,
+  tier2IntentService,
+  voiceQueryService
 });
 
 const loadPlugins = async () => {
