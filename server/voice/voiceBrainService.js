@@ -177,10 +177,8 @@ class VoiceBrainService {
     const hasRequestVerb = /\b(show|open|tell|give|create|start|stop|switch|run|make|find|set|pull|bring|list|check|fix|build|write|add|do)\b/.test(t);
     if (!hasRequestVerb
         && (/^(hi|hey|hello|yo|howdy|greetings|good (morning|afternoon|evening))\b|are you (there|awake|up|listening|around)|can you hear me|you (there|up)/.test(t))) {
-      const c = this.countSessions(ctx.sessions);
-      return c.total
-        ? `Yes, I'm here. ${c.busy} agent${c.busy === 1 ? '' : 's'} working right now. What do you need?`
-        : "Yes, I'm here and listening. What do you need?";
+      // A greeting gets a greeting — status only when asked for.
+      return "Yes, I'm here.";
     }
 
     return null;
