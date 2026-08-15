@@ -659,7 +659,7 @@ class VoiceBrainService {
       + `${liveBlock}\n\n`
       + 'TOOLS: when you need data or to act, reply with ONLY a tool call on one line: '
       + '<tool>{"name":"...","args":{...}}</tool> and nothing else. Available tools: '
-      + 'list_sessions{}, queue{}, prs{person?,project?}, run_command{command,params}. '
+      + 'list_sessions{}, queue{}, prs{person?,project?}, repo_info{project} (looks up what a project IS - repo, language, docs), run_command{command,params}. '
       + `run_command accepts: ${this.safeCommands().slice(0, 40).join(', ')}. `
       + '(focus-worktree wants {worktreeId}, set-workflow-mode wants {mode}.) '
       + 'You will get the result back and can then answer in speech. Use a tool instead of saying you cannot check something.\n\n'
@@ -682,6 +682,31 @@ class VoiceBrainService {
       if (name === 'prs') {
         const answer = await this.deps.voiceQueryService?.answer?.('open prs', { person: args.person || '', project: args.project || '' }, ctx);
         return answer || 'no PR data available';
+      }
+      if (name === 'repo_info') {
+        const reg = this.deps.voiceRegistryService?.load?.() || {};
+        const wanted = String(args.project || '').toLowerCase();
+        const entry = [...(reg.projects || []), ...(reg.products || [])]
+          .find((p) => p.name?.toLowerCase() === wanted
+            || (p.aliases || []).some((a) => a.toLowerCase() === wanted));
+        if (!entry?.repo) return `no repo known for ${args.project}`;
+        const { execFile } = require('child_process');
+        const gh = await new Promise((resolve) => {
+          execFile('gh', ['api', `repos/${entry.repo}`, '--jq', '{description,language,topics} | tostring'],
+            { timeout: 6000 }, (err, out) => resolve(err ? null : out.trim()));
+        });
+        let localDoc = '';
+        try {
+          const fs = require('fs');
+          const os = require('os');
+          const base = String(entry.path || '').replace(/^~(?=\/|$)/, os.homedir());
+          for (const f of ['CLAUDE.md', 'README.md', 'master/CLAUDE.md', 'master/README.md']) {
+            const p = require('path').join(base, f);
+            if (base && fs.existsSync(p)) { localDoc = fs.readFileSync(p, 'utf8').slice(0, 900); break; }
+          }
+        } catch { /* optional */ }
+        return [`repo ${entry.repo}`, gh ? `github: ${gh}` : '', localDoc ? `docs excerpt: ${localDoc}` : '']
+          .filter(Boolean).join('\n');
       }
       if (name === 'run_command') {
         const cmd = String(args.command || '');
