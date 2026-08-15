@@ -113,7 +113,7 @@ class VoiceRegistryService {
     if (reg.projects?.length) {
       lines.push('PROJECTS:');
       for (const p of reg.projects) {
-        lines.push(`- ${p.name}: ${p.desc || p.$comment || ''}${p.repo ? ` [repo ${p.repo}]` : ''}`);
+        lines.push(`- ${p.name}: ${p.desc || p.$comment || ''}${p.repo ? ` [repo ${p.repo}]` : ''}${Array.isArray(p.team) && p.team.length ? ` (team: ${p.team.join(', ')})` : ''}`);
       }
     }
     if (reg.products?.length) {
