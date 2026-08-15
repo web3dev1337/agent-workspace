@@ -491,3 +491,45 @@ describe('StatusDetector', () => {
     });
   });
 });
+
+describe('StatusDetector Claude Code v2 TUI', () => {
+  let detector;
+  const sessionId = 'v2-session';
+
+  beforeEach(() => {
+    detector = new StatusDetector();
+    const state = detector.getState(sessionId);
+    state.lastOutputTime = Date.now(); // v2 redraws constantly, output is always recent
+    state.lastBufferLength = 0;
+  });
+
+  afterEach(() => detector.reset());
+
+  const idleV2Buffer = [
+    'nemenulooks howyouwant.(disablerecapsin/config)',
+    '─────────────────────────────',
+    '❯ ',
+    '─────────────────────────────',
+    ' ⚠️84%(200K)|⏱plan?|🔧restrained-stage-bloom|📁work5|🧠Fable5',
+    '⏵⏵bypasspermissionson (shift+tabtocycle)·←1agent'
+  ].join('\n');
+
+  it('idle v2 prompt with constantly-refreshing statusline is waiting, not busy', () => {
+    expect(detector.detectStatus(sessionId, idleV2Buffer)).toBe('waiting');
+  });
+
+  it('a running turn (esc to interrupt) is busy even with the prompt visible', () => {
+    const busy = idleV2Buffer + '\n✻ Slithering… (esc to interrupt)';
+    expect(detector.detectStatus(sessionId, busy)).toBe('busy');
+  });
+
+  it('space-collapsed esc-to-interrupt still detected', () => {
+    const busy = idleV2Buffer + '\n✻Slithering…(esctointerrupt)';
+    expect(detector.detectStatus(sessionId, busy)).toBe('busy');
+  });
+
+  it('idle v2 prompt with stale tool bullets in scrollback is still waiting', () => {
+    const buffer = '● Bash(ls)\n⎿ file.txt\n' + idleV2Buffer;
+    expect(detector.detectStatus(sessionId, buffer)).toBe('waiting');
+  });
+});
