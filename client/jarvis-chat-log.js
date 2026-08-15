@@ -17,6 +17,10 @@
       <button class="jcl-toggle" title="collapse">–</button>
     </div>
     <div class="jcl-messages"></div>
+    <form class="jcl-inputrow">
+      <input class="jcl-input" type="text" placeholder="Type to JARVIS… (same brain as voice)" autocomplete="off" />
+      <button class="jcl-send" type="submit">Send</button>
+    </form>
   `;
   const style = document.createElement('style');
   style.textContent = `
@@ -40,7 +44,12 @@
     #jarvis-chat-log .jcl-status { color: #9fb0c3; font-size: 0.75rem; align-self: center;
       background: none; padding: 0.1rem 0; }
     #jarvis-chat-log .jcl-meta { display: block; margin-top: 0.2rem; font-size: 0.7rem; color: #9fb0c3; }
-    #jarvis-chat-log.jcl-collapsed .jcl-messages { display: none; }
+    #jarvis-chat-log .jcl-inputrow { display: flex; gap: 0.4rem; padding: 0.5rem; border-top: 1px solid #2a3444; }
+    #jarvis-chat-log .jcl-input { flex: 1; background: #0d1117; border: 1px solid #2a3444; border-radius: 0.45rem;
+      color: #fff; padding: 0.4rem 0.6rem; font: inherit; }
+    #jarvis-chat-log .jcl-send { background: #5cc8ff; color: #00131f; border: none; border-radius: 0.45rem;
+      padding: 0.4rem 0.8rem; font-weight: 700; cursor: pointer; }
+    #jarvis-chat-log.jcl-collapsed .jcl-messages, #jarvis-chat-log.jcl-collapsed .jcl-inputrow { display: none; }
     #jarvis-chat-log.jcl-collapsed { max-height: none; width: auto; }
   `;
   document.head.appendChild(style);
@@ -123,6 +132,32 @@
       clearInterval(adoptTimer);
     }
   }, 700);
+
+  // Typed input goes through the exact same ladder as speech.
+  const form = root.querySelector('.jcl-inputrow');
+  const input = root.querySelector('.jcl-input');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    add('me', text, 'typed');
+    state.lastUserAt = Date.now();
+    add('status', 'thinking…');
+    try {
+      const r = await fetch('/api/voice/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: text })
+      });
+      const d = await r.json();
+      if (d.success) add('status', `✓ ${d.method || 'done'}`);
+      else add('status', `✗ ${d.error || 'not recognized'}`);
+      // The spoken reply arrives via the speech socket events and is logged there.
+    } catch (err) {
+      add('status', `✗ ${err.message}`);
+    }
+  });
 
   window.jarvisChatLog = { add };
 })();
