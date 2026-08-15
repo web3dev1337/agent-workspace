@@ -649,6 +649,8 @@ class VoiceBrainService {
       const text = String(data?.message?.content || '').trim();
       return text ? text.slice(0, 360) : null;
     } catch {
+      // Timeouts/aborts are exactly what the breaker exists for.
+      trip('ollama');
       return null;
     }
   }
