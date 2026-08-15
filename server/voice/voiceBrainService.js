@@ -601,31 +601,94 @@ class VoiceBrainService {
         this._chatDoc = fs.readFileSync(docPath, 'utf8').slice(0, 20000);
       } catch { /* doc optional — framing below still applies */ }
     }
-    const sessions = Array.isArray(ctx.sessions) ? ctx.sessions.length : 0;
+    const sessions = Array.isArray(ctx.sessions) ? ctx.sessions : [];
+    const sessionLines = sessions.slice(0, 10)
+      .map((s) => `  - ${s.sessionId || s.id}: ${s.status || 'active'}${s.branch ? ` (${s.branch})` : ''}`).join('\n') || '  none';
+    const workspaces = (ctx.workspaces || []).join(', ') || 'none';
+    const queue = (Array.isArray(ctx.queue) ? ctx.queue : []).slice(0, 5)
+      .map((q) => q?.title || q?.id).filter(Boolean).join('; ') || 'empty';
+    const liveBlock = `LIVE STATE RIGHT NOW:\n- workspaces: ${workspaces}\n- active workspace: ${ctx.workspace || 'none'}\n- sessions:\n${sessionLines}\n- queue: ${queue}`;
     return 'You are JARVIS, the spoken voice interface of the Claude Orchestrator. '
       + 'You are talking OUT LOUD with the operator, so reply in one or two short '
       + 'conversational sentences of plain prose — no markdown, no lists, no code. '
       + 'You know the system intimately; the reference below describes the Commander '
       + 'API and orchestrator you front. You cannot execute anything yourself — actions '
       + 'are handled by other lanes — so answer questions, advise, and converse.\n\n'
-      + `Live state right now: ${sessions} active agent sessions.\n\n`
+      + `${liveBlock}\n\n`
+      + 'TOOLS: when you need data or to act, reply with ONLY a tool call on one line: '
+      + '<tool>{"name":"...","args":{...}}</tool> and nothing else. Available tools: '
+      + 'list_sessions{}, queue{}, prs{person?,project?}, run_command{command,params} '
+      + '(commands: open-queue, open-tasks, focus-worktree{worktreeId}, show-all-worktrees, set-workflow-mode{mode}). '
+      + 'You will get the result back and can then answer in speech. Use a tool instead of saying you cannot check something.\n\n'
       + (this._chatDoc ? `--- ORCHESTRATOR REFERENCE ---\n${this._chatDoc}` : '');
   }
 
+  async runVoiceTool(call, ctx) {
+    const name = String(call?.name || '');
+    const args = call?.args || {};
+    try {
+      if (name === 'list_sessions') {
+        const s = (Array.isArray(ctx.sessions) ? ctx.sessions : [])
+          .map((x) => `${x.sessionId || x.id}: ${x.status || 'active'}`).join('; ');
+        return s || 'no sessions';
+      }
+      if (name === 'queue') {
+        const q = (Array.isArray(ctx.queue) ? ctx.queue : []).map((x) => x?.title || x?.id).filter(Boolean);
+        return q.length ? q.join('; ') : 'queue is empty';
+      }
+      if (name === 'prs') {
+        const answer = await this.deps.voiceQueryService?.answer?.('open prs', { person: args.person || '', project: args.project || '' }, ctx);
+        return answer || 'no PR data available';
+      }
+      if (name === 'run_command') {
+        const cmd = String(args.command || '');
+        const allowed = ['open-queue', 'open-tasks', 'focus-worktree', 'show-all-worktrees', 'set-workflow-mode'];
+        if (!allowed.includes(cmd)) return `command ${cmd} is not in the allowed set`;
+        await this.deps.voiceCommandService?.executeCommand?.(cmd, args.params || {});
+        return `done: ${cmd}`;
+      }
+      return `unknown tool ${name}`;
+    } catch (error) {
+      return `tool failed: ${error.message}`;
+    }
+  }
+
+  parseToolCall(text) {
+    const m = String(text || '').match(/<tool>\s*({[\s\S]*?})\s*<\/tool>/);
+    if (!m) return null;
+    try { return JSON.parse(m[1]); } catch { return null; }
+  }
+
   async chatLocally(transcript, ctx = {}) {
-    // Circuit breaker: a dead endpoint costs one timeout, then stays skipped
-    // for 60s — without this, chat+query lanes could stack multi-timeout
-    // waits before the Commander fallback.
-    this._chatBreaker = this._chatBreaker || {};
-    const tripped = (k) => this._chatBreaker[k] && Date.now() - this._chatBreaker[k] < 60_000;
-    const trip = (k) => { this._chatBreaker[k] = Date.now(); };
-    // Best local brain first (OpenAI-compatible, e.g. Qwen on 18866), Ollama
-    // as the fallback when it is down.
-    const openaiUrl = String(process.env.VOICE_CHAT_URL || 'http://127.0.0.1:18866/v1').replace(/\/$/, '');
     const messages = [
       { role: 'system', content: this.chatSystemPrompt(ctx) },
       { role: 'user', content: String(transcript || '').trim() }
     ];
+    return this.chatWithTools(messages, ctx, 0);
+  }
+
+  async chatWithTools(messages, ctx, depth) {
+    const reply = await this.chatCompletion(messages);
+    if (!reply) return null;
+    const call = this.parseToolCall(reply);
+    // One tool round max — voice needs answers, not agent loops.
+    if (call && depth < 1) {
+      const result = await this.runVoiceTool(call, ctx);
+      this.logger.info?.('voice tool used', { tool: call.name, result: String(result).slice(0, 120) });
+      return this.chatWithTools([...messages,
+        { role: 'assistant', content: reply },
+        { role: 'user', content: `TOOL RESULT: ${result}\nNow answer in one or two spoken sentences (no tool calls).` }
+      ], ctx, depth + 1);
+    }
+    // Never speak a raw tool call.
+    return call ? null : reply;
+  }
+
+  async chatCompletion(messages) {
+    this._chatBreaker = this._chatBreaker || {};
+    const tripped = (k) => this._chatBreaker[k] && Date.now() - this._chatBreaker[k] < 60_000;
+    const trip = (k) => { this._chatBreaker[k] = Date.now(); };
+    const openaiUrl = String(process.env.VOICE_CHAT_URL || 'http://127.0.0.1:18866/v1').replace(/\/$/, '');
     if (!tripped('openai')) {
       try {
         const resp = await fetch(`${openaiUrl}/chat/completions`, {
