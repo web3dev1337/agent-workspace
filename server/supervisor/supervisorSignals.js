@@ -19,45 +19,19 @@ function lastNonEmptyLines(text, count) {
 }
 
 /**
- * Terminal UI chrome the agent CLI repaints on every redraw: prompt echoes,
- * separator rules, the status/footer bar. These lines repeat in the scrollback
- * of a perfectly healthy idle session, so they must never count as "looping".
- */
-const CHROME_LINE_PATTERNS = [
-  /^[─═━╌╍\-_=\s]+$/,
-  /^❯/,
-  /^[⏵○✻⚠📊※⎿]/u,
-  /^\W*\d+%\s*\(/,
-  /bypass permissions on/i,
-  /shift\+tab to cycle/i,
-  /Transcript saving is off/i,
-  /^✘\s*Auto-update failed/i
-];
-
-function isChromeLine(line) {
-  return CHROME_LINE_PATTERNS.some((re) => re.test(line));
-}
-
-/**
- * The most-repeated non-chrome line in the tail and how often it appears.
- * A high count is the cheapest reliable "this agent is looping" signal there is
- * — but only for real output lines; redrawn UI chrome is excluded.
+ * How many times the most-repeated line appears in the tail. A high count is
+ * the cheapest reliable "this agent is looping" signal there is.
  */
 function maxLineRepeat(text, { window = 40, minLength = 12 } = {}) {
   const counts = new Map();
   let max = 0;
-  let maxLine = '';
   for (const line of lastNonEmptyLines(text, window)) {
     if (line.length < minLength) continue;
-    if (isChromeLine(line)) continue;
     const next = (counts.get(line) || 0) + 1;
     counts.set(line, next);
-    if (next > max) {
-      max = next;
-      maxLine = line;
-    }
+    if (next > max) max = next;
   }
-  return { count: max, line: maxLine };
+  return max;
 }
 
 /**
@@ -214,7 +188,6 @@ async function gatherSignals({
     const buffer = String(session.buffer || '');
     const quietSeconds = quietTracker ? quietTracker.observe(id, buffer.length) : 0;
     const tail = stripControlSequences(buffer.slice(-TAIL_CHARS));
-    const repeat = maxLineRepeat(tail);
 
     const workspaceId = String(session.workspace || '').trim();
     const recovery = workspaceId ? sessionRecoveryService?.getSession?.(workspaceId, id) : null;
@@ -242,8 +215,7 @@ async function gatherSignals({
       quietSeconds,
       tail,
       lastLine: lastNonEmptyLines(tail, 1)[0] || '',
-      repeatedLineCount: repeat.count,
-      repeatedLine: repeat.line,
+      repeatedLineCount: maxLineRepeat(tail),
       git,
       tier: Number.isFinite(Number(record?.tier)) ? Number(record.tier) : null,
       ticketTitle: record?.ticketTitle || null
