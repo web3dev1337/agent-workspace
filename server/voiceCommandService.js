@@ -290,8 +290,10 @@ class VoiceCommandService {
       // Queue: prev item
       {
         patterns: [
+          // Anchored: "go back to the fresh start workspace" is a workspace
+          // switch, not queue navigation. Only the bare phrase navigates.
           /^(?:prev|previous)(?:\s+(?:item|one|pr))?$/i,
-          /go\s+back/i,
+          /^(?:o|go)\s+back$/i,
         ],
         command: 'queue-prev',
         extractParams: () => ({})
