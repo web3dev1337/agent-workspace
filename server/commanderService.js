@@ -149,8 +149,12 @@ function seedCommanderInstructionsIfNeeded() {
   writeFromTemplateOrFallback('AGENTS.md');
 }
 
+const MAX_COMMANDER_INSTANCES = 6;
+
 class CommanderService {
   constructor(options = {}) {
+    this.instanceId = options.instanceId || 'main';
+    this.label = options.label || (this.instanceId === 'main' ? 'Commander 1' : this.instanceId);
     this.io = options.io;
     this.sessionManager = options.sessionManager;
     this.session = null;
@@ -164,8 +168,49 @@ class CommanderService {
   static getInstance(options) {
     if (!CommanderService.instance) {
       CommanderService.instance = new CommanderService(options);
+      CommanderService.instances.set('main', CommanderService.instance);
     }
     return CommanderService.instance;
+  }
+
+  // Additional Commander instances (panel tabs). 'main' is always the
+  // singleton above so existing callers keep their exact behavior.
+  static forInstance(instanceId, options) {
+    const id = String(instanceId || 'main').trim() || 'main';
+    if (id === 'main') return CommanderService.getInstance(options);
+    return CommanderService.instances.get(id) || null;
+  }
+
+  static createInstance(options) {
+    if (CommanderService.instances.size >= MAX_COMMANDER_INSTANCES) {
+      return { error: `Instance limit reached (${MAX_COMMANDER_INSTANCES})` };
+    }
+    let n = 2;
+    while (CommanderService.instances.has(`cmd-${n}`)) n += 1;
+    const id = `cmd-${n}`;
+    const service = new CommanderService({ ...options, instanceId: id, label: `Commander ${n}` });
+    CommanderService.instances.set(id, service);
+    return { id, service };
+  }
+
+  static async removeInstance(instanceId) {
+    const id = String(instanceId || '').trim();
+    if (!id || id === 'main') return { error: 'Cannot remove the main Commander' };
+    const service = CommanderService.instances.get(id);
+    if (!service) return { error: 'Unknown instance' };
+    try { await service.stop(); } catch { /* best effort */ }
+    CommanderService.instances.delete(id);
+    return { ok: true };
+  }
+
+  static listInstances() {
+    return Array.from(CommanderService.instances.entries()).map(([id, s]) => ({
+      id,
+      label: s.label || id,
+      running: !!s.session,
+      ready: !!s.isReady,
+      claudeStarted: !!s.claudeStarted
+    }));
   }
 
   /**
@@ -202,14 +247,20 @@ class CommanderService {
         ? buildPowerShellArgs(null, { keepOpen: true, hideWindow: false })
         : [];
 
+      const instanceEnv = {
+        COMMANDER_INSTANCE_ID: this.instanceId,
+        COMMANDER_INSTANCE_LABEL: this.label || this.instanceId
+      };
       const env = process.platform === 'win32'
         ? augmentProcessEnv({
             ...process.env,
+            ...instanceEnv,
             HOME: HOME_DIR,
             TERM: 'xterm-color'
           })
         : {
             ...process.env,
+            ...instanceEnv,
             PATH: `${HOME_DIR}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
             HOME: HOME_DIR,
             TERM: 'xterm-color'
@@ -249,7 +300,7 @@ class CommanderService {
 
         // Emit to Commander panel
         if (this.io) {
-          this.io.emit('commander-output', { data });
+          this.io.emit('commander-output', { data, instanceId: this.instanceId });
         }
 
         // Detect when shell is ready
@@ -278,7 +329,7 @@ class CommanderService {
         this.claudeStarted = false; // Reset for next start
         this.resetClaudeLaunchState();
         if (this.io) {
-          this.io.emit('commander-exit', { exitCode });
+          this.io.emit('commander-exit', { exitCode, instanceId: this.instanceId });
         }
       });
 
@@ -713,5 +764,7 @@ class CommanderService {
     return true;
   }
 }
+
+CommanderService.instances = new Map();
 
 module.exports = { CommanderService, isCommanderCwdTrusted };

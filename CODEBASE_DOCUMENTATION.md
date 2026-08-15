@@ -137,6 +137,8 @@ server/portRegistry.js             - Port assignment + live service scanner (`/a
 ├─ Windows scan path: uses hidden `netstat`/`tasklist` probes so packaged Tauri builds do not flash console windows when Ports/Dashboard panels refresh
 └─ UI metadata: labels orchestrator-assigned ports, known dev servers, and custom user labels
 server/commanderService.js         - Top-level Commander PTY (Claude/Codex) + launch buffering
+├─ Multi-instance: panel tabs (`main` + `cmd-2..cmd-6`, cap 6) via static registry; `GET/POST /api/commander/instances`, `PATCH/DELETE /api/commander/instances/:id`; PTY routes take `?instance=`
+├─ Identity env: each PTY gets COMMANDER_INSTANCE_ID / COMMANDER_INSTANCE_LABEL so a Commander can find + rename itself
 ├─ Packaged CWD: uses `ORCHESTRATOR_DATA_DIR/commander` so desktop users can edit `CLAUDE.md` / `AGENTS.md` safely
 └─ First-run seed: copies the packaged `docs/COMMANDER_CLAUDE.md` into the Commander data directory when missing
 scripts/tauri/prepare-backend-resources.js - Tauri backend packager

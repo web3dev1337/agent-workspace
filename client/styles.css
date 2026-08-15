@@ -16040,3 +16040,60 @@ body.dependency-onboarding-active #dependency-setup-modal {
   align-self: center;
   cursor: help;
 }
+
+/* Commander tab bar (multiple Commander instances) */
+.commander-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px 0 6px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  overflow-x: auto;
+}
+
+.commander-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.commander-tab:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
+}
+
+.commander-tab.active {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+}
+
+.commander-tab-label[contenteditable="true"] {
+  outline: 1px solid var(--accent-primary);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.commander-tab-close {
+  opacity: 0.5;
+  padding: 0 2px;
+}
+
+.commander-tab-close:hover {
+  opacity: 1;
+}
+
+.commander-tab-add {
+  font-weight: 700;
+  padding: 3px 8px;
+}

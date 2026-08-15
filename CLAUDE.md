@@ -301,6 +301,22 @@ PORT=$(grep ORCHESTRATOR_PORT .env | cut -d= -f2)
 
 **All `curl` examples in this file use `$PORT`.** Never assume 3000 or 4000.
 
+### Multiple Commanders (panel tabs)
+
+There can be SEVERAL Commander instances at once (panel tabs: "Commander 1" =
+`main`, plus `cmd-2`..`cmd-6`). Know which one you are and address others:
+
+- **Your identity**: `echo $COMMANDER_INSTANCE_ID` (`main`, `cmd-2`, ...); your
+  current tab label is in `$COMMANDER_INSTANCE_LABEL` (snapshot from launch).
+- **Rename yourself** (e.g. to reflect what you're working on):
+  `curl -sS -X PATCH http://localhost:$PORT/api/commander/instances/$COMMANDER_INSTANCE_ID -H 'Content-Type: application/json' -d '{"label":"Deploys"}'`
+- **List instances**: `GET /api/commander/instances` → `{"instances":[{id,label,running,ready,claudeStarted}]}`
+- **Create / remove**: `POST /api/commander/instances` (returns `{id}`),
+  `DELETE /api/commander/instances/:id` (`main` cannot be removed).
+- Instance-scoped PTY endpoints take `?instance=<id>` (status/start/start-claude/
+  input/resize/stop/restart/output/clear). No param = `main`, so existing
+  automation keeps working untouched.
+
 ### What Commander Can Do
 1. **View All Sessions**: See all active Claude sessions across all workspaces
    - API: `GET /api/commander/sessions`
