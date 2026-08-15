@@ -640,8 +640,9 @@ class VoiceBrainService {
       + `${liveBlock}\n\n`
       + 'TOOLS: when you need data or to act, reply with ONLY a tool call on one line: '
       + '<tool>{"name":"...","args":{...}}</tool> and nothing else. Available tools: '
-      + 'list_sessions{}, queue{}, prs{person?,project?}, run_command{command,params} '
-      + '(commands: open-queue, open-tasks, focus-worktree{worktreeId}, show-all-worktrees, set-workflow-mode{mode}). '
+      + 'list_sessions{}, queue{}, prs{person?,project?}, run_command{command,params}. '
+      + `run_command accepts: ${this.safeCommands().slice(0, 40).join(', ')}. `
+      + '(focus-worktree wants {worktreeId}, set-workflow-mode wants {mode}.) '
       + 'You will get the result back and can then answer in speech. Use a tool instead of saying you cannot check something.\n\n'
       + (this._chatDoc ? `--- ORCHESTRATOR REFERENCE ---\n${this._chatDoc}` : '');
   }
@@ -665,8 +666,9 @@ class VoiceBrainService {
       }
       if (name === 'run_command') {
         const cmd = String(args.command || '');
-        const allowed = ['open-queue', 'open-tasks', 'focus-worktree', 'show-all-worktrees', 'set-workflow-mode'];
-        if (!allowed.includes(cmd)) return `command ${cmd} is not in the allowed set`;
+        // Every registry command EXCEPT destructive-sounding ones. Derived
+        // live, so new commands become voice-runnable without code changes.
+        if (!this.safeCommands().includes(cmd)) return `command ${cmd} is not allowed from the chat lane`;
         await this.deps.voiceCommandService?.executeCommand?.(cmd, args.params || {});
         return `done: ${cmd}`;
       }
@@ -674,6 +676,13 @@ class VoiceBrainService {
     } catch (error) {
       return `tool failed: ${error.message}`;
     }
+  }
+
+  safeCommands() {
+    const all = (this.deps.voiceCommandService?.getVoiceCommands?.() || []).map((c) => c.command);
+    const destructive = new RegExp(this.feedbackPolicy()?.destructivePattern
+      || 'kill|remove|delete|stop|deploy|merge|wipe|drop', 'i');
+    return [...new Set(all)].filter((c) => c && !destructive.test(c.replace(/-/g, ' ')));
   }
 
   parseToolCall(text) {
