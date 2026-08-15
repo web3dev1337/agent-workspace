@@ -1,0 +1,3 @@
+- [x] Investigate existing services (statusDetector, activityFeed, task-records, gh PR cache, multi-Commander)
+- [x] Write PLANS/2026-08-15/VOICE_TIERED_ARCHITECTURE.md
+- [ ] P1: tier-2 context injection (next PR, jarvis branch)
