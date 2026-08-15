@@ -103,6 +103,28 @@ class VoiceRegistryService {
     return { launchAgent: 'claude', launchEffort: 'low', reviewAgent: 'codex', ...this.load().defaults };
   }
 
+  /** Rich listing for the tier-3 chat brain: who and what everything IS. */
+  knowledgeBlock() {
+    const reg = this.load();
+    const lines = [];
+    if (reg.people?.length) {
+      lines.push('PEOPLE (teammates): ' + reg.people.map((p) => `${p.name} (github ${p.github})`).join('; '));
+    }
+    if (reg.projects?.length) {
+      lines.push('PROJECTS:');
+      for (const p of reg.projects) {
+        lines.push(`- ${p.name}: ${p.desc || p.$comment || ''}${p.repo ? ` [repo ${p.repo}]` : ''}`);
+      }
+    }
+    if (reg.products?.length) {
+      lines.push('GAMES/PRODUCTS (spoken name -> where they live):');
+      for (const p of reg.products) {
+        lines.push(`- ${p.name}: in ${p.repo}${p.subpath ? ` under ${p.subpath}` : ''}`);
+      }
+    }
+    return lines.join('\n');
+  }
+
   /** Compact prompt-ready listing for the tier-2 model. */
   promptBlock() {
     const reg = this.load();

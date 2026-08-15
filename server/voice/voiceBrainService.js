@@ -648,7 +648,8 @@ class VoiceBrainService {
     const workspaces = (ctx.workspaces || []).join(', ') || 'none';
     const queue = (Array.isArray(ctx.queue) ? ctx.queue : []).slice(0, 5)
       .map((q) => q?.title || q?.id).filter(Boolean).join('; ') || 'empty';
-    const liveBlock = `LIVE STATE RIGHT NOW:\n- workspaces: ${workspaces}\n- active workspace: ${ctx.workspace || 'none'}\n- sessions:\n${sessionLines}\n- queue: ${queue}`;
+    const registryBlock = this.deps.voiceRegistryService?.knowledgeBlock?.() || '';
+    const liveBlock = `${registryBlock}\n\nLIVE STATE RIGHT NOW:\n- workspaces: ${workspaces}\n- active workspace: ${ctx.workspace || 'none'}\n- sessions:\n${sessionLines}\n- queue: ${queue}`;
     return 'You are JARVIS, the spoken voice interface of the Claude Orchestrator. '
       + 'You are talking OUT LOUD with the operator, so reply in one or two short '
       + 'conversational sentences of plain prose — no markdown, no lists, no code. '
