@@ -96,6 +96,9 @@ server/utils/pathUtils.js          - Shared slash-normalization + data-directory
 server/pullRequestService.js       - `gh`-backed PR search/view/merge/review wrapper
 ├─ Search cache: 30s TTL + in-flight coalescing for `gh search prs` (shared by /api/prs, /api/process/tasks, /api/process/distribution); bypass with `?refresh=1`
 └─ Invalidation: local merge/review actions clear the cache so the UI reflects them immediately
+server/usageLimitsService.js       - Plan-usage limits for the header widget
+├─ Claude: reads `~/.local/state/ai-usage-monitor/claude-live.json` (tapped by the user's Claude Code status line)
+└─ Codex: runs `~/.codex/scripts/codex_usage.py` (official app-server helper), 5min cache, text parsed defensively
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
@@ -296,6 +299,8 @@ client/styles/tabs.css             - Tab bar styling
 └─ Responsive: Mobile and desktop layouts
 
 client/styles/projects-board.css   - Projects Board modal styling
+
+client/usage-limits-widget.js      - Header chip (right of Ports) showing Claude/Codex plan usage + reset countdowns from `/api/usage/limits`
 
 client/plugin-host.js              - Client plugin runtime for UI slots/actions
 ├─ Loads: `/api/plugins/client-surface` slot actions with cache/refresh support
@@ -642,6 +647,7 @@ POST /api/greenfield/detect-category - Infer category from description (taxonomy
 GET /api/setup-actions            - List Windows dependency-onboarding actions
 GET /api/setup-actions/state      - Read persisted dependency-onboarding state (completed/dismissed/current step)
 PUT /api/setup-actions/state      - Persist dependency-onboarding state into app data for desktop restarts
+GET /api/usage/limits             - Claude 5h/7d + Codex plan-usage percentages and reset times (refresh=1 bypasses Codex cache)
 GET /api/user-settings            - Get user preferences
 PUT /api/user-settings            - Update user preferences
 

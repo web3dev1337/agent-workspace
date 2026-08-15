@@ -105,6 +105,7 @@ const { WorkspaceManager } = require('./workspaceManager');
 const { WorktreeHelper } = require('./worktreeHelper');
 const AgentManager = require('./agentManager');
 const { PortRegistry } = require('./portRegistry');
+const { UsageLimitsService } = require('./usageLimitsService');
 const { GreenfieldService } = require('./greenfieldService');
 const { ProjectTypeService } = require('./projectTypeService');
 const { ContinuityService } = require('./continuityService');
@@ -4586,6 +4587,18 @@ app.post('/api/setup-actions/open-url', requirePolicyAction('write'), express.js
 });
 
 // Port registry API endpoints
+// Plan-usage limits for the header widget (Claude 5h/7d from the status-line
+// tap file, Codex windows from the official app-server helper).
+app.get('/api/usage/limits', async (req, res) => {
+  try {
+    const usageLimitsService = UsageLimitsService.getInstance();
+    const result = await usageLimitsService.getLimits({ refresh: req.query.refresh === '1' });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/ports', (req, res) => {
   try {
     const assignments = portRegistry.getAllAssignments();

@@ -16023,3 +16023,20 @@ body.dependency-onboarding-active #dependency-setup-modal {
     grid-template-columns: 1fr;
   }
 }
+
+/* Header plan-usage widget: reference info, deliberately muted. */
+.usage-limits-widget {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  margin-left: var(--space-sm);
+  background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  cursor: help;
+}
