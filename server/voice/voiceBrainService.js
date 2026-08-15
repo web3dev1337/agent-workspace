@@ -135,8 +135,10 @@ class VoiceBrainService {
       return null;
     }
 
-    // Thanks / acknowledgement — a quick reply, never a Commander job.
-    if (/^(thanks|thank you|thankyou|cheers|ta|much appreciated|nice one|good (job|work|stuff)|awesome|great|cool|ok|okay|kk|got it|sounds good|perfect|no worries)\b/.test(t)) {
+    // Thanks / acknowledgement — a quick reply, never a Commander job. Only
+    // SHORT pure acks: "ok can you open the workspace" is a request, not thanks.
+    if (t.split(/\s+/).length <= 3
+        && /^(thanks|thank you|thankyou|cheers|ta|much appreciated|nice one|good (job|work|stuff)|awesome|great|cool|ok|okay|kk|got it|sounds good|perfect|no worries)\b/.test(t)) {
       return this.say('thanks', {}, "You're welcome.");
     }
 
@@ -399,6 +401,7 @@ class VoiceBrainService {
   }
 
   tier2Snapshot(ctx) {
+    const names = Array.isArray(ctx?.workspaces) ? ctx.workspaces : [];
     const sessions = Array.isArray(ctx?.sessions) ? ctx.sessions : [];
     const worktrees = sessions
       .map((s) => `${s.worktreeId || s.id || 'unknown'} (${s.status || 'active'})`)
@@ -406,6 +409,7 @@ class VoiceBrainService {
       .join(', ');
     return {
       workspace: ctx?.workspace?.name || ctx?.workspace || 'none',
+      workspaceNames: names.join('|'),
       worktrees: worktrees || 'none',
       sessions: sessions.length
     };
@@ -500,7 +504,8 @@ class VoiceBrainService {
     }
     const paramMap = {
       'focus-worktree': { worktreeId: cls.worktree || cls.params },
-      'set-workflow-mode': { mode: cls.params }
+      'set-workflow-mode': { mode: cls.params },
+      'switch-workspace': { name: cls.params }
     };
 
     if (cls.action === 'catch-me-up') {

@@ -67,7 +67,7 @@ class Tier2IntentService {
 
   commands() {
     return ['open-queue', 'open-tasks', 'focus-worktree', 'show-all-worktrees',
-      'set-workflow-mode', 'catch-me-up', 'send-prompt', 'launch-agent'];
+      'set-workflow-mode', 'catch-me-up', 'send-prompt', 'launch-agent', 'switch-workspace'];
   }
 
   schema() {
@@ -191,14 +191,14 @@ class Tier2IntentService {
       return null;
     }
 
-    const result = this.applyGuards(utt, parsed);
+    const result = this.applyGuards(utt, parsed, snapshot);
     result.latencyMs = Date.now() - t0;
     this.harvest(utt, result);
     return result;
   }
 
   /** The deterministic layer — regex and registry beat model output. */
-  applyGuards(utt, j) {
+  applyGuards(utt, j, snapshot = null) {
     const low = utt.toLowerCase();
     let action = String(j.action || '');
     let params = String(j.params || '');
@@ -251,6 +251,22 @@ class Tier2IntentService {
     // Meta questions about the assistant's own prompt/instructions belong to
     // the chat brain (which refuses gracefully), not to any command.
     if (/system prompt|your instructions|your prompt\b/.test(low)) action = 'chat';
+    // Workspace names are live entities: "open the fresh start workspace" /
+    // "switch to zoo shrimp" must resolve against the actual workspace list.
+    const wsNames = String(snapshot?.workspaceNames || '').split('|').filter(Boolean);
+    const wsHit = wsNames
+      .filter((n) => {
+        const full = n.toLowerCase();
+        const words = full.split(/\s+/);
+        // full name, or its first two words ("zoo shrimp" -> Zoo Shrimp Game)
+        return low.includes(full) || (words.length >= 2 && low.includes(words.slice(0, 2).join(' ')));
+      })
+      .sort((a, b) => b.length - a.length)[0];
+    if (wsHit && /\b(open|switch|go to|goto|load|bring up)\b/.test(low)
+        && !/\bwork\s*(tree)?\s*\d/.test(low)) {
+      action = 'switch-workspace';
+      params = wsHit;
+    }
     // Homophone: "cue" is the queue.
     if (/\bcue\b/.test(low) && action === 'open-tasks') action = 'open-queue';
 
