@@ -60,6 +60,7 @@ class VoiceBrainService {
       }) || {};
       ctx.sessions = snap.computed?.sessions || [];
       ctx.workspace = snap.computed?.activeWorkspace?.name || null;
+      ctx.workspaces = (snap.computed?.workspaces || []).map((w) => w?.name || w?.id).filter(Boolean);
       ctx.queue = snap.context?.queueSummary || [];
       ctx.capabilities = snap.computed?.capabilitiesSummary?.commandCount || 0;
     } catch (error) {
@@ -148,7 +149,14 @@ class VoiceBrainService {
       return `${items.length} thing${items.length === 1 ? '' : 's'} asked for but not started. Most urgent: ${String(first?.summary || first?.text || '').slice(0, 120)}.`;
     }
 
-    // Which workspace
+    // Which workspaces exist / which one is open
+    if (/what\s+workspaces|which workspaces|list.*workspaces|workspaces (are|do)/.test(t)) {
+      const names = Array.isArray(ctx.workspaces) ? ctx.workspaces : [];
+      if (!names.length) return 'No workspaces are configured.';
+      const shown = names.slice(0, 6).join(', ');
+      const more = names.length > 6 ? `, and ${names.length - 6} more` : '';
+      return `${names.length} workspaces: ${shown}${more}. Active: ${ctx.workspace || 'none'}.`;
+    }
     if (/what.*(workspace|project).*(in|on|open)|which workspace|where am i/.test(t)) {
       return ctx.workspace ? `You're in the ${ctx.workspace} workspace.` : 'No workspace is open right now.';
     }
