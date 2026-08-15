@@ -3291,12 +3291,14 @@ class SessionManager extends EventEmitter {
   }
 
   matchesClaudeTrustPrompt(text) {
-    const normalized = String(text || '').toLowerCase();
-    if (!normalized.includes('quick safety check')) return false;
-    return normalized.includes('trust this folder')
-      || normalized.includes('trust this directory')
-      || normalized.includes('trust this workspace')
-      || normalized.includes('trust this project');
+    // Whitespace-collapsed: positioned TUI text loses its spaces when control
+    // sequences are stripped (same failure mode as the ready-prompt matcher).
+    const compact = String(text || '').toLowerCase().replace(/\s+/g, '');
+    if (!compact.includes('quicksafetycheck')) return false;
+    return compact.includes('trustthisfolder')
+      || compact.includes('trustthisdirectory')
+      || compact.includes('trustthisworkspace')
+      || compact.includes('trustthisproject');
   }
 }
 

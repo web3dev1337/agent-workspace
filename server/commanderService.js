@@ -58,6 +58,10 @@ const TRUST_PROMPT_MAX_WAIT_MS = 15000;
 // Claude's banner can appear before a pending trust prompt; wait this long
 // for the prompt before deciding it isn't coming (already-trusted folder).
 const READY_WITHOUT_TRUST_GRACE_MS = 2000;
+// Failsafe for launches on an already-trusted folder: no trust prompt can
+// appear, so if ready-detection misses, release queued keystrokes quickly
+// instead of holding them for the full trust-prompt window.
+const READY_PROMPT_MAX_WAIT_MS = 5000;
 
 // Claude Code records accepted trust dialogs per project in ~/.claude.json,
 // keyed by path with forward slashes (e.g. "C:/Users/x/project").
@@ -585,7 +589,7 @@ class CommanderService {
       recentOutput: '',
       forceFlushTimer: setTimeout(() => {
         this.flushQueuedLaunchInputs();
-      }, TRUST_PROMPT_MAX_WAIT_MS)
+      }, expectTrustPrompt ? TRUST_PROMPT_MAX_WAIT_MS : READY_PROMPT_MAX_WAIT_MS)
     };
   }
 
@@ -651,12 +655,14 @@ class CommanderService {
   }
 
   matchesClaudeTrustPrompt(text) {
-    const normalized = String(text || '').toLowerCase();
-    if (!normalized.includes('quick safety check')) return false;
-    return normalized.includes('trust this folder')
-      || normalized.includes('trust this directory')
-      || normalized.includes('trust this workspace')
-      || normalized.includes('trust this project');
+    // Whitespace-collapsed: positioned TUI text loses its spaces when control
+    // sequences are stripped (same failure mode as the ready-prompt matcher).
+    const compact = String(text || '').toLowerCase().replace(/\s+/g, '');
+    if (!compact.includes('quicksafetycheck')) return false;
+    return compact.includes('trustthisfolder')
+      || compact.includes('trustthisdirectory')
+      || compact.includes('trustthisworkspace')
+      || compact.includes('trustthisproject');
   }
 
   matchesClaudeReadyPrompt(text) {
@@ -665,12 +671,18 @@ class CommanderService {
     if (normalized.includes('welcome to claude code') && normalized.includes('? for shortcuts')) {
       return true;
     }
+    // Newer TUIs render text via cursor positioning, so after control-sequence
+    // stripping the banner can arrive with NO spaces ("claudecodev2.1.220").
+    // Match on a whitespace-collapsed view of the buffer.
+    const compact = normalized.replace(/\s+/g, '');
+    // The permission-mode status line only renders once the TUI is interactive.
+    if (compact.includes('shift+tabtocycle')) return true;
     // Claude Code v2 banner: "Claude Code v2.x.y". Don't match version strings
     // that are part of an upgrade notice ("claude code v2.1.201 -> v2.1.205"),
     // which can hit the buffer before the TUI is actually interactive. The first
     // lookahead pins the full version (stops greedy backtracking from matching a
     // truncated version that dodges the arrow check).
-    return /claude code v[\d.]+(?![\d.])(?!\s*(?:->|→|=>)\s*v?\d)/.test(normalized);
+    return /claudecodev[\d.]+(?![\d.])(?!(?:->|→|=>)v?\d)/.test(compact);
   }
 
   flushQueuedLaunchInputs() {
