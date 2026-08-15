@@ -692,11 +692,25 @@ class VoiceBrainService {
   }
 
   async chatLocally(transcript, ctx = {}) {
+    // Rolling conversation memory: the last few exchanges ride along so
+    // "what about the second one?" makes sense. Resets after 10 idle minutes —
+    // a fresh conversation deserves a fresh head.
+    if (!this._chatHistory || Date.now() - (this._chatLastAt || 0) > 10 * 60_000) this._chatHistory = [];
+    this._chatLastAt = Date.now();
     const messages = [
       { role: 'system', content: this.chatSystemPrompt(ctx) },
+      ...this._chatHistory.slice(-8),
       { role: 'user', content: String(transcript || '').trim() }
     ];
-    return this.chatWithTools(messages, ctx, 0);
+    const reply = await this.chatWithTools(messages, ctx, 0);
+    if (reply) {
+      this._chatHistory.push(
+        { role: 'user', content: String(transcript || '').trim() },
+        { role: 'assistant', content: reply }
+      );
+      this._chatHistory = this._chatHistory.slice(-16);
+    }
+    return reply;
   }
 
   async chatWithTools(messages, ctx, depth) {
