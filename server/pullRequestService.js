@@ -13,12 +13,33 @@ const logger = winston.createLogger({
   ]
 });
 
+const PR_SEARCH_CACHE_TTL_MS = Number(process.env.ORCHESTRATOR_PR_SEARCH_CACHE_TTL_MS || 30000);
+const PR_SEARCH_CACHE_MAX_ENTRIES = 50;
+
 class PullRequestService {
+  constructor() {
+    // `gh search prs` is a full GitHub network roundtrip (~1-1.5s) and three
+    // endpoints (/api/prs, /api/process/tasks, /api/process/distribution) issue
+    // the same query independently on every UI refresh. Cache results briefly
+    // and coalesce concurrent identical searches into one gh invocation.
+    this.searchCache = new Map(); // key -> { at, result }
+    this.searchInFlight = new Map(); // key -> Promise<result>
+    this.searchCacheEpoch = 0;
+  }
+
   static getInstance() {
     if (!PullRequestService.instance) {
       PullRequestService.instance = new PullRequestService();
     }
     return PullRequestService.instance;
+  }
+
+  // Local merges/reviews change what a PR search should return; drop cached
+  // results so the UI reflects the action immediately. Bumping the epoch also
+  // prevents in-flight searches started before the action from being cached.
+  invalidateSearchCache() {
+    this.searchCache.clear();
+    this.searchCacheEpoch += 1;
   }
 
   splitJsonStream(text) {
@@ -519,6 +540,7 @@ class PullRequestService {
       });
     });
 
+    this.invalidateSearchCache();
     return { ok: true, url: parsed.url, stdout: String(stdout || '') };
   }
 
@@ -551,6 +573,7 @@ class PullRequestService {
       });
     });
 
+    this.invalidateSearchCache();
     return { ok: true, url: parsed.url, action: normalizedAction, stdout: String(stdout || '') };
   }
 
@@ -583,8 +606,49 @@ class PullRequestService {
   }
 
   async searchPullRequests(params = {}) {
-    const { mode, state, sort, limit, query, repos, owners } = this.normalizeListParams(params);
+    const normalized = this.normalizeListParams(params);
+    const key = JSON.stringify([
+      normalized.mode, normalized.state, normalized.sort, normalized.limit,
+      normalized.query, normalized.repos, normalized.owners
+    ]);
+    const wantFresh = params.refresh === true || params.refresh === '1' || params.refresh === 'true';
 
+    if (!wantFresh) {
+      const hit = this.searchCache.get(key);
+      if (hit && Date.now() - hit.at < PR_SEARCH_CACHE_TTL_MS) {
+        return this.cloneSearchResult(hit.result);
+      }
+      const pending = this.searchInFlight.get(key);
+      if (pending) {
+        return pending.then((result) => this.cloneSearchResult(result));
+      }
+    }
+
+    const epoch = this.searchCacheEpoch;
+    const fetchPromise = this.fetchPullRequestSearch(normalized)
+      .then((result) => {
+        if (epoch === this.searchCacheEpoch) {
+          this.searchCache.set(key, { at: Date.now(), result });
+          while (this.searchCache.size > PR_SEARCH_CACHE_MAX_ENTRIES) {
+            this.searchCache.delete(this.searchCache.keys().next().value);
+          }
+        }
+        return result;
+      })
+      .finally(() => {
+        if (this.searchInFlight.get(key) === fetchPromise) this.searchInFlight.delete(key);
+      });
+    this.searchInFlight.set(key, fetchPromise);
+    return fetchPromise.then((result) => this.cloneSearchResult(result));
+  }
+
+  // Callers map/mutate the returned arrays; hand out copies so the cached
+  // entry stays pristine.
+  cloneSearchResult(result) {
+    return JSON.parse(JSON.stringify(result));
+  }
+
+  async fetchPullRequestSearch({ mode, state, sort, limit, query, repos, owners }) {
     const args = [
       'search',
       'prs',
