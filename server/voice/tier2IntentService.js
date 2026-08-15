@@ -110,7 +110,7 @@ class Tier2IntentService {
       this.startupPromise = (async () => {
         const port = new URL(this.url).port || '5742';
         this.child = spawn(this.serverBin,
-          ['-m', this.modelPath, '-ngl', '99', '-c', '8192', '--host', '127.0.0.1', '--port', port],
+          ['-m', this.modelPath, '-ngl', String(process.env.TIER2_NGL ?? '99'), '-c', '8192', '--host', '127.0.0.1', '--port', port],
           { env: { ...process.env, LD_LIBRARY_PATH: path.dirname(this.serverBin) }, stdio: 'ignore' });
         this.child.on('error', (error) => {
           this.logger.warn?.('tier2: llama-server spawn error', { error: error.message });
