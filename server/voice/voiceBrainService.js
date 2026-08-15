@@ -36,6 +36,29 @@ class VoiceBrainService {
     return VoiceBrainService.instance;
   }
 
+  /** All spoken phrases are DATA (config/voice-responses.json + user overlay). */
+  responses() {
+    if (!this._responses || Date.now() - (this._responsesAt || 0) > 30_000) {
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      let merged = {};
+      for (const f of [path.join(__dirname, '..', '..', 'config', 'voice-responses.json'),
+                       path.join(os.homedir(), '.orchestrator', 'voice-responses.json')]) {
+        try { Object.assign(merged, JSON.parse(fs.readFileSync(f, 'utf8'))); } catch { /* optional */ }
+      }
+      this._responses = merged;
+      this._responsesAt = Date.now();
+    }
+    return this._responses;
+  }
+
+  say(key, fills = {}, fallback = '') {
+    let s = this.responses()[key] || fallback;
+    for (const [k, v] of Object.entries(fills)) s = s.split(`{${k}}`).join(String(v));
+    return s;
+  }
+
   init(deps = {}) {
     this.deps = { ...this.deps, ...deps };
     // The voice command service forwards its unmatched utterances here.
@@ -100,7 +123,7 @@ class VoiceBrainService {
     // below — "never mind" starts with "never", so the guard would otherwise
     // swallow it as a negated action and send it to the Commander.
     if (/^(ok(ay)?|actually|uh+|um+|well|hmm|so|yeah|nah|no)?[\s,]*(never ?mind|forget it|forget about it)\b/.test(t)) {
-      return 'Okay, forget it.';
+      return this.say('dismissed', {}, 'Okay, forget it.');
     }
 
     // An action request ("open the queue", "start a reviewer") is never a fact
@@ -114,18 +137,18 @@ class VoiceBrainService {
 
     // Thanks / acknowledgement — a quick reply, never a Commander job.
     if (/^(thanks|thank you|thankyou|cheers|ta|much appreciated|nice one|good (job|work|stuff)|awesome|great|cool|ok|okay|kk|got it|sounds good|perfect|no worries)\b/.test(t)) {
-      return "You're welcome.";
+      return this.say('thanks', {}, "You're welcome.");
     }
 
     // What needs me / what's wrong / status of the fleet
     if (/(needs?|need)\s+(me|my|your)|attention|anything (wrong|broken|stuck|urgent)|what.*(should i|do i need)/.test(t)) {
-      return ctx.supervisor?.spoken || 'Nothing needs you right now. Everything else was handled.';
+      return ctx.supervisor?.spoken || this.say('nothingNeedsYou', {}, 'Nothing needs you right now.');
     }
 
     // How many agents / sessions working / how the fleet is doing
     if (/(how many|number of).*(agent|session|running|working|busy)|what.*(agents|sessions).*(doing|status)|\bfleet\b|how('?s| is| are)\b.*\b(agents?|sessions?)\b|are (they|the agents) (busy|working)/.test(t)) {
       const c = this.countSessions(ctx.sessions);
-      if (!c.total) return 'No agent sessions are open right now.';
+      if (!c.total) return this.say('noSessions', {}, 'No agent sessions are open right now.');
       const parts = [];
       if (c.busy) parts.push(`${c.busy} working`);
       if (c.waiting) parts.push(`${c.waiting} waiting on input`);
@@ -136,7 +159,7 @@ class VoiceBrainService {
     // The queue / what's next
     if (/\bqueue\b|what.*(next|to do|on the list)|what.*work.*(left|remaining)/.test(t)) {
       const q = Array.isArray(ctx.queue) ? ctx.queue : [];
-      if (!q.length) return 'The queue is empty.';
+      if (!q.length) return this.say('queueEmpty', {}, 'The queue is empty.');
       const top = q.slice(0, 3).map((x) => String(x?.title || x?.id || '').trim()).filter(Boolean);
       return `${q.length} item${q.length === 1 ? '' : 's'} in the queue. Top: ${top.join('; ')}.`;
     }
@@ -144,7 +167,7 @@ class VoiceBrainService {
     // Discord / what was asked for
     if (/\b(discord|chat)\b|asked (for|me)|anyone (need|ask)|untracked/.test(t)) {
       const items = Array.isArray(ctx.discord) ? ctx.discord : [];
-      if (!items.length) return 'Nothing outstanding from chat.';
+      if (!items.length) return this.say('nothingFromChat', {}, 'Nothing outstanding from chat.');
       const first = items[0];
       return `${items.length} thing${items.length === 1 ? '' : 's'} asked for but not started. Most urgent: ${String(first?.summary || first?.text || '').slice(0, 120)}.`;
     }
@@ -152,7 +175,7 @@ class VoiceBrainService {
     // Which workspaces exist / which one is open
     if (/what\s+workspaces|which workspaces|list.*workspaces|workspaces (are|do)/.test(t)) {
       const names = Array.isArray(ctx.workspaces) ? ctx.workspaces : [];
-      if (!names.length) return 'No workspaces are configured.';
+      if (!names.length) return this.say('noWorkspaces', {}, 'No workspaces are configured.');
       const shown = names.slice(0, 6).join(', ');
       const more = names.length > 6 ? `, and ${names.length - 6} more` : '';
       return `${names.length} workspaces: ${shown}${more}. Active: ${ctx.workspace || 'none'}.`;
@@ -163,7 +186,7 @@ class VoiceBrainService {
 
     // Identity — instant, not a job for the Commander agent.
     if (/what.?s? your name|who are you|what are you|your name|introduce yourself|are you (an? )?(ai|bot|robot|real|human|person)/.test(t)) {
-      return "I'm JARVIS, your fleet supervisor. I keep an eye on your agents, answer questions about what's going on, run commands, and hand bigger jobs to the Commander.";
+      return this.say('identity', {}, 'I am JARVIS, your fleet supervisor.');
     }
 
     // What can you do (not bare "help me" — that's a real request, let it flow on)
@@ -177,8 +200,10 @@ class VoiceBrainService {
     const hasRequestVerb = /\b(show|open|tell|give|create|start|stop|switch|run|make|find|set|pull|bring|list|check|fix|build|write|add|do)\b/.test(t);
     if (!hasRequestVerb
         && (/^(hi|hey|hello|yo|howdy|greetings|good (morning|afternoon|evening))\b|are you (there|awake|up|listening|around)|can you hear me|you (there|up)/.test(t))) {
-      // A greeting gets a greeting — status only when asked for.
-      return "Yes, I'm here.";
+      // A greeting gets a greeting — status only when asked for. If the
+      // config routes greetings to the LLM, fall through to the chat lane.
+      if (this.responses().greetingLane === 'llm') return null;
+      return this.say('greeting', {}, 'Yes, I am here.');
     }
 
     return null;
@@ -288,7 +313,7 @@ class VoiceBrainService {
     // A single stray word ("uh", "hmm") isn't a request — don't wake the
     // Commander for it.
     if (String(transcript || '').trim().split(/\s+/).filter(Boolean).length <= 1) {
-      const miss = "Sorry, I didn't catch that.";
+      const miss = this.say('notCaught', {}, 'Sorry, I did not catch that.');
       this.speak(miss);
       return { handled: false, route: 'unclear', spoken: miss };
     }
@@ -346,7 +371,7 @@ class VoiceBrainService {
       }
 
       if (!delivered) {
-        const miss = 'No Commander is running to take that.';
+        const miss = this.say('noCommander', {}, 'No Commander is running to take that.');
         this.speak(miss);
         return { handled: false, route: 'commander', spoken: miss };
       }
@@ -354,13 +379,13 @@ class VoiceBrainService {
       // Immediate ack, then speak the Commander's actual reply once it settles —
       // in the background, so the request returns now and the answer arrives when
       // the agent is done. This is the two-way loop.
-      this.speak('On it.');
+      this.speak(this.say('onIt', {}, 'On it.'));
       this.captureChain = this.captureChain
         .then(() => this.captureCommanderReply(before))
         .then((reply) => { if (reply) this.speak(reply, { priority: 'high' }); })
         .catch((error) => this.logger.warn?.('voice brain: reply capture failed', { error: error.message }));
 
-      return { handled: true, route: 'commander', spoken: 'On it.' };
+      return { handled: true, route: 'commander', spoken: this.say('onIt', {}, 'On it.') };
     }
 
     const miss = "I couldn't do that myself and there's no Commander running to hand it to.";
@@ -492,7 +517,7 @@ class VoiceBrainService {
           ? 'Send this message to that session via POST /api/commander/send-to-session (text first, then \\r separately). Reply in one short sentence confirming.'
           : `Launch a new ${agent} agent for that project/worktree via the orchestrator API. Reply in one short sentence confirming.`
       ].filter(Boolean).join('\n');
-      return this.forwardBrief(brief, `${cls.action === 'send-prompt' ? 'Sending that over' : 'Spinning that up'}.`);
+      return this.forwardBrief(brief, cls.action === 'send-prompt' ? this.say('sendingOver', {}, 'Sending that over.') : this.say('spinningUp', {}, 'Spinning that up.'));
     }
 
     if (!vcs?.executeCommand) return null;
@@ -525,7 +550,7 @@ class VoiceBrainService {
     const before = this.deps.commanderService?.getRecentOutput?.(150) || '';
     return Promise.resolve(forwarder(brief)).then((delivered) => {
       if (delivered === false) {
-        const miss = 'No Commander is running to take that.';
+        const miss = this.say('noCommander', {}, 'No Commander is running to take that.');
         this.speak(miss);
         return { handled: false, route: 'commander', spoken: miss };
       }
@@ -543,7 +568,7 @@ class VoiceBrainService {
 
   requestConfirmation(transcript, cls) {
     this.pendingConfirmation = { transcript, cls, at: Date.now() };
-    const say = `That sounds destructive — you want me to ${String(transcript || '').trim()}? Say yes to confirm.`;
+    const say = this.say('confirmDestructive', { transcript: String(transcript || '').trim() }, `Confirm: ${transcript}?`);
     this.speak(say);
     return { handled: true, route: 'confirm', spoken: say };
   }
@@ -564,12 +589,12 @@ class VoiceBrainService {
       // Destructive task: hand to Commander now that it is confirmed.
       return this.forwardBrief(
         `[voice:confirmed] ${original}\n\nThe operator confirmed this destructive request out loud. Execute it via the orchestrator API and reply in one short sentence.`,
-        'Confirmed — on it.'
+        this.say('confirmedOnIt', {}, 'Confirmed — on it.')
       );
     }
     if (/^(no|nope|cancel|stop|never ?mind|abort)\b/.test(low)) {
       this.pendingConfirmation = null;
-      const say = 'Cancelled.';
+      const say = this.say('cancelled', {}, 'Cancelled.');
       this.speak(say);
       return { handled: true, route: 'confirm-cancelled', spoken: say };
     }
@@ -727,7 +752,7 @@ class VoiceBrainService {
   /** A short spoken confirmation after a command lane hit. */
   confirmCommand(command) {
     const label = String(command || '').replace(/[-_]/g, ' ').trim();
-    const say = label ? `Done — ${label}.` : 'Done.';
+    const say = label ? this.say('commandDone', { label }, `Done — ${label}.`) : 'Done.';
     this.speak(say);
     return say;
   }

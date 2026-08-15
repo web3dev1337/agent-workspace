@@ -1,0 +1,23 @@
+{
+  "$comment": "Every canned phrase JARVIS speaks. Edit freely - no code changes needed. {placeholders} are filled live. Overlay file: ~/.orchestrator/voice-responses.json wins per key.",
+  "greeting": "Yes, I'm here.",
+  "dismissed": "Okay, forget it.",
+  "thanks": "You're welcome.",
+  "identity": "I'm JARVIS, your fleet supervisor. I keep an eye on your agents, answer questions about what's going on, run commands, and hand bigger jobs to the Commander.",
+  "noSessions": "No agent sessions are open right now.",
+  "queueEmpty": "The queue is empty.",
+  "nothingFromChat": "Nothing outstanding from chat.",
+  "noWorkspaces": "No workspaces are configured.",
+  "notCaught": "Sorry, I didn't catch that.",
+  "onIt": "On it.",
+  "sendingOver": "Sending that over.",
+  "spinningUp": "Spinning that up.",
+  "confirmedOnIt": "Confirmed — on it.",
+  "cancelled": "Cancelled.",
+  "noCommander": "No Commander is running to take that.",
+  "confirmDestructive": "That sounds destructive — you want me to {transcript}? Say yes to confirm.",
+  "commandDone": "Done — {label}.",
+  "nothingNeedsYou": "Nothing needs you right now. Everything else was handled.",
+  "greetingLane": "instant",
+  "$greetingLane": "instant = template above (0ms) | llm = route hellos to the tier-3 model for personality (~2-3s)"
+}
