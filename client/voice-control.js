@@ -317,6 +317,7 @@ class VoiceControl {
 
   startListening() {
     if (this.isListening) return;
+    window.SpeechOutput?.interrupt?.();
 
     if (this.transcriptionBackend === 'whisper') {
       this.startWhisperRecording();
@@ -344,6 +345,7 @@ class VoiceControl {
 
   async startWhisperRecording() {
     try {
+      window.SpeechOutput?.interrupt?.();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.mediaRecorder = new MediaRecorder(stream, {
         mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'

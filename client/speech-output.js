@@ -128,6 +128,11 @@
   window.SpeechOutput = {
     speak,
     attach,
+    // Barge-in: the user talking beats JARVIS talking, always.
+    interrupt() {
+      stopAudio();
+      if (synth) synth.cancel();
+    },
     isSupported: Boolean(synth),
     isEnabled: () => state.enabled,
     setEnabled(enabled) {
