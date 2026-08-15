@@ -1,0 +1,14 @@
+{
+  "$comment": "Named review chains. Steps run sequentially; each reviewer sees prior verdicts. agent: codex (uses ~/.codex config default model - sol/high floor) or claude (headless -p).",
+  "default": [
+    { "agent": "codex", "mode": "review" },
+    { "agent": "claude", "model": "sonnet", "mode": "review" }
+  ],
+  "high-risk": [
+    { "agent": "codex", "mode": "review" },
+    { "agent": "claude", "model": "opus", "mode": "review" }
+  ],
+  "quick": [
+    { "agent": "claude", "model": "sonnet", "mode": "review" }
+  ]
+}

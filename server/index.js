@@ -6415,6 +6415,27 @@ app.get('/api/process/readiness/templates', (req, res) => {
 });
 
 // ============================================
+// Review chains API (multi-agent PR review)
+// ============================================
+const ReviewChainService = require('./reviewChainService');
+const reviewChainService = ReviewChainService.getInstance({
+  logger, taskRecordService, speechService, activityFeed
+});
+
+app.post('/api/review-chains/start', express.json(), (req, res) => {
+  const { pr, repo, repoPath, chain, implementerSessionId } = req.body || {};
+  if (!pr || !repo) return res.status(400).json({ error: 'pr and repo are required' });
+  const result = reviewChainService.start({
+    pr, repo, repoPath, chain, implementerSessionId, commanderForwarder: sendToCommander
+  });
+  res.json(result);
+});
+
+app.get('/api/review-chains', (req, res) => {
+  res.json({ running: reviewChainService.status(), chains: Object.keys(reviewChainService.chains()) });
+});
+
+// ============================================
 // Task records API (tier/risk/prompt metadata)
 // ============================================
 
