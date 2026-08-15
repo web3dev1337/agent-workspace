@@ -804,7 +804,7 @@ class VoiceBrainService {
         const resp = await fetch(`${openaiUrl}/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: process.env.VOICE_CHAT_MODEL || 'local', messages, max_tokens: 160 }),
+          body: JSON.stringify({ model: process.env.VOICE_CHAT_MODEL || 'local', messages, max_tokens: 160, temperature: 0.4 }),
           signal: AbortSignal.timeout(9000)
         });
         if (resp.ok) {
@@ -822,7 +822,7 @@ class VoiceBrainService {
       const resp = await fetch(`${url}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, stream: false, keep_alive: '30m', messages, options: { num_predict: 160 } }),
+        body: JSON.stringify({ model, stream: false, keep_alive: '30m', messages, options: { num_predict: 160, temperature: 0.4 } }),
         signal: AbortSignal.timeout(15000)
       });
       if (!resp.ok) { trip('ollama'); return null; }
