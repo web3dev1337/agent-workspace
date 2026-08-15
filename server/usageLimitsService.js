@@ -25,8 +25,10 @@ const CLAUDE_STALE_AFTER_MS = 60 * 60 * 1000;
 
 const CODEX_HELPER = process.env.CODEX_USAGE_HELPER
   || path.join(os.homedir(), '.codex', 'scripts', 'codex_usage.py');
-// The Codex helper starts a local app-server round trip (~seconds), so cache.
-const CODEX_CACHE_TTL_MS = 5 * 60 * 1000;
+// The Codex helper starts a local app-server round trip against the ChatGPT
+// backend, so poll gently: 15min cache (override via env) keeps the widget
+// far away from account rate limits.
+const CODEX_CACHE_TTL_MS = Number(process.env.ORCHESTRATOR_CODEX_USAGE_TTL_MS || 15 * 60 * 1000);
 const CODEX_TIMEOUT_MS = 60 * 1000;
 
 // Grok subscription usage comes from the CLI proxy's billing endpoints, using
@@ -36,7 +38,7 @@ const CODEX_TIMEOUT_MS = 60 * 1000;
 // expired we simply report stale until the CLI refreshes it on next use.
 const GROK_AUTH_FILE = path.join(os.homedir(), '.grok', 'auth.json');
 const GROK_BILLING_BASE = process.env.GROK_BILLING_BASE_URL || 'https://cli-chat-proxy.grok.com/v1';
-const GROK_CACHE_TTL_MS = 5 * 60 * 1000;
+const GROK_CACHE_TTL_MS = Number(process.env.ORCHESTRATOR_GROK_USAGE_TTL_MS || 15 * 60 * 1000);
 const GROK_TIMEOUT_MS = 20 * 1000;
 
 class UsageLimitsService {
