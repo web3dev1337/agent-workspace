@@ -1555,6 +1555,7 @@ class SessionManager extends EventEmitter {
     }
 
     knownAgents.set('opencode', 'opencode');
+    knownAgents.set('grok', 'grok');
     knownAgents.set('gemini', 'gemini');
     knownAgents.set('aider', 'aider');
 

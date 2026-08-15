@@ -255,4 +255,30 @@ describe('AgentModelConfigService', () => {
     expect(resolved.effortSource.label).toBe('server environment');
     expect(resolved.effortSource.file).toBeNull();
   });
+
+  test('resolveGrokConfig reads default model and effort from the [models] section', () => {
+    writeFileInside(homeDir, ['.grok', 'config.toml'], [
+      '[cli]',
+      'installer = "internal"',
+      '',
+      '[models]',
+      'default = "grok-4.6"',
+      'default_reasoning_effort = "xhigh"',
+      '',
+      '[ui]',
+      'yolo = false'
+    ].join('\n'));
+
+    const resolved = createService().resolveGrokConfig();
+
+    expect(resolved.model).toBe('grok-4.6');
+    expect(resolved.effortLevel).toBe('xhigh');
+    expect(resolved.modelSource.label).toBe('grok config (global)');
+  });
+
+  test('resolveGrokConfig resolves to nulls when the config file is missing', () => {
+    const resolved = createService().resolveGrokConfig();
+    expect(resolved.model).toBeNull();
+    expect(resolved.effortLevel).toBeNull();
+  });
 });

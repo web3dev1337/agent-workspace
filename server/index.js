@@ -2863,6 +2863,7 @@ app.get('/api/sessions/model-config', (req, res) => {
     return res.json({
       ok: true,
       codex: agentModelConfigService.resolveCodexConfig(),
+      grok: agentModelConfigService.resolveGrokConfig(),
       sessions
     });
   } catch (error) {

@@ -16,6 +16,7 @@ const CLAUDE_WORKTREE_LAYERS = [
 ];
 const CLAUDE_USER_LAYER_LABEL = 'user settings (global)';
 const CODEX_CONFIG_LABEL = 'codex config (global)';
+const GROK_CONFIG_LABEL = 'grok config (global)';
 
 // Model aliases Claude Code resolves through ANTHROPIC_DEFAULT_*_MODEL env vars
 // (settable in any settings layer's `env` block, ~/.claude/.env, or the server
@@ -183,6 +184,33 @@ class AgentModelConfigService {
     return resolved;
   }
 
+  resolveGrokConfig() {
+    const file = path.join(this.homeDir, '.grok', 'config.toml');
+    const resolved = {
+      agent: 'grok',
+      model: null,
+      effortLevel: null,
+      modelSource: null,
+      effortSource: null
+    };
+
+    const raw = this.readTextFile(file);
+    if (!raw) return resolved;
+
+    const model = this.readSectionTomlString(raw, 'models', 'default');
+    if (model) {
+      resolved.model = model;
+      resolved.modelSource = { label: GROK_CONFIG_LABEL, file };
+    }
+    const effort = this.readSectionTomlString(raw, 'models', 'default_reasoning_effort');
+    if (effort) {
+      resolved.effortLevel = effort.toLowerCase();
+      resolved.effortSource = { label: GROK_CONFIG_LABEL, file };
+    }
+
+    return resolved;
+  }
+
   getClaudeSettingsLayers(directory) {
     const layers = [];
     const dir = String(directory || '').trim();
@@ -204,6 +232,23 @@ class AgentModelConfigService {
     for (const line of String(raw).split(/\r?\n/)) {
       const trimmed = line.trim();
       if (trimmed.startsWith('[')) break;
+      const match = trimmed.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`));
+      if (match) return match[1].trim() || null;
+    }
+    return null;
+  }
+
+  // String keys inside a specific [section], stopping at the next header.
+  // Grok keeps `default` and `default_reasoning_effort` under [models].
+  readSectionTomlString(raw, section, key) {
+    let inSection = false;
+    for (const line of String(raw).split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('[')) {
+        inSection = trimmed === `[${section}]`;
+        continue;
+      }
+      if (!inSection) continue;
       const match = trimmed.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`));
       if (match) return match[1].trim() || null;
     }
