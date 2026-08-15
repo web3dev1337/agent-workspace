@@ -153,6 +153,12 @@ server/speechService.js            - Speech output with degrading backends
 server/routes/speechRoutes.js      - `/api/speech/*` (say, backend, enabled, spoken fleet briefing)
 client/speech-output.js            - Web Speech API listener for the browser backend (`window.SpeechOutput`)
 server/voiceCommandService.js      - (existing) rule/LLM voice parsing, now with `setCommanderForwarder()`: unmatched speech is handed to the Commander agent instead of dead-ending
+server/voice/voiceRegistryService.js - Spoken aliases -> canonical people/projects/products; identities live in untracked ~/.orchestrator/voice-registry.json (repo ships placeholder shapes only)
+server/voice/tier2IntentService.js  - Tier-2 intent classifier: Bonsai-1.7B via prism llama.cpp, grammar-enforced enums, deterministic guard layer (worktree regex, alias grounding, question-shape, lexical agent); harvests transcripts to ~/.orchestrator/voice-transcripts.jsonl; prompt: config/voice-tier2-prompt.txt
+server/voice/voiceQueryService.js   - Tier-2.5 deterministic query answers (gh PR searches 30s-cached, session state, activity.jsonl windows) spoken as template sentences
+server/voice/realtimeManagerService.js - Ambient narration: session/queue TRANSITIONS spoken with a 30s floor; config voice-tiers.json -> realtimeManager
+server/reviewChainService.js        - Multi-agent PR review chains (config/review-chains.json): sequential codex/claude headless reviewers, VERDICT parsing, task-record outcomes, needs_fix routed to implementer/Commander; API /api/review-chains
+config/voice-tiers.json             - Ladder config: tier models/thresholds, destructive pattern, feedback policy, realtime manager
 server/voice/voiceProviderService.js - Swappable voice-model registry (a model is DATA, not code)
 ├─ Loads `config/voice-providers.json` (override `~/.agent-workspace/voice-providers.json`)
 ├─ Health-checks each provider (command present? env set? model server reachable?) — all degrade, never throw
