@@ -804,11 +804,14 @@ class VoiceCommandService {
       // Open PRs panel
       {
         patterns: [
-          /open\s+prs/i,
-          /show\s+prs/i,
-          /open\s+pull\s+requests/i,
-          /show\s+pull\s+requests/i,
-          /open\s+pr\s+panel/i,
+          // Anchored: "open anrok's prs in the toy store" is a QUERY for the
+          // brain (entities and all), not this panel. Only the bare phrase
+          // opens the panel.
+          /^(?:please\s+)?open\s+(?:the\s+)?prs$/i,
+          /^(?:please\s+)?show\s+(?:the\s+)?prs$/i,
+          /^(?:please\s+)?open\s+(?:the\s+)?pull\s+requests$/i,
+          /^(?:please\s+)?show\s+(?:the\s+)?pull\s+requests$/i,
+          /^(?:please\s+)?open\s+(?:the\s+)?pr\s+panel$/i,
         ],
         command: 'open-prs',
         extractParams: () => ({})
@@ -1731,7 +1734,32 @@ JSON:`;
   }
 
   async processVoiceCommand(transcript, { forwardUnmatched = true } = {}) {
+    // A pending destructive confirmation intercepts EVERYTHING — "yes"/"no"
+    // must never be re-interpreted as a fresh command by any matcher below.
+    if (this.brain?.pendingConfirmation && this.brain?.resolvePendingConfirmation) {
+      const outcome = await this.brain.resolvePendingConfirmation(transcript);
+      if (outcome) {
+        return {
+          success: outcome.handled, method: outcome.route, command: outcome.command || null,
+          params: {}, transcript, executed: outcome.handled, spoken: outcome.spoken
+        };
+      }
+    }
+
     const parsed = await this.parseCommand(transcript);
+
+    // Destructive-sounding commands wait for a spoken yes REGARDLESS of which
+    // matcher found them (exact rules, the legacy classifier, or tier 2).
+    if (parsed.success && this.brain?.isDestructive?.(transcript)) {
+      const outcome = this.brain.requestConfirmation(transcript, {
+        intent: 'command', action: parsed.command,
+        exec: { command: parsed.command, params: parsed.params }
+      });
+      return {
+        success: true, method: 'confirm', command: parsed.command, params: parsed.params,
+        transcript, executed: false, spoken: outcome.spoken
+      };
+    }
 
     // Fast fact/greeting answer (matched before the LLM classifier) — speak and done.
     if (parsed.fact) {

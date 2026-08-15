@@ -437,6 +437,19 @@ class VoiceBrainService {
 
   async executeClassifiedCommand(transcript, cls) {
     const vcs = this.deps.voiceCommandService;
+    // Confirmed legacy-matcher commands carry their exact exec payload.
+    if (cls?.exec?.command) {
+      try {
+        await vcs.executeCommand(cls.exec.command, cls.exec.params || {});
+        const say = this.confirmCommand(cls.exec.command);
+        return { handled: true, route: 'command', command: cls.exec.command, spoken: say };
+      } catch (error) {
+        this.logger.warn?.('voice brain: confirmed command failed', { error: error.message });
+        const say = 'That command failed.';
+        this.speak(say);
+        return { handled: false, route: 'command', spoken: say };
+      }
+    }
     const paramMap = {
       'focus-worktree': { worktreeId: cls.worktree || cls.params },
       'set-workflow-mode': { mode: cls.params }

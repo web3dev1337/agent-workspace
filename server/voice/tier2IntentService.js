@@ -191,10 +191,11 @@ class Tier2IntentService {
       worktree = m ? `work${m[1]}` : toks.length ? `work${NUM_WORDS[toks[toks.length - 1]]}` : '';
     }
 
-    // Registry alias resolution is data, not inference.
+    // Entities are registry-grounded or empty — a model guess with no alias
+    // hit in the actual words is a hallucination, not a resolution.
     const resolved = this.registry?.resolve?.(utt) || {};
-    if (resolved.person) person = resolved.person.name;
-    if (resolved.project) project = resolved.project.name;
+    person = resolved.person ? resolved.person.name : '';
+    project = resolved.project ? resolved.project.name : '';
     if (resolved.product) { product = resolved.product.name; project = project || resolved.product.name; }
 
     // Agent choice is lexical.
