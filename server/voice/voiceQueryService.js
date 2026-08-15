@@ -2,6 +2,7 @@ const os = require('os');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
+const { getAgentWorkspaceDir } = require('../utils/pathUtils');
 
 /**
  * Tier 2.5: deterministic data fetchers for voice queries.
@@ -17,7 +18,12 @@ class VoiceQueryService {
     this.logger = logger;
     this.registry = registry;
     this.ghCache = new Map();
-    this.activityLog = path.join(os.homedir(), '.orchestrator', 'activity.jsonl');
+    // ActivityFeedService writes to the agent-workspace dir; the old
+    // ~/.orchestrator file is a legacy fallback.
+    this.activityLogs = [
+      path.join(getAgentWorkspaceDir(), 'activity.jsonl'),
+      path.join(os.homedir(), '.orchestrator', 'activity.jsonl')
+    ];
   }
 
   static getInstance(options = {}) {
@@ -126,14 +132,18 @@ class VoiceQueryService {
         : 12;
       const since = Date.now() - hours * 3600_000;
       let lines = [];
-      try {
-        lines = fs.readFileSync(this.activityLog, 'utf8').trim().split('\n').slice(-500);
-      } catch { return null; }
+      for (const file of this.activityLogs) {
+        try {
+          lines = fs.readFileSync(file, 'utf8').trim().split('\n').slice(-500);
+          break;
+        } catch { /* try next */ }
+      }
+      if (!lines.length) return null;
       const events = [];
       for (const line of lines) {
         try {
           const e = JSON.parse(line);
-          const at = Date.parse(e.at || e.timestamp || 0);
+          const at = Date.parse(e.ts || e.at || e.timestamp || 0);
           if (at < since) continue;
           const text = JSON.stringify(e).toLowerCase();
           if (projectEntry && !(projectEntry.repo && text.includes(projectEntry.repo.split('/')[1].toLowerCase()))
@@ -143,7 +153,7 @@ class VoiceQueryService {
       }
       if (!events.length) return `No recorded activity${project ? ` on ${project}` : ''} in the last ${hours} hours.`;
       const kinds = {};
-      for (const e of events) kinds[e.event || e.type || 'event'] = (kinds[e.event || e.type || 'event'] || 0) + 1;
+      for (const e of events) { const k = e.kind || e.event || e.type || 'event'; kinds[k] = (kinds[k] || 0) + 1; }
       const summary = Object.entries(kinds).slice(0, 4).map(([k, n]) => `${n} ${k.replace(/[._]/g, ' ')}`).join(', ');
       return `In the last ${hours} hours${project ? ` on ${project}` : ''}: ${events.length} events — ${summary}.`;
     }

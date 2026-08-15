@@ -554,7 +554,8 @@ RealtimeManagerService.getInstance({ logger }).init({
   workspaceManager,
   commanderService,
   commandRegistry,
-  speechService
+  speechService,
+  userSettingsService
 });
 
 const loadPlugins = async () => {
@@ -6436,8 +6437,14 @@ app.post('/api/review-chains/start', express.json(), (req, res) => {
   const fsPath = require('path');
   const home = require('os').homedir();
   const resolvedPath = repoPath ? fsPath.resolve(String(repoPath)) : null;
-  if (resolvedPath && (!resolvedPath.startsWith(fsPath.join(home, 'GitHub')) || !require('fs').existsSync(resolvedPath))) {
-    return res.status(400).json({ error: 'repoPath must be an existing directory under ~/GitHub' });
+  const { getAgentWorkspaceDir } = require('./utils/pathUtils');
+  const allowedRoots = [
+    fsPath.join(home, 'GitHub'),
+    fsPath.join(getAgentWorkspaceDir(), 'projects'),
+    process.env.AGENT_WORKSPACE_PROJECTS_DIR ? fsPath.resolve(process.env.AGENT_WORKSPACE_PROJECTS_DIR) : null
+  ].filter(Boolean);
+  if (resolvedPath && (!allowedRoots.some((r) => resolvedPath.startsWith(r)) || !require('fs').existsSync(resolvedPath))) {
+    return res.status(400).json({ error: 'repoPath must be an existing directory under a managed project root' });
   }
   const result = reviewChainService.start({
     pr: String(pr), repo: String(repo), repoPath: resolvedPath, chain: chainName,

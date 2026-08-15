@@ -157,7 +157,7 @@ class ReviewChainService {
 
       const clean = state.verdicts.every((v) => v.verdict === 'approved');
       await this.taskRecordService?.upsert?.(taskId, {
-        reviewOutcome: clean ? 'approved' : 'inconclusive',
+        reviewOutcome: clean ? 'approved' : 'commented',
         reviewedAt: new Date().toISOString(),
         notes: state.verdicts.map((v) => `${v.agent}:${v.verdict}`).join(', ')
       });

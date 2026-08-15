@@ -87,8 +87,13 @@ class Tier2IntentService {
     };
   }
 
-  /** Model + binary exist, or the server is already answering. */
+  /**
+   * Model + binary exist (or server already up) AND the last startup attempt
+   * didn't fail recently — a model that exists but won't boot must not keep
+   * suppressing the legacy fallback matchers.
+   */
   available() {
+    if (this.lastStartFailureAt && Date.now() - this.lastStartFailureAt < 5 * 60_000) return false;
     return (fs.existsSync(this.modelPath) && fs.existsSync(this.serverBin)) || Boolean(this.child);
   }
 
@@ -114,6 +119,8 @@ class Tier2IntentService {
         this.child.on('exit', () => { this.child = null; });
         this.logger.info?.('tier2: started Bonsai llama-server', { port });
         const ok = await this.waitHealthy(30_000);
+        if (!ok) this.lastStartFailureAt = Date.now();
+        else this.lastStartFailureAt = null;
         return ok;
       })().finally(() => { this.startupPromise = null; });
     }

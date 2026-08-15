@@ -97,6 +97,16 @@ class RealtimeManagerService {
     return lines;
   }
 
+  currentMode() {
+    if (this.deps.commandRegistry?.workflowMode) return this.deps.commandRegistry.workflowMode;
+    try {
+      const all = this.deps.userSettingsService?.getAllSettings?.();
+      return all?.global?.ui?.workflow?.mode || null;
+    } catch {
+      return null;
+    }
+  }
+
   speakId(id) {
     return String(id).replace(/-/g, ' ');
   }
@@ -111,8 +121,9 @@ class RealtimeManagerService {
 
     if (!this.pendingLines.length) return;
     // Background mode means "stop talking to me" unless configured otherwise.
-    if (!this.config.speakInBackgroundMode
-        && this.deps.commandRegistry?.workflowMode === 'background') {
+    // The UI persists its mode via user settings (ui.workflow.mode); the voice
+    // command path sets commandRegistry.workflowMode. Either source counts.
+    if (!this.config.speakInBackgroundMode && this.currentMode() === 'background') {
       this.pendingLines = [];
       return;
     }

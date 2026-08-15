@@ -391,7 +391,7 @@ class VoiceBrainService {
 
   isDestructive(transcript) {
     const pattern = this.feedbackPolicy()?.destructivePattern
-      || '\\b(kill|kil|remove|delete|deploy|merge|force push|drop|wipe|shut ?down)\\b';
+      || '\\b(kill|kil|remove|delete|deploy|merge|force push|drop|wipe|shut ?down|destroy|nuke|terminate)\\b|\\b(stop|close)\\b.*\\b(all|every|claudes?|agents?|sessions?|server|everything)\\b';
     return new RegExp(pattern, 'i').test(String(transcript || ''));
   }
 
