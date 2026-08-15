@@ -6424,9 +6424,25 @@ const reviewChainService = ReviewChainService.getInstance({
 
 app.post('/api/review-chains/start', express.json(), (req, res) => {
   const { pr, repo, repoPath, chain, implementerSessionId } = req.body || {};
-  if (!pr || !repo) return res.status(400).json({ error: 'pr and repo are required' });
+  // Strict input validation: these values reach child-process prompts run by
+  // agents, so nothing free-form gets through.
+  if (!/^\d{1,6}$/.test(String(pr || ''))) return res.status(400).json({ error: 'pr must be a PR number' });
+  if (!/^[\w.-]+\/[\w.-]+$/.test(String(repo || ''))) return res.status(400).json({ error: 'repo must be owner/name' });
+  const chainName = String(chain || 'default');
+  const chains = reviewChainService.chains();
+  if (!Object.prototype.hasOwnProperty.call(chains, chainName) || !Array.isArray(chains[chainName])) {
+    return res.status(400).json({ error: 'unknown chain' });
+  }
+  const fsPath = require('path');
+  const home = require('os').homedir();
+  const resolvedPath = repoPath ? fsPath.resolve(String(repoPath)) : null;
+  if (resolvedPath && (!resolvedPath.startsWith(fsPath.join(home, 'GitHub')) || !require('fs').existsSync(resolvedPath))) {
+    return res.status(400).json({ error: 'repoPath must be an existing directory under ~/GitHub' });
+  }
   const result = reviewChainService.start({
-    pr, repo, repoPath, chain, implementerSessionId, commanderForwarder: sendToCommander
+    pr: String(pr), repo: String(repo), repoPath: resolvedPath, chain: chainName,
+    implementerSessionId: implementerSessionId ? String(implementerSessionId).slice(0, 120) : null,
+    commanderForwarder: sendToCommander
   });
   res.json(result);
 });
@@ -8843,7 +8859,10 @@ function shutdown(signal = 'unknown') {
   for (const [name, service] of [
     ['appServerService', appServerService],
     ['discordWatchService', discordWatchService],
-    ['supervisorService', supervisorService]
+    ['supervisorService', supervisorService],
+    // tier2 owns a spawned llama-server child; realtime manager owns an interval.
+    ['tier2IntentService', tier2IntentService],
+    ['realtimeManagerService', RealtimeManagerService.getInstance()]
   ]) {
     try {
       service?.stop?.();

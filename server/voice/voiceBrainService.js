@@ -185,8 +185,11 @@ class VoiceBrainService {
    */
   extractAssistantReply(fullText, beforeText = '') {
     let text = String(fullText || '');
-    // Only the output produced AFTER the request was sent.
+    // Only the output produced AFTER the request was sent. When the rolling
+    // buffer has scrolled (prefix no longer matches), fall back to the tail
+    // rather than re-reading the whole buffer as if it were new output.
     if (beforeText && text.startsWith(beforeText)) text = text.slice(beforeText.length);
+    else if (beforeText) text = text.split('\n').slice(-40).join('\n');
 
     const cleaned = text
       .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '') // OSC sequences
@@ -217,6 +220,9 @@ class VoiceBrainService {
       .map((l) => l.trim())
       .filter((l) => /^[⏺●]\s*\S/.test(l))
       .map((l) => l.replace(/^[⏺●]\s*/, ''))
+      // Tool-call headers render as bullets too ("Bash(gh pr view …)") — those
+      // are chrome, not the answer.
+      .filter((l) => !/^\w+\([^)]*\)?/.test(l) || /\s[a-z]{3,}\s/.test(l.replace(/\([^)]*\)/g, '')))
       .filter((l) => l.length >= 4 && /[a-z]{3,}/i.test(l));
     if (bulletLines.length) return bulletLines.slice(-2).join(' ').slice(0, 360);
 
@@ -260,6 +266,7 @@ class VoiceBrainService {
    */
   async handleUnmatched(transcript) {
     const ctx = this.buildContext();
+    let taskEntities = null;
 
     // Confirm-first: a pending destructive action waits for a yes/no before
     // anything else is interpreted.
@@ -293,7 +300,8 @@ class VoiceBrainService {
       }
       if (cls && cls.confidence >= (t2.confidenceThreshold ?? 0.6)) {
         const routed = await this.routeClassified(transcript, cls, ctx);
-        if (routed) return routed;
+        if (routed && !routed.fallthrough) return routed;
+        if (routed?.fallthrough) taskEntities = routed.entities;
       }
     }
 
@@ -312,11 +320,15 @@ class VoiceBrainService {
       // going silent.
     }
 
-    // Agent lane: the Commander has the whole API and can do anything.
+    // Agent lane: the Commander has the whole API and can do anything — which
+    // is exactly why a destructive-sounding request must not reach it without
+    // a spoken yes, even when tier 2 was down or unsure.
+    if (this.isDestructive(transcript)) {
+      return this.requestConfirmation(transcript, { intent: 'task' });
+    }
     const forwarder = this.deps.commanderForwarder;
     if (typeof forwarder === 'function') {
-      const entities = this.pendingTaskEntities;
-      this.pendingTaskEntities = null;
+      const entities = taskEntities;
       const entityLine = entities
         ? `\nResolved entities: project=${entities.project || '-'} person=${entities.person || '-'} worktree=${entities.worktree || '-'} agent=${entities.agent || '-'}`
         : '';
@@ -425,12 +437,12 @@ class VoiceBrainService {
       return null;
     }
 
-    // task: fall through to the Commander lane, but enrich the brief with the
-    // entities tier 2 already resolved so the agent starts oriented.
+    // task: fall through to the Commander lane, handing the resolved entities
+    // back by VALUE — instance state here would leak onto the next unrelated
+    // utterance (and race across concurrent ones).
     if (cls.intent === 'task') {
       if (this.isDestructive(transcript)) return this.requestConfirmation(transcript, cls);
-      this.pendingTaskEntities = cls;
-      return null; // Commander lane below handles it (with entity brief).
+      return { fallthrough: true, entities: cls };
     }
     return null;
   }
@@ -593,6 +605,12 @@ class VoiceBrainService {
   }
 
   async chatLocally(transcript, ctx = {}) {
+    // Circuit breaker: a dead endpoint costs one timeout, then stays skipped
+    // for 60s — without this, chat+query lanes could stack multi-timeout
+    // waits before the Commander fallback.
+    this._chatBreaker = this._chatBreaker || {};
+    const tripped = (k) => this._chatBreaker[k] && Date.now() - this._chatBreaker[k] < 60_000;
+    const trip = (k) => { this._chatBreaker[k] = Date.now(); };
     // Best local brain first (OpenAI-compatible, e.g. Qwen on 18866), Ollama
     // as the fallback when it is down.
     const openaiUrl = String(process.env.VOICE_CHAT_URL || 'http://127.0.0.1:18866/v1').replace(/\/$/, '');
@@ -600,30 +618,33 @@ class VoiceBrainService {
       { role: 'system', content: this.chatSystemPrompt(ctx) },
       { role: 'user', content: String(transcript || '').trim() }
     ];
-    try {
-      const resp = await fetch(`${openaiUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: process.env.VOICE_CHAT_MODEL || 'local', messages, max_tokens: 160 }),
-        signal: AbortSignal.timeout(20000)
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        const text = String(data?.choices?.[0]?.message?.content || '').trim();
-        if (text) return text.slice(0, 360);
-      }
-    } catch { /* fall through to ollama */ }
+    if (!tripped('openai')) {
+      try {
+        const resp = await fetch(`${openaiUrl}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: process.env.VOICE_CHAT_MODEL || 'local', messages, max_tokens: 160 }),
+          signal: AbortSignal.timeout(9000)
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const text = String(data?.choices?.[0]?.message?.content || '').trim();
+          if (text) return text.slice(0, 360);
+        } else trip('openai');
+      } catch { trip('openai'); }
+    }
 
     const url = String(process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, '');
     const model = String(process.env.OLLAMA_MODEL || 'llama3.1:8b');
+    if (tripped('ollama')) return null;
     try {
       const resp = await fetch(`${url}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, stream: false, keep_alive: '30m', messages, options: { num_predict: 160 } }),
-        signal: AbortSignal.timeout(20000)
+        signal: AbortSignal.timeout(15000)
       });
-      if (!resp.ok) return null;
+      if (!resp.ok) { trip('ollama'); return null; }
       const data = await resp.json();
       const text = String(data?.message?.content || '').trim();
       return text ? text.slice(0, 360) : null;

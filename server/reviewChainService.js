@@ -78,8 +78,12 @@ class ReviewChainService {
         cmd = 'codex';
         args = ['exec', '-s', 'read-only', prompt];
       } else {
+        // Reviewers are READ-ONLY by construction: a malicious PR diff must
+        // not be able to steer the agent into writes or pushes. Only reading
+        // tools and the gh pr read commands are allowed.
         cmd = 'claude';
-        args = ['-p', prompt, '--model', step.model || 'sonnet', '--dangerously-skip-permissions'];
+        args = ['-p', prompt, '--model', step.model || 'sonnet',
+          '--allowedTools', 'Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git log:*),Bash(git show:*)'];
       }
       const child = spawn(cmd, args, { cwd, env: process.env, timeout: 15 * 60_000 });
       let out = '';
@@ -105,7 +109,9 @@ class ReviewChainService {
     if ([...this.running.values()].some((r) => r.repo === repo && r.pr === pr)) {
       return { started: false, reason: `a chain is already running for ${repo}#${pr}` };
     }
-    const steps = this.chains()[chain] || this.chains().default;
+    const all = this.chains();
+    const steps = (Object.prototype.hasOwnProperty.call(all, chain) && Array.isArray(all[chain]))
+      ? all[chain] : all.default;
     const state = { pr, repo, chain, step: 0, verdicts: [], startedAt: new Date().toISOString() };
     this.running.set(chainId, state);
     const taskId = `pr:${repo}#${pr}`;

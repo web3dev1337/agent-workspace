@@ -1300,6 +1300,9 @@ class CommandRegistry {
           throw new Error(`Invalid mode: ${params.mode}`);
         }
         io.emit('commander-action', { action: 'set-workflow-mode', mode });
+        // Server-side services (realtime manager) need the mode too — the UI
+        // event alone leaves the backend blind to it.
+        this.workflowMode = mode;
         return { message: `Workflow mode: ${mode}` };
       }
     });

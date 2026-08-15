@@ -66,10 +66,10 @@ class RealtimeManagerService {
         commandRegistry: d.commandRegistry
       }) || {};
       const sessions = {};
-      for (const s of snap.sessions || []) {
-        sessions[s.id || s.name || 'unknown'] = String(s.status || 'active').toLowerCase();
+      for (const s of snap.computed?.sessions || []) {
+        sessions[s.sessionId || s.id || s.name || 'unknown'] = String(s.status || 'active').toLowerCase();
       }
-      return { sessions, queue: (snap.queue || []).length };
+      return { sessions, queue: (snap.context?.queueSummary || []).length };
     } catch {
       return null;
     }
@@ -110,6 +110,12 @@ class RealtimeManagerService {
     this.prev = now;
 
     if (!this.pendingLines.length) return;
+    // Background mode means "stop talking to me" unless configured otherwise.
+    if (!this.config.speakInBackgroundMode
+        && this.deps.commandRegistry?.workflowMode === 'background') {
+      this.pendingLines = [];
+      return;
+    }
     const floorMs = (this.config.minSecondsBetweenUpdates || 30) * 1000;
     if (Date.now() - this.lastSpokenAt < floorMs) return;
 

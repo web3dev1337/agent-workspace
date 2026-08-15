@@ -104,8 +104,9 @@
     return true;
   }
   // The shared socket is created by app.js on init; poll briefly until it exists.
+  let bindTries = 0;
   const bindTimer = setInterval(() => {
-    if (bind(window.orchestrator?.socket || window.socket)) clearInterval(bindTimer);
+    if (bind(window.orchestrator?.socket || window.socket) || ++bindTries > 240) clearInterval(bindTimer);
   }, 500);
 
   // The Alt+J panel mounts lazily on first open — adopt the log into it as a
@@ -113,9 +114,11 @@
   // instead of floating over it. Messages keep accumulating while orphaned.
   const adoptTimer = setInterval(() => {
     const sections = document.querySelector('.jarvis-panel .jarvis-sections');
-    if (sections && root.parentElement !== sections) sections.insertBefore(root, sections.firstChild);
+    if (sections && root.parentElement !== sections) {
+      sections.insertBefore(root, sections.firstChild);
+      clearInterval(adoptTimer);
+    }
   }, 700);
-  void adoptTimer;
 
   window.jarvisChatLog = { add };
 })();

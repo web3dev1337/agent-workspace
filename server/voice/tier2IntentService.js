@@ -30,12 +30,17 @@ class Tier2IntentService {
   constructor({ logger = console, registry = null } = {}) {
     this.logger = logger;
     this.registry = registry;
-    this.url = String(process.env.TIER2_LLM_URL || 'http://127.0.0.1:5742').replace(/\/$/, '');
-    this.autostart = String(process.env.TIER2_AUTOSTART || 'true') !== 'false';
-    this.modelPath = String(process.env.TIER2_MODEL || path.join(os.homedir(), 'AI-Models', 'Bonsai-1.7B.gguf'));
-    this.serverBin = String(process.env.TIER2_LLAMA_BIN
+    let cfg = {};
+    try {
+      cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'config', 'voice-tiers.json'), 'utf8')).tier2 || {};
+    } catch { /* config optional */ }
+    const expand = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
+    this.url = String(process.env.TIER2_LLM_URL || cfg.url || 'http://127.0.0.1:5742').replace(/\/$/, '');
+    this.autostart = String(process.env.TIER2_AUTOSTART ?? cfg.autostart ?? 'true') !== 'false';
+    this.modelPath = expand(process.env.TIER2_MODEL || cfg.model || path.join(os.homedir(), 'AI-Models', 'Bonsai-1.7B.gguf'));
+    this.serverBin = expand(process.env.TIER2_LLAMA_BIN
       || path.join(os.homedir(), 'local-llm', 'prism-llama', 'build', 'bin', 'llama-server'));
-    this.confidenceThreshold = Number(process.env.TIER2_CONFIDENCE || 0.6);
+    this.confidenceThreshold = Number(process.env.TIER2_CONFIDENCE || cfg.confidenceThreshold || 0.6);
     this.child = null;
     this.transcriptLog = path.join(os.homedir(), '.orchestrator', 'voice-transcripts.jsonl');
     this.promptTemplate = this.loadPromptTemplate();
@@ -82,6 +87,11 @@ class Tier2IntentService {
     };
   }
 
+  /** Model + binary exist, or the server is already answering. */
+  available() {
+    return (fs.existsSync(this.modelPath) && fs.existsSync(this.serverBin)) || Boolean(this.child);
+  }
+
   async ensureServer() {
     if (await this.healthy()) return true;
     if (!this.autostart) return false;
@@ -89,14 +99,25 @@ class Tier2IntentService {
       this.logger.warn?.('tier2: model or llama binary missing', { model: this.modelPath, bin: this.serverBin });
       return false;
     }
-    if (this.child) return this.waitHealthy(20_000);
-    const port = new URL(this.url).port || '5742';
-    this.child = spawn(this.serverBin,
-      ['-m', this.modelPath, '-ngl', '99', '-c', '8192', '--host', '127.0.0.1', '--port', port],
-      { env: { ...process.env, LD_LIBRARY_PATH: path.dirname(this.serverBin) }, stdio: 'ignore' });
-    this.child.on('exit', () => { this.child = null; });
-    this.logger.info?.('tier2: started Bonsai llama-server', { port });
-    return this.waitHealthy(30_000);
+    // Memoize the in-flight startup so concurrent classify() calls share ONE
+    // spawn instead of racing for the port and orphaning the winner.
+    if (!this.startupPromise) {
+      this.startupPromise = (async () => {
+        const port = new URL(this.url).port || '5742';
+        this.child = spawn(this.serverBin,
+          ['-m', this.modelPath, '-ngl', '99', '-c', '8192', '--host', '127.0.0.1', '--port', port],
+          { env: { ...process.env, LD_LIBRARY_PATH: path.dirname(this.serverBin) }, stdio: 'ignore' });
+        this.child.on('error', (error) => {
+          this.logger.warn?.('tier2: llama-server spawn error', { error: error.message });
+          this.child = null;
+        });
+        this.child.on('exit', () => { this.child = null; });
+        this.logger.info?.('tier2: started Bonsai llama-server', { port });
+        const ok = await this.waitHealthy(30_000);
+        return ok;
+      })().finally(() => { this.startupPromise = null; });
+    }
+    return this.startupPromise;
   }
 
   async healthy() {
@@ -181,12 +202,12 @@ class Tier2IntentService {
     let product = null;
 
     // Worktree from the raw utterance (spoken numbers included).
-    const wtMatch = low.match(/work\s*(?:tree)?\s*(\d|won|one|to|too|two|three|for|four|five|six|seven|eight|nine)\b/);
+    const wtMatch = low.match(/work\s*(?:tree)?\s*(\d{1,2}|won|one|to|too|two|three|for|four|five|six|seven|eight|nine)\b/);
     if (wtMatch) {
       const tok = wtMatch[1];
       worktree = /\d/.test(tok) ? `work${tok}` : `work${NUM_WORDS[tok]}`;
     } else if (worktree) {
-      const m = worktree.match(/(\d)/);
+      const m = worktree.match(/(\d{1,2})/);
       const toks = (worktree.toLowerCase().match(/[a-z]+/g) || []).filter((t) => t in NUM_WORDS);
       worktree = m ? `work${m[1]}` : toks.length ? `work${NUM_WORDS[toks[toks.length - 1]]}` : '';
     }

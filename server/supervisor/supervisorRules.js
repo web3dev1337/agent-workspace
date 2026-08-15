@@ -158,9 +158,13 @@ function matches(condition, signal) {
   if (when.tiers.length && !when.tiers.includes(Number(signal.tier))) return false;
   if (when.minQuietSeconds !== null && signal.quietSeconds < when.minQuietSeconds) return false;
   if (when.maxQuietSeconds !== null && signal.quietSeconds > when.maxQuietSeconds) return false;
-  if (when.repeatedTailLine !== null && Number(signal.repeatedLineCount || 0) < when.repeatedTailLine) return false;
-
-  if (when.tailMatches.length && !when.tailMatches.some((re) => re.test(signal.tail))) return false;
+  if (when.repeatedTailLine !== null) {
+    if (Number(signal.repeatedLineCount || 0) < when.repeatedTailLine) return false;
+    // A loop rule is about the line that repeats. Matching the whole tail here
+    // let a benign "Auto-update failed" footer anywhere on screen turn an idle
+    // prompt redraw into a critical "repeating error" finding.
+    if (when.tailMatches.length && !when.tailMatches.some((re) => re.test(String(signal.repeatedLine || '')))) return false;
+  } else if (when.tailMatches.length && !when.tailMatches.some((re) => re.test(signal.tail))) return false;
   if (when.tailNotMatches.length && when.tailNotMatches.some((re) => re.test(signal.tail))) return false;
 
   if (!gitMatches(when.git, signal.git)) return false;

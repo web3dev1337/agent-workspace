@@ -83,7 +83,7 @@ class SpeechService {
     // Warm neural TTS HTTP servers (model kept loaded, POST /synthesize -> WAV).
     // piper: fast (~0.2s), decent. kokoro: natural (~2s CPU), the nicer voice.
     this.piperHttpUrl = String(process.env.PIPER_HTTP_URL || 'http://127.0.0.1:5959').replace(/\/$/, '');
-    this.kokoroHttpUrl = String(process.env.KOKORO_HTTP_URL || 'http://127.0.0.1:5960').replace(/\/$/, '');
+    this.kokoroHttpUrl = String(process.env.KOKORO_HTTP_URL || 'http://127.0.0.1:5732').replace(/\/$/, '');
     this.history = [];
     this.lastSpokenAt = new Map();
     this.backendCache = null;

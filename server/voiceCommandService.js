@@ -1299,6 +1299,14 @@ class VoiceCommandService {
       return { success: false, error: 'too short to classify', transcript: text };
     }
 
+    // The tier-2 classifier (grammar-constrained, calibrated, ~100ms) has
+    // superseded the legacy free-text LLM matchers: when the brain carries
+    // tier 2, unmatched speech falls through to it instead. The legacy path
+    // survives only as a fallback for setups without tier 2.
+    if (this.brain?.deps?.tier2IntentService?.available?.()) {
+      return { success: false, error: 'deferred to tier-2 classifier', transcript: text };
+    }
+
     // Try Ollama first (local, private)
     if (this.useOllama) {
       const ollamaResult = await this.parseWithOllama(text);

@@ -65,7 +65,11 @@ class VoiceQueryService {
       const args = ['search', 'prs', '--state', 'open', '--limit', '10',
         '--json', 'title,number,repository,updatedAt'];
       if (personEntry?.github) args.push('--author', personEntry.github);
-      else args.push('--owner', 'web3dev1337');
+      else {
+        const owner = this.registry?.defaults?.().githubOwner
+          || (reg.projects?.find((p) => p.repo)?.repo || '').split('/')[0];
+        if (owner) args.push('--owner', owner);
+      }
       if (/today/.test(low)) {
         const today = new Date().toISOString().slice(0, 10);
         args.push('--created', `>=${today}`);

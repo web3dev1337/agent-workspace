@@ -80,7 +80,8 @@ class VoiceRegistryService {
     candidates.sort((a, b) => b.alias.length - a.alias.length);
     let remaining = text;
     for (const c of candidates) {
-      if (!remaining.includes(` ${c.alias} `) && !remaining.includes(` ${c.alias}s `)) continue;
+      if (!remaining.includes(` ${c.alias} `) && !remaining.includes(` ${c.alias}s `)
+          && !remaining.includes(` ${c.alias}'s `)) continue;
       const slot = { products: 'product', projects: 'project', people: 'person' }[c.kind];
       if (!found[slot]) {
         found[slot] = c.entry;
