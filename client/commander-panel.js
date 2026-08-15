@@ -24,6 +24,176 @@ class CommanderPanel {
     this.lastSyncedSize = null;
     this.resizeObserver = null;
     this.inputChain = Promise.resolve();
+    // Commander tabs: 'main' always exists; extra instances are cmd-2..cmd-6.
+    this.activeInstance = 'main';
+    this.tabs = new Map([['main', { label: 'Commander 1', terminal: null, fitAddon: null, isRunning: false, isStarting: false, lastSyncedSize: null }]]);
+  }
+
+  // Instance-scoped API URL: main uses the bare endpoint (back-compat),
+  // extra tabs append ?instance=<id>.
+  apiUrl(path) {
+    if (this.activeInstance === 'main') return `${this.serverUrl}${path}`;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${this.serverUrl}${path}${sep}instance=${encodeURIComponent(this.activeInstance)}`;
+  }
+
+  // Per-tab terminal container; created on demand, shown only when active.
+  getActiveContainer() {
+    if (this.activeInstance === 'main') return document.getElementById('commander-terminal');
+    const id = `commander-terminal-${this.activeInstance}`;
+    let el = document.getElementById(id);
+    if (!el) {
+      const mainEl = document.getElementById('commander-terminal');
+      if (!mainEl) return null;
+      el = document.createElement('div');
+      el.className = 'commander-terminal';
+      el.id = id;
+      mainEl.parentElement.insertBefore(el, mainEl.nextSibling);
+    }
+    return el;
+  }
+
+  renderTabs() {
+    const bar = document.getElementById('commander-tabbar');
+    if (!bar) return;
+    bar.replaceChildren();
+    for (const [id, tab] of this.tabs) {
+      const btn = document.createElement('button');
+      btn.className = `commander-tab${id === this.activeInstance ? ' active' : ''}`;
+      const label = document.createElement('span');
+      label.className = 'commander-tab-label';
+      label.textContent = tab.label || id;
+      btn.appendChild(label);
+      btn.title = 'Click to switch · double-click to rename';
+      btn.addEventListener('click', () => this.switchTab(id));
+      label.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        this.startTabRename(id, label);
+      });
+      if (id !== 'main') {
+        const close = document.createElement('span');
+        close.className = 'commander-tab-close';
+        close.textContent = '×';
+        close.title = 'Close this Commander';
+        close.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.closeTab(id);
+        });
+        btn.appendChild(close);
+      }
+      bar.appendChild(btn);
+    }
+    if (this.tabs.size < 6) {
+      const add = document.createElement('button');
+      add.className = 'commander-tab commander-tab-add';
+      add.textContent = '+';
+      add.title = 'Start a new Commander';
+      add.addEventListener('click', () => this.addTab());
+      bar.appendChild(add);
+    }
+    const title = document.getElementById('commander-title-text');
+    if (title) title.textContent = this.tabs.get(this.activeInstance)?.label || 'Commander';
+  }
+
+  startTabRename(id, labelEl) {
+    labelEl.contentEditable = 'true';
+    labelEl.focus();
+    document.getSelection()?.selectAllChildren(labelEl);
+    const finish = async (commit) => {
+      labelEl.contentEditable = 'false';
+      const text = labelEl.textContent.trim().slice(0, 40);
+      if (!commit || !text) {
+        this.renderTabs();
+        return;
+      }
+      try {
+        await fetch(`${this.serverUrl}/api/commander/instances/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: text })
+        });
+        const tab = this.tabs.get(id);
+        if (tab) tab.label = text;
+      } catch { /* keep old label */ }
+      this.renderTabs();
+    };
+    labelEl.addEventListener('blur', () => finish(true), { once: true });
+    labelEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); labelEl.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+  }
+
+  saveActiveTabState() {
+    const tab = this.tabs.get(this.activeInstance);
+    if (!tab) return;
+    tab.terminal = this.terminal;
+    tab.fitAddon = this.fitAddon;
+    tab.isRunning = this.isRunning;
+    tab.isStarting = this.isStarting;
+    tab.lastSyncedSize = this.lastSyncedSize;
+  }
+
+  switchTab(id) {
+    if (!this.tabs.has(id) || id === this.activeInstance) return;
+    this.saveActiveTabState();
+    const prevContainer = this.getActiveContainer();
+    if (prevContainer) prevContainer.style.display = 'none';
+    this.activeInstance = id;
+    const tab = this.tabs.get(id);
+    this.terminal = tab.terminal;
+    this.fitAddon = tab.fitAddon;
+    this.isRunning = tab.isRunning;
+    this.isStarting = tab.isStarting;
+    this.lastSyncedSize = null; // PTY may have drifted while hidden
+    const container = this.getActiveContainer();
+    if (container) container.style.display = '';
+    this.updateStatusBadge();
+    this.renderTabs();
+    if (this.terminal) {
+      this.fitTerminalSoon();
+    }
+  }
+
+  async addTab() {
+    try {
+      const res = await fetch(`${this.serverUrl}/api/commander/instances`, { method: 'POST' });
+      const result = await res.json();
+      if (!res.ok || !result.id) {
+        this.orchestrator?.showNotification?.(result.error || 'Could not create Commander', 'error');
+        return;
+      }
+      this.tabs.set(result.id, { label: `Commander ${result.id.replace('cmd-', '')}`, terminal: null, fitAddon: null, isRunning: false, isStarting: false, lastSyncedSize: null });
+      this.switchTab(result.id);
+      // Same auto-start flow as first open: start the PTY, Claude follows.
+      await this.startCommander();
+    } catch (error) {
+      console.error('Failed to add commander tab:', error);
+    }
+  }
+
+  async closeTab(id) {
+    if (id === 'main') return;
+    try {
+      await fetch(`${this.serverUrl}/api/commander/instances/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch { /* remove locally regardless */ }
+    const tab = this.tabs.get(id);
+    try { tab?.terminal?.dispose?.(); } catch { /* already gone */ }
+    document.getElementById(`commander-terminal-${id}`)?.remove();
+    this.tabs.delete(id);
+    if (this.activeInstance === id) {
+      this.activeInstance = 'main';
+      const main = this.tabs.get('main');
+      this.terminal = main.terminal;
+      this.fitAddon = main.fitAddon;
+      this.isRunning = main.isRunning;
+      this.isStarting = main.isStarting;
+      const container = this.getActiveContainer();
+      if (container) container.style.display = '';
+      this.fitTerminalSoon();
+    }
+    this.updateStatusBadge();
+    this.renderTabs();
   }
 
   fitTerminalSoon() {
@@ -51,7 +221,7 @@ class CommanderPanel {
       return;
     }
     this.lastSyncedSize = { cols, rows };
-    fetch(`${this.serverUrl}/api/commander/resize`, {
+    fetch(this.apiUrl('/api/commander/resize'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cols, rows })
@@ -128,6 +298,7 @@ class CommanderPanel {
           <button id="commander-close" class="commander-window-btn close" title="Close">✕</button>
         </div>
       </div>
+      <div class="commander-tabbar" id="commander-tabbar"></div>
       <div class="commander-toolbar">
         <button id="commander-start" class="commander-btn" title="Start terminal" data-ui-visibility="commander.startStop">▶️ Start</button>
         <button id="commander-stop" class="commander-btn" title="Stop terminal" data-ui-visibility="commander.startStop">⏹️ Stop</button>
@@ -155,6 +326,7 @@ class CommanderPanel {
       </div>
     `;
     document.body.appendChild(panel);
+    this.renderTabs();
 
     // Advice overlay (rendered on demand)
     const advice = document.createElement('div');
@@ -178,7 +350,7 @@ class CommanderPanel {
   setPlaceholderMessages(lines = []) {
     if (this.terminal) return;
 
-    const container = document.getElementById('commander-terminal');
+    const container = this.getActiveContainer();
     if (!container) return;
 
     const messages = Array.isArray(lines) && lines.length
@@ -204,7 +376,7 @@ class CommanderPanel {
   initTerminal() {
     if (this.terminal) return;
 
-    const container = document.getElementById('commander-terminal');
+    const container = this.getActiveContainer();
     if (!container) return;
 
     // Clear placeholder
@@ -584,22 +756,36 @@ class CommanderPanel {
     socket.off('commander-output');
     socket.off('commander-exit');
 
-    socket.on('commander-output', ({ data }) => {
-      if (this.terminal && !this.historyPending) {
-        this.terminal.write(data);
-      } else {
-        // Buffer output until the terminal exists and history replay is done
-        this.pendingOutput = (this.pendingOutput || '') + data;
+    socket.on('commander-output', ({ data, instanceId }) => {
+      const id = instanceId || 'main';
+      if (id === this.activeInstance) {
+        if (this.terminal && !this.historyPending) {
+          this.terminal.write(data);
+        } else {
+          // Buffer output until the terminal exists and history replay is done
+          this.pendingOutput = (this.pendingOutput || '') + data;
+        }
+        return;
       }
+      // Background tab: write straight into its terminal so scrollback stays live.
+      const tab = this.tabs.get(id);
+      tab?.terminal?.write?.(data);
     });
 
-    socket.on('commander-exit', ({ exitCode }) => {
-      this.isRunning = false;
-      // A restarted PTY comes back at its default size, so force a re-sync
-      this.lastSyncedSize = null;
-      this.updateStatusBadge();
-      if (this.terminal) {
-        this.terminal.writeln(`\r\n[Commander exited with code ${exitCode}]`);
+    socket.on('commander-exit', ({ exitCode, instanceId }) => {
+      const id = instanceId || 'main';
+      const tab = this.tabs.get(id);
+      if (tab) tab.isRunning = false;
+      if (id === this.activeInstance) {
+        this.isRunning = false;
+        // A restarted PTY comes back at its default size, so force a re-sync
+        this.lastSyncedSize = null;
+        this.updateStatusBadge();
+        if (this.terminal) {
+          this.terminal.writeln(`\r\n[Commander exited with code ${exitCode}]`);
+        }
+      } else {
+        tab?.terminal?.writeln?.(`\r\n[Commander exited with code ${exitCode}]`);
       }
     });
   }
@@ -609,7 +795,7 @@ class CommanderPanel {
    */
   async fetchStatus() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/commander/status`);
+      const response = await fetch(this.apiUrl('/api/commander/status'));
       if (response.ok) {
         const status = await response.json();
         this.isRunning = status.running;
@@ -626,16 +812,9 @@ class CommanderPanel {
   updateStatusBadge() {
     const badge = document.getElementById('commander-status-badge');
     if (badge) {
-      if (this.isStarting) {
-        badge.textContent = 'Starting';
-        badge.className = 'commander-status starting';
-      } else if (this.isRunning) {
-        badge.textContent = 'Running';
-        badge.className = 'commander-status online';
-      } else {
-        badge.textContent = 'Stopped';
-        badge.className = 'commander-status offline';
-      }
+      badge.textContent = '●';
+      badge.className = `commander-status ${this.isStarting ? 'starting' : (this.isRunning ? 'online' : 'offline')}`;
+      badge.title = this.isStarting ? 'Starting' : (this.isRunning ? 'Running' : 'Stopped');
     }
   }
 
@@ -733,7 +912,7 @@ class CommanderPanel {
 
     this.startCommanderPromise = (async () => {
       try {
-        const response = await fetch(`${this.serverUrl}/api/commander/start`, {
+        const response = await fetch(this.apiUrl('/api/commander/start'), {
           method: 'POST'
         });
         const result = response.ok
@@ -775,7 +954,7 @@ class CommanderPanel {
    */
   async stopCommander() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/commander/stop`, {
+      const response = await fetch(this.apiUrl('/api/commander/stop'), {
         method: 'POST'
       });
 
@@ -799,7 +978,7 @@ class CommanderPanel {
     }
 
     try {
-      const response = await fetch(`${this.serverUrl}/api/commander/start-claude`, {
+      const response = await fetch(this.apiUrl('/api/commander/start-claude'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode })
@@ -1009,7 +1188,7 @@ class CommanderPanel {
     // Chain requests so keystrokes reach the terminal in the order typed;
     // parallel fetches can otherwise arrive out of order and scramble input.
     this.inputChain = this.inputChain
-      .then(() => fetch(`${this.serverUrl}/api/commander/input`, {
+      .then(() => fetch(this.apiUrl('/api/commander/input'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input })
@@ -1026,7 +1205,7 @@ class CommanderPanel {
    */
   async fetchInitialOutput() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/commander/output?lines=500`);
+      const response = await fetch(this.apiUrl('/api/commander/output?lines=500'));
       if (response.ok) {
         const { output } = await response.json();
         if (output && this.terminal) {
@@ -1052,7 +1231,7 @@ class CommanderPanel {
    */
   async checkStatus() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/commander/status`);
+      const response = await fetch(this.apiUrl('/api/commander/status'));
       if (response.ok) {
         const status = await response.json();
         this.isRunning = status.running;

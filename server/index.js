@@ -7796,10 +7796,52 @@ app.post('/api/pager/jobs/:id/stop', express.json(), (req, res) => {
 // Commander Service API (Claude Code Terminal)
 // ============================================
 
+// Resolve which Commander instance a request targets (panel tabs).
+// No/unknown instance -> the main singleton, so existing callers are untouched.
+const resolveCommander = (req) => {
+  const id = String(req.query.instance || req.body?.instance || 'main').trim() || 'main';
+  if (id === 'main') return commanderService;
+  return CommanderService.forInstance(id);
+};
+
+// List Commander instances (panel tabs)
+app.get('/api/commander/instances', (req, res) => {
+  try {
+    commanderService; // ensure main is registered
+    res.json({ instances: CommanderService.listInstances() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create an additional Commander instance
+app.post('/api/commander/instances', (req, res) => {
+  try {
+    const result = CommanderService.createInstance({ io, sessionManager });
+    if (result.error) return res.status(409).json({ error: result.error });
+    res.json({ id: result.id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Stop and remove an additional Commander instance
+app.delete('/api/commander/instances/:id', async (req, res) => {
+  try {
+    const result = await CommanderService.removeInstance(req.params.id);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get Commander status
 app.get('/api/commander/status', (req, res) => {
   try {
-    const status = commanderService.getStatus();
+    const target = resolveCommander(req);
+    if (!target) return res.status(404).json({ error: 'Unknown commander instance' });
+    const status = target.getStatus();
     res.json(status);
   } catch (error) {
     logger.error('Failed to get commander status', { error: error.message });
@@ -7810,7 +7852,9 @@ app.get('/api/commander/status', (req, res) => {
 // Start Commander terminal
 app.post('/api/commander/start', async (req, res) => {
   try {
-    const result = await commanderService.start();
+    const target = resolveCommander(req);
+    if (!target) return res.status(404).json({ error: 'Unknown commander instance' });
+    const result = await target.start();
     res.json(result);
   } catch (error) {
     logger.error('Failed to start commander', { error: error.message });
@@ -7822,8 +7866,10 @@ app.post('/api/commander/start', async (req, res) => {
 app.post('/api/commander/start-claude', async (req, res) => {
   try {
     const { mode, yolo } = req.body;
+    const target = resolveCommander(req);
+    if (!target) return res.status(404).json({ error: 'Unknown commander instance' });
     // yolo defaults to true for Commander (YOLO mode enabled by default)
-    const result = await commanderService.startClaude(mode || 'fresh', yolo !== false);
+    const result = await target.startClaude(mode || 'fresh', yolo !== false);
     res.json(result);
   } catch (error) {
     logger.error('Failed to start Claude in commander', { error: error.message });
@@ -7839,7 +7885,9 @@ app.post('/api/commander/input', (req, res) => {
       return res.status(400).json({ error: 'Input is required' });
     }
 
-    const success = commanderService.sendInput(input);
+    const target = resolveCommander(req);
+    if (!target) return res.status(404).json({ error: 'Unknown commander instance' });
+    const success = target.sendInput(input);
     res.json({ success });
   } catch (error) {
     logger.error('Commander input failed', { error: error.message });
@@ -7863,7 +7911,9 @@ app.post('/api/commander/resize', (req, res) => {
       });
     }
 
-    const success = commanderService.resize(cols, rows);
+    const target = resolveCommander(req);
+    if (!target) return res.status(404).json({ error: 'Unknown commander instance' });
+    const success = target.resize(cols, rows);
     res.json({ success, cols, rows });
   } catch (error) {
     logger.error('Commander resize failed', { error: error.message });
@@ -7874,7 +7924,9 @@ app.post('/api/commander/resize', (req, res) => {
 // Stop Commander terminal
 app.post('/api/commander/stop', (req, res) => {
   try {
-    const result = commanderService.stop();
+    const target = resolveCommander(req);
+    if (!target) return res.status(404).json({ error: 'Unknown commander instance' });
+    const result = target.stop();
     res.json(result);
   } catch (error) {
     logger.error('Failed to stop commander', { error: error.message });
@@ -7885,7 +7937,9 @@ app.post('/api/commander/stop', (req, res) => {
 // Restart Commander terminal
 app.post('/api/commander/restart', async (req, res) => {
   try {
-    const result = await commanderService.restart();
+    const target = resolveCommander(req);
+    if (!target) return res.status(404).json({ error: 'Unknown commander instance' });
+    const result = await target.restart();
     res.json(result);
   } catch (error) {
     logger.error('Failed to restart commander', { error: error.message });
@@ -7897,7 +7951,9 @@ app.post('/api/commander/restart', async (req, res) => {
 app.get('/api/commander/output', (req, res) => {
   try {
     const { lines } = req.query;
-    const output = commanderService.getRecentOutput(lines ? parseInt(lines) : 50);
+    const target = resolveCommander(req);
+    if (!target) return res.status(404).json({ error: 'Unknown commander instance' });
+    const output = target.getRecentOutput(lines ? parseInt(lines) : 50);
     res.json({ output });
   } catch (error) {
     logger.error('Failed to get commander output', { error: error.message });
@@ -7906,9 +7962,25 @@ app.get('/api/commander/output', (req, res) => {
 });
 
 // Clear Commander buffer
+// Rename a Commander instance tab
+app.patch('/api/commander/instances/:id', express.json(), (req, res) => {
+  try {
+    const target = CommanderService.forInstance(req.params.id);
+    if (!target) return res.status(404).json({ error: 'Unknown commander instance' });
+    const label = String(req.body?.label || '').trim().slice(0, 40);
+    if (!label) return res.status(400).json({ error: 'label is required' });
+    target.label = label;
+    res.json({ ok: true, id: target.instanceId, label });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/commander/clear', (req, res) => {
   try {
-    commanderService.clearBuffer();
+    const clearTarget = resolveCommander(req);
+    if (!clearTarget) return res.status(404).json({ error: 'Unknown commander instance' });
+    clearTarget.clearBuffer();
     res.json({ success: true });
   } catch (error) {
     logger.error('Failed to clear commander buffer', { error: error.message });
