@@ -58,6 +58,7 @@ server/sessionManager.js           - Terminal session lifecycle management
 server/statusDetector.js           - Claude Code session monitoring
 ├─ Detects: Claude sessions, branch changes, status updates
 ├─ Busy/idle heuristics: tool/typing signals are recency-gated to avoid stale "busy forever" states
+├─ Input-aware gating: `noInputSinceLaunch` option — a freshly launched agent that never received a submitted command (Enter) reports `waiting`, not `busy`, from weak recency/scrollback heuristics; strong markers (esc to interrupt, provider work patterns) still report busy (covers `claude -p`/`codex exec` auto-runs). SessionManager tracks `agentStartedAt`/`agentInputSubmitted` per session (see `isAutoRunAgentCommand`)
 ├─ Events: session-detected, branch-changed, status-updated
 └─ Polling: Configurable intervals for status checks
 
@@ -261,6 +262,8 @@ client/app.js                      - Main client application
 ├─ Quick Work GitHub import: “GitHub — Not Cloned” rows can clone directly or open a placement modal (category/framework/parent folders) before auto-starting `work1`
 ├─ Quick Work onboarding: first-run hint card + “Folder map” modal explain category→folder mapping (`game -> games`, `website -> websites`, etc.) for fresh installs
 ├─ Status UI: visual state mapping for `busy`, `waiting`, `ready-new`, and `no-agent`
+├─ Sidebar ordering: repo groups sort by manual drag order (persisted per workspace at `ui.worktrees.repoOrder.<workspaceKey>`), then alphabetically; worktrees numeric-aware (work2 < work10). Drag any worktree row to move its repo group
+├─ Quick Work "✨ New repo": `showQuickNewRepoModal()` → POST /api/github/create-repo-worktree (private GitHub repo by default); placement modal supports inline "+ New framework" (POST /api/project-types/frameworks) and explicit "(none)" framework selection
 └─ Dependencies: Socket.IO client, terminal emulation
 
 client/assets/agent-workspace-logo.png - Shared circular brand mark used by the app favicon, sidebar/dashboard title logo, and as the source for bundled desktop icons
@@ -304,7 +307,10 @@ client/styles/tabs.css             - Tab bar styling
 
 client/styles/projects-board.css   - Projects Board modal styling
 
-client/usage-limits-widget.js      - Header chip (right of Ports) showing Claude/Codex plan usage + reset countdowns from `/api/usage/limits`
+client/usage-limits-widget.js      - Header chip (right of Ports) showing Claude/Codex/Grok plan usage + reset countdowns from `/api/usage/limits`
+├─ Generic Claude buckets: renders any extra rate-limit bucket Claude Code reports (e.g. `seven_day_fable` → "Fable 7d") via usageLimitsService `extraBuckets`; tooltip shows the live model name
+├─ Usage severity colors: % turns yellow ≥70 / orange ≥85 / red ≥95
+└─ Weekly use-it-or-lose-it pace: countdown highlighted when usage is far behind the pace needed to spend the weekly quota (models the ~20%-per-5h-window cap with a realism factor)
 
 client/plugin-host.js              - Client plugin runtime for UI slots/actions
 ├─ Loads: `/api/plugins/client-surface` slot actions with cache/refresh support
@@ -640,6 +646,7 @@ POST /api/project-types/frameworks - Add a framework to the project taxonomy
 GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
 GET /api/github/repos             - List GitHub repositories via `gh` (owner/limit/force supported)
 POST /api/github/clone-and-add-worktree - Clone `owner/repo` into taxonomy-guided folder placement (`<repo>/master`) and attach/start a mixed worktree (default `work1`)
+POST /api/github/create-repo-worktree - Create a brand-new repo: local `<repo>/master` (git init, seed commit), GitHub repo (PRIVATE by default) + push, then attach/start `work1` in the workspace (Quick Work "✨ New repo" button)
 POST /api/projects/create-workspace - Create project scaffold + matching workspace in one request
 GET /api/discord/status            - Discord queue + services health/status (counts + signature status); endpoint can be gated by `DISCORD_API_TOKEN`
 POST /api/discord/ensure-services  - Ensure Services workspace/session bootstrap; accepts optional `dangerousModeOverride` (gated by `DISCORD_ALLOW_DANGEROUS_OVERRIDE`)
