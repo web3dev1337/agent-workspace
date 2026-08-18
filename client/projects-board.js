@@ -197,8 +197,22 @@ class ProjectsBoardUI {
         if (hideForksEl) hideForksEl.checked = !!this.hideForks;
       } catch {}
 
-      if (this.hideForks) {
-        await this.ensureGitHubRepos({ force });
+      // Every GitHub repo belongs on the board, not just the ones cloned on
+      // THIS machine — uncloned repos appear as GitHub-only rows (default
+      // backlog/unclassified) under a stable machine-independent key, so the
+      // full portfolio shows on any computer.
+      await this.ensureGitHubRepos({ force });
+      const localNames = new Set(this.projects.map((p) => String(p?.name || '').trim().toLowerCase()));
+      for (const repo of (Array.isArray(this.githubRepos) ? this.githubRepos : [])) {
+        const name = String(repo?.name || '').trim();
+        if (!name || localNames.has(name.toLowerCase())) continue;
+        this.projects.push({
+          key: `github:${String(repo?.nameWithOwner || name).trim()}`,
+          name,
+          path: '',
+          type: 'github-remote',
+          category: 'GitHub — not cloned'
+        });
       }
 
       this.render();
