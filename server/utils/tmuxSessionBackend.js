@@ -22,7 +22,7 @@ const SESSION_NAME_UNSAFE = /[^A-Za-z0-9_-]/g;
 
 // Bump when the ensureConfigured option list changes so already-running tmux
 // servers (marker holds the old version) get reconfigured on the next spawn.
-const CONFIG_MARKER_VERSION = '2';
+const CONFIG_MARKER_VERSION = '3';
 
 // Device-attribute REPORT sequences: DA1 `ESC [ ? … c` and DA2 `ESC [ > … c`.
 // These are terminal auto-RESPONSES, never something a user types. They only
@@ -101,11 +101,12 @@ class TmuxSessionBackend {
   }
 
   // One-time per-socket server config. The options make embedded panes behave
-  // like plain terminals: no status bar, no prefix key, tmux-level mouse ON so
-  // the scroll wheel scrolls pane history (tmux puts the outer terminal in the
-  // alternate screen, where xterm.js would otherwise translate wheel to arrow
-  // keys — Claude Code shows "Scroll wheel is sending arrow keys"), modest
-  // scrollback, and windows sized to the most recently attached client.
+  // like plain terminals. Mouse stays OFF so xterm.js keeps browser-native
+  // text selection (tmux mouse mode eats drags — selection instantly cleared).
+  // The outer alternate screen is disabled (smcup@/rmcup@) so pane output
+  // scrolls through the browser terminal's own buffer: native wheel scrolling,
+  // scrollbar, and selection — no wheel→arrow-key translation, no copy-mode
+  // snap-back. PgUp copy-mode (styled below) remains for pre-attach history.
   ensureConfigured() {
     try {
       this.run(['start-server']);
@@ -132,13 +133,21 @@ class TmuxSessionBackend {
       ['set', '-g', 'exit-empty', 'off'],
       ['set', '-g', 'status', 'off'],
       ['set', '-g', 'prefix', 'None'],
-      ['set', '-g', 'mouse', 'on'],
+      ['set', '-g', 'mouse', 'off'],
       ['set', '-g', 'history-limit', '20000'],
       ['set', '-g', 'default-terminal', 'xterm-256color'],
       // Pin the outer terminal's capabilities so tmux never has to depend on a
       // (slow, round-tripped over the browser socket) probe response to detect
       // truecolor/clipboard — which is what races and leaks DA reports.
       ['set', '-ga', 'terminal-features', 'xterm-256color:RGB:clipboard'],
+      // Never switch the OUTER terminal to the alternate screen — that is what
+      // made xterm.js translate wheel scrolling into arrow keys.
+      ['set', '-ga', 'terminal-overrides', '*:smcup@:rmcup@'],
+      // Readable copy-mode selection (default is a jarring orange).
+      ['set', '-g', 'mode-style', 'bg=#264f78,fg=terminal'],
+      // Hide tmux from inner apps' UI heuristics (e.g. Claude Code renders
+      // diffs differently when TERM_PROGRAM=tmux).
+      ['set-environment', '-g', '-r', 'TERM_PROGRAM'],
       ['set', '-g', 'escape-time', '25'],
       ['set', '-g', 'window-size', 'latest'],
       ['set', '-g', 'allow-rename', 'off'],
