@@ -533,3 +533,58 @@ describe('StatusDetector Claude Code v2 TUI', () => {
     expect(detector.detectStatus(sessionId, buffer)).toBe('waiting');
   });
 });
+
+describe('StatusDetector input-aware gating (noInputSinceLaunch)', () => {
+  let detector;
+  const sessionId = 'fresh-launch';
+
+  beforeEach(() => {
+    detector = new StatusDetector();
+    const state = detector.getState(sessionId);
+    state.lastOutputTime = Date.now(); // startup screen just streamed
+    state.lastBufferLength = 0;
+  });
+
+  afterEach(() => detector.reset());
+
+  const startupBuffer = [
+    '╭─── Claude Code v2.1.220 ───╮',
+    '│ Welcome back A!            │',
+    '│ Tips for getting started   │',
+    '╰────────────────────────────╯',
+    'x'.repeat(120)
+  ].join('\n');
+
+  it('fresh manual launch with only startup output is waiting, not busy', () => {
+    expect(detector.detectStatus(sessionId, startupBuffer, { noInputSinceLaunch: true }))
+      .toBe('waiting');
+  });
+
+  it('same buffer without the flag keeps legacy assume-busy behavior', () => {
+    expect(detector.detectStatus(sessionId, startupBuffer, {})).toBe('busy');
+  });
+
+  it('trust prompt screen with no input is waiting', () => {
+    const trust = startupBuffer + '\n❯ 1. Yes, I trust this folder\n  2. No, exit\nEnter to confirm · Esc to cancel';
+    expect(detector.detectStatus(sessionId, trust, { noInputSinceLaunch: true }))
+      .toBe('waiting');
+  });
+
+  it('resumed session scrollback with old tool bullets and no input is not busy', () => {
+    const resumed = '● Bash(npm test)\n⎿ 12 passing\n' + startupBuffer;
+    expect(detector.detectStatus(sessionId, resumed, { noInputSinceLaunch: true }))
+      .not.toBe('busy');
+  });
+
+  it('a genuinely running turn (esc to interrupt) is busy even with no tracked input', () => {
+    const busy = startupBuffer + '\n✻ Reticulating… (esc to interrupt)';
+    expect(detector.detectStatus(sessionId, busy, { noInputSinceLaunch: true }))
+      .toBe('busy');
+  });
+
+  it('non-claude agent startup output with no input is waiting, not busy', () => {
+    const buffer = 'OpenAI Codex splash\n' + 'y'.repeat(150);
+    expect(detector.detectStatus(sessionId, buffer, { agent: 'grok', noInputSinceLaunch: true }))
+      .toBe('waiting');
+  });
+});

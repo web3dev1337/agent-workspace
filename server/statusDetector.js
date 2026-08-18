@@ -24,6 +24,29 @@ const ASSUME_BUSY_SINCE_OUTPUT_GEMINI_MS = 6000; // 6s
 const ASSUME_BUSY_SINCE_OUTPUT_OPENCODE_MS = 5000; // 5s
 const ASSUME_BUSY_SINCE_OUTPUT_AIDER_MS = 10000; // 10s
 
+// Markers a CLI only renders while a turn is genuinely running. These are the
+// one signal strong enough to call a session busy on its own, so they survive
+// the "no input submitted yet" suppression that guards every weaker heuristic.
+const RUNNING_TURN_PATTERNS = {
+  claude: [/esc to interrupt/i],
+  codex: [/esc to interrupt/i, /tab to add notes/i],
+  gemini: [
+    /Thinking\.\.\./i,
+    /\(esc to cancel,\s*[\d:smh]+\)/i,
+    /\(press tab to focus\)/i,
+    /Waiting for MCP servers to initialize/i,
+  ],
+  opencode: [
+    /Thinking\.\.\./i,
+    /Generating\.\.\./i,
+    /Working\.\.\./i,
+    /Waiting for tool response\.\.\./i,
+    /Building tool call\.\.\./i,
+    /press esc to exit cancel/i,
+  ],
+  aider: [/Waiting for .*LLM/i, /Waiting for .*model/i, /think tokens/i],
+};
+
 class StatusDetector {
   constructor() {
     // RELIABLE completion indicators - Claude shows these when done
@@ -271,6 +294,14 @@ class StatusDetector {
     const state = this.getState(sessionId);
     const agent = this.normalizeAgent(options?.agent);
     const isNonClaudeAgent = !!(agent && agent !== 'claude');
+    // The session manager relays every keystroke, so it knows whether a command
+    // was ever submitted (Enter pressed) since the agent launched. A freshly
+    // launched agent that has received no input cannot be working — weak
+    // recency/scrollback heuristics must not report busy for it. Strong
+    // evidence of a running turn (esc-to-interrupt, provider work markers)
+    // still wins, which keeps auto-run launches (`claude -p`, `codex exec`)
+    // reporting busy correctly.
+    const noInputSinceLaunch = options?.noInputSinceLaunch === true;
     if (agent) {
       state.agent = agent;
     }
@@ -322,7 +353,8 @@ class StatusDetector {
       }
 
       if (timeSinceOutput < assumeBusyWindowMs && buffer.length > 100) {
-        return 'busy';
+        // Startup splash/redraw output without any submitted command is not work.
+        return noInputSinceLaunch ? 'waiting' : 'busy';
       }
 
       return 'idle';
@@ -392,8 +424,11 @@ class StatusDetector {
       return 'waiting';
     }
 
-    // 4. Active tool usage (definitely busy)
-    if (hasRecentOutput) {
+    // 4. Active tool usage (definitely busy).
+    // Skipped when nothing has been submitted since the agent launched: a
+    // resumed session repaints old tool bullets into scrollback, and a fresh
+    // session cannot be running tools before its first command.
+    if (hasRecentOutput && !noInputSinceLaunch) {
       for (const pattern of this.toolPatterns) {
         if (!pattern.test(lastFewLines)) continue;
         state.claudeLikely = true;
@@ -404,8 +439,8 @@ class StatusDetector {
       }
     }
 
-    // 5. Check typing/thinking patterns
-    if (hasRecentOutput) {
+    // 5. Check typing/thinking patterns (same no-input gating as tool patterns)
+    if (hasRecentOutput && !noInputSinceLaunch) {
       for (const pattern of this.typingPatterns) {
         if (!pattern.test(lastFewLines)) continue;
         state.claudeLikely = true;
@@ -413,7 +448,7 @@ class StatusDetector {
         return 'busy';
       }
     }
-    if (hasRecentOutput && /(\.\.\.|…)$/.test(trimmedLastNonEmptyLine)) {
+    if (hasRecentOutput && !noInputSinceLaunch && /(\.\.\.|…)$/.test(trimmedLastNonEmptyLine)) {
       state.claudeLikely = true;
       logger.debug('Trailing ellipsis detected - busy');
       return 'busy';
@@ -432,9 +467,11 @@ class StatusDetector {
       return 'idle';
     }
 
-    // 8. Default: assume busy for a short quiet window after output.
+    // 8. Default: assume busy for a short quiet window after output — unless
+    // the agent has never received a command, in which case startup/welcome
+    // output means it is sitting at its prompt waiting for the user.
     if (timeSinceOutput < assumeBusyWindowMs && buffer.length > 100) {
-      return 'busy';
+      return noInputSinceLaunch ? 'waiting' : 'busy';
     }
 
     return 'idle';

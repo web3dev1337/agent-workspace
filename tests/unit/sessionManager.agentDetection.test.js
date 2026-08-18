@@ -55,3 +55,32 @@ describe('SessionManager agent detection', () => {
     ).toBe('gemini');
   });
 });
+
+describe('SessionManager isAutoRunAgentCommand', () => {
+  const sm = () => new SessionManager({ emit: jest.fn() }, null);
+
+  it('plain interactive launches are not auto-run', () => {
+    expect(sm().isAutoRunAgentCommand('claude', ['--dangerously-skip-permissions'])).toBe(false);
+    expect(sm().isAutoRunAgentCommand('codex', ['--dangerously-bypass-approvals-and-sandbox'])).toBe(false);
+    expect(sm().isAutoRunAgentCommand('claude', [])).toBe(false);
+  });
+
+  it('flag values are not mistaken for prompts', () => {
+    expect(sm().isAutoRunAgentCommand('codex', ['-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort=ultra', '--dangerously-bypass-approvals-and-sandbox'])).toBe(false);
+    expect(sm().isAutoRunAgentCommand('claude', ['--model', 'opus'])).toBe(false);
+  });
+
+  it('resume/continue subcommands stay idle', () => {
+    expect(sm().isAutoRunAgentCommand('codex', ['resume', '--last'])).toBe(false);
+    expect(sm().isAutoRunAgentCommand('claude', ['--continue'])).toBe(false);
+  });
+
+  it('print mode and exec are auto-run', () => {
+    expect(sm().isAutoRunAgentCommand('claude', ['-p', 'do the thing'])).toBe(true);
+    expect(sm().isAutoRunAgentCommand('codex', ['exec', 'fix the bug'])).toBe(true);
+  });
+
+  it('positional prompt is auto-run', () => {
+    expect(sm().isAutoRunAgentCommand('claude', ['build me a game'])).toBe(true);
+  });
+});
