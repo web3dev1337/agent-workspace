@@ -739,6 +739,16 @@ body {
   transform: translateX(2px);
 }
 
+/* Drag-to-reorder project groups in the sidebar */
+.worktree-item.dragging {
+  opacity: 0.5;
+}
+
+.worktree-item.drag-over {
+  border-color: var(--accent-primary);
+  box-shadow: 0 -2px 0 0 var(--accent-primary);
+}
+
 .worktree-item.active {
   background: var(--accent-primary);
   color: var(--text-on-accent);

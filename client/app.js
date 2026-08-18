@@ -4768,6 +4768,57 @@ class ClaudeOrchestrator {
     return this.getSidebarVisualStatusForWorktree(worktreeKey, raw);
   }
 
+  // Manual sidebar project ordering (drag-to-reorder), persisted per workspace
+  // in user settings at ui.worktrees.repoOrder.<workspaceKey> = [repoName, ...].
+  getSidebarRepoOrderKey() {
+    return String(this.currentWorkspace?.id || 'default').replace(/\./g, '_');
+  }
+
+  getSidebarRepoOrder() {
+    const all = this.userSettings?.global?.ui?.worktrees?.repoOrder || {};
+    const arr = all[this.getSidebarRepoOrderKey()];
+    return Array.isArray(arr) ? arr.map((v) => String(v || '').toLowerCase()) : [];
+  }
+
+  compareSidebarRepos(aName, bName) {
+    const a = String(aName || '').toLowerCase();
+    const b = String(bName || '').toLowerCase();
+    if (a === b) return 0;
+    const order = this.getSidebarRepoOrder();
+    const ai = order.indexOf(a);
+    const bi = order.indexOf(b);
+    if (ai !== -1 || bi !== -1) {
+      if (ai === -1) return 1;      // unordered repos sort after pinned ones
+      if (bi === -1) return -1;
+      return ai - bi;
+    }
+    return a.localeCompare(b);
+  }
+
+  async moveSidebarRepoBefore(draggedRepo, targetRepo) {
+    const dragged = String(draggedRepo || '').toLowerCase();
+    const target = String(targetRepo || '').toLowerCase();
+    if (dragged === target) return;
+
+    // Current effective order of the repos visible in this workspace.
+    const repos = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) continue;
+      const name = String(this.extractRepositoryName(sessionId) || '').toLowerCase();
+      if (!repos.includes(name)) repos.push(name);
+    }
+    repos.sort((a, b) => this.compareSidebarRepos(a, b));
+
+    const from = repos.indexOf(dragged);
+    const to = repos.indexOf(target);
+    if (from === -1 || to === -1) return;
+    repos.splice(from, 1);
+    repos.splice(repos.indexOf(target) + (from < to ? 1 : 0), 0, dragged);
+
+    await this.updateGlobalUserSetting(`ui.worktrees.repoOrder.${this.getSidebarRepoOrderKey()}`, repos);
+    this.buildSidebar();
+  }
+
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
     if (!worktreeList) return;
@@ -4816,12 +4867,13 @@ class ClaudeOrchestrator {
       }
     }
 
-    // Sort worktrees by repository name, then worktree ID
+    // Sort worktrees: manual repo order (drag-to-reorder) first, then
+    // repository name alphabetically, then worktree ID numeric-aware so
+    // work2 < work10.
     const sortedWorktrees = [...worktrees.entries()].sort((a, b) => {
-      const repoA = (a[1].repositoryName || '').toLowerCase();
-      const repoB = (b[1].repositoryName || '').toLowerCase();
-      if (repoA !== repoB) return repoA.localeCompare(repoB);
-      return (a[1].worktreeId || '').localeCompare(b[1].worktreeId || '');
+      const repoCmp = this.compareSidebarRepos(a[1].repositoryName, b[1].repositoryName);
+      if (repoCmp !== 0) return repoCmp;
+      return (a[1].worktreeId || '').localeCompare(b[1].worktreeId || '', undefined, { numeric: true, sensitivity: 'base' });
     });
 
     // Create sidebar items
@@ -4843,7 +4895,38 @@ class ClaudeOrchestrator {
       // Only show visibility state, not activity state (activity filtering is handled separately)
       item.className = `worktree-item ${!isVisible ? 'hidden-terminal' : ''}`;
       item.dataset.worktreeId = worktree.id;
-      item.title = 'Click to toggle • Ctrl+Click to solo/unsolo this worktree';
+      item.title = 'Click to toggle • Ctrl+Click to solo/unsolo this worktree • Drag to reorder projects';
+
+      // Drag a worktree row to move its whole repository group above/below others.
+      item.draggable = true;
+      const dragRepoName = worktree.repositoryName || '';
+      item.addEventListener('dragstart', (e) => {
+        this.sidebarDragRepo = dragRepoName;
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', dragRepoName); } catch { /* IE-style guards */ }
+        }
+        item.classList.add('dragging');
+      });
+      item.addEventListener('dragend', () => {
+        this.sidebarDragRepo = null;
+        item.classList.remove('dragging');
+      });
+      item.addEventListener('dragover', (e) => {
+        if (this.sidebarDragRepo === null || this.sidebarDragRepo === undefined) return;
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        item.classList.add('drag-over');
+      });
+      item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.classList.remove('drag-over');
+        const dragged = this.sidebarDragRepo;
+        this.sidebarDragRepo = null;
+        if (dragged === null || dragged === undefined) return;
+        this.moveSidebarRepoBefore(dragged, dragRepoName);
+      });
 
       const rawBranch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
       const branchMeta = this.formatBranchLabel(rawBranch, { context: 'sidebar' });
