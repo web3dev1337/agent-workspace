@@ -11939,9 +11939,30 @@ class ClaudeOrchestrator {
     }
   }
 
+  // Passive-toast suppression: success/info popups are only feedback when they
+  // follow the user's OWN action in this tab. Broadcast/background events
+  // (another Commander adding a worktree, restarts, status churn) firing
+  // top-right toasts while the user is elsewhere are noise — suppressed by
+  // default. Re-enable with ui.notifications.passiveToasts: true. Errors and
+  // warnings always show.
+  isPassiveToastSuppressed(type) {
+    if (type === 'error' || type === 'warning') return false;
+    if (this.userSettings?.global?.ui?.notifications?.passiveToasts === true) return false;
+    if (!this._interactionTrackerInstalled) {
+      this._interactionTrackerInstalled = true;
+      this._lastUserInteractionAt = 0;
+      const mark = () => { this._lastUserInteractionAt = Date.now(); };
+      document.addEventListener('mousedown', mark, true);
+      document.addEventListener('keydown', mark, true);
+      return true; // no interaction observed yet this page-load
+    }
+    return (Date.now() - (this._lastUserInteractionAt || 0)) > 5000;
+  }
+
   showToast(message, type = 'info', options = {}) {
     const rawMessage = String(message || '').trim();
     if (!rawMessage) return;
+    if (!options?.force && this.isPassiveToastSuppressed(type)) return;
 
     const normalizedType = (['info', 'success', 'warning', 'error'].includes(type)) ? type : 'info';
     const durationMsRaw = Number(options?.durationMs);
@@ -17139,6 +17160,14 @@ class ClaudeOrchestrator {
       return false;
     }
 
+    // Don't show when an agent is already active in this terminal (e.g. a
+    // tmux-adopted session after a server restart — the agent survived, only
+    // the UI state was reset). Recovery keeps `agent` across restarts.
+    const session = this.sessions?.get?.(sessionId);
+    if (session?.agent) {
+      return false;
+    }
+
     // Don't show if auto-start is enabled (it will handle startup)
     const effectiveSettings = this.getEffectiveSettings(sessionId);
     if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
@@ -18581,6 +18610,9 @@ class ClaudeOrchestrator {
   }
 
   showTemporaryMessage(message, type = 'info') {
+    // Same passive suppression as showToast — this is the green top-right
+    // popup; unsolicited ones are noise.
+    if (this.isPassiveToastSuppressed(type)) return;
     // Create a temporary message element
     const messageEl = document.createElement('div');
     messageEl.className = `temporary-message ${type}`;
