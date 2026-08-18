@@ -102,14 +102,29 @@ class TmuxSessionBackend {
   // scrollback (xterm.js keeps its own client-side), and windows sized to the
   // most recently attached client.
   ensureConfigured() {
-    if (this._configured) return true;
     try {
       this.run(['start-server']);
     } catch (error) {
       this.logger.error?.('Failed to start tmux server for session persistence', { socket: this.socketName, error: error.message });
       return false;
     }
+    // Trust the SERVER, not a process-local flag: an empty tmux server exits
+    // (exit-empty) and a later `new-session` silently spawns a fresh one with
+    // default options — status bar back on, prefix key active. The marker
+    // option lives on the server, so a fresh server always gets reconfigured.
+    try {
+      const marker = this.run(['show', '-gv', '@aw_configured']);
+      if (String(marker || '').trim() === '1') {
+        this._configured = true;
+        return true;
+      }
+    } catch {
+      // marker unset — fall through and configure
+    }
     const options = [
+      // First: keep the server alive while it has no sessions, closing the
+      // configure→first-attach gap that loses these options entirely.
+      ['set', '-g', 'exit-empty', 'off'],
       ['set', '-g', 'status', 'off'],
       ['set', '-g', 'prefix', 'None'],
       ['set', '-g', 'mouse', 'off'],
@@ -125,7 +140,10 @@ class TmuxSessionBackend {
       ['set', '-g', 'set-titles', 'off'],
       // Belt-and-braces on top of buildTmuxEnv: never hand these to panes.
       ['set-environment', '-g', '-r', 'CLAUDECODE'],
-      ['set-environment', '-g', '-r', 'CLAUDE_CODE_ENTRYPOINT']
+      ['set-environment', '-g', '-r', 'CLAUDE_CODE_ENTRYPOINT'],
+      // Last: the on-server marker the check above looks for. Set only after
+      // the real options so a partially-configured server is retried.
+      ['set', '-g', '@aw_configured', '1']
     ];
     for (const args of options) {
       try {

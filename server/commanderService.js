@@ -12,6 +12,7 @@ const os = require('os');
 const winston = require('winston');
 const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
 const { loadNodePty } = require('./utils/nodePtyCompat');
+const { TmuxSessionBackend } = require('./utils/tmuxSessionBackend');
 
 const HOME_DIR = process.env.HOME || os.homedir();
 
@@ -53,6 +54,28 @@ const packagedDataDir = (() => {
 })();
 const packagedCommanderDir = packagedDataDir ? path.join(packagedDataDir, 'commander') : null;
 const COMMANDER_CWD = process.env.COMMANDER_CWD || (isPackaged ? (packagedCommanderDir || (process.env.HOME || process.env.USERPROFILE || defaultCwd)) : defaultCwd);
+
+// Commander persistence: the same tmux backend worktree sessions use, so a
+// server restart (nodemon reload, update, crash) detaches the Commander pane
+// instead of killing the Claude conversation running in it. Shares the
+// per-port socket with SessionManager. ORCHESTRATOR_SESSION_PERSISTENCE=0
+// disables; Windows/tmux-less installs fall back to direct pty spawning.
+let commanderPersistenceBackend;
+function getCommanderPersistence() {
+  if (commanderPersistenceBackend !== undefined) return commanderPersistenceBackend;
+  const envOverride = String(process.env.ORCHESTRATOR_SESSION_PERSISTENCE || '').trim();
+  const wanted = envOverride ? envOverride !== '0' : true;
+  if (!wanted || process.platform === 'win32') {
+    commanderPersistenceBackend = null;
+    return commanderPersistenceBackend;
+  }
+  const backend = new TmuxSessionBackend({
+    socketName: `agent-workspace-${process.env.ORCHESTRATOR_PORT || 'default'}`,
+    logger
+  });
+  commanderPersistenceBackend = backend.isAvailable() ? backend : null;
+  return commanderPersistenceBackend;
+}
 const TRUST_PROMPT_BUFFER_CHARS = 6000;
 const TRUST_PROMPT_MAX_WAIT_MS = 15000;
 // Claude's banner can appear before a pending trust prompt; wait this long
@@ -274,8 +297,35 @@ class CommanderService {
         env
       };
 
+      // Persistence path: spawn a tmux CLIENT; the real shell/Claude runs in a
+      // pane that survives server restarts. `new-session -A` re-adopts a
+      // surviving pane, preserving the running Claude conversation.
+      let spawnCommand = shell;
+      let spawnArgs = shellArgs;
+      let persistence = null;
+      const persistenceBackend = getCommanderPersistence();
+      if (persistenceBackend) {
+        delete env.TMUX;
+        delete env.TMUX_PANE;
+        persistenceBackend.ensureConfigured();
+        const persistSessionId = `commander-${this.instanceId}`;
+        const adopted = persistenceBackend.hasSession(persistSessionId);
+        const spec = persistenceBackend.buildSpawnCommand({
+          sessionId: persistSessionId,
+          command: shell,
+          args: shellArgs,
+          cwd: COMMANDER_CWD
+        });
+        spawnCommand = spec.command;
+        spawnArgs = spec.args;
+        persistence = { backend: 'tmux', sessionId: persistSessionId, name: spec.name, adopted };
+        if (adopted) {
+          logger.info('Adopting surviving Commander session', { instanceId: this.instanceId });
+        }
+      }
+
       // Spawn Claude Code terminal
-      const ptyProcess = pty.spawn(shell, shellArgs, ptyOptions);
+      const ptyProcess = pty.spawn(spawnCommand, spawnArgs, ptyOptions);
 
       this.session = {
         id: 'commander',
@@ -283,8 +333,27 @@ class CommanderService {
         type: 'commander',
         status: 'starting',
         buffer: '',
-        lastActivity: Date.now()
+        lastActivity: Date.now(),
+        persistence
       };
+
+      // An adopted pane already has its Claude running: mark ready and never
+      // auto-type `claude` into the surviving conversation. Backfill history
+      // from the pane so the panel shows pre-restart output.
+      if (persistence?.adopted) {
+        this.session.status = 'ready';
+        this.isReady = true;
+        this.claudeStarted = true;
+        try {
+          const history = persistenceBackend.capturePane(persistence.sessionId);
+          if (history) {
+            this.session.buffer = history;
+            this.addToOutputBuffer(history);
+          }
+        } catch {
+          // history backfill is best-effort
+        }
+      }
 
       // Handle output
       ptyProcess.onData((data) => {
@@ -489,6 +558,13 @@ class CommanderService {
   stop() {
     if (this.session && this.session.pty) {
       logger.info('Stopping Commander terminal');
+      // Explicit stop/restart means "give me a fresh terminal" — kill the
+      // persistent pane too (server SHUTDOWN never calls stop(), so restarts
+      // still detach-and-survive).
+      const persistSessionId = this.session.persistence?.sessionId;
+      if (persistSessionId) {
+        try { getCommanderPersistence()?.killSession(persistSessionId); } catch { /* best effort */ }
+      }
       this.session.pty.kill();
       this.session = null;
       this.isReady = false;

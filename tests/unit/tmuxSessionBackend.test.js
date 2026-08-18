@@ -114,25 +114,43 @@ describe('TmuxSessionBackend', () => {
 
   test('ensureConfigured starts the server, applies options, and tolerates option failures', () => {
     const seen = [];
+    let configured = false;
     const execImpl = jest.fn((cmd, args) => {
       seen.push(args.slice(2)); // drop -L <socket>
       if (args.includes('set-environment')) throw new Error('unknown variable');
+      // Emulate the on-server marker: unset until the configure pass sets it.
+      if (args.includes('@aw_configured')) {
+        if (args[2] === 'show') {
+          if (!configured) throw new Error('unknown option');
+          return '1\n';
+        }
+        configured = true;
+      }
       return '';
     });
     const { backend } = makeBackend({ execImpl });
     expect(backend.ensureConfigured()).toBe(true);
     expect(seen[0]).toEqual(['start-server']);
     expect(seen).toEqual(expect.arrayContaining([
+      ['set', '-g', 'exit-empty', 'off'],
       ['set', '-g', 'status', 'off'],
       ['set', '-g', 'prefix', 'None'],
       ['set', '-g', 'mouse', 'off'],
       ['set', '-g', 'window-size', 'latest'],
-      ['set', '-ga', 'terminal-features', 'xterm-256color:RGB:clipboard']
+      ['set', '-ga', 'terminal-features', 'xterm-256color:RGB:clipboard'],
+      ['set', '-g', '@aw_configured', '1']
     ]));
-    // second call is a no-op
+    // Second call re-verifies against the SERVER (start-server + marker probe)
+    // but must not reapply the option list.
     const callsBefore = execImpl.mock.calls.length;
     expect(backend.ensureConfigured()).toBe(true);
-    expect(execImpl.mock.calls.length).toBe(callsBefore);
+    expect(execImpl.mock.calls.length).toBe(callsBefore + 2);
+    // A fresh server that lost the marker (exit-empty race, manual kill-server)
+    // gets fully reconfigured instead of being trusted from a process flag.
+    configured = false;
+    expect(backend.ensureConfigured()).toBe(true);
+    const reconfigured = seen.slice(-1)[0];
+    expect(reconfigured).toEqual(['set', '-g', '@aw_configured', '1']);
   });
 
   test('hasSession / killSession / panePid / capturePane use exact-match targets and fail soft', () => {
