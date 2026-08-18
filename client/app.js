@@ -35562,7 +35562,10 @@ class ClaudeOrchestrator {
       // ignore
     }
 
-    if (!silent && (activeWorkspaceChanged || activeVisibilityChanged)) {
+    // "Worktree ready" toast is opt-in (default OFF — the sidebar dot already
+    // shows readiness). Re-enable via ui.notifications.worktreeReady: true.
+    if (!silent && (activeWorkspaceChanged || activeVisibilityChanged)
+        && this.userSettings?.global?.ui?.notifications?.worktreeReady === true) {
       const readyMsg = isBackground
         ? `Worktree ${resolvedWorktreeId} terminals ready (background)`
         : `Worktree ${resolvedWorktreeId} terminals ready!`;
