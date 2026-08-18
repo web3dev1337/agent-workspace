@@ -4780,10 +4780,34 @@ class ClaudeOrchestrator {
     return Array.isArray(arr) ? arr.map((v) => String(v || '').toLowerCase()) : [];
   }
 
+  // Projects-board status ranking for sidebar ordering: Ship Next repos first,
+  // then Active, then everything else. Keys in the board are relative paths
+  // (games/roblox/kpop-idol-empire); the sidebar knows repo names, so match by
+  // final path segment. Memoized per board fetch.
+  getSidebarRepoStatusRank() {
+    const fetchedAt = this.projectsBoardCache?.fetchedAt || 0;
+    if (this._sidebarStatusRank && this._sidebarStatusRank.fetchedAt === fetchedAt) {
+      return this._sidebarStatusRank.map;
+    }
+    const columnRank = { next: 0, active: 1 };
+    const map = new Map();
+    const mapping = this.projectsBoardCache?.value?.board?.projectToColumn || {};
+    for (const [projectKey, columnId] of Object.entries(mapping)) {
+      const base = String(projectKey || '').split('/').filter(Boolean).pop()?.toLowerCase();
+      if (!base) continue;
+      const rank = columnRank[String(columnId)] ?? 2;
+      const previous = map.get(base);
+      map.set(base, previous === undefined ? rank : Math.min(previous, rank));
+    }
+    this._sidebarStatusRank = { fetchedAt, map };
+    return map;
+  }
+
   compareSidebarRepos(aName, bName) {
     const a = String(aName || '').toLowerCase();
     const b = String(bName || '').toLowerCase();
     if (a === b) return 0;
+    // Manual drag order beats everything.
     const order = this.getSidebarRepoOrder();
     const ai = order.indexOf(a);
     const bi = order.indexOf(b);
@@ -4792,6 +4816,11 @@ class ClaudeOrchestrator {
       if (bi === -1) return -1;
       return ai - bi;
     }
+    // Then project status: Ship Next, then Active, then the rest.
+    const statusRank = this.getSidebarRepoStatusRank();
+    const aRank = statusRank.get(a) ?? 2;
+    const bRank = statusRank.get(b) ?? 2;
+    if (aRank !== bRank) return aRank - bRank;
     return a.localeCompare(b);
   }
 
@@ -4822,6 +4851,15 @@ class ClaudeOrchestrator {
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
     if (!worktreeList) return;
+
+    // Status-based ordering needs the projects board; fetch once and re-render.
+    if (!this.projectsBoardCache?.value && !this._sidebarBoardFetchInFlight) {
+      this._sidebarBoardFetchInFlight = true;
+      this.getProjectsBoard()
+        .then(() => this.buildSidebar())
+        .catch(() => {})
+        .finally(() => { this._sidebarBoardFetchInFlight = false; });
+    }
 
     const previousScrollTop = worktreeList.scrollTop;
     const preservedProjectShortcuts = document.getElementById('sidebar-project-shortcuts')?.cloneNode(true) || null;

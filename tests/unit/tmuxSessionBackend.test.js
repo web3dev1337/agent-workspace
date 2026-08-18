@@ -122,7 +122,7 @@ describe('TmuxSessionBackend', () => {
       if (args.includes('@aw_configured')) {
         if (args[2] === 'show') {
           if (!configured) throw new Error('unknown option');
-          return '3\n';
+          return '4\n';
         }
         configured = true;
       }
@@ -140,7 +140,8 @@ describe('TmuxSessionBackend', () => {
       ['set', '-ga', 'terminal-features', 'xterm-256color:RGB:clipboard'],
       ['set', '-ga', 'terminal-overrides', '*:smcup@:rmcup@'],
       ['set', '-g', 'mode-style', 'bg=#264f78,fg=terminal'],
-      ['set', '-g', '@aw_configured', '3']
+      ['set', '-g', 'focus-events', 'on'],
+      ['set', '-g', '@aw_configured', '4']
     ]));
     // Second call re-verifies against the SERVER (start-server + marker probe)
     // but must not reapply the option list.
@@ -152,7 +153,7 @@ describe('TmuxSessionBackend', () => {
     configured = false;
     expect(backend.ensureConfigured()).toBe(true);
     const reconfigured = seen.slice(-1)[0];
-    expect(reconfigured).toEqual(['set', '-g', '@aw_configured', '3']);
+    expect(reconfigured).toEqual(['set', '-g', '@aw_configured', '4']);
   });
 
   test('hasSession / killSession / panePid / capturePane use exact-match targets and fail soft', () => {
