@@ -20,6 +20,10 @@ const { execFileSync } = require('child_process');
 
 const SESSION_NAME_UNSAFE = /[^A-Za-z0-9_-]/g;
 
+// Bump when the ensureConfigured option list changes so already-running tmux
+// servers (marker holds the old version) get reconfigured on the next spawn.
+const CONFIG_MARKER_VERSION = '2';
+
 // Device-attribute REPORT sequences: DA1 `ESC [ ? … c` and DA2 `ESC [ > … c`.
 // These are terminal auto-RESPONSES, never something a user types. They only
 // appear on the input stream as an echo of the browser terminal answering a
@@ -97,10 +101,11 @@ class TmuxSessionBackend {
   }
 
   // One-time per-socket server config. The options make embedded panes behave
-  // like plain terminals: no status bar, no prefix key, no tmux-level mouse
-  // handling (a pane's own mouse-mode requests still pass through), modest
-  // scrollback (xterm.js keeps its own client-side), and windows sized to the
-  // most recently attached client.
+  // like plain terminals: no status bar, no prefix key, tmux-level mouse ON so
+  // the scroll wheel scrolls pane history (tmux puts the outer terminal in the
+  // alternate screen, where xterm.js would otherwise translate wheel to arrow
+  // keys — Claude Code shows "Scroll wheel is sending arrow keys"), modest
+  // scrollback, and windows sized to the most recently attached client.
   ensureConfigured() {
     try {
       this.run(['start-server']);
@@ -114,7 +119,7 @@ class TmuxSessionBackend {
     // option lives on the server, so a fresh server always gets reconfigured.
     try {
       const marker = this.run(['show', '-gv', '@aw_configured']);
-      if (String(marker || '').trim() === '1') {
+      if (String(marker || '').trim() === CONFIG_MARKER_VERSION) {
         this._configured = true;
         return true;
       }
@@ -127,7 +132,7 @@ class TmuxSessionBackend {
       ['set', '-g', 'exit-empty', 'off'],
       ['set', '-g', 'status', 'off'],
       ['set', '-g', 'prefix', 'None'],
-      ['set', '-g', 'mouse', 'off'],
+      ['set', '-g', 'mouse', 'on'],
       ['set', '-g', 'history-limit', '20000'],
       ['set', '-g', 'default-terminal', 'xterm-256color'],
       // Pin the outer terminal's capabilities so tmux never has to depend on a
@@ -143,7 +148,7 @@ class TmuxSessionBackend {
       ['set-environment', '-g', '-r', 'CLAUDE_CODE_ENTRYPOINT'],
       // Last: the on-server marker the check above looks for. Set only after
       // the real options so a partially-configured server is retried.
-      ['set', '-g', '@aw_configured', '1']
+      ['set', '-g', '@aw_configured', CONFIG_MARKER_VERSION]
     ];
     for (const args of options) {
       try {
