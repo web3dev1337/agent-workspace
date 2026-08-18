@@ -1062,6 +1062,17 @@ class SessionManager extends EventEmitter {
       
       // Add workspace ID to session
       session.workspace = this.workspace?.id || null;
+
+      // An adopted pane may still be running its agent from before the
+      // restart, but the in-memory launch/input markers died with the old
+      // process. Restore a conservative state: agent present, no input
+      // observed yet — weak busy heuristics stay gated (no post-restart
+      // orange flash from backfill output) until real evidence (esc to
+      // interrupt) or actual user input arrives.
+      if (persistence?.adopted && session.type === 'claude') {
+        session.agentStartedAt = Date.now();
+        session.agentInputSubmitted = false;
+      }
       this.sessions.set(sessionId, session);
       this.clearSessionHydrated(sessionId, { workspaceId: session.workspace, session });
 

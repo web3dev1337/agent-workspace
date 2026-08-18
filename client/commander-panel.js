@@ -247,6 +247,36 @@ class CommanderPanel {
     this.setupSocketListeners();
     await this.fetchStatus();
     this.updateCommanderTitle();
+    this.syncTabsFromServer();
+  }
+
+  // The server is the source of truth for Commander instances (it re-adopts
+  // surviving cmd-N panes after a restart). Without this sync, a recovered
+  // Commander 2 has no tab and "+" would create Commander 3 instead.
+  async syncTabsFromServer() {
+    try {
+      const res = await fetch(`${this.serverUrl}/api/commander/instances`);
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      const rows = Array.isArray(data?.instances) ? data.instances : [];
+      let changed = false;
+      for (const row of rows) {
+        const id = String(row?.id || '').trim();
+        if (!id || this.tabs.has(id)) continue;
+        this.tabs.set(id, {
+          label: String(row?.label || `Commander ${id.replace('cmd-', '')}`),
+          terminal: null,
+          fitAddon: null,
+          isRunning: !!row?.running,
+          isStarting: false,
+          lastSyncedSize: null
+        });
+        changed = true;
+      }
+      if (changed) this.renderTabs();
+    } catch {
+      // panel works without the sync; tabs just reflect local state
+    }
   }
 
   /**
@@ -839,6 +869,7 @@ class CommanderPanel {
       panel.classList.remove('hidden');
       backdrop?.classList.remove('hidden');
       this.isVisible = true;
+      this.syncTabsFromServer();
       this.pinPanelPosition(panel);
 
       // Focus immediately so keystrokes land without waiting for the
