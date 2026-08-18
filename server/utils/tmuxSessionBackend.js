@@ -22,7 +22,7 @@ const SESSION_NAME_UNSAFE = /[^A-Za-z0-9_-]/g;
 
 // Bump when the ensureConfigured option list changes so already-running tmux
 // servers (marker holds the old version) get reconfigured on the next spawn.
-const CONFIG_MARKER_VERSION = '3';
+const CONFIG_MARKER_VERSION = '4';
 
 // Device-attribute REPORT sequences: DA1 `ESC [ ? … c` and DA2 `ESC [ > … c`.
 // These are terminal auto-RESPONSES, never something a user types. They only
@@ -145,6 +145,10 @@ class TmuxSessionBackend {
       ['set', '-ga', 'terminal-overrides', '*:smcup@:rmcup@'],
       // Readable copy-mode selection (default is a jarring orange).
       ['set', '-g', 'mode-style', 'bg=#264f78,fg=terminal'],
+      // Raw-pty parity: forward FocusIn/FocusOut to inner apps (Claude Code
+      // uses them) and let deliberate escaped passthrough sequences flow.
+      ['set', '-g', 'focus-events', 'on'],
+      ['set', '-g', 'allow-passthrough', 'on'],
       // Hide tmux from inner apps' UI heuristics (e.g. Claude Code renders
       // diffs differently when TERM_PROGRAM=tmux).
       ['set-environment', '-g', '-r', 'TERM_PROGRAM'],
