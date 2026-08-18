@@ -418,6 +418,9 @@ const commanderService = CommanderService.getInstance({
   io
 });
 
+// Re-attach Commander tabs whose tmux panes survived the last restart.
+CommanderService.adoptOrphanInstances({ sessionManager, io });
+
 // Initialize Command Registry for Commander UI control
 commandRegistry.init({
   io,

@@ -204,6 +204,39 @@ class CommanderService {
     return CommanderService.instances.get(id) || null;
   }
 
+  // The instance registry is in-memory but the tmux panes are not: after a
+  // server restart, surviving commander-cmd-N panes would be orphaned (no tab,
+  // Claude still running inside). Re-register and start them so `new-session
+  // -A` re-adopts each pane and the tab reappears with its conversation.
+  static adoptOrphanInstances(options = {}, backendOverride = null) {
+    const backend = backendOverride || getCommanderPersistence();
+    if (!backend) return [];
+    let names = [];
+    try {
+      names = backend.listSessionNames();
+    } catch {
+      return [];
+    }
+    const adopted = [];
+    for (const name of names) {
+      const match = /^commander-(cmd-(\d+))$/.exec(String(name || ''));
+      if (!match) continue;
+      const id = match[1];
+      if (CommanderService.instances.has(id)) continue;
+      if (CommanderService.instances.size >= MAX_COMMANDER_INSTANCES) break;
+      const service = new CommanderService({ ...options, instanceId: id, label: `Commander ${match[2]}` });
+      CommanderService.instances.set(id, service);
+      service.start().catch((error) => {
+        logger.warn('Failed to start adopted Commander instance', { id, error: error?.message });
+      });
+      adopted.push(id);
+    }
+    if (adopted.length) {
+      logger.info('Adopted orphaned Commander instances', { adopted });
+    }
+    return adopted;
+  }
+
   static createInstance(options) {
     if (CommanderService.instances.size >= MAX_COMMANDER_INSTANCES) {
       return { error: `Instance limit reached (${MAX_COMMANDER_INSTANCES})` };

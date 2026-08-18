@@ -61,3 +61,42 @@ describe('CommanderService multi-instance registry', () => {
     expect(CommanderService.createInstance({}).id).toBe('cmd-2');
   });
 });
+
+describe('CommanderService.adoptOrphanInstances', () => {
+  const cleanup = () => {
+    for (const id of Array.from(CommanderService.instances.keys())) {
+      if (id !== 'main') CommanderService.instances.delete(id);
+    }
+  };
+  beforeEach(cleanup);
+  afterEach(() => {
+    for (const id of Array.from(CommanderService.instances.keys())) {
+      if (id !== 'main') CommanderService.instances.delete(id);
+    }
+    jest.restoreAllMocks();
+  });
+
+  it('re-registers and starts instances for surviving commander panes', () => {
+    const fakeBackend = { listSessionNames: () => ['commander-main', 'commander-cmd-3', 'kpop-work1-claude'] };
+    const started = [];
+    jest.spyOn(CommanderService.prototype, 'start').mockImplementation(function mockStart() {
+      started.push(this.instanceId);
+      return Promise.resolve({ success: true });
+    });
+    const adopted = CommanderService.adoptOrphanInstances({}, fakeBackend);
+    expect(adopted).toEqual(['cmd-3']);
+    expect(CommanderService.instances.has('cmd-3')).toBe(true);
+    expect(started).toEqual(['cmd-3']);
+  });
+
+  it('skips already-registered instances and non-commander sessions', () => {
+    const fakeBackend = { listSessionNames: () => ['commander-main', 'zoo-work1-claude'] };
+    jest.spyOn(CommanderService.prototype, 'start').mockImplementation(() => Promise.resolve({ success: true }));
+    expect(CommanderService.adoptOrphanInstances({}, fakeBackend)).toEqual([]);
+  });
+
+  it('fails soft when the backend cannot list sessions', () => {
+    const fakeBackend = { listSessionNames: () => { throw new Error('no server'); } };
+    expect(CommanderService.adoptOrphanInstances({}, fakeBackend)).toEqual([]);
+  });
+});
