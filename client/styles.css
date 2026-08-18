@@ -739,6 +739,16 @@ body {
   transform: translateX(2px);
 }
 
+/* Drag-to-reorder project groups in the sidebar */
+.worktree-item.dragging {
+  opacity: 0.5;
+}
+
+.worktree-item.drag-over {
+  border-color: var(--accent-primary);
+  box-shadow: 0 -2px 0 0 var(--accent-primary);
+}
+
 .worktree-item.active {
   background: var(--accent-primary);
   color: var(--text-on-accent);
@@ -4468,6 +4478,35 @@ header {
   background: var(--bg-secondary);
   color: var(--text-primary);
   padding: 8px 10px;
+}
+
+.quick-remote-framework-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.quick-remote-framework-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-remote-framework-add {
+  padding: 0 10px;
+  font-weight: 700;
+}
+
+.quick-remote-framework-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.quick-remote-framework-form input {
+  flex: 1;
+  min-width: 10rem;
 }
 
 .quick-remote-clone-category-help {
@@ -16040,6 +16079,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
   align-self: center;
   cursor: help;
 }
+
+/* Usage severity highlights: running-out (%) and use-it-or-lose-it (countdown) */
+.usage-limits-widget .usage-sev-yellow { color: #ffd685; font-weight: 600; }
+.usage-limits-widget .usage-sev-orange { color: #ffab5e; font-weight: 600; }
+.usage-limits-widget .usage-sev-red { color: #ff6b6b; font-weight: 700; }
 
 /* Commander tab bar (multiple Commander instances) */
 .commander-tabbar {

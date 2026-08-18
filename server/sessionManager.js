@@ -1113,6 +1113,14 @@ class SessionManager extends EventEmitter {
       const mode = this.detectAgentMode(agent, commandName, commandArgs, command);
       logger.info('Detected agent command', { sessionId, agent, cwd, mode });
 
+      // Input-aware status gating: a freshly launched agent has done no work
+      // until a command is actually submitted to it (Enter written after
+      // launch). Auto-run launches (`claude -p "..."`, `codex exec`, or a
+      // positional prompt argument) start working immediately, so they count
+      // as already-submitted.
+      session.agentStartedAt = Date.now();
+      session.agentInputSubmitted = this.isAutoRunAgentCommand(commandName, commandArgs);
+
       sessionRecoveryService.updateAgent(workspaceId, sessionId, agent, mode);
 
       if (cwd) {
@@ -1584,6 +1592,32 @@ class SessionManager extends EventEmitter {
     return null;
   }
 
+  // True when the launch command itself carries a task, so the agent starts
+  // working with no further input: -p/--print flags, `codex exec`, or a
+  // positional prompt argument. Flags that take a value (e.g. `-m <model>`)
+  // must not have their value mistaken for a prompt.
+  isAutoRunAgentCommand(commandName, commandArgs = []) {
+    const args = (commandArgs || []).map((arg) => String(arg || ''));
+    if (args.some((arg) => arg === '-p' || arg === '--print')) return true;
+    const idleSubcommands = new Set(['resume', 'continue', 'login', 'logout', 'config', 'fork', 'apply', 'debug', 'review']);
+    const valueFlags = new Set([
+      '-m', '--model', '-c', '--config', '-C', '--cd', '--profile', '-s', '--sandbox',
+      '-a', '--ask-for-approval', '--effort', '--agent', '--session-id', '--add-dir',
+      '--permission-mode', '--append-system-prompt', '--mcp-config'
+    ]);
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (arg.startsWith('-')) {
+        if (valueFlags.has(arg) && !arg.includes('=')) i++; // skip the flag's value
+        continue;
+      }
+      if (idleSubcommands.has(arg.toLowerCase())) return false;
+      // `codex exec`, or a positional prompt like `claude "do the thing"`.
+      return true;
+    }
+    return false;
+  }
+
   detectAgentMode(agent, commandName, commandArgs = [], fullCommand = '') {
     if (!agent) return null;
 
@@ -1858,14 +1892,25 @@ class SessionManager extends EventEmitter {
           payload = payload.replace(/\r?\n/g, '\r\n');
         }
       }
+      // Whether an agent was already running BEFORE this write. The Enter that
+      // launches the agent flows through this same call, so submission marking
+      // must only count Enters written while the agent was already up.
+      const agentWasActive = !!session.agentStartedAt;
+      const inputHasEnter = typeof data === 'string' && /[\r\n]/.test(data);
+
       session.pty.write(payload);
       session.lastActivity = Date.now();
-      
+
       // Reset inactivity timer on any user input to keep the session alive
       this.resetInactivityTimer(session);
-      
-      // If was waiting and user provided input, mark as busy
-      if (session.status === 'waiting' && session.type === 'claude') {
+
+      if (agentWasActive && inputHasEnter) {
+        session.agentInputSubmitted = true;
+      }
+
+      // If waiting and the user actually submitted (Enter) — typing characters
+      // without sending them is not work — mark as busy.
+      if (session.status === 'waiting' && session.type === 'claude' && inputHasEnter) {
         // Cancel any pending status flip (prevents "busy→waiting" flicker after input)
         if (session.pendingStatusTimer) {
           clearTimeout(session.pendingStatusTimer);
@@ -2174,13 +2219,18 @@ class SessionManager extends EventEmitter {
       ? (recovery?.lastAgent || (type === 'codex' ? 'codex' : null))
       : null;
 
-    const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer || '', { agent });
+    const noInputSinceLaunch = !!(session.agentStartedAt && !session.agentInputSubmitted);
+    const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer || '', { agent, noInputSinceLaunch });
     if (newStatus === 'idle' && workspaceId && recovery?.lastAgent) {
       const recentOutput = this.statusDetector.stripControlSequences((session.buffer || '').slice(-2000));
       const recentLines = recentOutput.split('\n');
       const lastNonEmptyLine = this.statusDetector.getLastNonEmptyLine(recentLines).trim();
       const recentAll = this.statusDetector.getLastNonEmptyLines(recentLines, 6).join('\n');
       if (this.statusDetector.hasExplicitShellIndicator(recentAll, lastNonEmptyLine)) {
+        // Agent exited back to a shell — clear launch/input markers so the
+        // next launch starts a fresh no-input-yet window.
+        session.agentStartedAt = null;
+        session.agentInputSubmitted = false;
         try {
           sessionRecoveryService.markAgentInactive(workspaceId, sessionId);
         } catch {

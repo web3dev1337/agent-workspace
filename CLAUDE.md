@@ -360,6 +360,26 @@ PATCH /api/recommendations/:id         # {"status":"installed"|"dismissed"}
 DELETE /api/recommendations/:id        # remove entirely
 ```
 
+### Creating a New Repo (Commander / any agent)
+
+When the user says "start a new repo / new project" (e.g. "new repo, it's a game, Roblox, called X"), use the create-repo API. **Private is ALWAYS the default** — only pass `isPrivate: false` if the user explicitly says public.
+
+```bash
+curl -sS -X POST http://localhost:$PORT/api/github/create-repo-worktree \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workspaceId": "<GET /api/workspaces/active first!>",
+    "name": "repo-name",
+    "categoryId": "game",
+    "frameworkId": "roblox",
+    "worktreeId": "work1"
+  }'
+```
+
+What it does: creates `<categoryBase>/<frameworkSuffix>/<name>/master` (git init, branch `master`, seed commit), creates the GitHub repo (private) and pushes, then attaches + starts `work1` in the given workspace. `parentPath` defaults from the framework's `pathSuffix` (roblox → `games/roblox`, threejs → `games/ThreeJs`); pass it explicitly to override. Categories/frameworks: `GET /api/project-types` (add frameworks via `POST /api/project-types/frameworks`).
+
+UI equivalent: Add Worktrees → "✨ New repo" button.
+
 ### Logging Missing Tools
 When a command fails with "not found", POST a recommendation so the user sees it in the UI 🔧 badge:
 ```bash

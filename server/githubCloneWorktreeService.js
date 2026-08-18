@@ -299,6 +299,137 @@ class GitHubCloneWorktreeService {
     };
   }
 
+  // Create a brand-new repo (local <repo>/master + GitHub remote, private by
+  // default), then attach a worktree to the workspace — the greenfield twin of
+  // cloneAndAddWorktree, sharing its placement/validation plumbing.
+  async createRepoAndAddWorktree({
+    workspaceId,
+    name,
+    categoryId,
+    frameworkId,
+    parentPath,
+    repositoryType,
+    worktreeId,
+    socketId,
+    startTier,
+    isPrivate = true,
+    createGithub = true,
+    createFolders = true,
+    ensureWorkspaceMixedWorktree
+  } = {}) {
+    if (typeof ensureWorkspaceMixedWorktree !== 'function') {
+      const error = new Error('Missing ensureWorkspaceMixedWorktree callback');
+      error.statusCode = 500;
+      throw error;
+    }
+
+    const workspaceKey = String(workspaceId || '').trim();
+    if (!workspaceKey) {
+      const error = new Error('workspaceId is required');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const repoName = String(name || '').trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repoName)) {
+      const error = new Error('Repo name must be alphanumeric with . _ - only');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const normalizedWorktreeId = String(worktreeId || 'work1').trim().toLowerCase();
+    if (!/^work\d+$/.test(normalizedWorktreeId)) {
+      const error = new Error('worktreeId must match work{n}');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const tier = Number(startTier);
+    const startTierSafe = tier >= 1 && tier <= 4 ? tier : undefined;
+    const placement = this.resolvePlacement({ repoName, categoryId, parentPath });
+    const repoRoot = path.resolve(placement.repositoryPath);
+    const masterPath = path.join(repoRoot, 'master');
+
+    if (fs.existsSync(masterPath) || fs.existsSync(path.join(repoRoot, 'main'))) {
+      const error = new Error(`A repo already exists at ${repoRoot}`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    await this.ensureRepoRootState({ repositoryPath: repoRoot, createFolders: !!createFolders });
+    const entries = await fsp.readdir(repoRoot).catch(() => []);
+    if (entries.filter((entry) => !['.DS_Store', 'Thumbs.db'].includes(entry)).length > 0) {
+      const error = new Error(`Target repository folder is not empty: ${repoRoot}`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Local repo: <repo>/master with branch "master" and a seed commit.
+    await fsp.mkdir(masterPath, { recursive: true });
+    await this.runCommand('git', ['init', '-b', 'master'], { cwd: masterPath });
+    await fsp.writeFile(path.join(masterPath, 'README.md'), `# ${repoName}\n`, 'utf8');
+    await this.runCommand('git', ['add', '-A'], { cwd: masterPath });
+    await this.runCommand('git', ['commit', '-m', 'chore: initial commit'], { cwd: masterPath });
+
+    let githubRepo = null;
+    if (createGithub !== false) {
+      const visibilityFlag = isPrivate === false ? '--public' : '--private';
+      try {
+        await this.runCommand('gh', ['repo', 'create', repoName, visibilityFlag, '--source', '.', '--remote', 'origin', '--push'], { cwd: masterPath });
+        const view = await this.runCommand('gh', ['repo', 'view', '--json', 'nameWithOwner,url'], { cwd: masterPath }).catch(() => null);
+        try {
+          githubRepo = view ? JSON.parse(view.stdout) : null;
+        } catch {
+          githubRepo = null;
+        }
+      } catch (error) {
+        const wrapped = new Error(`Local repo created at ${repoRoot}, but GitHub repo creation failed: ${error.message}`);
+        wrapped.statusCode = 500;
+        throw wrapped;
+      }
+    }
+
+    const resolvedRepositoryType = this.resolveRepositoryType({
+      repositoryType,
+      category: placement.category,
+      frameworkId
+    });
+
+    const ensured = await ensureWorkspaceMixedWorktree({
+      workspaceId: workspaceKey,
+      repositoryPath: repoRoot,
+      repositoryType: resolvedRepositoryType,
+      repositoryName: repoName,
+      worktreeId: normalizedWorktreeId,
+      socketId: String(socketId || '').trim() || null,
+      startTier: startTierSafe
+    });
+
+    return {
+      workspaceId: workspaceKey,
+      repo: {
+        name: repoName,
+        nameWithOwner: githubRepo?.nameWithOwner || null,
+        url: githubRepo?.url || null,
+        repositoryPath: repoRoot,
+        repositoryPathRelativeToGitHub: placement.relativePath,
+        categoryId: String(placement.category?.id || ''),
+        categoryName: String(placement.category?.name || ''),
+        parentPath: placement.parentPathNormalized,
+        primaryPath: masterPath,
+        repositoryType: resolvedRepositoryType,
+        private: isPrivate !== false,
+        pushedToGithub: !!githubRepo || createGithub !== false
+      },
+      worktree: {
+        id: ensured.worktreeId,
+        path: ensured.worktreePath
+      },
+      sessions: ensured.sessions,
+      alreadyInWorkspace: !!ensured.alreadyExists
+    };
+  }
+
   async cloneAndAddWorktree({
     workspaceId,
     repo,

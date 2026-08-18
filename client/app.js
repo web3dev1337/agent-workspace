@@ -4768,6 +4768,57 @@ class ClaudeOrchestrator {
     return this.getSidebarVisualStatusForWorktree(worktreeKey, raw);
   }
 
+  // Manual sidebar project ordering (drag-to-reorder), persisted per workspace
+  // in user settings at ui.worktrees.repoOrder.<workspaceKey> = [repoName, ...].
+  getSidebarRepoOrderKey() {
+    return String(this.currentWorkspace?.id || 'default').replace(/\./g, '_');
+  }
+
+  getSidebarRepoOrder() {
+    const all = this.userSettings?.global?.ui?.worktrees?.repoOrder || {};
+    const arr = all[this.getSidebarRepoOrderKey()];
+    return Array.isArray(arr) ? arr.map((v) => String(v || '').toLowerCase()) : [];
+  }
+
+  compareSidebarRepos(aName, bName) {
+    const a = String(aName || '').toLowerCase();
+    const b = String(bName || '').toLowerCase();
+    if (a === b) return 0;
+    const order = this.getSidebarRepoOrder();
+    const ai = order.indexOf(a);
+    const bi = order.indexOf(b);
+    if (ai !== -1 || bi !== -1) {
+      if (ai === -1) return 1;      // unordered repos sort after pinned ones
+      if (bi === -1) return -1;
+      return ai - bi;
+    }
+    return a.localeCompare(b);
+  }
+
+  async moveSidebarRepoBefore(draggedRepo, targetRepo) {
+    const dragged = String(draggedRepo || '').toLowerCase();
+    const target = String(targetRepo || '').toLowerCase();
+    if (dragged === target) return;
+
+    // Current effective order of the repos visible in this workspace.
+    const repos = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) continue;
+      const name = String(this.extractRepositoryName(sessionId) || '').toLowerCase();
+      if (!repos.includes(name)) repos.push(name);
+    }
+    repos.sort((a, b) => this.compareSidebarRepos(a, b));
+
+    const from = repos.indexOf(dragged);
+    const to = repos.indexOf(target);
+    if (from === -1 || to === -1) return;
+    repos.splice(from, 1);
+    repos.splice(repos.indexOf(target) + (from < to ? 1 : 0), 0, dragged);
+
+    await this.updateGlobalUserSetting(`ui.worktrees.repoOrder.${this.getSidebarRepoOrderKey()}`, repos);
+    this.buildSidebar();
+  }
+
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
     if (!worktreeList) return;
@@ -4816,12 +4867,13 @@ class ClaudeOrchestrator {
       }
     }
 
-    // Sort worktrees by repository name, then worktree ID
+    // Sort worktrees: manual repo order (drag-to-reorder) first, then
+    // repository name alphabetically, then worktree ID numeric-aware so
+    // work2 < work10.
     const sortedWorktrees = [...worktrees.entries()].sort((a, b) => {
-      const repoA = (a[1].repositoryName || '').toLowerCase();
-      const repoB = (b[1].repositoryName || '').toLowerCase();
-      if (repoA !== repoB) return repoA.localeCompare(repoB);
-      return (a[1].worktreeId || '').localeCompare(b[1].worktreeId || '');
+      const repoCmp = this.compareSidebarRepos(a[1].repositoryName, b[1].repositoryName);
+      if (repoCmp !== 0) return repoCmp;
+      return (a[1].worktreeId || '').localeCompare(b[1].worktreeId || '', undefined, { numeric: true, sensitivity: 'base' });
     });
 
     // Create sidebar items
@@ -4843,7 +4895,38 @@ class ClaudeOrchestrator {
       // Only show visibility state, not activity state (activity filtering is handled separately)
       item.className = `worktree-item ${!isVisible ? 'hidden-terminal' : ''}`;
       item.dataset.worktreeId = worktree.id;
-      item.title = 'Click to toggle • Ctrl+Click to solo/unsolo this worktree';
+      item.title = 'Click to toggle • Ctrl+Click to solo/unsolo this worktree • Drag to reorder projects';
+
+      // Drag a worktree row to move its whole repository group above/below others.
+      item.draggable = true;
+      const dragRepoName = worktree.repositoryName || '';
+      item.addEventListener('dragstart', (e) => {
+        this.sidebarDragRepo = dragRepoName;
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', dragRepoName); } catch { /* IE-style guards */ }
+        }
+        item.classList.add('dragging');
+      });
+      item.addEventListener('dragend', () => {
+        this.sidebarDragRepo = null;
+        item.classList.remove('dragging');
+      });
+      item.addEventListener('dragover', (e) => {
+        if (this.sidebarDragRepo === null || this.sidebarDragRepo === undefined) return;
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        item.classList.add('drag-over');
+      });
+      item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.classList.remove('drag-over');
+        const dragged = this.sidebarDragRepo;
+        this.sidebarDragRepo = null;
+        if (dragged === null || dragged === undefined) return;
+        this.moveSidebarRepoBefore(dragged, dragRepoName);
+      });
 
       const rawBranch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
       const branchMeta = this.formatBranchLabel(rawBranch, { context: 'sidebar' });
@@ -32080,6 +32163,9 @@ class ClaudeOrchestrator {
           <button class="btn-secondary quick-folder-map-btn" id="quick-worktree-folder-map" title="Show how category dropdown values map to folders">
             Folder map
           </button>
+          <button class="btn-primary quick-new-repo-btn" id="quick-worktree-new-repo" title="Create a brand-new repo (local master/ + GitHub, private by default) and start work1 here">
+            ✨ New repo
+          </button>
           <span class="quick-cache-status" id="quick-worktree-cache-status" title="Repo list cache status"></span>
           <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees" style="display:none">
             <input type="checkbox" id="worktree-modal-keep-open">
@@ -32212,6 +32298,11 @@ class ClaudeOrchestrator {
     const advancedBtn = modal.querySelector('.quick-advanced-btn');
     const refreshBtn = modal.querySelector('#quick-worktree-refresh');
     const folderMapBtn = modal.querySelector('#quick-worktree-folder-map');
+    const newRepoBtn = modal.querySelector('#quick-worktree-new-repo');
+    newRepoBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.showQuickNewRepoModal();
+    });
     const quickRemoteInput = modal.querySelector('#quick-remote-repo-input');
     const quickRemoteAddBtn = modal.querySelector('#quick-remote-repo-add');
     const quickRemoteConfigBtn = modal.querySelector('#quick-remote-repo-configure');
@@ -32988,8 +33079,17 @@ class ClaudeOrchestrator {
             </label>
             <label class="quick-remote-clone-label">
               <span>Framework</span>
-              <select id="quick-remote-framework"></select>
+              <div class="quick-remote-framework-row">
+                <select id="quick-remote-framework"></select>
+                <button type="button" id="quick-remote-framework-add" class="btn-secondary quick-remote-framework-add" title="Add a new framework to this category">＋</button>
+              </div>
             </label>
+          </div>
+          <div id="quick-remote-framework-form" class="quick-remote-framework-form" style="display:none;">
+            <input id="quick-remote-framework-name" type="text" class="search-input" placeholder="Framework name (e.g. Godot)">
+            <input id="quick-remote-framework-suffix" type="text" class="search-input" placeholder="Subfolder (optional, e.g. godot)">
+            <button type="button" class="btn-primary" id="quick-remote-framework-save">Save</button>
+            <button type="button" class="btn-secondary" id="quick-remote-framework-cancel">Cancel</button>
           </div>
           <div id="quick-remote-category-help" class="quick-remote-clone-category-help"></div>
 
@@ -33033,7 +33133,12 @@ class ClaudeOrchestrator {
       parentPathManuallyEdited: false
     };
 
-    const getFrameworkRows = (categoryId) => frameworksAll.filter((framework) => String(framework?.categoryId || '').trim() === String(categoryId || '').trim());
+    // Read frameworks from the live taxonomy so inline-added frameworks appear
+    // without reopening the modal.
+    const getFrameworkRows = (categoryId) => {
+      const rows = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : frameworksAll;
+      return rows.filter((framework) => String(framework?.categoryId || '').trim() === String(categoryId || '').trim());
+    };
 
     const populateCategorySelect = () => {
       categorySelect.innerHTML = categories.map((category) => {
@@ -33047,7 +33152,9 @@ class ClaudeOrchestrator {
 
     const populateFrameworkSelect = () => {
       const rows = getFrameworkRows(state.categoryId);
-      const hasCurrent = rows.some((framework) => String(framework?.id || '').trim() === state.frameworkId);
+      // '' is a valid explicit "(none)" choice — never override it back to a framework.
+      const hasCurrent = state.frameworkId === ''
+        || rows.some((framework) => String(framework?.id || '').trim() === state.frameworkId);
       if (!hasCurrent) {
         state.frameworkId = rows[0]?.id ? String(rows[0].id) : '';
       }
@@ -33168,6 +33275,293 @@ class ClaudeOrchestrator {
       state.parentPathManuallyEdited = true;
       refreshState({ preserveManualPath: true });
     });
+
+    // Inline "+ New framework": adds a taxonomy framework for the selected
+    // category via POST /api/project-types/frameworks, then selects it.
+    const frameworkAddBtn = modal.querySelector('#quick-remote-framework-add');
+    const frameworkForm = modal.querySelector('#quick-remote-framework-form');
+    const frameworkNameInput = modal.querySelector('#quick-remote-framework-name');
+    const frameworkSuffixInput = modal.querySelector('#quick-remote-framework-suffix');
+    const frameworkSaveBtn = modal.querySelector('#quick-remote-framework-save');
+    const frameworkCancelBtn = modal.querySelector('#quick-remote-framework-cancel');
+    const toggleFrameworkForm = (show) => {
+      if (frameworkForm) frameworkForm.style.display = show ? '' : 'none';
+      if (show) frameworkNameInput?.focus();
+    };
+    frameworkAddBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleFrameworkForm(frameworkForm?.style.display === 'none');
+    });
+    frameworkCancelBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleFrameworkForm(false);
+    });
+    frameworkSaveBtn?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const name = String(frameworkNameInput?.value || '').trim();
+      if (!name) {
+        this.showToast('Framework name is required', 'error');
+        return;
+      }
+      const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const category = categories.find((row) => String(row?.id || '').trim() === state.categoryId) || null;
+      const defaultTemplateId = String(category?.defaultTemplateId || 'generic-empty').trim();
+      const pathSuffix = String(frameworkSuffixInput?.value || '').trim();
+      try {
+        frameworkSaveBtn.disabled = true;
+        const res = await fetch('/api/project-types/frameworks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            name,
+            categoryId: state.categoryId,
+            defaultTemplateId,
+            templateIds: [defaultTemplateId],
+            pathSuffix: pathSuffix || undefined
+          })
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || result?.ok === false) {
+          throw new Error(result?.error || `Failed to add framework (${res.status})`);
+        }
+        await this.ensureProjectTypeTaxonomy({ force: true }).catch(() => {});
+        state.frameworkId = id;
+        state.parentPathManuallyEdited = false;
+        populateFrameworkSelect();
+        refreshState({ preserveManualPath: false });
+        toggleFrameworkForm(false);
+        if (frameworkNameInput) frameworkNameInput.value = '';
+        if (frameworkSuffixInput) frameworkSuffixInput.value = '';
+        this.showToast(`Framework "${name}" added`, 'success');
+      } catch (error) {
+        this.showToast(String(error?.message || error), 'error');
+      } finally {
+        frameworkSaveBtn.disabled = false;
+      }
+    });
+  }
+
+  // "New repo" flow: category + framework + name + private checkbox →
+  // creates <base>/<parent>/<name>/master locally, pushes to GitHub (private
+  // by default), and starts work1 in the current workspace.
+  async showQuickNewRepoModal() {
+    await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    if (!categories.length) {
+      this.showToast('Project taxonomy unavailable (cannot configure folder placement)', 'error');
+      return;
+    }
+    if (!this.currentWorkspace?.id) {
+      this.showToast('No active workspace selected', 'error');
+      return;
+    }
+
+    // Mutable stand-in for the repo object the placement helpers expect.
+    const repoRef = { name: '' };
+    const existing = document.getElementById('quick-new-repo-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'quick-new-repo-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content quick-remote-clone-modal-content">
+        <div class="modal-header">
+          <h3>New Repo</h3>
+          <button class="close-btn" data-action="close">✕</button>
+        </div>
+        <div class="modal-body quick-remote-clone-body">
+          <div class="quick-remote-clone-help">Creates <code>&lt;repo&gt;/master</code> locally, pushes to GitHub, then starts <code>work1</code> in this workspace.</div>
+
+          <label class="quick-remote-clone-label">
+            <span>Repo name</span>
+            <input id="quick-new-repo-name" type="text" class="search-input" placeholder="e.g. otter-cove-tycoon" autocomplete="off">
+          </label>
+
+          <div class="quick-remote-clone-grid">
+            <label class="quick-remote-clone-label">
+              <span>Category</span>
+              <select id="quick-new-repo-category"></select>
+            </label>
+            <label class="quick-remote-clone-label">
+              <span>Framework</span>
+              <select id="quick-new-repo-framework"></select>
+            </label>
+          </div>
+
+          <label class="quick-remote-clone-label">
+            <span>Parent folders inside category (optional)</span>
+            <input id="quick-new-repo-parent" type="text" class="search-input" placeholder="e.g. roblox">
+          </label>
+
+          <label class="quick-checkbox" title="Private repos are only visible to you">
+            <input type="checkbox" id="quick-new-repo-private" checked>
+            Private GitHub repo (default)
+          </label>
+
+          <div class="quick-remote-final-path">
+            <div class="quick-remote-final-path-label">Final path</div>
+            <div id="quick-new-repo-final-path" class="quick-remote-final-path-value"></div>
+          </div>
+        </div>
+        <div class="modal-footer quick-remote-clone-footer">
+          <button class="btn-secondary" data-action="close">Cancel</button>
+          <button class="btn-primary" id="quick-new-repo-confirm" disabled>Create + Start work1</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const nameInput = modal.querySelector('#quick-new-repo-name');
+    const categorySelect = modal.querySelector('#quick-new-repo-category');
+    const frameworkSelect = modal.querySelector('#quick-new-repo-framework');
+    const parentInput = modal.querySelector('#quick-new-repo-parent');
+    const privateCheckbox = modal.querySelector('#quick-new-repo-private');
+    const finalPathEl = modal.querySelector('#quick-new-repo-final-path');
+    const confirmBtn = modal.querySelector('#quick-new-repo-confirm');
+
+    const state = {
+      categoryId: String(categories.find((c) => c.id === 'game')?.id || categories[0]?.id || ''),
+      frameworkId: '',
+      parentPath: '',
+      parentManuallyEdited: false
+    };
+
+    const frameworksFor = (categoryId) => {
+      const rows = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+      return rows.filter((f) => String(f?.categoryId || '').trim() === String(categoryId || '').trim());
+    };
+
+    const populateCategories = () => {
+      categorySelect.innerHTML = categories.map((category) => {
+        const id = String(category?.id || '').trim();
+        const selected = id === state.categoryId ? 'selected' : '';
+        return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(category?.name || id)}</option>`;
+      }).join('');
+    };
+
+    const populateFrameworks = () => {
+      const rows = frameworksFor(state.categoryId);
+      const hasCurrent = state.frameworkId === '' || rows.some((f) => String(f?.id || '').trim() === state.frameworkId);
+      if (!hasCurrent) state.frameworkId = rows[0]?.id ? String(rows[0].id) : '';
+      frameworkSelect.innerHTML = [
+        '<option value="">(none)</option>',
+        ...rows.map((f) => {
+          const id = String(f?.id || '').trim();
+          const selected = id === state.frameworkId ? 'selected' : '';
+          return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(f?.name || id)}</option>`;
+        })
+      ].join('');
+    };
+
+    const refresh = () => {
+      if (!state.parentManuallyEdited) {
+        state.parentPath = this.guessQuickRemoteParentPath({ categoryId: state.categoryId, frameworkId: state.frameworkId });
+        parentInput.value = state.parentPath;
+      }
+      const defaults = this.buildQuickRemoteCloneDefaults(repoRef, {
+        categoryId: state.categoryId,
+        frameworkId: state.frameworkId,
+        parentPath: state.parentPath
+      });
+      const nameOk = /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repoRef.name);
+      confirmBtn.disabled = !nameOk;
+      finalPathEl.textContent = nameOk
+        ? `${defaults.finalPath}/master (worktree: work1)`
+        : 'Enter a repo name (letters, numbers, . _ -)';
+    };
+
+    populateCategories();
+    populateFrameworks();
+    refresh();
+
+    nameInput.addEventListener('input', () => {
+      repoRef.name = String(nameInput.value || '').trim();
+      refresh();
+    });
+    categorySelect.addEventListener('change', () => {
+      state.categoryId = String(categorySelect.value || '').trim();
+      state.parentManuallyEdited = false;
+      populateFrameworks();
+      refresh();
+    });
+    frameworkSelect.addEventListener('change', () => {
+      state.frameworkId = String(frameworkSelect.value || '').trim();
+      state.parentManuallyEdited = false;
+      refresh();
+    });
+    parentInput.addEventListener('input', () => {
+      state.parentPath = this.sanitizeQuickRemoteParentPath(String(parentInput.value || ''));
+      state.parentManuallyEdited = true;
+      refresh();
+    });
+
+    modal.addEventListener('click', async (event) => {
+      if (event.target.closest('[data-action="close"]')) {
+        event.preventDefault();
+        modal.remove();
+        return;
+      }
+      if (event.target !== confirmBtn) return;
+      event.preventDefault();
+
+      const previousText = confirmBtn.textContent;
+      try {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Creating…';
+        const payload = {
+          workspaceId: this.currentWorkspace.id,
+          name: repoRef.name,
+          categoryId: state.categoryId,
+          frameworkId: state.frameworkId || '',
+          parentPath: this.sanitizeQuickRemoteParentPath(state.parentPath || ''),
+          worktreeId: 'work1',
+          socketId: this.socket?.id || null,
+          startTier: (() => {
+            const startTier = Number(this.quickWorktreeStartTier);
+            return (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+          })(),
+          isPrivate: !!privateCheckbox.checked,
+          createGithub: true,
+          createFolders: true
+        };
+        const response = await fetch('/api/github/create-repo-worktree', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data?.ok === false) {
+          throw new Error(String(data?.error || `Create failed (HTTP ${response.status})`));
+        }
+
+        const responseSessions = data?.sessions && typeof data.sessions === 'object' ? data.sessions : {};
+        if (Object.keys(responseSessions).some((sessionId) => !this.sessions.has(sessionId))) {
+          this.applyWorktreeSessionsAddedPayload({
+            worktreeId: data?.worktree?.id || 'work1',
+            sessions: responseSessions,
+            startTier: payload.startTier,
+            workspaceId: this.currentWorkspace.id
+          }, { silent: true });
+        }
+
+        const remote = data?.repo?.nameWithOwner ? ` → ${data.repo.nameWithOwner}` : '';
+        this.showToast(`Created ${repoRef.name}${remote} (${data?.worktree?.id || 'work1'})`, 'success');
+        this.invalidateScannedReposCache();
+        await this.loadQuickWorktreeRepos().catch(() => {});
+        modal.remove();
+        document.getElementById('quick-worktree-modal')?.remove();
+      } catch (error) {
+        console.error('Create repo + worktree failed:', error);
+        this.showToast(String(error?.message || error), 'error');
+        confirmBtn.disabled = false;
+      } finally {
+        confirmBtn.textContent = previousText;
+      }
+    });
+
+    nameInput.focus();
   }
 
   toggleQuickWorktreeFavorite(repoPath) {
@@ -34056,6 +34450,18 @@ class ClaudeOrchestrator {
     const category = categories.find((row) => String(row?.id || '').trim() === String(categoryId || '').trim());
     if (!category) return '';
 
+    // Explicit "(none)" framework → no framework-flavored parent guess at all.
+    const frameworkToken = String(frameworkId || '').trim().toLowerCase();
+    if (!frameworkToken) return '';
+
+    // The framework's own pathSuffix is the authoritative folder placement
+    // (e.g. roblox -> games/roblox, threejs -> games/ThreeJs).
+    const frameworks = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+    const framework = frameworks.find((row) => String(row?.id || '').trim().toLowerCase() === frameworkToken) || null;
+    if (framework?.pathSuffix) {
+      return this.sanitizeQuickRemoteParentPath(String(framework.pathSuffix));
+    }
+
     const workspaceRepoPath = normalizeClientPath(this.currentWorkspace?.repository?.path || '');
     const workspaceRepoPathNorm = this.normalizeWorktreePath(workspaceRepoPath);
     const categoryBaseNorm = this.normalizeWorktreePath(this.getQuickRemoteCategoryBasePath(category));
@@ -34070,8 +34476,7 @@ class ClaudeOrchestrator {
     const suggestions = this.collectQuickRemoteParentPathSuggestions({ categoryId, frameworkId });
     if (suggestions[0]) return this.sanitizeQuickRemoteParentPath(suggestions[0]);
 
-    const frameworkToken = String(frameworkId || '').trim().toLowerCase();
-    if (frameworkToken && frameworkToken !== 'generic' && frameworkToken !== 'web-generic') {
+    if (frameworkToken !== 'generic' && frameworkToken !== 'web-generic') {
       return this.sanitizeQuickRemoteParentPath(frameworkToken);
     }
 
@@ -34103,7 +34508,11 @@ class ClaudeOrchestrator {
     const category = categories.find((row) => String(row?.id || '').trim() === categoryId) || categories[0] || null;
     const selectedCategoryId = String(category?.id || '').trim();
 
-    const frameworkId = String(overrides?.frameworkId || this.resolveQuickRemoteFrameworkId(selectedCategoryId, remoteRepo)).trim();
+    // overrides.frameworkId === '' means the user explicitly chose "(none)" —
+    // do not re-infer a framework for them (that made "none" impossible to select).
+    const frameworkId = overrides?.frameworkId !== undefined
+      ? String(overrides.frameworkId || '').trim()
+      : String(this.resolveQuickRemoteFrameworkId(selectedCategoryId, remoteRepo) || '').trim();
     const parentPath = this.sanitizeQuickRemoteParentPath(
       overrides?.parentPath ?? this.guessQuickRemoteParentPath({ categoryId: selectedCategoryId, frameworkId })
     );
