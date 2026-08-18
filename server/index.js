@@ -5565,6 +5565,56 @@ app.post('/api/github/clone-and-add-worktree', express.json(), async (req, res) 
   }
 });
 
+// Create a brand-new repo (local master/ + GitHub remote, private by default)
+// and attach a worktree to the workspace. Greenfield twin of clone-and-add-worktree.
+app.post('/api/github/create-repo-worktree', express.json(), async (req, res) => {
+  try {
+    const {
+      workspaceId,
+      name,
+      categoryId,
+      frameworkId,
+      parentPath,
+      repositoryType,
+      worktreeId,
+      socketId,
+      startTier,
+      isPrivate,
+      createGithub,
+      createFolders
+    } = req.body || {};
+
+    const result = await githubCloneWorktreeService.createRepoAndAddWorktree({
+      workspaceId: String(workspaceId || '').trim(),
+      name: String(name || '').trim(),
+      categoryId: String(categoryId || '').trim(),
+      frameworkId: String(frameworkId || '').trim(),
+      parentPath: String(parentPath || '').trim(),
+      repositoryType: String(repositoryType || '').trim(),
+      worktreeId: String(worktreeId || 'work1').trim(),
+      socketId: String(socketId || '').trim(),
+      startTier,
+      isPrivate: isPrivate !== false,
+      createGithub: createGithub !== false,
+      createFolders: createFolders !== false,
+      ensureWorkspaceMixedWorktree
+    });
+
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode) || 500;
+    logger.error('Failed to create repo and add worktree', {
+      error: error.message,
+      stack: error.stack,
+      statusCode
+    });
+    res.status(statusCode).json({
+      ok: false,
+      error: String(error?.message || 'Failed to create repo and add worktree')
+    });
+  }
+});
+
 // ============================================
 // Pull Requests API
 // ============================================

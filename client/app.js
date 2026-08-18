@@ -32163,6 +32163,9 @@ class ClaudeOrchestrator {
           <button class="btn-secondary quick-folder-map-btn" id="quick-worktree-folder-map" title="Show how category dropdown values map to folders">
             Folder map
           </button>
+          <button class="btn-primary quick-new-repo-btn" id="quick-worktree-new-repo" title="Create a brand-new repo (local master/ + GitHub, private by default) and start work1 here">
+            ✨ New repo
+          </button>
           <span class="quick-cache-status" id="quick-worktree-cache-status" title="Repo list cache status"></span>
           <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees" style="display:none">
             <input type="checkbox" id="worktree-modal-keep-open">
@@ -32295,6 +32298,11 @@ class ClaudeOrchestrator {
     const advancedBtn = modal.querySelector('.quick-advanced-btn');
     const refreshBtn = modal.querySelector('#quick-worktree-refresh');
     const folderMapBtn = modal.querySelector('#quick-worktree-folder-map');
+    const newRepoBtn = modal.querySelector('#quick-worktree-new-repo');
+    newRepoBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.showQuickNewRepoModal();
+    });
     const quickRemoteInput = modal.querySelector('#quick-remote-repo-input');
     const quickRemoteAddBtn = modal.querySelector('#quick-remote-repo-add');
     const quickRemoteConfigBtn = modal.querySelector('#quick-remote-repo-configure');
@@ -33332,6 +33340,228 @@ class ClaudeOrchestrator {
         frameworkSaveBtn.disabled = false;
       }
     });
+  }
+
+  // "New repo" flow: category + framework + name + private checkbox →
+  // creates <base>/<parent>/<name>/master locally, pushes to GitHub (private
+  // by default), and starts work1 in the current workspace.
+  async showQuickNewRepoModal() {
+    await this.ensureProjectTypeTaxonomy({ force: false }).catch(() => {});
+    const categories = Array.isArray(this.projectTypeTaxonomy?.categories) ? this.projectTypeTaxonomy.categories : [];
+    if (!categories.length) {
+      this.showToast('Project taxonomy unavailable (cannot configure folder placement)', 'error');
+      return;
+    }
+    if (!this.currentWorkspace?.id) {
+      this.showToast('No active workspace selected', 'error');
+      return;
+    }
+
+    // Mutable stand-in for the repo object the placement helpers expect.
+    const repoRef = { name: '' };
+    const existing = document.getElementById('quick-new-repo-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'quick-new-repo-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content quick-remote-clone-modal-content">
+        <div class="modal-header">
+          <h3>New Repo</h3>
+          <button class="close-btn" data-action="close">✕</button>
+        </div>
+        <div class="modal-body quick-remote-clone-body">
+          <div class="quick-remote-clone-help">Creates <code>&lt;repo&gt;/master</code> locally, pushes to GitHub, then starts <code>work1</code> in this workspace.</div>
+
+          <label class="quick-remote-clone-label">
+            <span>Repo name</span>
+            <input id="quick-new-repo-name" type="text" class="search-input" placeholder="e.g. otter-cove-tycoon" autocomplete="off">
+          </label>
+
+          <div class="quick-remote-clone-grid">
+            <label class="quick-remote-clone-label">
+              <span>Category</span>
+              <select id="quick-new-repo-category"></select>
+            </label>
+            <label class="quick-remote-clone-label">
+              <span>Framework</span>
+              <select id="quick-new-repo-framework"></select>
+            </label>
+          </div>
+
+          <label class="quick-remote-clone-label">
+            <span>Parent folders inside category (optional)</span>
+            <input id="quick-new-repo-parent" type="text" class="search-input" placeholder="e.g. roblox">
+          </label>
+
+          <label class="quick-checkbox" title="Private repos are only visible to you">
+            <input type="checkbox" id="quick-new-repo-private" checked>
+            Private GitHub repo (default)
+          </label>
+
+          <div class="quick-remote-final-path">
+            <div class="quick-remote-final-path-label">Final path</div>
+            <div id="quick-new-repo-final-path" class="quick-remote-final-path-value"></div>
+          </div>
+        </div>
+        <div class="modal-footer quick-remote-clone-footer">
+          <button class="btn-secondary" data-action="close">Cancel</button>
+          <button class="btn-primary" id="quick-new-repo-confirm" disabled>Create + Start work1</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const nameInput = modal.querySelector('#quick-new-repo-name');
+    const categorySelect = modal.querySelector('#quick-new-repo-category');
+    const frameworkSelect = modal.querySelector('#quick-new-repo-framework');
+    const parentInput = modal.querySelector('#quick-new-repo-parent');
+    const privateCheckbox = modal.querySelector('#quick-new-repo-private');
+    const finalPathEl = modal.querySelector('#quick-new-repo-final-path');
+    const confirmBtn = modal.querySelector('#quick-new-repo-confirm');
+
+    const state = {
+      categoryId: String(categories.find((c) => c.id === 'game')?.id || categories[0]?.id || ''),
+      frameworkId: '',
+      parentPath: '',
+      parentManuallyEdited: false
+    };
+
+    const frameworksFor = (categoryId) => {
+      const rows = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+      return rows.filter((f) => String(f?.categoryId || '').trim() === String(categoryId || '').trim());
+    };
+
+    const populateCategories = () => {
+      categorySelect.innerHTML = categories.map((category) => {
+        const id = String(category?.id || '').trim();
+        const selected = id === state.categoryId ? 'selected' : '';
+        return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(category?.name || id)}</option>`;
+      }).join('');
+    };
+
+    const populateFrameworks = () => {
+      const rows = frameworksFor(state.categoryId);
+      const hasCurrent = state.frameworkId === '' || rows.some((f) => String(f?.id || '').trim() === state.frameworkId);
+      if (!hasCurrent) state.frameworkId = rows[0]?.id ? String(rows[0].id) : '';
+      frameworkSelect.innerHTML = [
+        '<option value="">(none)</option>',
+        ...rows.map((f) => {
+          const id = String(f?.id || '').trim();
+          const selected = id === state.frameworkId ? 'selected' : '';
+          return `<option value="${this.escapeHtml(id)}" ${selected}>${this.escapeHtml(f?.name || id)}</option>`;
+        })
+      ].join('');
+    };
+
+    const refresh = () => {
+      if (!state.parentManuallyEdited) {
+        state.parentPath = this.guessQuickRemoteParentPath({ categoryId: state.categoryId, frameworkId: state.frameworkId });
+        parentInput.value = state.parentPath;
+      }
+      const defaults = this.buildQuickRemoteCloneDefaults(repoRef, {
+        categoryId: state.categoryId,
+        frameworkId: state.frameworkId,
+        parentPath: state.parentPath
+      });
+      const nameOk = /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repoRef.name);
+      confirmBtn.disabled = !nameOk;
+      finalPathEl.textContent = nameOk
+        ? `${defaults.finalPath}/master (worktree: work1)`
+        : 'Enter a repo name (letters, numbers, . _ -)';
+    };
+
+    populateCategories();
+    populateFrameworks();
+    refresh();
+
+    nameInput.addEventListener('input', () => {
+      repoRef.name = String(nameInput.value || '').trim();
+      refresh();
+    });
+    categorySelect.addEventListener('change', () => {
+      state.categoryId = String(categorySelect.value || '').trim();
+      state.parentManuallyEdited = false;
+      populateFrameworks();
+      refresh();
+    });
+    frameworkSelect.addEventListener('change', () => {
+      state.frameworkId = String(frameworkSelect.value || '').trim();
+      state.parentManuallyEdited = false;
+      refresh();
+    });
+    parentInput.addEventListener('input', () => {
+      state.parentPath = this.sanitizeQuickRemoteParentPath(String(parentInput.value || ''));
+      state.parentManuallyEdited = true;
+      refresh();
+    });
+
+    modal.addEventListener('click', async (event) => {
+      if (event.target.closest('[data-action="close"]')) {
+        event.preventDefault();
+        modal.remove();
+        return;
+      }
+      if (event.target !== confirmBtn) return;
+      event.preventDefault();
+
+      const previousText = confirmBtn.textContent;
+      try {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Creating…';
+        const payload = {
+          workspaceId: this.currentWorkspace.id,
+          name: repoRef.name,
+          categoryId: state.categoryId,
+          frameworkId: state.frameworkId || '',
+          parentPath: this.sanitizeQuickRemoteParentPath(state.parentPath || ''),
+          worktreeId: 'work1',
+          socketId: this.socket?.id || null,
+          startTier: (() => {
+            const startTier = Number(this.quickWorktreeStartTier);
+            return (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+          })(),
+          isPrivate: !!privateCheckbox.checked,
+          createGithub: true,
+          createFolders: true
+        };
+        const response = await fetch('/api/github/create-repo-worktree', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data?.ok === false) {
+          throw new Error(String(data?.error || `Create failed (HTTP ${response.status})`));
+        }
+
+        const responseSessions = data?.sessions && typeof data.sessions === 'object' ? data.sessions : {};
+        if (Object.keys(responseSessions).some((sessionId) => !this.sessions.has(sessionId))) {
+          this.applyWorktreeSessionsAddedPayload({
+            worktreeId: data?.worktree?.id || 'work1',
+            sessions: responseSessions,
+            startTier: payload.startTier,
+            workspaceId: this.currentWorkspace.id
+          }, { silent: true });
+        }
+
+        const remote = data?.repo?.nameWithOwner ? ` → ${data.repo.nameWithOwner}` : '';
+        this.showToast(`Created ${repoRef.name}${remote} (${data?.worktree?.id || 'work1'})`, 'success');
+        this.invalidateScannedReposCache();
+        await this.loadQuickWorktreeRepos().catch(() => {});
+        modal.remove();
+        document.getElementById('quick-worktree-modal')?.remove();
+      } catch (error) {
+        console.error('Create repo + worktree failed:', error);
+        this.showToast(String(error?.message || error), 'error');
+        confirmBtn.disabled = false;
+      } finally {
+        confirmBtn.textContent = previousText;
+      }
+    });
+
+    nameInput.focus();
   }
 
   toggleQuickWorktreeFavorite(repoPath) {
