@@ -33071,8 +33071,17 @@ class ClaudeOrchestrator {
             </label>
             <label class="quick-remote-clone-label">
               <span>Framework</span>
-              <select id="quick-remote-framework"></select>
+              <div class="quick-remote-framework-row">
+                <select id="quick-remote-framework"></select>
+                <button type="button" id="quick-remote-framework-add" class="btn-secondary quick-remote-framework-add" title="Add a new framework to this category">＋</button>
+              </div>
             </label>
+          </div>
+          <div id="quick-remote-framework-form" class="quick-remote-framework-form" style="display:none;">
+            <input id="quick-remote-framework-name" type="text" class="search-input" placeholder="Framework name (e.g. Godot)">
+            <input id="quick-remote-framework-suffix" type="text" class="search-input" placeholder="Subfolder (optional, e.g. godot)">
+            <button type="button" class="btn-primary" id="quick-remote-framework-save">Save</button>
+            <button type="button" class="btn-secondary" id="quick-remote-framework-cancel">Cancel</button>
           </div>
           <div id="quick-remote-category-help" class="quick-remote-clone-category-help"></div>
 
@@ -33116,7 +33125,12 @@ class ClaudeOrchestrator {
       parentPathManuallyEdited: false
     };
 
-    const getFrameworkRows = (categoryId) => frameworksAll.filter((framework) => String(framework?.categoryId || '').trim() === String(categoryId || '').trim());
+    // Read frameworks from the live taxonomy so inline-added frameworks appear
+    // without reopening the modal.
+    const getFrameworkRows = (categoryId) => {
+      const rows = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : frameworksAll;
+      return rows.filter((framework) => String(framework?.categoryId || '').trim() === String(categoryId || '').trim());
+    };
 
     const populateCategorySelect = () => {
       categorySelect.innerHTML = categories.map((category) => {
@@ -33130,7 +33144,9 @@ class ClaudeOrchestrator {
 
     const populateFrameworkSelect = () => {
       const rows = getFrameworkRows(state.categoryId);
-      const hasCurrent = rows.some((framework) => String(framework?.id || '').trim() === state.frameworkId);
+      // '' is a valid explicit "(none)" choice — never override it back to a framework.
+      const hasCurrent = state.frameworkId === ''
+        || rows.some((framework) => String(framework?.id || '').trim() === state.frameworkId);
       if (!hasCurrent) {
         state.frameworkId = rows[0]?.id ? String(rows[0].id) : '';
       }
@@ -33250,6 +33266,71 @@ class ClaudeOrchestrator {
       state.parentPath = String(parentInput.value || '');
       state.parentPathManuallyEdited = true;
       refreshState({ preserveManualPath: true });
+    });
+
+    // Inline "+ New framework": adds a taxonomy framework for the selected
+    // category via POST /api/project-types/frameworks, then selects it.
+    const frameworkAddBtn = modal.querySelector('#quick-remote-framework-add');
+    const frameworkForm = modal.querySelector('#quick-remote-framework-form');
+    const frameworkNameInput = modal.querySelector('#quick-remote-framework-name');
+    const frameworkSuffixInput = modal.querySelector('#quick-remote-framework-suffix');
+    const frameworkSaveBtn = modal.querySelector('#quick-remote-framework-save');
+    const frameworkCancelBtn = modal.querySelector('#quick-remote-framework-cancel');
+    const toggleFrameworkForm = (show) => {
+      if (frameworkForm) frameworkForm.style.display = show ? '' : 'none';
+      if (show) frameworkNameInput?.focus();
+    };
+    frameworkAddBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleFrameworkForm(frameworkForm?.style.display === 'none');
+    });
+    frameworkCancelBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleFrameworkForm(false);
+    });
+    frameworkSaveBtn?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const name = String(frameworkNameInput?.value || '').trim();
+      if (!name) {
+        this.showToast('Framework name is required', 'error');
+        return;
+      }
+      const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const category = categories.find((row) => String(row?.id || '').trim() === state.categoryId) || null;
+      const defaultTemplateId = String(category?.defaultTemplateId || 'generic-empty').trim();
+      const pathSuffix = String(frameworkSuffixInput?.value || '').trim();
+      try {
+        frameworkSaveBtn.disabled = true;
+        const res = await fetch('/api/project-types/frameworks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            name,
+            categoryId: state.categoryId,
+            defaultTemplateId,
+            templateIds: [defaultTemplateId],
+            pathSuffix: pathSuffix || undefined
+          })
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || result?.ok === false) {
+          throw new Error(result?.error || `Failed to add framework (${res.status})`);
+        }
+        await this.ensureProjectTypeTaxonomy({ force: true }).catch(() => {});
+        state.frameworkId = id;
+        state.parentPathManuallyEdited = false;
+        populateFrameworkSelect();
+        refreshState({ preserveManualPath: false });
+        toggleFrameworkForm(false);
+        if (frameworkNameInput) frameworkNameInput.value = '';
+        if (frameworkSuffixInput) frameworkSuffixInput.value = '';
+        this.showToast(`Framework "${name}" added`, 'success');
+      } catch (error) {
+        this.showToast(String(error?.message || error), 'error');
+      } finally {
+        frameworkSaveBtn.disabled = false;
+      }
     });
   }
 
@@ -34139,6 +34220,18 @@ class ClaudeOrchestrator {
     const category = categories.find((row) => String(row?.id || '').trim() === String(categoryId || '').trim());
     if (!category) return '';
 
+    // Explicit "(none)" framework → no framework-flavored parent guess at all.
+    const frameworkToken = String(frameworkId || '').trim().toLowerCase();
+    if (!frameworkToken) return '';
+
+    // The framework's own pathSuffix is the authoritative folder placement
+    // (e.g. roblox -> games/roblox, threejs -> games/ThreeJs).
+    const frameworks = Array.isArray(this.projectTypeTaxonomy?.frameworks) ? this.projectTypeTaxonomy.frameworks : [];
+    const framework = frameworks.find((row) => String(row?.id || '').trim().toLowerCase() === frameworkToken) || null;
+    if (framework?.pathSuffix) {
+      return this.sanitizeQuickRemoteParentPath(String(framework.pathSuffix));
+    }
+
     const workspaceRepoPath = normalizeClientPath(this.currentWorkspace?.repository?.path || '');
     const workspaceRepoPathNorm = this.normalizeWorktreePath(workspaceRepoPath);
     const categoryBaseNorm = this.normalizeWorktreePath(this.getQuickRemoteCategoryBasePath(category));
@@ -34153,8 +34246,7 @@ class ClaudeOrchestrator {
     const suggestions = this.collectQuickRemoteParentPathSuggestions({ categoryId, frameworkId });
     if (suggestions[0]) return this.sanitizeQuickRemoteParentPath(suggestions[0]);
 
-    const frameworkToken = String(frameworkId || '').trim().toLowerCase();
-    if (frameworkToken && frameworkToken !== 'generic' && frameworkToken !== 'web-generic') {
+    if (frameworkToken !== 'generic' && frameworkToken !== 'web-generic') {
       return this.sanitizeQuickRemoteParentPath(frameworkToken);
     }
 
@@ -34186,7 +34278,11 @@ class ClaudeOrchestrator {
     const category = categories.find((row) => String(row?.id || '').trim() === categoryId) || categories[0] || null;
     const selectedCategoryId = String(category?.id || '').trim();
 
-    const frameworkId = String(overrides?.frameworkId || this.resolveQuickRemoteFrameworkId(selectedCategoryId, remoteRepo)).trim();
+    // overrides.frameworkId === '' means the user explicitly chose "(none)" —
+    // do not re-infer a framework for them (that made "none" impossible to select).
+    const frameworkId = overrides?.frameworkId !== undefined
+      ? String(overrides.frameworkId || '').trim()
+      : String(this.resolveQuickRemoteFrameworkId(selectedCategoryId, remoteRepo) || '').trim();
     const parentPath = this.sanitizeQuickRemoteParentPath(
       overrides?.parentPath ?? this.guessQuickRemoteParentPath({ categoryId: selectedCategoryId, frameworkId })
     );
