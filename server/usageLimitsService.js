@@ -70,12 +70,23 @@ class UsageLimitsService {
           resetsAt: Number.isFinite(resets) ? resets : null
         };
       };
+      // Pass through any additional rate-limit buckets Claude Code reports
+      // (e.g. a model-specific weekly bucket like seven_day_opus/seven_day_fable)
+      // so new buckets surface in the UI without code changes here.
+      const extraBuckets = [];
+      for (const [key, value] of Object.entries(limits)) {
+        if (key === 'five_hour' || key === 'seven_day') continue;
+        const parsed = bucket(value);
+        if (parsed) extraBuckets.push({ key, ...parsed });
+      }
       return {
         available: true,
         updatedAt,
         stale: updatedAt ? (Date.now() - updatedAt * 1000) > CLAUDE_STALE_AFTER_MS : true,
+        model: String(raw?.model || '').trim() || null,
         fiveHour: bucket(limits.five_hour),
-        sevenDay: bucket(limits.seven_day)
+        sevenDay: bucket(limits.seven_day),
+        extraBuckets
       };
     } catch {
       return { available: false };

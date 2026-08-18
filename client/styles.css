@@ -16041,6 +16041,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
   cursor: help;
 }
 
+/* Usage severity highlights: running-out (%) and use-it-or-lose-it (countdown) */
+.usage-limits-widget .usage-sev-yellow { color: #ffd685; font-weight: 600; }
+.usage-limits-widget .usage-sev-orange { color: #ffab5e; font-weight: 600; }
+.usage-limits-widget .usage-sev-red { color: #ff6b6b; font-weight: 700; }
+
 /* Commander tab bar (multiple Commander instances) */
 .commander-tabbar {
   display: flex;
