@@ -18,12 +18,12 @@
       "name": "Game",
       "description": "Game projects across engines and frameworks",
       "basePath": "games",
-      "keywords": ["game", "hytopia", "unity", "godot", "gaming", "monogame"],
+      "keywords": ["game", "hytopia", "unity", "godot", "gaming", "monogame", "roblox", "threejs"],
       "defaultTemplateId": "hytopia-game-starter",
       "defaultRepositoryType": "hytopia-game",
       "defaultLaunchSettingsType": "hytopia-game",
       "buttonProfileId": "hytopia-game",
-      "frameworkIds": ["hytopia", "monogame"]
+      "frameworkIds": ["hytopia", "monogame", "roblox", "threejs", "unity"]
     },
     {
       "id": "tool",
@@ -108,6 +108,33 @@
       "name": "MonoGame",
       "description": "MonoGame projects",
       "categoryId": "game",
+      "defaultTemplateId": "generic-empty",
+      "templateIds": ["generic-empty"]
+    },
+    {
+      "id": "roblox",
+      "name": "Roblox",
+      "description": "Roblox game development (Luau)",
+      "categoryId": "game",
+      "pathSuffix": "roblox",
+      "defaultTemplateId": "generic-empty",
+      "templateIds": ["generic-empty"]
+    },
+    {
+      "id": "threejs",
+      "name": "ThreeJS",
+      "description": "Three.js browser games",
+      "categoryId": "game",
+      "pathSuffix": "ThreeJs",
+      "defaultTemplateId": "generic-empty",
+      "templateIds": ["generic-empty"]
+    },
+    {
+      "id": "unity",
+      "name": "Unity",
+      "description": "Unity game projects",
+      "categoryId": "game",
+      "pathSuffix": "unity",
       "defaultTemplateId": "generic-empty",
       "templateIds": ["generic-empty"]
     },
