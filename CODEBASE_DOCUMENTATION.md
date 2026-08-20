@@ -291,7 +291,7 @@ client/greenfield-framework-modal.js - Framework creation modal for the greenfie
 ├─ Workspace-context suggestion (repo type -> recommended template/framework defaults)
 └─ Full-screen wizard UI for project scaffolding + workspace creation
 
-client/projects-board.js           - Projects kanban board modal (Archive/Maybe One Day/Backlog/Active/Ship Next/Done; drag/drop + re-order; collapsible columns; live tag; hide forks; persists via `/api/projects/board`)
+client/projects-board.js           - Projects kanban board modal (Archive/Maybe One Day/Backlog/Active/Ship Next/Done; drag/drop + re-order; collapsible columns; live tag; hide forks; "Edited" recency radio filter All/30d/7d/1d from cached GitHub `pushedAt` — no extra API calls, local-only repos stay visible; card push-age hints; persists via `/api/projects/board`)
 
 client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
 ├─ Features: Browser-like tabs for multiple workspaces

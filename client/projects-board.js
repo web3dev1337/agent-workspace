@@ -1,3 +1,11 @@
+const PROJECTS_BOARD_RECENCY_OPTIONS = [
+  { days: 0, label: 'All' },
+  { days: 30, label: '30d' },
+  { days: 7, label: '7d' },
+  { days: 1, label: '1d' }
+];
+const PROJECTS_BOARD_MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 class ProjectsBoardUI {
   constructor(orchestrator) {
     this.orchestrator = orchestrator;
@@ -25,6 +33,7 @@ class ProjectsBoardUI {
     this._dragOverRaf = null;
     this._pendingDragOver = null;
     this.hideForks = false;
+    this.recencyDays = 0;
     this.githubRepos = [];
     this._escHandler = null;
     this._wrapExpandResizeHandler = null;
@@ -92,6 +101,15 @@ class ProjectsBoardUI {
             <input type="checkbox" id="projects-board-hide-forks" />
             Hide forks
           </label>
+          <div class="projects-board-recency" id="projects-board-recency" role="radiogroup" aria-label="Show repos pushed within" title="Show only repos with pushes (by anyone) inside the window — cached GitHub data, no extra API calls. Repos without GitHub data stay visible.">
+            <span class="projects-board-recency-title">Edited:</span>
+            ${PROJECTS_BOARD_RECENCY_OPTIONS.map((opt) => `
+              <label class="projects-board-recency-option">
+                <input type="radio" name="projects-board-recency" value="${opt.days}" ${opt.days === 0 ? 'checked' : ''} />
+                <span>${opt.label}</span>
+              </label>
+            `).join('')}
+          </div>
           <button type="button" class="button-secondary" id="projects-board-refresh" title="Refresh repos + board">↻ Refresh</button>
         </div>
         <div class="projects-board-meta" id="projects-board-meta"></div>
@@ -142,6 +160,28 @@ class ProjectsBoardUI {
           localStorage.setItem('projects-board-hide-forks', this.hideForks ? 'true' : 'false');
         } catch {}
         if (this.hideForks) {
+          await this.ensureGitHubRepos({ force: false });
+        }
+        this.render();
+      });
+    }
+
+    const recencyEl = modal.querySelector('#projects-board-recency');
+    if (recencyEl) {
+      try {
+        const raw = Number.parseInt(localStorage.getItem('projects-board-recency-days') || '0', 10);
+        this.recencyDays = PROJECTS_BOARD_RECENCY_OPTIONS.some((opt) => opt.days === raw) ? raw : 0;
+      } catch {}
+      const checked = recencyEl.querySelector(`input[value="${this.recencyDays}"]`);
+      if (checked) checked.checked = true;
+
+      recencyEl.addEventListener('change', async (e) => {
+        const value = Number.parseInt(String(e.target?.value || '0'), 10);
+        this.recencyDays = PROJECTS_BOARD_RECENCY_OPTIONS.some((opt) => opt.days === value) ? value : 0;
+        try {
+          localStorage.setItem('projects-board-recency-days', String(this.recencyDays));
+        } catch {}
+        if (this.recencyDays > 0) {
           await this.ensureGitHubRepos({ force: false });
         }
         this.render();
@@ -259,15 +299,34 @@ class ProjectsBoardUI {
     return !!tags?.live;
   }
 
-  getForkMapByName() {
+  getGitHubMetaByName() {
     const map = new Map();
     const rows = Array.isArray(this.githubRepos) ? this.githubRepos : [];
     for (const repo of rows) {
       const name = String(repo?.name || '').trim().toLowerCase();
       if (!name) continue;
-      map.set(name, { isFork: !!repo?.isFork });
+      const pushedAtMs = repo?.pushedAt ? Date.parse(repo.pushedAt) : NaN;
+      map.set(name, {
+        isFork: !!repo?.isFork,
+        lastPushMs: Number.isFinite(pushedAtMs) ? pushedAtMs : null
+      });
     }
     return map;
+  }
+
+  getProjectGitHubMeta(project, metaByName = null) {
+    const map = metaByName || this.getGitHubMetaByName();
+    return map.get(String(project?.name || '').trim().toLowerCase()) || null;
+  }
+
+  formatPushAge(lastPushMs) {
+    if (!lastPushMs) return '';
+    const ageMs = Date.now() - lastPushMs;
+    if (ageMs < PROJECTS_BOARD_MS_PER_DAY) return 'today';
+    const days = Math.floor(ageMs / PROJECTS_BOARD_MS_PER_DAY);
+    if (days < 60) return `${days}d ago`;
+    if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+    return `${Math.floor(days / 365)}y ago`;
   }
 
   matchesFilter(project, term) {
@@ -281,9 +340,20 @@ class ProjectsBoardUI {
 
   buildFullColumnModel() {
     const rows = Array.isArray(this.projects) ? this.projects : [];
-    const forkMap = this.hideForks ? this.getForkMapByName() : null;
-    const visible = forkMap
-      ? rows.filter((p) => !forkMap.get(String(p?.name || '').trim().toLowerCase())?.isFork)
+    const needsMeta = this.hideForks || this.recencyDays > 0;
+    const metaByName = needsMeta ? this.getGitHubMetaByName() : null;
+    const cutoffMs = this.recencyDays > 0 ? Date.now() - (this.recencyDays * PROJECTS_BOARD_MS_PER_DAY) : 0;
+    const visible = needsMeta
+      ? rows.filter((p) => {
+        const meta = this.getProjectGitHubMeta(p, metaByName);
+        if (this.hideForks && meta?.isFork) return false;
+        if (cutoffMs && meta) {
+          // Known GitHub repo: hide unless someone pushed inside the window.
+          // Local-only repos (no GitHub match) can't be judged — keep them visible.
+          if (!meta.lastPushMs || meta.lastPushMs < cutoffMs) return false;
+        }
+        return true;
+      })
       : rows;
 
     const byColumn = new Map();
@@ -340,7 +410,8 @@ class ProjectsBoardUI {
       let visible = 0;
       for (const list of byColumn.values()) visible += list.length;
       const fileHint = this.storePath ? ` • saved: ${this.storePath}` : '';
-      metaEl.textContent = `${visible}/${total} projects${fileHint}`;
+      const recencyHint = this.recencyDays > 0 ? ` • pushed ≤${this.recencyDays}d` : '';
+      metaEl.textContent = `${visible}/${total} projects${recencyHint}${fileHint}`;
     }
 
     const columnsEl = modal.querySelector('#projects-board-columns');
@@ -352,6 +423,7 @@ class ProjectsBoardUI {
       .replace(/\"/g, '&quot;')
       .replace(/'/g, '&#039;');
 
+    const metaByName = this.getGitHubMetaByName();
     const renderCard = (project) => {
       const icon = this.orchestrator?.getProjectIcon?.(project.type) || '📁';
       const name = escapeHtml(project.name);
@@ -359,7 +431,9 @@ class ProjectsBoardUI {
       const path = escapeHtml(project.path || '');
       const category = escapeHtml(project.category || '');
       const type = escapeHtml(project.type || '');
-      const subtitle = category ? `${category} • ${key}` : key;
+      const pushAge = this.formatPushAge(this.getProjectGitHubMeta(project, metaByName)?.lastPushMs);
+      const parts = [category, key, pushAge].filter(Boolean);
+      const subtitle = parts.join(' • ');
       const isLive = this.getProjectIsLive(project.key);
       return `
         <div class="projects-board-card ${isLive ? 'is-live' : ''}" draggable="true" data-project-key="${key}" data-project-type="${type}" title="${path}">

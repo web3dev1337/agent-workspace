@@ -1,0 +1,7 @@
+- [x] Radio UI + persistence
+- [x] Filter logic + fork-map merge
+- [x] CSS segmented control
+- [x] Jest unit tests (7/7 green)
+- [x] Browser-verified on isolated server (300→38→22 cards, 0 console errors)
+- [x] Docs commit
+- [ ] PR

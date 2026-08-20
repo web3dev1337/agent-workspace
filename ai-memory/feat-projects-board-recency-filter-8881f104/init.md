@@ -1,0 +1,1 @@
+User request (voice, 2026-08-21): Projects board — next to "Hide forks" add a recently-edited filter as radio buttons (All/30d/7d/1d) showing repos with commits in that window, by ANYONE (teammate pushes count). No extra GitHub API spam — cache, refresh button. Feature-flag-safe for other users (default All).
