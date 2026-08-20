@@ -1,0 +1,6 @@
+- [x] Extract files + wire index.js
+- [x] node --check clean
+- [x] Atlas unit tests 70/70; FULL suite 119 suites / 762 tests green
+- [x] Live smoke: /api/atlas/status,digest,find on booted server; `node scripts/atlas.js status` against real data
+- [ ] PR
+- [x] CI fix: registry commits fall back to a neutral atlas identity when the machine has none (jest sandboxes process.env, so env-based test fixes cannot work; CI runners have no git identity)

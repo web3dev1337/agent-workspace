@@ -116,6 +116,14 @@ server/threadService.js            - Workspace/project thread persistence (`~/.o
 ├─ Project aggregation: `listProjects()` returns repository-level chat rollups across one/many workspaces
 └─ Lifecycle: create/list/close/archive + session association updates
 server/projectBoardService.js      - Local projects kanban board persistence (`~/.orchestrator/project-board.json`) + APIs (`GET /api/projects/board`, `POST /api/projects/board/move`, `POST /api/projects/board/patch`)
+server/repoAtlasService.js         - Repo Atlas singleton — registry bootstrap, scan orchestration, query/propose/audience/sync facade (data: `~/.agent-workspace/atlas/`, registry synced to a PRIVATE git repo)
+server/atlas/                      - Atlas internals: atlasSchema (validation), atlasStore (one-file-per-repo registry IO under `entries/`), atlasDiscovery (local clones + GitHub scan), atlasQuery (find/digest/list), atlasProposals (agent write-back queue, user approves), atlasCompiler (per-audience bundle redaction — private never leaves the machine), atlasSync (git pull/rebase/push of the registry for multi-machine curation)
+server/routes/atlasRoutes.js       - `/api/atlas/*` REST surface (status/entries/find/digest/topics/refresh/proposals/audiences/subscriptions) with read/write policy gating
+scripts/atlas.js                   - `atlas` CLI (scan/status/list/show/find/digest/note/avoid/set/audience/compile/propose/proposals/remote/sync/publish/subscribe/doctor/init)
+config/repo-atlas-topics.json      - Canonical topic vocabulary for atlas highlights
+config/repo-atlas.example.json     - Annotated `.repo-atlas.json` per-repo manifest example
+skills/public/repo-atlas/SKILL.md  - Agent-facing skill doc for querying/proposing to the atlas
+tests/unit/repoAtlas*.test.js      - Atlas coverage: schema/store/query/proposals/compiler/sync/service (70 tests)
 server/discordIntegrationService.js - Discord queue orchestration bridge (Services workspace ensure/start, signed queue verification, invocation idempotency, JSONL audit log for processing dispatch/replay/fail paths)
 server/intentHaikuService.js       - Session intent summarizer for context-switch hints (optional Anthropic Haiku model, heuristic fallback)
 server/agentModelConfigService.js  - Resolves the model + reasoning effort agent launches will use per worktree (Claude `.claude/settings*.json` cascade: local > project > user; Codex `~/.codex/config.toml`; Grok `~/.grok/config.toml` [models] section)

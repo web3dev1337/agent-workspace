@@ -1,0 +1,4 @@
+- git checkout of atlas-only paths from origin/feature/autopilot-voice-and-repo-atlas (all NEW files, zero conflicts): scripts/atlas.js, server/atlas/*, server/repoAtlasService.js, server/routes/atlasRoutes.js, config/repo-atlas-{topics,example}.json, .repo-atlas.json, skills/public/repo-atlas, tests/unit/repoAtlas*.
+- Hand-wire 3 hunks into current main server/index.js (require, getInstance, /api/atlas mount with requirePolicyAction read/write).
+- No new npm deps (express + node builtins + existing utils/pathUtils).
+- JARVIS/supervisor/Discord/voice/jarvis-panel UI stay in #1029.
