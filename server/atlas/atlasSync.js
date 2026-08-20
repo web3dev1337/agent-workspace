@@ -90,7 +90,12 @@ async function hasChanges(dir) {
 async function commitAll(dir, message) {
   await git(['add', '-A'], { cwd: dir });
   if (!(await hasChanges(dir))) return { committed: false };
-  const commit = await git(['commit', '-m', message], { cwd: dir });
+  let commit = await git(['commit', '-m', message], { cwd: dir });
+  if (!commit.ok && /empty ident|Author identity unknown/i.test(`${commit.stderr || ''} ${commit.error || ''}`)) {
+    // A machine with no git identity (fresh install, CI) can still keep a
+    // registry — fall back to a neutral atlas identity for registry commits.
+    commit = await git(['-c', 'user.name=Repo Atlas', '-c', 'user.email=atlas@localhost', 'commit', '-m', message], { cwd: dir });
+  }
   return { committed: commit.ok, error: commit.ok ? null : (commit.stderr || commit.error) };
 }
 

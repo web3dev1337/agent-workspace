@@ -91,7 +91,7 @@ describe('Repo Atlas multi-machine sync', () => {
     // Simulate the pre-fix state: force-track the config and commit it.
     const dir = store.registryDir();
     execFileSync('git', ['add', '-f', 'atlas.config.json'], { cwd: dir, stdio: 'pipe' });
-    execFileSync('git', ['commit', '-m', 'legacy: tracked config'], { cwd: dir, stdio: 'pipe' });
+    execFileSync('git', ['-c', 'user.name=Atlas Test', '-c', 'user.email=atlas-test@localhost', 'commit', '-m', 'legacy: tracked config'], { cwd: dir, stdio: 'pipe' });
 
     expect((await a.sync()).ok).toBe(true);
     const tracked = execFileSync('git', ['ls-tree', '-r', '--name-only', 'main'], { cwd: remote, stdio: 'pipe' }).toString();
