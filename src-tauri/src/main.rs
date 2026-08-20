@@ -265,6 +265,18 @@ fn strip_unc_prefix(p: std::path::PathBuf) -> std::path::PathBuf {
 }
 
 fn resolve_node_command(app: &tauri::AppHandle) -> std::ffi::OsString {
+    // An explicit override wins over the bundled runtime. It used to be consulted only after
+    // every bundled candidate had been ruled out, so on a packaged build — where a bundled
+    // node.exe always exists — setting ORCHESTRATOR_NODE_PATH did nothing. That is the escape
+    // hatch the Windows guide tells people to reach for when the bundled runtime will not run
+    // (antivirus quarantine, a blocked unsigned binary), and it has to be reachable.
+    if let Ok(path) = std::env::var("ORCHESTRATOR_NODE_PATH") {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() && std::path::Path::new(trimmed).exists() {
+            return trimmed.into();
+        }
+    }
+
     for root in bundled_resource_roots(app) {
         let candidates = if cfg!(target_os = "windows") {
             vec![
@@ -367,6 +379,22 @@ async fn navigate_window(window: tauri::WebviewWindow, url: String) {
         }
         tokio::time::sleep(Duration::from_millis(150)).await;
     }
+}
+
+/// Open the backend's stdout/stderr sinks under the data dir. Appends, so a crash loop keeps its
+/// history instead of each restart erasing the evidence of the last one.
+#[cfg(target_os = "windows")]
+fn backend_output_file(data_dir: &std::path::Path) -> Option<(std::fs::File, std::fs::File)> {
+    let logs_dir = data_dir.join("logs");
+    std::fs::create_dir_all(&logs_dir).ok()?;
+    let open = |name: &str| {
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(logs_dir.join(name))
+            .ok()
+    };
+    Some((open("backend-stdout.log")?, open("backend-stderr.log")?))
 }
 
 fn append_tauri_bootstrap_log(data_dir: &std::path::Path, message: &str) {
@@ -726,12 +754,23 @@ fn main() {
                         cmd.arg(entry);
                         cmd.current_dir(&data_dir);
                         cmd.stdin(Stdio::null());
-                        // On Windows, null stdout/stderr to avoid console window flash.
-                        // On other platforms, keep stderr for debugging.
+                        // On Windows the backend's own output used to go to null to avoid a
+                        // console window flash. CREATE_NO_WINDOW below is what actually suppresses
+                        // the console, so nulling the streams bought nothing and cost everything:
+                        // a backend that spawned and then died on boot left no trace anywhere, and
+                        // the user got "did not become ready" with no cause. Send it to a file.
                         #[cfg(target_os = "windows")]
                         {
-                            cmd.stdout(Stdio::null());
-                            cmd.stderr(Stdio::null());
+                            match backend_output_file(&data_dir) {
+                                Some((out, err)) => {
+                                    cmd.stdout(Stdio::from(out));
+                                    cmd.stderr(Stdio::from(err));
+                                }
+                                None => {
+                                    cmd.stdout(Stdio::null());
+                                    cmd.stderr(Stdio::null());
+                                }
+                            }
                         }
                         #[cfg(not(target_os = "windows"))]
                         {
