@@ -1,0 +1,5 @@
+- Client-only change (no server restart needed to adopt: Ctrl+F5).
+- Data: /api/github/repos?scope=all already returns pushedAt (user/repos REST, owned+org+collab, updates on any push) — cached server-side + client localStorage. Zero new API calls.
+- projects-board.js: PROJECTS_BOARD_RECENCY_OPTIONS const, radio group in toolbar, localStorage persist (projects-board-recency-days), getGitHubMetaByName (merged fork+pushedAt map, replaces getForkMapByName), filter in buildFullColumnModel, "pushed ≤Nd" meta hint, push-age on card subtitles.
+- Local-only repos (no GitHub match): kept visible under filter (can't judge recency).
+- Tests: tests/unit/projectsBoardRecencyFilter.test.js (jest, 7 cases).
