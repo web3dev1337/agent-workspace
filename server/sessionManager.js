@@ -1074,7 +1074,19 @@ class SessionManager extends EventEmitter {
         session.agentInputSubmitted = false;
       }
       this.sessions.set(sessionId, session);
-      this.clearSessionHydrated(sessionId, { workspaceId: session.workspace, session });
+      if (persistence?.adopted && session.type === 'claude') {
+        // The tmux pane survived untouched — this is a server-process restart,
+        // not a real machine restart, and whatever agent was running is still
+        // running. Mark it hydrated so /api/recovery treats it exactly like a
+        // session the user already interacted with this boot: recovery would
+        // be redundant, and typing `claude --resume` into an already-live
+        // REPL just corrupts its input. A genuinely dead session (no tmux
+        // socket to adopt, e.g. after a computer restart) still spawns fresh
+        // and hits the clearSessionHydrated() branch below as before.
+        this.markSessionHydrated(sessionId, { workspaceId: session.workspace, session });
+      } else {
+        this.clearSessionHydrated(sessionId, { workspaceId: session.workspace, session });
+      }
 
       if (session.workspace) {
         sessionRecoveryService.updateSession(session.workspace, sessionId, {
