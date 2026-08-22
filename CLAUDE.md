@@ -876,13 +876,42 @@ All commands run these 4 services:
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
 
-## In-Place Production Update (deferred restart)
+## In-Place Production Update
 
-To update the running production `master/` without killing sessions mid-update (full write-up: `PLANS/2026-08-15/PROD_UPDATE.md`):
+### Preferred: just let nodemon restart — sessions survive on their own (as of PR #1059, 2026-08-22)
+
+Every session (Commander tabs AND worktree terminals) now runs as a tmux CLIENT attached to
+a pane on a dedicated per-port tmux socket (`agent-workspace-<port>`, e.g.
+`agent-workspace-3000` for production) — the real shell/Claude process lives under the tmux
+server, not under the node process. When `server/**` changes and nodemon restarts, only the
+outer node-pty client dies; the tmux pane keeps running untouched, and the orchestrator
+re-adopts it on the next `createSession()`/reconnect. This is on by default
+(`ORCHESTRATOR_SESSION_PERSISTENCE=0` disables it; unavailable tmux falls back to plain
+node-pty automatically, in which case sessions do NOT survive a restart).
+
+So the normal update path is just: `git pull`/`git checkout` in `master/`, let nodemon
+restart, done. Commander tabs and worktree terminals come back with their conversations
+intact — verified live via `tmux capture-pane` across all three Commander instances during
+that PR's own restart. Caveats:
+- If the update also changes the Node version node-pty was built against, terminals will
+  fail to spawn after the restart until `npm rebuild node-pty` runs against the exact live
+  Node binary (`readlink -f /proc/<nodemon-pid>/exe`) — this bit PR #1059 itself.
+- The browser UI does a brief WebSocket reconnect at restart; no action needed, it recovers
+  on its own within a few seconds.
+- If persistence is disabled or tmux is unavailable, fall back to the deferred-restart
+  method below instead.
+
+### Fallback: deferred restart (nodemon SIGSTOP)
+
+Use this when you want to control the exact moment sessions might glitch (e.g. persistence
+disabled, tmux missing, or you want zero WebSocket-reconnect blips during someone's active
+work) rather than nodemon restarting whenever it notices the file change. Full write-up:
+`PLANS/2026-08-15/PROD_UPDATE.md`.
 
 1. `pgrep -af nodemon` — find the nodemon pid watching `server/`.
 2. `kill -STOP <nodemon pid>` — server keeps running old code from memory; ptys/sessions survive.
 3. Update files (`git pull` / `git checkout`); file-change events queue but do not fire.
-4. `kill -CONT <nodemon pid>` when ready for downtime — queued events fire, server restarts, ALL sessions die at that chosen moment. Verify with `ss -tlnp | grep :3000` + a `curl` to an API endpoint.
+4. `kill -CONT <nodemon pid>` when ready for downtime — queued events fire, server restarts at
+   that chosen moment. Verify with `ss -tlnp | grep :3000` + a `curl` to an API endpoint.
 
 Rules: never leave nodemon STOPped across a stack shutdown (pending signals unprocessed → orphans). Client-only changes (`client/*.js`/`*.css`) need NO restart — just Ctrl+F5 the browser.
