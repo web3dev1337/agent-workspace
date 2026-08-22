@@ -46,7 +46,10 @@ class CommanderPanel {
 
   healTerminal() {
     if (!this.isVisible || !this.terminal) return;
-    this.fitTerminalSoon();
+    // Passive repaint only — this runs on a timer and on every tab/window
+    // focus regain, so it must never steal keyboard focus into Commander
+    // while the user is typing somewhere else on the page.
+    this.fitTerminalSoon({ focus: false });
   }
 
   // Instance-scoped API URL: main uses the bare endpoint (back-compat),
@@ -232,14 +235,14 @@ class CommanderPanel {
     this.renderTabs();
   }
 
-  fitTerminalSoon() {
+  fitTerminalSoon({ focus = true } = {}) {
     if (!this.fitAddon || !this.terminal) return;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         this.fitAddon?.fit();
         this.syncTerminalSize();
         this.terminal?.refresh?.(0, Math.max(0, (this.terminal.rows || 1) - 1));
-        this.terminal?.focus();
+        if (focus) this.terminal?.focus();
       });
     });
   }
