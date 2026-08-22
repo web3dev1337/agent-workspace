@@ -171,6 +171,22 @@ class SessionManager extends EventEmitter {
     return this.recoveryHydratedSessions.has(key);
   }
 
+  // True signal for "is this session's process actually still alive" —
+  // independent of whether THIS server process has gotten around to calling
+  // createSession() for it yet. hasSessionHydrated() only tracks in-memory
+  // state for the current process, so right after a server restart it's
+  // false for every session even though a tmux-persisted one never died —
+  // that gap is what let the recovery flow re-type a `claude --resume`
+  // command into an already-running Claude session on every reconnect.
+  isSessionAliveInTmux(sessionId) {
+    if (!this.sessionPersistenceEnabled) return false;
+    try {
+      return this.sessionPersistence.hasSession(sessionId);
+    } catch {
+      return false;
+    }
+  }
+
   // Determine effective inactivity timeout per session (ms)
   getSessionTimeout(session) {
     if (!session) return this.sessionTimeout;

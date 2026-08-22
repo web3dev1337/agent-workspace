@@ -4824,7 +4824,14 @@ app.get('/api/recovery/:workspaceId', async (req, res) => {
       ? recoveryInfo.sessions.filter((entry) => {
           const sessionId = String(entry?.sessionId || '').trim();
           if (!sessionId) return false;
-          return !sessionManager.hasSessionHydrated(sessionId, { workspaceId });
+          if (sessionManager.hasSessionHydrated(sessionId, { workspaceId })) return false;
+          // A tmux-persisted pane surviving a server restart means the real
+          // process (Claude included) never stopped — opening the terminal
+          // just reattaches to it as-is. Recovery has nothing to do here, so
+          // don't offer/auto-run a `claude --resume` into an already-live
+          // session (see sessionManager.isSessionAliveInTmux).
+          if (sessionManager.isSessionAliveInTmux(sessionId)) return false;
+          return true;
         })
       : [];
 
