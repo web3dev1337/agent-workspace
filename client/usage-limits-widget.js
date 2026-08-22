@@ -18,6 +18,7 @@ const PACE_LOSE_RED = 0.15;    // >=15% of quota mathematically/realistically un
 const PACE_LOSE_ORANGE = 0.05;
 const PACE_DEFICIT_ORANGE = 0.35; // behind linear pace by 35+ points
 const PACE_DEFICIT_YELLOW = 0.20;
+const PACE_DEFICIT_MAX_SECONDS_LEFT = 2 * 24 * 3600; // only flag linear-pace deficit inside the last 2 days — plenty of runway before that
 
 class UsageLimitsWidget {
   constructor() {
@@ -79,7 +80,9 @@ class UsageLimitsWidget {
     if (lose >= PACE_LOSE_RED) return 'red';
     if (lose >= PACE_LOSE_ORANGE) return 'orange';
 
-    // Behind the linear pace needed to finish the quota by reset.
+    // Behind the linear pace needed to finish the quota by reset — only worth
+    // flagging once reset is close; days out, being "behind" linear pace is normal.
+    if (secsLeft > PACE_DEFICIT_MAX_SECONDS_LEFT) return null;
     const elapsedFrac = 1 - secsLeft / windowSeconds;
     const deficit = elapsedFrac - used;
     if (deficit >= PACE_DEFICIT_ORANGE) return 'orange';
@@ -120,6 +123,25 @@ class UsageLimitsWidget {
     return String(key || '').replace(/_/g, ' ');
   }
 
+  // "1 week" -> 604800, "5 hours" -> 18000, etc. Unrecognized labels sort last.
+  windowDurationSeconds(label) {
+    const m = String(label || '').match(/^(\d+)\s*(hour|day|week|month)s?$/i);
+    if (!m) return 0;
+    const mult = { hour: 3600, day: 86400, week: 604800, month: 2592000 }[m[2].toLowerCase()] || 0;
+    return Number(m[1]) * mult;
+  }
+
+  // Display order for every pill: the plan's own weekly bucket, then its
+  // hourly bucket, then any extra model-specific bucket (e.g. "Spark") last.
+  sortWindowsForDisplay(windows, defaultBucket) {
+    return [...windows].sort((a, b) => {
+      const aExtra = a.bucket && a.bucket !== defaultBucket ? 1 : 0;
+      const bExtra = b.bucket && b.bucket !== defaultBucket ? 1 : 0;
+      if (aExtra !== bExtra) return aExtra - bExtra;
+      return this.windowDurationSeconds(b.window) - this.windowDurationSeconds(a.window);
+    });
+  }
+
   pill(bodyHtml, tipLines) {
     return `<span class="usage-pill" title="${this.escape(tipLines.join('\n'))}">${bodyHtml}</span>`;
   }
@@ -128,8 +150,8 @@ class UsageLimitsWidget {
     const claude = this.data.claude || {};
     if (!claude.available) return null;
     const buckets = [
-      this.formatBucketHtml('5h', claude.fiveHour),
-      this.formatBucketHtml('7d', claude.sevenDay, { weekly: true })
+      this.formatBucketHtml('7d', claude.sevenDay, { weekly: true }),
+      this.formatBucketHtml('5h', claude.fiveHour)
     ];
     for (const extra of (Array.isArray(claude.extraBuckets) ? claude.extraBuckets : [])) {
       buckets.push(this.formatBucketHtml(this.labelForExtraBucket(extra.key), extra, { weekly: /seven_day/.test(extra.key) }));
@@ -151,8 +173,9 @@ class UsageLimitsWidget {
   renderCodexPill() {
     const codex = this.data.codex || {};
     if (!codex.available || !Array.isArray(codex.windows) || !codex.windows.length) return null;
-    const multi = codex.windows.length > 1;
-    const buckets = codex.windows
+    const sortedWindows = this.sortWindowsForDisplay(codex.windows, 'codex');
+    const multi = sortedWindows.length > 1;
+    const buckets = sortedWindows
       .map(w => {
         const windowLabel = w.window === '1 week' ? 'wk' : w.window;
         const label = multi && w.bucket && w.bucket !== 'codex' ? `${w.bucket.replace(/^codex_/, '')} ${windowLabel}` : windowLabel;
@@ -161,7 +184,7 @@ class UsageLimitsWidget {
       .filter(Boolean);
     if (!buckets.length) return null;
     const tips = ['Codex plan usage:'];
-    for (const w of codex.windows) {
+    for (const w of sortedWindows) {
       if (w.resetsAt) tips.push(`  ${w.bucket || w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
     }
     return this.pill(`Codex ${buckets.join('  ')}${codex.stale ? '?' : ''}`, tips);
@@ -170,7 +193,8 @@ class UsageLimitsWidget {
   renderGrokPill() {
     const grok = this.data.grok || {};
     if (!grok.available || !Array.isArray(grok.windows) || !grok.windows.length) return null;
-    const buckets = grok.windows
+    const sortedWindows = this.sortWindowsForDisplay(grok.windows, 'grok');
+    const buckets = sortedWindows
       .map(w => this.formatBucketHtml(
         w.window === '1 week' ? 'wk' : (w.window === '1 month' ? 'mo' : w.window),
         w,
@@ -179,7 +203,7 @@ class UsageLimitsWidget {
       .filter(Boolean);
     if (!buckets.length) return null;
     const tips = ['Grok plan usage:'];
-    for (const w of grok.windows) {
+    for (const w of sortedWindows) {
       if (w.resetsAt) tips.push(`  ${w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
     }
     return this.pill(`Grok ${buckets.join('  ')}${grok.stale ? '?' : ''}`, tips);
