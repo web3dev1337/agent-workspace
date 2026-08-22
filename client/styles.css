@@ -16063,27 +16063,61 @@ body.dependency-onboarding-active #dependency-setup-modal {
   }
 }
 
-/* Header plan-usage widget: reference info, deliberately muted. */
+/* Header plan-usage widget: one pill per provider, reference info, deliberately muted. */
 .usage-limits-widget {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 4px;
+  margin-left: var(--space-sm);
+}
+
+.usage-pill {
   font-size: 0.72rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  margin-left: var(--space-sm);
   background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
   padding: 1px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   border: 1px solid var(--border-color);
   white-space: pre;
   display: inline-flex;
   align-items: center;
-  align-self: center;
   cursor: help;
 }
 
 /* Usage severity highlights: running-out (%) and use-it-or-lose-it (countdown) */
-.usage-limits-widget .usage-sev-yellow { color: #ffd685; font-weight: 600; }
-.usage-limits-widget .usage-sev-orange { color: #ffab5e; font-weight: 600; }
-.usage-limits-widget .usage-sev-red { color: #ff6b6b; font-weight: 700; }
+.usage-pill .usage-sev-yellow { color: #ffd685; font-weight: 600; }
+.usage-pill .usage-sev-orange { color: #ffab5e; font-weight: 600; }
+.usage-pill .usage-sev-red { color: #ff6b6b; font-weight: 700; }
+
+/* EXPERIMENT: two-signal pace bar (Claude 7d bucket only) — fill = quota
+   used, marker line = fraction of the window elapsed. */
+.usage-bar {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 8px;
+  margin-left: 5px;
+  background: var(--bg-tertiary);
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, var(--text-secondary) 20%);
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.usage-bar-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: var(--used);
+  background: var(--text-tertiary);
+}
+.usage-bar-marker {
+  position: absolute;
+  top: -1px; bottom: -1px;
+  left: var(--pace);
+  width: 2px;
+  background: var(--text-primary);
+}
 
 /* Commander tab bar (multiple Commander instances) */
 .commander-tabbar {
