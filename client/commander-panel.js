@@ -27,6 +27,26 @@ class CommanderPanel {
     // Commander tabs: 'main' always exists; extra instances are cmd-2..cmd-6.
     this.activeInstance = 'main';
     this.tabs = new Map([['main', { label: 'Commander 1', terminal: null, fitAddon: null, isRunning: false, isStarting: false, lastSyncedSize: null }]]);
+
+    // xterm's Canvas renderer occasionally leaves stale/garbled rows after a
+    // burst of output while the browser tab was backgrounded (rendering gets
+    // throttled while hidden). fitTerminalSoon() already forces a full
+    // repaint — that's why manually resizing "fixes" it — so run the same
+    // heal on focus/visibility regain and a slow background sweep, matching
+    // the pattern terminal.js already uses for worktree terminals.
+    this.healIntervalMs = 15_000;
+    window.addEventListener('focus', () => this.healTerminal());
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) this.healTerminal();
+    });
+    setInterval(() => {
+      if (!document.hidden) this.healTerminal();
+    }, this.healIntervalMs);
+  }
+
+  healTerminal() {
+    if (!this.isVisible || !this.terminal) return;
+    this.fitTerminalSoon();
   }
 
   // Instance-scoped API URL: main uses the bare endpoint (back-compat),
