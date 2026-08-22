@@ -120,75 +120,81 @@ class UsageLimitsWidget {
     return String(key || '').replace(/_/g, ' ');
   }
 
+  pill(providerClass, bodyHtml, tipLines) {
+    return `<span class="usage-pill usage-pill-${providerClass}" title="${this.escape(tipLines.join('\n'))}">${bodyHtml}</span>`;
+  }
+
+  renderClaudePill() {
+    const claude = this.data.claude || {};
+    if (!claude.available) return null;
+    const buckets = [
+      this.formatBucketHtml('5h', claude.fiveHour),
+      this.formatBucketHtml('7d', claude.sevenDay, { weekly: true })
+    ];
+    for (const extra of (Array.isArray(claude.extraBuckets) ? claude.extraBuckets : [])) {
+      buckets.push(this.formatBucketHtml(this.labelForExtraBucket(extra.key), extra, { weekly: /seven_day/.test(extra.key) }));
+    }
+    const rendered = buckets.filter(Boolean);
+    if (!rendered.length) return null;
+    const tips = [`Claude plan usage${claude.model ? ` (${claude.model})` : ''}${claude.stale ? ' (stale — open any Claude session to refresh)' : ''}:`];
+    if (claude.fiveHour?.resetsAt) tips.push(`  5-hour window: ${claude.fiveHour.usedPercentage}% used, resets ${new Date(claude.fiveHour.resetsAt * 1000).toLocaleString()}`);
+    if (claude.sevenDay?.resetsAt) tips.push(`  7-day window: ${claude.sevenDay.usedPercentage}% used, resets ${new Date(claude.sevenDay.resetsAt * 1000).toLocaleString()}`);
+    for (const extra of (Array.isArray(claude.extraBuckets) ? claude.extraBuckets : [])) {
+      if (extra.resetsAt) tips.push(`  ${this.labelForExtraBucket(extra.key)}: ${extra.usedPercentage}% used, resets ${new Date(extra.resetsAt * 1000).toLocaleString()}`);
+    }
+    if (claude.sevenDay?.resetsAt && this.paceSeverity(claude.sevenDay)) {
+      tips.push('  ⚠ weekly quota is going unused — countdown highlighted (use it or lose it)');
+    }
+    return this.pill('claude', `Claude ${rendered.join('  ')}${claude.stale ? '?' : ''}`, tips);
+  }
+
+  renderCodexPill() {
+    const codex = this.data.codex || {};
+    if (!codex.available || !Array.isArray(codex.windows) || !codex.windows.length) return null;
+    const multi = codex.windows.length > 1;
+    const buckets = codex.windows
+      .map(w => {
+        const windowLabel = w.window === '1 week' ? 'wk' : w.window;
+        const label = multi && w.bucket && w.bucket !== 'codex' ? `${w.bucket.replace(/^codex_/, '')} ${windowLabel}` : windowLabel;
+        return this.formatBucketHtml(label, w, { weekly: w.window === '1 week' });
+      })
+      .filter(Boolean);
+    if (!buckets.length) return null;
+    const tips = ['Codex plan usage:'];
+    for (const w of codex.windows) {
+      if (w.resetsAt) tips.push(`  ${w.bucket || w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
+    }
+    return this.pill('codex', `Codex ${buckets.join('  ')}${codex.stale ? '?' : ''}`, tips);
+  }
+
+  renderGrokPill() {
+    const grok = this.data.grok || {};
+    if (!grok.available || !Array.isArray(grok.windows) || !grok.windows.length) return null;
+    const buckets = grok.windows
+      .map(w => this.formatBucketHtml(
+        w.window === '1 week' ? 'wk' : (w.window === '1 month' ? 'mo' : w.window),
+        w,
+        { weekly: w.window === '1 week', windowSeconds: w.window === '1 month' ? 30 * 86400 : WEEKLY_WINDOW_SECONDS }
+      ))
+      .filter(Boolean);
+    if (!buckets.length) return null;
+    const tips = ['Grok plan usage:'];
+    for (const w of grok.windows) {
+      if (w.resetsAt) tips.push(`  ${w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
+    }
+    return this.pill('grok', `Grok ${buckets.join('  ')}${grok.stale ? '?' : ''}`, tips);
+  }
+
   render() {
     if (!this.el || !this.data) return;
-    const parts = [];
-    const tips = [];
-    const claude = this.data.claude || {};
-    if (claude.available) {
-      const buckets = [
-        this.formatBucketHtml('5h', claude.fiveHour),
-        this.formatBucketHtml('7d', claude.sevenDay, { weekly: true })
-      ];
-      for (const extra of (Array.isArray(claude.extraBuckets) ? claude.extraBuckets : [])) {
-        buckets.push(this.formatBucketHtml(this.labelForExtraBucket(extra.key), extra, { weekly: /seven_day/.test(extra.key) }));
-      }
-      const rendered = buckets.filter(Boolean);
-      if (rendered.length) {
-        parts.push(`Claude ${rendered.join('  ')}${claude.stale ? '?' : ''}`);
-        tips.push(`Claude plan usage${claude.model ? ` (${claude.model})` : ''}${claude.stale ? ' (stale — open any Claude session to refresh)' : ''}:`);
-        if (claude.fiveHour?.resetsAt) tips.push(`  5-hour window: ${claude.fiveHour.usedPercentage}% used, resets ${new Date(claude.fiveHour.resetsAt * 1000).toLocaleString()}`);
-        if (claude.sevenDay?.resetsAt) tips.push(`  7-day window: ${claude.sevenDay.usedPercentage}% used, resets ${new Date(claude.sevenDay.resetsAt * 1000).toLocaleString()}`);
-        for (const extra of (Array.isArray(claude.extraBuckets) ? claude.extraBuckets : [])) {
-          if (extra.resetsAt) tips.push(`  ${this.labelForExtraBucket(extra.key)}: ${extra.usedPercentage}% used, resets ${new Date(extra.resetsAt * 1000).toLocaleString()}`);
-        }
-        if (claude.sevenDay?.resetsAt && this.paceSeverity(claude.sevenDay)) {
-          tips.push('  ⚠ weekly quota is going unused — countdown highlighted (use it or lose it)');
-        }
-      }
-    }
-    const codex = this.data.codex || {};
-    if (codex.available && Array.isArray(codex.windows) && codex.windows.length) {
-      const multi = codex.windows.length > 1;
-      const buckets = codex.windows
-        .map(w => {
-          const windowLabel = w.window === '1 week' ? 'wk' : w.window;
-          const label = multi && w.bucket && w.bucket !== 'codex' ? `${w.bucket.replace(/^codex_/, '')} ${windowLabel}` : windowLabel;
-          return this.formatBucketHtml(label, w, { weekly: w.window === '1 week' });
-        })
-        .filter(Boolean);
-      if (buckets.length) {
-        parts.push(`Codex ${buckets.join('  ')}${codex.stale ? '?' : ''}`);
-        tips.push('Codex plan usage:');
-        for (const w of codex.windows) {
-          if (w.resetsAt) tips.push(`  ${w.bucket || w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
-        }
-      }
-    }
-    const grok = this.data.grok || {};
-    if (grok.available && Array.isArray(grok.windows) && grok.windows.length) {
-      const buckets = grok.windows
-        .map(w => this.formatBucketHtml(
-          w.window === '1 week' ? 'wk' : (w.window === '1 month' ? 'mo' : w.window),
-          w,
-          { weekly: w.window === '1 week', windowSeconds: w.window === '1 month' ? 30 * 86400 : WEEKLY_WINDOW_SECONDS }
-        ))
-        .filter(Boolean);
-      if (buckets.length) {
-        parts.push(`Grok ${buckets.join('  ')}${grok.stale ? '?' : ''}`);
-        tips.push('Grok plan usage:');
-        for (const w of grok.windows) {
-          if (w.resetsAt) tips.push(`  ${w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
-        }
-      }
-    }
-    if (!parts.length) {
+    const pills = [this.renderClaudePill(), this.renderCodexPill(), this.renderGrokPill()].filter(Boolean);
+    if (!pills.length) {
       this.el.style.display = 'none';
       return;
     }
     this.el.style.display = '';
-    this.el.innerHTML = `⏱ ${parts.join('  ·  ')}`;
-    this.el.title = tips.join('\n');
+    this.el.removeAttribute('title');
+    this.el.innerHTML = pills.join('');
   }
 }
 
