@@ -152,6 +152,22 @@ class CommanderPanel {
     this.renderTabs();
     if (this.terminal) {
       this.fitTerminalSoon();
+    } else {
+      // A tab restored by syncTabsFromServer() (its PTY survived a page
+      // refresh) never had a terminal attached locally — check status and
+      // attach one now instead of leaving the container blank.
+      this.checkStatus().then((status) => {
+        if (this.activeInstance !== id) return; // switched away while awaiting
+        if (status.running) {
+          this.initTerminal();
+          if (this.fitAddon && this.terminal) {
+            this.lastSyncedSize = null;
+            this.fitTerminalSoon();
+          }
+        } else {
+          this.setPlaceholderMessages(['Commander is not running.', 'Click ▶️ Start to launch it.']);
+        }
+      });
     }
   }
 

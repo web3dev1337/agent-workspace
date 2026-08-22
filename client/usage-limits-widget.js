@@ -142,6 +142,17 @@ class UsageLimitsWidget {
     });
   }
 
+  // A small two-signal bar next to the existing %/countdown text — fill =
+  // quota used, marker line = how far through the window we are. Fill past
+  // the marker = spending ahead of pace; short of it = coasting.
+  paceBarHtml(bucket, windowSeconds = WEEKLY_WINDOW_SECONDS) {
+    if (!bucket || !Number.isFinite(bucket.usedPercentage) || !bucket.resetsAt) return '';
+    const secsLeft = bucket.resetsAt - Date.now() / 1000;
+    const elapsedFrac = Math.min(1, Math.max(0, 1 - secsLeft / windowSeconds));
+    const usedFrac = Math.min(1, Math.max(0, bucket.usedPercentage / 100));
+    return `<span class="usage-bar" style="--used:${Math.round(usedFrac * 100)}%;--pace:${Math.round(elapsedFrac * 100)}%"><span class="usage-bar-fill"></span><span class="usage-bar-marker"></span></span>`;
+  }
+
   pill(bodyHtml, tipLines) {
     return `<span class="usage-pill" title="${this.escape(tipLines.join('\n'))}">${bodyHtml}</span>`;
   }
@@ -149,12 +160,21 @@ class UsageLimitsWidget {
   renderClaudePill() {
     const claude = this.data.claude || {};
     if (!claude.available) return null;
+    const sevenDayText = this.formatBucketHtml('7d', claude.sevenDay, { weekly: true });
+    const fiveHourText = this.formatBucketHtml('5h', claude.fiveHour);
     const buckets = [
-      this.formatBucketHtml('7d', claude.sevenDay, { weekly: true }),
-      this.formatBucketHtml('5h', claude.fiveHour)
+      sevenDayText ? `${sevenDayText}${this.paceBarHtml(claude.sevenDay, WEEKLY_WINDOW_SECONDS)}` : null,
+      fiveHourText ? `${fiveHourText}${this.paceBarHtml(claude.fiveHour, FIVE_HOUR_SECONDS)}` : null
     ];
+    // Unlike Spark, Fable is a real quota worth tracking closely — gets a bar
+    // too. Anthropic's API doesn't send a resets_at for this per-model weekly
+    // bucket, but it shares the account's weekly cycle, so fall back to the
+    // main 7d bucket's reset time for the countdown/bar.
     for (const extra of (Array.isArray(claude.extraBuckets) ? claude.extraBuckets : [])) {
-      buckets.push(this.formatBucketHtml(this.labelForExtraBucket(extra.key), extra, { weekly: /seven_day/.test(extra.key) }));
+      const isWeekly = /seven_day/.test(extra.key);
+      const display = extra.resetsAt ? extra : { ...extra, resetsAt: isWeekly ? claude.sevenDay?.resetsAt : null };
+      const extraText = this.formatBucketHtml(this.labelForExtraBucket(extra.key), display, { weekly: isWeekly });
+      buckets.push(extraText ? `${extraText}${this.paceBarHtml(display, WEEKLY_WINDOW_SECONDS)}` : null);
     }
     const rendered = buckets.filter(Boolean);
     if (!rendered.length) return null;
@@ -162,12 +182,13 @@ class UsageLimitsWidget {
     if (claude.fiveHour?.resetsAt) tips.push(`  5-hour window: ${claude.fiveHour.usedPercentage}% used, resets ${new Date(claude.fiveHour.resetsAt * 1000).toLocaleString()}`);
     if (claude.sevenDay?.resetsAt) tips.push(`  7-day window: ${claude.sevenDay.usedPercentage}% used, resets ${new Date(claude.sevenDay.resetsAt * 1000).toLocaleString()}`);
     for (const extra of (Array.isArray(claude.extraBuckets) ? claude.extraBuckets : [])) {
-      if (extra.resetsAt) tips.push(`  ${this.labelForExtraBucket(extra.key)}: ${extra.usedPercentage}% used, resets ${new Date(extra.resetsAt * 1000).toLocaleString()}`);
+      const resetsAt = extra.resetsAt || (/seven_day/.test(extra.key) ? claude.sevenDay?.resetsAt : null);
+      if (resetsAt) tips.push(`  ${this.labelForExtraBucket(extra.key)}: ${extra.usedPercentage}% used, resets ${new Date(resetsAt * 1000).toLocaleString()}${extra.resetsAt ? '' : ' (assumed, shares the weekly cycle)'}`);
     }
     if (claude.sevenDay?.resetsAt && this.paceSeverity(claude.sevenDay)) {
       tips.push('  ⚠ weekly quota is going unused — countdown highlighted (use it or lose it)');
     }
-    return this.pill(`Claude ${rendered.join('  ')}${claude.stale ? '?' : ''}`, tips);
+    return this.pill(`Claude${claude.stale ? '?' : ''} ${rendered.join('  ')}`, tips);
   }
 
   renderCodexPill() {
@@ -177,9 +198,14 @@ class UsageLimitsWidget {
     const multi = sortedWindows.length > 1;
     const buckets = sortedWindows
       .map(w => {
+        const isExtra = w.bucket && w.bucket !== 'codex';
         const windowLabel = w.window === '1 week' ? 'wk' : w.window;
-        const label = multi && w.bucket && w.bucket !== 'codex' ? `${w.bucket.replace(/^codex_/, '')} ${windowLabel}` : windowLabel;
-        return this.formatBucketHtml(label, w, { weekly: w.window === '1 week' });
+        const label = multi && isExtra ? `Spark ${windowLabel}` : windowLabel;
+        const text = this.formatBucketHtml(label, w, { weekly: w.window === '1 week' });
+        if (!text) return null;
+        // Bars are for the main plan bucket only — the model-specific extra
+        // buckets (Spark) are minor enough that a bar is just noise.
+        return isExtra ? text : `${text}${this.paceBarHtml(w, this.windowDurationSeconds(w.window) || WEEKLY_WINDOW_SECONDS)}`;
       })
       .filter(Boolean);
     if (!buckets.length) return null;
@@ -187,7 +213,7 @@ class UsageLimitsWidget {
     for (const w of sortedWindows) {
       if (w.resetsAt) tips.push(`  ${w.bucket || w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
     }
-    return this.pill(`Codex ${buckets.join('  ')}${codex.stale ? '?' : ''}`, tips);
+    return this.pill(`Codex${codex.stale ? '?' : ''} ${buckets.join('  ')}`, tips);
   }
 
   renderGrokPill() {
@@ -195,18 +221,22 @@ class UsageLimitsWidget {
     if (!grok.available || !Array.isArray(grok.windows) || !grok.windows.length) return null;
     const sortedWindows = this.sortWindowsForDisplay(grok.windows, 'grok');
     const buckets = sortedWindows
-      .map(w => this.formatBucketHtml(
-        w.window === '1 week' ? 'wk' : (w.window === '1 month' ? 'mo' : w.window),
-        w,
-        { weekly: w.window === '1 week', windowSeconds: w.window === '1 month' ? 30 * 86400 : WEEKLY_WINDOW_SECONDS }
-      ))
+      .map(w => {
+        const barWindowSeconds = w.window === '1 month' ? 30 * 86400 : (this.windowDurationSeconds(w.window) || WEEKLY_WINDOW_SECONDS);
+        const text = this.formatBucketHtml(
+          w.window === '1 week' ? 'wk' : (w.window === '1 month' ? 'mo' : w.window),
+          w,
+          { weekly: w.window === '1 week', windowSeconds: barWindowSeconds }
+        );
+        return text ? `${text}${this.paceBarHtml(w, barWindowSeconds)}` : null;
+      })
       .filter(Boolean);
     if (!buckets.length) return null;
     const tips = ['Grok plan usage:'];
     for (const w of sortedWindows) {
       if (w.resetsAt) tips.push(`  ${w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
     }
-    return this.pill(`Grok ${buckets.join('  ')}${grok.stale ? '?' : ''}`, tips);
+    return this.pill(`Grok${grok.stale ? '?' : ''} ${buckets.join('  ')}`, tips);
   }
 
   render() {

@@ -16091,6 +16091,34 @@ body.dependency-onboarding-active #dependency-setup-modal {
 .usage-pill .usage-sev-orange { color: #ffab5e; font-weight: 600; }
 .usage-pill .usage-sev-red { color: #ff6b6b; font-weight: 700; }
 
+/* EXPERIMENT: two-signal pace bar (Claude 7d bucket only) — fill = quota
+   used, marker line = fraction of the window elapsed. */
+.usage-bar {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 8px;
+  margin-left: 5px;
+  background: var(--bg-tertiary);
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, var(--text-secondary) 20%);
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.usage-bar-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: var(--used);
+  background: var(--text-tertiary);
+}
+.usage-bar-marker {
+  position: absolute;
+  top: -1px; bottom: -1px;
+  left: var(--pace);
+  width: 2px;
+  background: var(--text-primary);
+}
+
 /* Commander tab bar (multiple Commander instances) */
 .commander-tabbar {
   display: flex;
