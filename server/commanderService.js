@@ -13,6 +13,7 @@ const winston = require('winston');
 const { augmentProcessEnv, buildPowerShellArgs } = require('./utils/processUtils');
 const { loadNodePty } = require('./utils/nodePtyCompat');
 const { TmuxSessionBackend } = require('./utils/tmuxSessionBackend');
+const commanderSessions = require('./commanderSessionRegistry');
 
 const HOME_DIR = process.env.HOME || os.homedir();
 
@@ -462,11 +463,29 @@ class CommanderService {
     // Build the claude command
     let cmd = 'claude';
 
-    // Add flags based on mode
-    if (mode === 'continue') {
-      cmd += ' --continue';
-    } else if (mode === 'resume') {
-      cmd += ' --resume';
+    // Every Commander instance launches from the same COMMANDER_CWD, so
+    // Claude Code's own "most recent conversation in this directory" (bare
+    // --continue/--resume) is ambiguous across tabs — see
+    // commanderSessionRegistry.js. Pin an explicit session id whenever we
+    // have one so this instance always reattaches to its own conversation.
+    if (mode === 'continue' || mode === 'resume') {
+      const pinnedId = commanderSessions.getSessionId(this.instanceId, COMMANDER_CWD);
+      if (pinnedId) {
+        cmd += ` --resume ${pinnedId}`;
+      } else if (mode === 'continue') {
+        cmd += ' --continue';
+      } else {
+        cmd += ' --resume';
+      }
+      if (!pinnedId) {
+        // Ambiguous resume — capture whichever session ends up newest right
+        // after launch so the NEXT resume for this instance is precise.
+        setTimeout(() => commanderSessions.captureLatestSessionId(this.instanceId, COMMANDER_CWD), 3000);
+      }
+    } else {
+      const freshId = commanderSessions.newSessionId();
+      commanderSessions.setSessionId(this.instanceId, freshId);
+      cmd += ` --session-id ${freshId}`;
     }
 
     // Commander runs in YOLO mode by default for orchestration capabilities
