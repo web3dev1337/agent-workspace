@@ -16227,6 +16227,47 @@ body.dependency-onboarding-active #dependency-setup-modal {
   font-style: italic;
 }
 
+.system-stats-process-subrow { opacity: 0.85; }
+.system-stats-process-subrow .system-stats-process-name { font-style: italic; }
+
+.system-stats-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 6px var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  margin-bottom: 4px;
+}
+
+.system-stats-model-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.system-stats-model-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-stats-model-detail {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.system-stats-unload-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
+
 /* Commander tab bar (multiple Commander instances) */
 .commander-tabbar {
   display: flex;

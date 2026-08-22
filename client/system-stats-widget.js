@@ -81,15 +81,51 @@ class SystemStatsWidget {
         <span class="system-stats-process-name">${this.escape(p.name)}</span>
         <span class="system-stats-process-pid">PID ${p.pid}</span>
         <span class="system-stats-process-mem">${p.usedGB}GB</span>
-      </div>`).join('');
+      </div>
+      ${(p.identified || []).map(ip => `
+      <div class="system-stats-process-row system-stats-process-subrow">
+        <span class="system-stats-process-name">↳ ${this.escape(ip.label)}${ip.port ? ` :${ip.port}` : ''}</span>
+        <span class="system-stats-process-pid">PID ${ip.pid}</span>
+        <span class="system-stats-process-mem"></span>
+      </div>`).join('')}`).join('');
     const sourceNote = gpuProcesses.source === 'windows-gpu-counters'
       ? 'Via Windows GPU performance counters (WSL2 can\'t see host process VRAM directly).'
       : 'Via nvidia-smi.';
     return `<div class="system-stats-process-list">${rows}</div><div class="system-stats-source-note">${this.escape(sourceNote)}</div>`;
   }
 
+  renderModelsHtml(models) {
+    if (!models) return '<div class="system-stats-loading">Loading…</div>';
+    const ollamaModels = models.ollama?.models || [];
+    const llamaCppServers = models.llamaCppServers || [];
+    if (!ollamaModels.length && !llamaCppServers.length) {
+      const reason = models.ollama?.available === false && models.ollama?.reason === 'not-installed'
+        ? ''
+        : ' right now';
+      return `<div class="system-stats-empty">No local LLM${reason} loaded into VRAM.</div>`;
+    }
+    const unloadBtn = (source, name, pid) => `<button class="btn-secondary system-stats-unload-btn" data-action="unload-model" data-source="${this.escape(source)}" data-name="${this.escape(name || '')}" data-pid="${pid || ''}">Unload</button>`;
+    const ollamaRows = ollamaModels.map(m => `
+      <div class="system-stats-model-row">
+        <div class="system-stats-model-info">
+          <span class="system-stats-model-name">${this.escape(m.name)}</span>
+          <span class="system-stats-model-detail">Ollama · ${this.escape(m.size || '?')} · until ${this.escape(m.until || '?')}</span>
+        </div>
+        ${unloadBtn('ollama', m.name)}
+      </div>`).join('');
+    const llamaRows = llamaCppServers.map(s => `
+      <div class="system-stats-model-row">
+        <div class="system-stats-model-info">
+          <span class="system-stats-model-name">${this.escape(s.name)}</span>
+          <span class="system-stats-model-detail">llama.cpp${s.port ? ` · port ${s.port}` : ''} · PID ${s.pid}</span>
+        </div>
+        ${unloadBtn('llama.cpp', null, s.pid)}
+      </div>`).join('');
+    return ollamaRows + llamaRows;
+  }
+
   renderModalBody() {
-    const { cpu, ram, gpu, gpuProcesses } = this.data || {};
+    const { cpu, ram, gpu, gpuProcesses, models } = this.data || {};
     const bar = (label, pct, detail) => `
       <div class="system-stats-bar-row">
         <div class="system-stats-bar-label">${label} <span class="system-stats-bar-detail">${detail}</span></div>
@@ -100,12 +136,45 @@ class SystemStatsWidget {
     if (ram) html += bar('RAM', ram.percent, `${ram.usedGB}GB / ${ram.totalGB}GB`);
     if (gpu?.available) {
       html += bar('VRAM', gpu.percent, `${gpu.usedGB}GB / ${gpu.totalGB}GB · ${this.escape(gpu.name)}`);
+      html += `<h3 class="system-stats-section-title">Loaded models</h3>`;
+      html += this.renderModelsHtml(models);
       html += `<h3 class="system-stats-section-title">What's using the VRAM</h3>`;
       html += this.renderProcessesHtml(gpuProcesses);
     } else if (gpu) {
       html += `<div class="system-stats-empty">No GPU detected (${this.escape(gpu.reason || 'unknown')}).</div>`;
     }
     return html;
+  }
+
+  async unloadModel(btn) {
+    const source = btn.dataset.source;
+    const name = btn.dataset.name || null;
+    const pid = btn.dataset.pid ? Number(btn.dataset.pid) : null;
+    const label = source === 'ollama' ? name : `PID ${pid}`;
+    if (!confirm(`Unload ${label}? This stops it and frees its VRAM.`)) return;
+    btn.disabled = true;
+    btn.textContent = 'Unloading…';
+    try {
+      const res = await fetch('/api/system/models/unload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, name, pid })
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || !result.ok) {
+        alert(`Unload failed: ${result.reason || res.status}`);
+        btn.disabled = false;
+        btn.textContent = 'Unload';
+        return;
+      }
+      await this.fetchStats({ processes: true, refresh: true });
+      const modal = document.getElementById('system-stats-modal');
+      if (modal) modal.querySelector('.system-stats-body').innerHTML = this.renderModalBody();
+    } catch (error) {
+      alert(`Unload failed: ${error.message}`);
+      btn.disabled = false;
+      btn.textContent = 'Unload';
+    }
   }
 
   async openModal() {
@@ -128,7 +197,11 @@ class SystemStatsWidget {
       </div>
     `;
     document.body.appendChild(modal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) { modal.remove(); return; }
+      const unloadBtn = e.target.closest('[data-action="unload-model"]');
+      if (unloadBtn) this.unloadModel(unloadBtn);
+    });
 
     const refresh = async () => {
       const bodyEl = modal.querySelector('.system-stats-body');
