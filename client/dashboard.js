@@ -13,6 +13,15 @@ class Dashboard {
     this.quickLinks = null;
     this._escHandler = null;
     this._projectLaunchInFlight = false;
+    // Opening a workspace can trigger a recovery check from more than one
+    // caller in quick succession (dashboard.openWorkspace() fires before the
+    // switch even starts; app.js's workspace-changed handler fires again once
+    // the server confirms it, and a socket reconnect can fire it again after
+    // that). Recovering a session also makes it briefly look "recoverable"
+    // again the moment it starts running, so a snapshot-timestamp comparison
+    // alone doesn't catch this — a short per-workspace cooldown does.
+    this.recoveryPromptCooldownMs = 60_000;
+    this.lastRecoveryPromptAt = new Map(); // workspaceId -> Date.now()
   }
 
   async show() {
@@ -3899,6 +3908,12 @@ class Dashboard {
       return { action: 'skip', pending: null };
     }
 
+    const lastPromptAt = this.lastRecoveryPromptAt.get(targetWorkspaceId) || 0;
+    if (Date.now() - lastPromptAt < this.recoveryPromptCooldownMs) {
+      console.log('Skipping recovery dialog - already prompted for this workspace recently');
+      return { action: 'dismissed', pending: null };
+    }
+
     const savedAt = String(recoveryInfo.savedAt || '').trim();
     const dismissKey = `orchestrator-recovery-dismissed:${targetWorkspaceId}`;
     if (savedAt) {
@@ -3913,6 +3928,8 @@ class Dashboard {
         // ignore
       }
     }
+
+    this.lastRecoveryPromptAt.set(targetWorkspaceId, Date.now());
 
     if (recoveryMode === 'auto') {
       console.log('Auto-recovering all sessions');
