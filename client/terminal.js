@@ -414,8 +414,13 @@ class TerminalManager {
       this.orchestrator?.onManualTerminalInput?.(sessionId);
       this.orchestrator.sendTerminalInput(sessionId, data);
 
-      // Track input buffer for autosuggestions
-      this.updateInputBuffer(sessionId, data);
+      // Track input buffer for autosuggestions — but not for paste-originated
+      // bursts: an unbracketed multi-line paste would be stored whole as the
+      // "current line" and later pollute command history with a bogus glued
+      // entry. (Bracketed pastes were already skipped by their ESC prefix.)
+      if (!this._pasteInProgress) {
+        this.updateInputBuffer(sessionId, data);
+      }
     });
     
     // Handle resize
@@ -632,8 +637,7 @@ class TerminalManager {
         if (item.types.includes('text/plain')) {
           const blob = await item.getType('text/plain');
           const text = await blob.text();
-          this.orchestrator?.onManualTerminalInput?.(sessionId);
-          this.orchestrator.sendTerminalInput(sessionId, text);
+          this.pasteTextToTerminal(sessionId, text);
           return;
         }
       }
@@ -641,21 +645,54 @@ class TerminalManager {
       // If no supported content found, try readText as fallback
       const text = await navigator.clipboard.readText();
       if (text) {
-        this.orchestrator?.onManualTerminalInput?.(sessionId);
-        this.orchestrator.sendTerminalInput(sessionId, text);
+        this.pasteTextToTerminal(sessionId, text);
       }
     } catch (err) {
       // Some browsers don't support clipboard.read(), fall back to readText
       console.warn('clipboard.read() not supported, falling back to readText:', err.message);
       try {
         const text = await navigator.clipboard.readText();
-        this.orchestrator?.onManualTerminalInput?.(sessionId);
-        this.orchestrator.sendTerminalInput(sessionId, text);
+        this.pasteTextToTerminal(sessionId, text);
       } catch (textErr) {
         console.error('Failed to read text from clipboard:', textErr);
         throw textErr;
       }
     }
+  }
+
+  /**
+   * Send pasted text to a session's terminal.
+   *
+   * Uses xterm's paste() rather than sending the raw string: paste() normalizes
+   * newlines and, when the running program has bracketed-paste mode enabled
+   * (it sent ESC[?2004h), wraps the text in ESC[200~ .. ESC[201~. That tells the
+   * program "this is pasted text" so multi-line code is treated as literal input
+   * instead of a burst of Enter keypresses (which was mangling/early-submitting
+   * multi-line pastes). Programs that don't enable the mode receive the text
+   * unwrapped, so nothing regresses for them.
+   *
+   * paste() routes through terminal.onData, which already forwards to
+   * sendTerminalInput and marks the session active — so no extra plumbing here.
+   * If the xterm instance isn't available, fall back to sending raw text.
+   */
+  pasteTextToTerminal(sessionId, text) {
+    const terminal = this.terminals.get(sessionId);
+    if (terminal && typeof terminal.paste === 'function') {
+      // paste() fires onData synchronously; flag the burst so autosuggestion
+      // input-buffer tracking skips it (see the onData handler).
+      this._pasteInProgress = true;
+      try {
+        terminal.paste(text);
+      } finally {
+        this._pasteInProgress = false;
+      }
+      return;
+    }
+    // Deliberate fail-open: the terminal vanished during the async clipboard
+    // read (tab close/teardown race) — deliver the raw text unnormalized
+    // rather than dropping the paste.
+    this.orchestrator?.onManualTerminalInput?.(sessionId);
+    this.orchestrator?.sendTerminalInput?.(sessionId, text);
   }
 
   /**
