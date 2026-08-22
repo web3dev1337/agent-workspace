@@ -105,4 +105,39 @@ describe('atlasSchema', () => {
     expect(report.ok).toBe(true);
     expect(report.warnings.join(' ')).toMatch(/lands in no bundle/);
   });
+
+  test('encrypted is a valid visibility, no groups required', () => {
+    const entry = normalizeEntry({ id: 'x', visibility: 'encrypted', summary: 's' }, { strict: true });
+    expect(entry.visibility).toBe('encrypted');
+    expect(validateEntry(entry).errors).toEqual([]);
+  });
+
+  test('an unrecognized visibility is rejected, not silently coerced', () => {
+    const entry = normalizeEntry({ id: 'x', visibility: 'top-secret' }, { strict: true });
+    // oneOf() falls back to the schema default rather than accepting junk.
+    expect(entry.visibility).toBe('private');
+  });
+
+  test('normalizeEntry preserves a sealed ciphertext payload rather than dropping the unknown field', () => {
+    const cipher = { v: 1, alg: 'aes-256-gcm', kdf: 'scrypt', salt: 'a', iv: 'b', tag: 'c', ciphertext: 'd' };
+    const entry = normalizeEntry({ id: 'x', visibility: 'encrypted', encrypted: cipher }, { strict: true });
+    expect(entry.encrypted).toEqual(cipher);
+  });
+
+  test('normalizeEntry ignores a non-object encrypted value rather than trusting it', () => {
+    const entry = normalizeEntry({ id: 'x', encrypted: 'not-an-object' }, { strict: true });
+    expect(entry.encrypted).toBeNull();
+  });
+
+  test('mergeEntries lets a later plaintext layer clear an inherited ciphertext', () => {
+    const cipher = { v: 1, alg: 'aes-256-gcm', kdf: 'scrypt', salt: 'a', iv: 'b', tag: 'c', ciphertext: 'd' };
+    const merged = mergeEntries(
+      { id: 'x', visibility: 'encrypted', encrypted: cipher, __source: 'subscription' },
+      { id: 'x', visibility: 'public', summary: 'decrypted locally', __source: 'registry' }
+    );
+    // A later layer that omits `encrypted` entirely leaves the earlier value
+    // alone (mergeEntries only overwrites fields a layer actually sets) — so
+    // an explicit null is required to clear it, exactly like any other field.
+    expect(merged.encrypted).toEqual(cipher);
+  });
 });

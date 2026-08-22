@@ -5,6 +5,7 @@ const { getAgentWorkspaceDir } = require('../utils/pathUtils');
 const { SCHEMA_VERSION, kebab, normalizeEntry } = require('./atlasSchema');
 
 const MANIFEST_FILENAME = '.repo-atlas.json';
+const REPO_KEY_FILENAME = '.repo-atlas-key';
 const MANIFEST_SEARCH_SUBDIRS = ['', 'master', 'main'];
 const DISCOVERY_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const CONFIG_FILENAME = 'atlas.config.json';
@@ -269,6 +270,66 @@ function writeManifest(projectRoot, entry) {
   return writeJson(path.join(checkout || projectRoot, MANIFEST_FILENAME), entry);
 }
 
+/**
+ * The repo-key mechanism: a per-repo symmetric key committed INTO the repo it
+ * protects, at `.repo-atlas-key` (same search path as the manifest — root,
+ * then `master`/`main` for worktree layouts). Whoever can read that file has
+ * GitHub access to the repo, which is exactly who should be able to decrypt
+ * that repo's atlas entry wherever it ends up shared. This is deliberate:
+ * the key is not a secret from anyone who already has the source.
+ */
+function keyPathFor(projectRoot) {
+  for (const subdir of MANIFEST_SEARCH_SUBDIRS) {
+    const candidate = path.join(projectRoot, subdir, REPO_KEY_FILENAME);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function readRepoKey(projectRoot) {
+  if (!projectRoot) return null;
+  const filePath = keyPathFor(projectRoot);
+  if (!filePath) return null;
+  const raw = fs.readFileSync(filePath, 'utf8').trim();
+  return raw || null;
+}
+
+function writeRepoKey(projectRoot, keyBase64) {
+  const checkout = ['master', 'main']
+    .map((dir) => path.join(projectRoot, dir))
+    .find((candidate) => fs.existsSync(candidate));
+  const target = path.join(checkout || projectRoot, REPO_KEY_FILENAME);
+  fs.writeFileSync(target, `${keyBase64}\n`, 'utf8');
+  return target;
+}
+
+// Machine-local cache of resolved repo keys, keyed by `owner/repo`. This is
+// what lets `atlas key sync` (a `gh api` fetch) or a local clone read only
+// ever happen once per repo per machine — never synced, never leaves here.
+function keysCacheDir() {
+  return path.join(atlasDir(), 'keys');
+}
+
+function keyCachePath(repoId) {
+  return path.join(keysCacheDir(), `${kebab(repoId)}.key`);
+}
+
+function loadCachedRepoKey(repoId) {
+  try {
+    const raw = fs.readFileSync(keyCachePath(repoId), 'utf8').trim();
+    return raw || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedRepoKey(repoId, keyBase64) {
+  ensureDir(keysCacheDir());
+  const target = keyCachePath(repoId);
+  fs.writeFileSync(target, `${keyBase64}\n`, 'utf8');
+  return target;
+}
+
 function saveBundle(audienceId, bundle, outputPath = '') {
   const written = [writeJson(path.join(bundlesDir(), `atlas.${kebab(audienceId)}.json`), bundle)];
   if (outputPath) written.push(writeJson(path.resolve(outputPath), bundle));
@@ -314,6 +375,7 @@ function removeSubscription(name) {
 
 module.exports = {
   MANIFEST_FILENAME,
+  REPO_KEY_FILENAME,
   CONFIG_FILENAME,
   DISCOVERY_CACHE_TTL_MS,
   atlasDir,
@@ -340,6 +402,13 @@ module.exports = {
   manifestPathFor,
   loadManifest,
   writeManifest,
+  keyPathFor,
+  readRepoKey,
+  writeRepoKey,
+  keysCacheDir,
+  keyCachePath,
+  loadCachedRepoKey,
+  saveCachedRepoKey,
   saveBundle,
   loadSubscriptions,
   saveSubscription,

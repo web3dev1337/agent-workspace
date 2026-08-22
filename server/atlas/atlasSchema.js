@@ -6,9 +6,18 @@ const SCHEMA_VERSION = 1;
 const KINDS = ['game', 'library', 'tool', 'website', 'service', 'reference', 'writing', 'experiment', 'infra', 'other'];
 const STATUSES = ['active', 'paused', 'prototype', 'archived', 'abandoned'];
 const MATURITIES = ['production', 'beta', 'prototype', 'experiment'];
-const VISIBILITIES = ['public', 'team', 'private'];
+const VISIBILITIES = ['public', 'team', 'private', 'encrypted'];
 const DIMENSIONS = ['2d', '3d', 'mixed', 'n/a'];
 const REDACTABLE_FIELDS = ['summary', 'notes', 'paths', 'highlights', 'avoid', 'seeAlso', 'tags'];
+
+// visibility: 'encrypted' entries: everything here is the judgement content
+// that gets sealed behind the repo key. `id`/`name`/`repo`/`owner`/`kind`
+// stay in clear text on purpose — a reader needs to know which repo's key to
+// try, and "a locked entry exists for this repo" is not itself a secret.
+const ENCRYPTED_FIELDS = [
+  'summary', 'status', 'maturity', 'dimension', 'platforms', 'languages',
+  'tags', 'quality', 'highlights', 'avoid', 'seeAlso', 'lastActivity'
+];
 
 // Never leave this machine in a compiled bundle: absolute paths expose the
 // local user/folder layout and say nothing useful to anyone else.
@@ -209,6 +218,14 @@ function normalizeEntry(raw = {}, { strict = false } = {}) {
   if (strict || has('lastActivity')) entry.lastActivity = isoDate(raw?.lastActivity);
   if (strict || has('lastScannedAt')) entry.lastScannedAt = isoDate(raw?.lastScannedAt);
 
+  // A sealed entry (visibility: encrypted, no repo key resolved yet) — the
+  // ciphertext blob for the fields listed in ENCRYPTED_FIELDS. Must survive
+  // mergeEntries' final strict normalize or a locked entry loses its payload
+  // the moment it is layered in from a subscription.
+  if (strict || has('encrypted')) {
+    entry.encrypted = (raw?.encrypted && typeof raw.encrypted === 'object') ? raw.encrypted : null;
+  }
+
   if (strict && !entry.name) entry.name = entry.id || '';
 
   return entry;
@@ -279,6 +296,7 @@ module.exports = {
   VISIBILITIES,
   DIMENSIONS,
   REDACTABLE_FIELDS,
+  ENCRYPTED_FIELDS,
   LOCAL_ONLY_FIELDS,
   kebab,
   normalizeTopic,
