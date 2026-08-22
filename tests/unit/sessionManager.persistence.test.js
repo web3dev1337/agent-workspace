@@ -126,6 +126,32 @@ describe('SessionManager session persistence', () => {
     expect(writes).toEqual(['\x1b[?1;2cls\r']); // no stripping without tmux
   });
 
+  test('isSessionAliveInTmux reflects a live tmux pane surviving a server restart', () => {
+    const { sm } = makeManager();
+    sm.sessionPersistence.hasSession.mockReturnValue(true);
+    expect(sm.isSessionAliveInTmux('work1-claude')).toBe(true);
+    expect(sm.sessionPersistence.hasSession).toHaveBeenCalledWith('work1-claude');
+  });
+
+  test('isSessionAliveInTmux is false when the pane is genuinely gone', () => {
+    const { sm } = makeManager();
+    sm.sessionPersistence.hasSession.mockReturnValue(false);
+    expect(sm.isSessionAliveInTmux('work1-claude')).toBe(false);
+  });
+
+  test('isSessionAliveInTmux is false when persistence is disabled, without querying tmux', () => {
+    const { sm } = makeManager();
+    sm.sessionPersistenceEnabled = false;
+    expect(sm.isSessionAliveInTmux('work1-claude')).toBe(false);
+    expect(sm.sessionPersistence.hasSession).not.toHaveBeenCalled();
+  });
+
+  test('isSessionAliveInTmux is false (not thrown) when the tmux query itself errors', () => {
+    const { sm } = makeManager();
+    sm.sessionPersistence.hasSession.mockImplementation(() => { throw new Error('tmux not found'); });
+    expect(sm.isSessionAliveInTmux('work1-claude')).toBe(false);
+  });
+
   test('getPersistenceStatus reports disabled cleanly', () => {
     const { sm } = makeManager();
     sm.sessionPersistenceEnabled = false;
