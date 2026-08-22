@@ -875,7 +875,23 @@ class TerminalManager {
           }
         }
 
+        const beforeCols = terminal?.cols || 0;
+        const beforeRows = terminal?.rows || 0;
         fitAddon.fit();
+
+        // xterm-addon-fit only clears+redraws the renderer when the computed
+        // size actually changed — a same-size fit (the common heal-sweep
+        // case: nothing was actually resized, we're just recovering from a
+        // stale/garbled canvas after the tab was backgrounded) leaves it
+        // untouched, so the refresh() below just repaints the same stale
+        // state. Force two real resizes (nudge a column down, then back) so
+        // the renderer always reconstructs — this is what an actual window
+        // resize does that a same-size fit + refresh doesn't.
+        if (terminal && terminal.cols === beforeCols && terminal.rows === beforeRows) {
+          const nudgedCols = Math.max(beforeCols - 1, 2);
+          terminal.resize(nudgedCols, beforeRows);
+          terminal.resize(beforeCols, beforeRows);
+        }
 
         // Get dimensions and (only if reasonable) notify server. Resizing the PTY to
         // very small sizes can hard-wrap output in the shell, which can't be undone.
