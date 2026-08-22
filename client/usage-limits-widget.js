@@ -120,8 +120,8 @@ class UsageLimitsWidget {
     return String(key || '').replace(/_/g, ' ');
   }
 
-  pill(providerClass, bodyHtml, tipLines) {
-    return `<span class="usage-pill usage-pill-${providerClass}" title="${this.escape(tipLines.join('\n'))}">${bodyHtml}</span>`;
+  pill(bodyHtml, tipLines) {
+    return `<span class="usage-pill" title="${this.escape(tipLines.join('\n'))}">${bodyHtml}</span>`;
   }
 
   renderClaudePill() {
@@ -145,7 +145,7 @@ class UsageLimitsWidget {
     if (claude.sevenDay?.resetsAt && this.paceSeverity(claude.sevenDay)) {
       tips.push('  ⚠ weekly quota is going unused — countdown highlighted (use it or lose it)');
     }
-    return this.pill('claude', `Claude ${rendered.join('  ')}${claude.stale ? '?' : ''}`, tips);
+    return this.pill(`Claude ${rendered.join('  ')}${claude.stale ? '?' : ''}`, tips);
   }
 
   renderCodexPill() {
@@ -164,7 +164,7 @@ class UsageLimitsWidget {
     for (const w of codex.windows) {
       if (w.resetsAt) tips.push(`  ${w.bucket || w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
     }
-    return this.pill('codex', `Codex ${buckets.join('  ')}${codex.stale ? '?' : ''}`, tips);
+    return this.pill(`Codex ${buckets.join('  ')}${codex.stale ? '?' : ''}`, tips);
   }
 
   renderGrokPill() {
@@ -182,7 +182,7 @@ class UsageLimitsWidget {
     for (const w of grok.windows) {
       if (w.resetsAt) tips.push(`  ${w.name} (${w.window}): ${w.usedPercentage}% used, resets ${new Date(w.resetsAt * 1000).toLocaleString()}`);
     }
-    return this.pill('grok', `Grok ${buckets.join('  ')}${grok.stale ? '?' : ''}`, tips);
+    return this.pill(`Grok ${buckets.join('  ')}${grok.stale ? '?' : ''}`, tips);
   }
 
   render() {

@@ -16074,7 +16074,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .usage-pill {
   font-size: 0.72rem;
+  color: var(--text-secondary);
   font-family: var(--font-mono);
+  background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
   padding: 1px 8px;
   border-radius: 999px;
   border: 1px solid var(--border-color);
@@ -16082,22 +16084,6 @@ body.dependency-onboarding-active #dependency-setup-modal {
   display: inline-flex;
   align-items: center;
   cursor: help;
-}
-
-.usage-pill-claude {
-  color: #e8a487;
-  background: color-mix(in srgb, #d97757 14%, transparent);
-  border-color: color-mix(in srgb, #d97757 45%, var(--border-color));
-}
-.usage-pill-codex {
-  color: #6fe0bd;
-  background: color-mix(in srgb, #10a37f 14%, transparent);
-  border-color: color-mix(in srgb, #10a37f 45%, var(--border-color));
-}
-.usage-pill-grok {
-  color: #b0a3ff;
-  background: color-mix(in srgb, #7c5cff 14%, transparent);
-  border-color: color-mix(in srgb, #7c5cff 45%, var(--border-color));
 }
 
 /* Usage severity highlights: running-out (%) and use-it-or-lose-it (countdown) */
