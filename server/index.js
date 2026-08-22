@@ -4640,6 +4640,25 @@ app.get('/api/system/stats', async (req, res) => {
   }
 });
 
+// Unload a locally-loaded LLM to free VRAM: `ollama stop` for Ollama models,
+// SIGTERM for a standalone llama.cpp `llama-server` process (identity
+// re-verified server-side before the kill — see systemStatsService.unloadModel).
+app.post('/api/system/models/unload', async (req, res) => {
+  try {
+    const { source, name, pid } = req.body || {};
+    const systemStatsService = SystemStatsService.getInstance();
+    const result = await systemStatsService.unloadModel({ source, name, pid });
+    if (!result.ok) {
+      res.status(400).json(result);
+      return;
+    }
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to unload model', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, reason: 'Failed to unload model' });
+  }
+});
+
 app.get('/api/ports', (req, res) => {
   try {
     const assignments = portRegistry.getAllAssignments();
