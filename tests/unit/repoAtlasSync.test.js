@@ -25,9 +25,21 @@ describe('Repo Atlas multi-machine sync', () => {
     git(['init', '-q', '--bare', remote], root);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     delete process.env.AGENT_WORKSPACE_ATLAS_DIR;
-    fs.rmSync(root, { recursive: true, force: true });
+    // Windows CI: a git child process can hold its working-directory handle
+    // open for a few hundred ms after its promise resolves, so an immediate
+    // rmSync races it and throws EBUSY. Retry with backoff instead of
+    // failing the whole suite over a cleanup race unrelated to the test.
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      try {
+        fs.rmSync(root, { recursive: true, force: true });
+        return;
+      } catch (error) {
+        if (error.code !== 'EBUSY' || attempt === 5) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+      }
+    }
   });
 
   test('curated entries are one file per repo so machines cannot conflict', () => {
@@ -136,7 +148,7 @@ describe('Repo Atlas multi-machine sync', () => {
     const backOnA = machine('a');
     expect((await backOnA.sync()).ok).toBe(true);
     expect(backOnA.topics().map((t) => t.topic).sort()).toEqual(['physics', 'testing']);
-  });
+  }, 20000); // four sequential git syncs; Windows CI runners are slow enough to miss the 5s default
 
   test('sync refuses to run without a remote rather than failing silently', async () => {
     const result = await machine('a').sync();
