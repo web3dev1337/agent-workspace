@@ -106,6 +106,7 @@ const { WorktreeHelper } = require('./worktreeHelper');
 const AgentManager = require('./agentManager');
 const { PortRegistry } = require('./portRegistry');
 const { UsageLimitsService } = require('./usageLimitsService');
+const { SystemStatsService } = require('./systemStatsService');
 const { GreenfieldService } = require('./greenfieldService');
 const { ProjectTypeService } = require('./projectTypeService');
 const { ContinuityService } = require('./continuityService');
@@ -4619,6 +4620,23 @@ app.get('/api/usage/limits', async (req, res) => {
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// CPU/RAM/VRAM for the header stats button. `processes=1` pulls the
+// (slower) per-process VRAM breakdown for the modal; the header pill polls
+// without it. `refresh=1` bypasses the cache.
+app.get('/api/system/stats', async (req, res) => {
+  try {
+    const systemStatsService = SystemStatsService.getInstance();
+    const stats = await systemStatsService.getStats({
+      includeProcesses: req.query.processes === '1',
+      refresh: req.query.refresh === '1'
+    });
+    res.json(stats);
+  } catch (error) {
+    logger.error('Failed to get system stats', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get system stats' });
   }
 });
 

@@ -16119,6 +16119,114 @@ body.dependency-onboarding-active #dependency-setup-modal {
   background: var(--text-primary);
 }
 
+/* Header CPU/RAM/VRAM stats button + modal */
+#system-stats-summary { font-family: var(--font-mono); font-size: 0.78rem; }
+#system-stats-summary .usage-sev-yellow { color: #ffd685; font-weight: 600; }
+#system-stats-summary .usage-sev-orange { color: #ffab5e; font-weight: 600; }
+#system-stats-summary .usage-sev-red { color: #ff6b6b; font-weight: 700; }
+
+.system-stats-modal .system-stats-content {
+  max-width: 560px;
+  width: 90vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.system-stats-body {
+  overflow-y: auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.system-stats-bar-row { display: flex; flex-direction: column; gap: 4px; }
+
+.system-stats-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.system-stats-bar-detail {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.system-stats-bar-track {
+  height: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.system-stats-bar-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  transition: width 0.2s ease;
+}
+.system-stats-bar-fill.sev-yellow { background: #ffd685; }
+.system-stats-bar-fill.sev-orange { background: #ffab5e; }
+.system-stats-bar-fill.sev-red { background: #ff6b6b; }
+
+.system-stats-section-title {
+  margin: var(--space-sm) 0 0 0;
+  font-size: 0.9rem;
+}
+
+.system-stats-loading,
+.system-stats-empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: var(--space-sm) 0;
+}
+
+.system-stats-process-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.system-stats-process-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--space-sm);
+  padding: 4px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+}
+
+.system-stats-process-row:nth-child(odd) { background: var(--bg-tertiary); }
+
+.system-stats-process-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-stats-process-pid,
+.system-stats-process-mem {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.system-stats-process-mem { color: var(--text-primary); font-weight: 600; }
+
+.system-stats-source-note {
+  margin-top: var(--space-sm);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* Commander tab bar (multiple Commander instances) */
 .commander-tabbar {
   display: flex;
