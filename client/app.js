@@ -9251,6 +9251,7 @@ class ClaudeOrchestrator {
 
 	    // Keep terminals visually consistent with UI theme.
 	    this.terminalManager?.updateTheme?.(this.settings.theme);
+	    this.commanderPanel?.updateTheme?.(this.settings.theme);
 	  }
 
 	  applyThemeFromUserSettings() {

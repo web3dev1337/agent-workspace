@@ -482,34 +482,19 @@ class CommanderPanel {
       rightClickSelectsWord: true,
       // xterm 5.x removed rendererType/experimentalCharAtlas; the Canvas renderer is
       // loaded as an addon after open() below (DOM renderer leaves garbled rows).
-      theme: {
-        background: '#0d1117',
-        foreground: '#c9d1d9',
-        cursor: '#c9d1d9',
-        cursorAccent: '#0d1117',
-        selection: 'rgba(88, 166, 255, 0.3)',
-        black: '#484f58',
-        red: '#ff7b72',
-        green: '#3fb950',
-        yellow: '#d29922',
-        blue: '#58a6ff',
-        magenta: '#bc8cff',
-        cyan: '#39c5cf',
-        white: '#b1bac4',
-        brightBlack: '#6e7681',
-        brightRed: '#ffa198',
-        brightGreen: '#56d364',
-        brightYellow: '#e3b341',
-        brightBlue: '#79c0ff',
-        brightMagenta: '#d2a8ff',
-        brightCyan: '#56d4dd',
-        brightWhite: '#f0f6fc'
-      }
+      // Shared with worktree terminals (terminal-themes.js) so Commander matches
+      // them exactly — including when the user switches theme, see updateTheme().
+      theme: window.getTerminalTheme(this.orchestrator?.settings?.theme)
     });
 
     // Add fit addon
     this.fitAddon = new FitAddon.FitAddon();
     this.terminal.loadAddon(this.fitAddon);
+
+    // Clickable URLs — worktree terminals have had this since WebLinksAddon was
+    // wired into TerminalManager; Commander never got it, so links in Commander
+    // output (PR URLs, doc links) sat there unclickable.
+    this.terminal.loadAddon(new WebLinksAddon.WebLinksAddon());
 
     // Open terminal
     this.terminal.open(container);
@@ -610,6 +595,24 @@ class CommanderPanel {
       });
       this.resizeObserver.observe(container);
     }
+  }
+
+  /**
+   * Mirrors TerminalManager.updateTheme() — called from the same app-wide
+   * theme toggle. Every Commander tab keeps its own xterm instance (see
+   * saveActiveTabState/switchTab), and only the active one is ever
+   * guaranteed to be synced into `this.tabs`, so this updates both.
+   */
+  updateTheme(theme) {
+    const themeConfig = window.getTerminalTheme(theme);
+    const seen = new Set();
+    const apply = (terminal) => {
+      if (!terminal || seen.has(terminal)) return;
+      seen.add(terminal);
+      terminal.options.theme = themeConfig;
+    };
+    apply(this.terminal);
+    for (const tab of this.tabs.values()) apply(tab.terminal);
   }
 
   /**
