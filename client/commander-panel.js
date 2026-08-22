@@ -239,7 +239,23 @@ class CommanderPanel {
     if (!this.fitAddon || !this.terminal) return;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        const beforeCols = this.terminal.cols;
+        const beforeRows = this.terminal.rows;
         this.fitAddon?.fit();
+        // xterm-addon-fit only clears+redraws the renderer when the computed
+        // size actually changed — a same-size fit (the common heal-sweep
+        // case: nothing was actually resized, we're just recovering from a
+        // stale/garbled canvas) leaves it untouched, so refresh() alone
+        // schedules a repaint of the SAME stale render state. Force two real
+        // resizes (nudge a column down, then back) so the renderer always
+        // reconstructs — this is what an actual window resize does that a
+        // same-size fit + refresh doesn't, which is why manually resizing
+        // "fixes" it but the passive heal sometimes didn't.
+        if (this.terminal.cols === beforeCols && this.terminal.rows === beforeRows) {
+          const nudgedCols = Math.max(beforeCols - 1, 2);
+          this.terminal.resize(nudgedCols, beforeRows);
+          this.terminal.resize(beforeCols, beforeRows);
+        }
         this.syncTerminalSize();
         this.terminal?.refresh?.(0, Math.max(0, (this.terminal.rows || 1) - 1));
         if (focus) this.terminal?.focus();
