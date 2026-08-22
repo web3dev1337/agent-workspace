@@ -103,8 +103,9 @@ atlas compile <audience> --dry-run --explain    # always dry-run first
 - `visibility: public` — in every bundle.
 - `visibility: team` — only for audiences named in its `groups`.
 - `visibility: private` — never shared, overrides groups.
+- `visibility: encrypted` — in every bundle too, but sealed to that repo's own key (`.repo-atlas-key`, committed inside the repo it protects). Decrypting it needs GitHub access to the repo, not audience membership — someone can read the bundle file and still see nothing but ciphertext for these entries. `atlas key generate <id>` creates the key on first `atlas compile`/`publish` for a cloned `encrypted` entry; a teammate who was just given repo access runs `atlas key sync` to pull it via `gh api`.
 
-Never change a repo's `visibility` or `groups` on the user's behalf. Bundles are metadata distribution, not access control — GitHub permissions are the real boundary.
+Never change a repo's `visibility` or `groups` on the user's behalf. Bundles are metadata distribution, not access control — GitHub permissions are the real boundary. `encrypted` visibility adds a second, cryptographic lock on top of that; it is not a substitute for it, and rotating a leaked key (`atlas key generate --rotate`) does not un-decrypt bundles someone already pulled.
 
 ## Setup
 

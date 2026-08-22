@@ -108,6 +108,7 @@ const commands = {
     out(`scan roots    ${status.scanRoots.join(', ')}`);
     out(`repos         ${status.entryCount} (${status.clonedCount} cloned locally, ${status.curatedCount} curated)`);
     out(`highlights    ${status.highlightCount}`);
+    if (status.lockedCount) out(`locked        ${status.lockedCount} encrypted entries you can't read yet — try \`atlas key sync\``);
     out(`audiences     ${status.audiences.join(', ') || 'none configured'}`);
     out(`remote        ${status.remote || 'not configured — run `atlas remote set <git-url>`'}`);
     if (status.subscriptions.length) {
@@ -149,7 +150,8 @@ const commands = {
       const marks = [
         entry.cloned ? 'local' : 'remote',
         entry.isFork ? 'fork' : '',
-        entry.archived ? 'archived' : ''
+        entry.archived ? 'archived' : '',
+        entry.visibility === 'encrypted' && entry.locked ? 'locked' : ''
       ].filter(Boolean).join('/');
       const highlights = (entry.highlights || []).map((h) => `${h.topic}:${h.quality ?? '?'}`).join(' ');
       out(`${entry.id.padEnd(34)} ${String(entry.kind || '').padEnd(10)} ${marks.padEnd(16)} ${highlights}`);
@@ -241,7 +243,7 @@ const commands = {
 
   set(positionals, flags) {
     const id = positionals[0];
-    if (!id) return fail('usage: atlas set <id> [--visibility public|team|private] [--groups a,b] [--kind ...] [--status ...] [--summary "..."]');
+    if (!id) return fail('usage: atlas set <id> [--visibility public|team|private|encrypted] [--groups a,b] [--kind ...] [--status ...] [--summary "..."]');
 
     const patch = {};
     if (flags.visibility) patch.visibility = flags.visibility;
@@ -288,6 +290,45 @@ const commands = {
       return out(`Audience "${id}" saved. Tag repos into it with \`atlas set <id> --visibility team --groups ${id}\`.`);
     }
     return fail(`unknown audience action "${action}"`);
+  },
+
+  async key(positionals, flags) {
+    const action = positionals[0];
+
+    if (action === 'generate') {
+      const id = positionals[1];
+      if (!id) return fail('usage: atlas key generate <id> [--rotate]');
+      const result = atlas.generateRepoKey(id, { rotate: flags.rotate === true });
+      if (!result.generated) {
+        out(`"${id}" already has a repo key (${result.path}). Pass --rotate to replace it.`);
+        return undefined;
+      }
+      out(`${result.rotated ? 'Rotated' : 'Generated'} the repo key for "${id}": ${result.path}`);
+      out('Commit and push that file — anyone with access to this repo can now decrypt its atlas entry.');
+      if (result.rotated) out('Anyone who cached the old key can still read bundles compiled before this rotation.');
+      return undefined;
+    }
+
+    if (action === 'show') {
+      const id = positionals[1];
+      if (!id) return fail('usage: atlas key show <id>');
+      const key = atlas.getRepoKey(id);
+      if (!key) {
+        out(`No key resolved for "${id}" yet. If it's yours: \`atlas key generate ${id}\`. If it was shared with you: \`atlas key sync\`.`);
+        return undefined;
+      }
+      out(key);
+      return undefined;
+    }
+
+    if (action === 'sync' || !action) {
+      out('Resolving keys for anything you can currently decrypt (cache, local clones, `gh api` for repos you have access to)…');
+      const result = await atlas.unlockEncrypted();
+      out(`${result.unlocked}/${result.checked} unlocked${result.stillLocked.length ? `. Still locked: ${result.stillLocked.join(', ')}` : '.'}`);
+      return undefined;
+    }
+
+    return fail(`unknown key action "${action}"`);
   },
 
   propose(positionals, flags) {
@@ -474,6 +515,12 @@ const commands = {
   atlas audience list | add <id> [--label "..."] [--out <path>] [--out-remote <git-url>]
   atlas compile <audience> [--dry-run] [--explain]
 
+encrypted sharing (repo access, not audience membership, gates decryption):
+  atlas set <id> --visibility encrypted   goes in every bundle, sealed to the repo's key
+  atlas key generate <id> [--rotate]      create/rotate that repo's key — commit the file it writes
+  atlas key show <id>                     print a key you already have
+  atlas key sync                          fetch keys (via \`gh\`) for anything you now have repo access to
+
 write-back (agents propose, you decide):
   atlas propose <id> --topic X [--quality N] [--notes "..."] [--evidence "why"] [--avoid]
   atlas proposals [list|approve <id>|reject <id>|clear] [--status all]
@@ -495,8 +542,12 @@ values:     maturity ${MATURITIES.join('|')}   visibility ${VISIBILITIES.join('|
 
 Sharing model: entries are private by default. \`visibility: public\` goes in every
 bundle, \`team\` goes only to audiences listed in its groups, \`private\` never leaves
-this machine. Compiled bundles are metadata distribution — GitHub permissions are
-still the real access control.
+this machine, \`encrypted\` goes in every bundle too but sealed to that repo's own
+key — decrypting it needs GitHub access to the repo it describes, not audience
+membership. Compiled (non-encrypted) bundles are still metadata distribution —
+GitHub permissions on wherever you publish them remain the real access control.
+Encrypted entries add a second lock on top of that: even someone who can read the
+bundle file itself cannot read a sealed entry without also having repo access.
 
 Multi-machine: your registry (judgement, portable) lives in a PRIVATE git repo,
 one file per repo so machines never conflict. Discovery (what this computer has

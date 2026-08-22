@@ -1,4 +1,5 @@
 const { SCHEMA_VERSION, LOCAL_ONLY_FIELDS, kebab } = require('./atlasSchema');
+const { sealEntry } = require('./atlasEncryption');
 
 const PUBLIC_AUDIENCE = 'public';
 
@@ -7,6 +8,10 @@ const PUBLIC_AUDIENCE = 'public';
  *
  * `private` is a hard kill switch — it wins over any group membership, so the
  * safe thing to do when unsure about an entry is mark it private and move on.
+ *
+ * `encrypted` goes in every bundle, same as `public` — the point is that
+ * access is gated by the repo key, not by which audience compiled the
+ * bundle, so there is no reason to also restrict it by group.
  */
 function decide(entry, audience) {
   const audienceId = kebab(audience);
@@ -15,6 +20,9 @@ function decide(entry, audience) {
 
   if (visibility === 'private') {
     return { include: false, reason: 'visibility: private (never shared)' };
+  }
+  if (visibility === 'encrypted') {
+    return { include: true, reason: 'visibility: encrypted (repo-key gated, not audience-gated)' };
   }
   if (visibility === 'public') {
     return { include: true, reason: 'visibility: public' };
@@ -73,7 +81,7 @@ function redactForAudience(entry, audience) {
  * the enforcement boundary. The compiler's job is to make accidental oversharing
  * structurally hard, and to show its working via `decisions`.
  */
-function compileBundle(entries, { audience, label = '', description = '' } = {}) {
+function compileBundle(entries, { audience, label = '', description = '', repoKeys = new Map() } = {}) {
   const audienceId = kebab(audience);
   if (!audienceId) throw new Error('compileBundle requires an audience');
 
@@ -87,6 +95,36 @@ function compileBundle(entries, { audience, label = '', description = '' } = {})
       continue;
     }
     const { entry: redacted, redactions } = redactForAudience(entry, audienceId);
+
+    if (redacted.visibility === 'encrypted') {
+      // Already ciphertext (e.g. relayed from a subscription without ever
+      // being decrypted locally) — nothing left to seal, and re-sealing
+      // would encrypt the empty plaintext view instead of the real payload,
+      // silently discarding it. Pass the ciphertext through unchanged.
+      if (redacted.encrypted) {
+        included.push(redacted);
+        decisions.push({ id: entry.id, included: true, reason: 'visibility: encrypted (already sealed, relayed as-is)', redactions: ['encrypted'] });
+        continue;
+      }
+      const key = repoKeys.get(redacted.repo) || repoKeys.get(redacted.id);
+      // No key resolved (repo not cloned here, or key generation was never
+      // run) — never fall back to shipping it plaintext. Exclude it, same as
+      // the `private` kill switch: unsure means don't share.
+      if (!key) {
+        decisions.push({
+          id: entry.id,
+          included: false,
+          reason: 'visibility: encrypted but no repo key available (run `atlas key generate`)',
+          redactions: []
+        });
+        continue;
+      }
+      const sealed = sealEntry(redacted, key);
+      included.push(sealed);
+      decisions.push({ id: entry.id, included: true, reason: verdict.reason, redactions: ['encrypted'] });
+      continue;
+    }
+
     included.push(redacted);
     decisions.push({ id: entry.id, included: true, reason: verdict.reason, redactions });
   }

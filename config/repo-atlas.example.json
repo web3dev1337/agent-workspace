@@ -16,7 +16,7 @@
   "status": "active",
   "maturity": "production",
 
-  "$comment_sharing": "visibility: public (in every bundle) | team (only audiences listed in groups) | private (never leaves this machine, overrides groups)",
+  "$comment_sharing": "visibility: public (in every bundle) | team (only audiences listed in groups) | private (never leaves this machine, overrides groups) | encrypted (in every bundle, sealed to this repo's own key — decrypt needs GitHub access to THIS repo, not group membership; see `atlas key generate`/`atlas key sync`)",
   "visibility": "team",
   "groups": ["core-team"],
 

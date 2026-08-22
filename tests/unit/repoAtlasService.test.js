@@ -146,4 +146,70 @@ describe('RepoAtlasService', () => {
     expect(status.registryDir).toContain('registry');
     expect(status.curatedCount).toBe(1);
   });
+
+  describe('encrypted sharing', () => {
+    beforeEach(() => {
+      atlas.setAudience({ id: 'core-team', label: 'Core team' });
+      atlas.setEntry('acme-tycoon', { visibility: 'encrypted', summary: 'gated by repo access' });
+      atlas.addHighlight('acme-tycoon', { topic: 'testing', quality: 5, notes: 'do not leak this' });
+    });
+
+    test('generateRepoKey writes .repo-atlas-key into the cloned repo and caches it', () => {
+      const result = atlas.generateRepoKey('acme-tycoon');
+      expect(result.generated).toBe(true);
+      expect(fs.existsSync(path.join(repoDir, '.repo-atlas-key'))).toBe(true);
+      expect(store.loadCachedRepoKey('owner/acme-tycoon')).toBe(result.key);
+    });
+
+    test('generateRepoKey is idempotent unless --rotate is asked for', () => {
+      const first = atlas.generateRepoKey('acme-tycoon');
+      const second = atlas.generateRepoKey('acme-tycoon');
+      expect(second.generated).toBe(false);
+      expect(second.key).toBe(first.key);
+    });
+
+    test('generateRepoKey --rotate replaces the key', () => {
+      const first = atlas.generateRepoKey('acme-tycoon');
+      const rotated = atlas.generateRepoKey('acme-tycoon', { rotate: true });
+      expect(rotated.key).not.toBe(first.key);
+      expect(atlas.getRepoKey('acme-tycoon')).toBe(rotated.key);
+    });
+
+    test('generateRepoKey refuses a repo you have not cloned', () => {
+      atlas.setEntry('never-cloned', { name: 'never-cloned', visibility: 'encrypted' });
+      expect(() => atlas.generateRepoKey('never-cloned')).toThrow(/not cloned locally/);
+    });
+
+    test('compile auto-generates a key and ships ciphertext, not plaintext', () => {
+      const result = atlas.compile('core-team');
+      expect(result.counts.included).toBe(1);
+
+      const sealed = result.bundle.entries[0];
+      expect(sealed.id).toBe('acme-tycoon');
+      expect(sealed.visibility).toBe('encrypted');
+      expect(sealed.encrypted).toBeTruthy();
+      expect(JSON.stringify(sealed)).not.toMatch(/do not leak this/);
+      expect(JSON.stringify(sealed)).not.toMatch(/gated by repo access/);
+
+      // The key it just used is now on disk, ready to commit.
+      expect(fs.existsSync(path.join(repoDir, '.repo-atlas-key'))).toBe(true);
+    });
+
+    test('compiling twice reuses the same key instead of rotating on every publish', () => {
+      const first = atlas.compile('core-team').bundle.entries[0].encrypted;
+      const second = atlas.compile('core-team').bundle.entries[0].encrypted;
+      // Different nonce/salt per encryption, but decryptable by the same key —
+      // prove that by checking the key file on disk never changed.
+      const key = store.readRepoKey(repoDir);
+      expect(() => require('../../server/atlas/atlasEncryption').unsealEntry({ encrypted: first }, key)).not.toThrow();
+      expect(() => require('../../server/atlas/atlasEncryption').unsealEntry({ encrypted: second }, key)).not.toThrow();
+    });
+
+    test('unlockEncrypted reports nothing to do when everything is already yours', async () => {
+      const result = await atlas.unlockEncrypted();
+      // Your own entries are never sealed locally — only compiled OUTPUT is —
+      // so there is nothing locked to unlock in your own view.
+      expect(result).toEqual({ checked: 0, unlocked: 0, stillLocked: [] });
+    });
+  });
 });

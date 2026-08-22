@@ -1,5 +1,6 @@
 const { compileBundle, decide, redactForAudience } = require('../../server/atlas/atlasCompiler');
 const { normalizeEntry } = require('../../server/atlas/atlasSchema');
+const { sealEntry, unsealEntry, generateKey } = require('../../server/atlas/atlasEncryption');
 
 const entry = (overrides) => normalizeEntry({
   id: 'sample',
@@ -85,5 +86,57 @@ describe('atlasCompiler', () => {
 
   test('compileBundle refuses to run without an audience', () => {
     expect(() => compileBundle([], {})).toThrow(/audience/);
+  });
+
+  describe('encrypted visibility', () => {
+    test('reaches every audience, unlike team visibility', () => {
+      const sealed = entry({ visibility: 'encrypted', repo: 'acme/sample', groups: [] });
+      expect(decide(sealed, 'core-team').include).toBe(true);
+      expect(decide(sealed, 'contractors').include).toBe(true);
+      expect(decide(sealed, 'public').include).toBe(true);
+    });
+
+    test('compileBundle seals judgement fields when a repo key is provided', () => {
+      const key = generateKey();
+      const result = compileBundle(
+        [entry({ id: 'secret-repo', visibility: 'encrypted', repo: 'acme/secret-repo' })],
+        { audience: 'core-team', repoKeys: new Map([['acme/secret-repo', key]]) }
+      );
+
+      expect(result.counts).toEqual({ total: 1, included: 1, excluded: 0, redacted: 1 });
+      const [sealed] = result.bundle.entries;
+      expect(sealed.id).toBe('secret-repo');
+      expect(sealed.repo).toBe('acme/secret-repo');
+      expect(sealed.encrypted).toBeTruthy();
+      expect(sealed.summary).toBeUndefined();
+      expect(JSON.stringify(sealed)).not.toMatch(/good harness/);
+
+      const restored = unsealEntry(sealed, key);
+      expect(restored.summary).toBe('A repo');
+      expect(restored.highlights[0].notes).toBe('good harness');
+    });
+
+    test('compileBundle excludes an encrypted entry rather than shipping it plaintext when no key is available', () => {
+      const result = compileBundle(
+        [entry({ id: 'secret-repo', visibility: 'encrypted', repo: 'acme/secret-repo' })],
+        { audience: 'core-team' }
+      );
+
+      expect(result.bundle.entries).toEqual([]);
+      expect(result.counts).toEqual({ total: 1, included: 0, excluded: 1, redacted: 0 });
+      expect(result.decisions[0].reason).toMatch(/no repo key available/);
+    });
+
+    test('an already-sealed entry passed straight through stays sealed rather than resealed', () => {
+      // Guards against a regression where compileBundle could double-encrypt
+      // (or accidentally leak) an entry that is already ciphertext, e.g. one
+      // relayed from a subscription without ever being decrypted locally.
+      const key = generateKey();
+      const sealed = sealEntry(entry({ id: 'relayed', visibility: 'encrypted', repo: 'acme/relayed' }), key);
+      const relayable = normalizeEntry({ ...sealed, groups: [] }, { strict: true });
+
+      const result = compileBundle([relayable], { audience: 'core-team', repoKeys: new Map([['acme/relayed', key]]) });
+      expect(unsealEntry(result.bundle.entries[0], key).summary).toBe('A repo');
+    });
   });
 });

@@ -6,6 +6,7 @@ const store = require('./atlas/atlasStore');
 const discovery = require('./atlas/atlasDiscovery');
 const query = require('./atlas/atlasQuery');
 const compiler = require('./atlas/atlasCompiler');
+const encryption = require('./atlas/atlasEncryption');
 const sync = require('./atlas/atlasSync');
 const proposals = require('./atlas/atlasProposals');
 const { getProjectsRoot, getLegacyProjectsRoot } = require('./utils/pathUtils');
@@ -149,7 +150,13 @@ class RepoAtlasService {
       }
       merged.id = id;
       merged.sources = (merged.sources || []).filter((s) => s !== 'defaults');
-      entries.push(merged);
+      // Opportunistic, no-network unlock: if a key for this repo is already
+      // cached (or this machine happens to have the repo cloned too), decrypt
+      // right here so every reader — find/show/digest — just sees the entry.
+      // A key that only exists over `gh api` needs an explicit
+      // `unlockEncrypted()` / `atlas key sync` first; getEntries() never
+      // makes network calls.
+      entries.push(encryption.decryptIfPossible(merged));
     }
 
     entries.sort((a, b) => a.id.localeCompare(b.id));
@@ -289,10 +296,12 @@ class RepoAtlasService {
     // repo you later cloned (the old `foreign` filter alone let that case
     // republish the teammate's fields as if they were yours).
     const own = this.getOwnEntries().filter((entry) => entry.foreign !== true);
+    const repoKeys = encryption.resolveKeysForPublish(own, { logger: this.logger });
     const result = compiler.compileBundle(own, {
       audience,
       label: meta.label,
-      description: meta.description
+      description: meta.description,
+      repoKeys
     });
     result.written = write ? store.saveBundle(audience, result.bundle, meta.outputPath) : [];
     return result;
@@ -341,7 +350,74 @@ class RepoAtlasService {
   async subscribe({ name, source }) {
     const result = await sync.subscribe({ name, source });
     this.invalidate();
+    // Anything this machine can already decrypt without the network (cached
+    // key, or a local clone with `.repo-atlas-key`) unlocks for free on the
+    // very next getEntries() read — see decryptIfPossible() there. A key
+    // that only exists via `gh api` needs an explicit `atlas key sync`
+    // (unlockEncrypted()) — subscribe() itself never makes network calls,
+    // matching the rest of the CLI ("no network unless you ask it to").
     return result;
+  }
+
+  /**
+   * Generate (or rotate) the repo key for one of YOUR entries. Requires a
+   * local clone — the key has to land in `.repo-atlas-key` in that repo for
+   * anyone to ever find it. Refuses to clobber an existing key unless you
+   * explicitly ask for a rotation, since rotating breaks decrypt for every
+   * bundle already compiled with the old key.
+   */
+  generateRepoKey(id, { rotate = false } = {}) {
+    const entry = this.getOwnEntries().find((e) => e.id === schema.kebab(id));
+    if (!entry) throw new Error(`no repo "${id}" on the map (or it is not yours to key — try \`atlas list\`)`);
+    if (!entry.cloned || !entry.localPath) {
+      throw new Error(`"${id}" is not cloned locally — a repo key has to live inside the repo it protects`);
+    }
+
+    const repoId = entry.repo || entry.id;
+    const existing = store.readRepoKey(entry.localPath);
+    if (existing && !rotate) {
+      store.saveCachedRepoKey(repoId, existing);
+      store.saveCachedRepoKey(entry.id, existing);
+      return { id: entry.id, key: existing, generated: false, path: store.keyPathFor(entry.localPath) };
+    }
+
+    const key = rotate ? encryption.rotateKeyForPublish(entry) : encryption.generateKey();
+    const writtenPath = rotate ? store.keyPathFor(entry.localPath) : store.writeRepoKey(entry.localPath, key);
+    store.saveCachedRepoKey(repoId, key);
+    store.saveCachedRepoKey(entry.id, key);
+
+    return { id: entry.id, key, generated: true, rotated: rotate, path: writtenPath };
+  }
+
+  /**
+   * Read-only key lookup — never generates or writes anything. Checks the
+   * local cache, then a local clone if this machine has one.
+   */
+  getRepoKey(id) {
+    const entry = this.getEntry(id);
+    if (!entry) return null;
+    return encryption.resolveKeyLocal(entry);
+  }
+
+  /**
+   * Resolve keys, over the network if needed, for every currently-locked
+   * encrypted entry this machine can see. Call after `atlas subscribe`, or
+   * on demand as `atlas key sync` once someone grants you repo access.
+   */
+  async unlockEncrypted({ fetchKey } = {}) {
+    const locked = this.getEntries({ force: true }).filter((entry) => entry.visibility === 'encrypted' && entry.locked);
+    let unlocked = 0;
+    const stillLocked = [];
+
+    for (const entry of locked) {
+      // eslint-disable-next-line no-await-in-loop
+      const key = await encryption.resolveKeyRemote(entry, fetchKey ? { fetchKey } : {});
+      if (key) unlocked += 1;
+      else stillLocked.push(entry.id);
+    }
+
+    if (unlocked) this.invalidate();
+    return { checked: locked.length, unlocked, stillLocked };
   }
 
   /**
@@ -436,6 +512,7 @@ class RepoAtlasService {
       foreignCount: entries.filter((e) => e.foreign).length,
       curatedCount: Object.keys(store.loadEntries()).length,
       highlightCount: entries.reduce((sum, e) => sum + (e.highlights || []).length, 0),
+      lockedCount: entries.filter((e) => e.visibility === 'encrypted' && e.locked).length,
       audiences: this.listAudiences().map((a) => a.id),
       subscriptions: this.listSubscriptions(),
       proposals: proposals.getStats(),
@@ -454,5 +531,6 @@ module.exports.store = store;
 module.exports.discovery = discovery;
 module.exports.query = query;
 module.exports.compiler = compiler;
+module.exports.encryption = encryption;
 module.exports.proposals = proposals;
 module.exports.defaultScanRoots = defaultScanRoots;

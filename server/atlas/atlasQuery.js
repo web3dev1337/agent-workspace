@@ -143,6 +143,7 @@ function describeEntryInline(entry) {
     .join(', ');
 
   const flags = [];
+  if (entry.visibility === 'encrypted' && entry.locked) flags.push('🔒locked');
   if (isStale(entry) || entry.status === 'archived') flags.push('⚠old');
   if (!entry.cloned) flags.push('remote');
   if (entry.isFork) flags.push('fork');
@@ -187,6 +188,10 @@ function buildDigest(entries, { groupBy = 'platform', maxPerBucket = 8, onlyWith
 function describeEntry(entry) {
   const lines = [];
   lines.push(`# ${entry.name || entry.id}${entry.repo ? `  (${entry.repo})` : ''}`);
+  if (entry.visibility === 'encrypted' && entry.locked) {
+    lines.push(`🔒 encrypted — you don't have the repo key yet. If you have GitHub access to ${entry.repo || 'this repo'}, run \`atlas key sync\`.`);
+    return lines.join('\n');
+  }
   if (entry.summary) lines.push(entry.summary);
   lines.push('');
 

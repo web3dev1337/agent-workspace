@@ -297,5 +297,106 @@ describe('Repo Atlas multi-machine sync', () => {
       expect(me.unsubscribe('them')).toBe(true);
       expect(me.find('auth')).toEqual([]);
     });
+
+    describe('encrypted entries', () => {
+      // The full point of encrypted visibility: it can travel through a
+      // shared bundle exactly like a public entry, but only a machine that
+      // can also resolve the source repo's key ever sees the contents.
+      const sealedEntry = (key) => {
+        const { sealEntry, generateKey } = require('../../server/atlas/atlasEncryption');
+        const sourceKey = key || generateKey();
+        const sealed = sealEntry({
+          id: 'vault-repo',
+          name: 'vault-repo',
+          repo: 'acme/vault-repo',
+          owner: 'acme',
+          kind: 'service',
+          summary: 'gated by repo access',
+          highlights: [{ topic: 'testing', quality: 5, paths: [], notes: 'do not leak this' }]
+        }, sourceKey);
+        return { sealed, sourceKey };
+      };
+
+      test('someone with no key sees the entry exists but cannot read it', async () => {
+        const { sealed } = sealedEntry();
+        const shared = publishBundle(root, [sealed]);
+
+        const me = machine('me');
+        await me.subscribe({ name: 'them', source: shared });
+
+        const entry = me.getEntry('vault-repo');
+        expect(entry).toBeTruthy();
+        expect(entry.locked).toBe(true);
+        expect(entry.summary).toBe('');
+        expect(me.find('testing')).toEqual([]); // nothing decrypted, nothing to find
+      });
+
+      test('a machine that already has the repo cloned decrypts on the spot', async () => {
+        const { sealed, sourceKey } = sealedEntry();
+        const shared = publishBundle(root, [sealed]);
+
+        const vaultRepoDir = path.join(root, 'me-clone', 'vault-repo');
+        fs.mkdirSync(vaultRepoDir, { recursive: true });
+        store.writeRepoKey(vaultRepoDir, sourceKey);
+
+        const me = machine('me');
+        // No explicit unlock step at all — getEntries() resolves the key
+        // from the local clone on its own, same as it already does for the
+        // manifest layer. Discovery has to know about the clone first
+        // (mirrors "cloning a repo a teammate shared" above) — the
+        // subscription layer alone always reports localPath: null.
+        store.saveDiscoveryCache([{ id: 'vault-repo', name: 'vault-repo', localPath: vaultRepoDir, cloned: true }]);
+        me.invalidate();
+        await me.subscribe({ name: 'them', source: shared });
+
+        const entry = me.getEntry('vault-repo');
+        expect(entry.locked).toBe(false);
+      });
+
+      test('atlas key sync unlocks a repo you were only just given gh access to', async () => {
+        const { sealed, sourceKey } = sealedEntry();
+        const shared = publishBundle(root, [sealed]);
+
+        const me = machine('me');
+        await me.subscribe({ name: 'them', source: shared });
+        expect(me.getEntry('vault-repo').locked).toBe(true);
+
+        const fetchKey = jest.fn().mockResolvedValue(sourceKey);
+        const result = await me.unlockEncrypted({ fetchKey });
+
+        expect(result).toEqual({ checked: 1, unlocked: 1, stillLocked: [] });
+        expect(fetchKey).toHaveBeenCalledWith('acme/vault-repo');
+        expect(me.getEntry('vault-repo').locked).toBe(false);
+        expect(me.getEntry('vault-repo').highlights[0].topic).toBe('testing');
+      });
+
+      test('atlas key sync reports what is still locked when gh has no access either', async () => {
+        const { sealed } = sealedEntry();
+        const shared = publishBundle(root, [sealed]);
+
+        const me = machine('me');
+        await me.subscribe({ name: 'them', source: shared });
+
+        const fetchKey = jest.fn().mockResolvedValue(null);
+        const result = await me.unlockEncrypted({ fetchKey });
+
+        expect(result).toEqual({ checked: 1, unlocked: 0, stillLocked: ['vault-repo'] });
+        expect(me.getEntry('vault-repo').locked).toBe(true);
+      });
+
+      test('an unlocked entry is never re-shared, same rule as any other subscribed entry', async () => {
+        const { sealed, sourceKey } = sealedEntry();
+        const shared = publishBundle(root, [sealed]);
+
+        const me = machine('me');
+        await me.subscribe({ name: 'them', source: shared });
+        await me.unlockEncrypted({ fetchKey: async () => sourceKey });
+        expect(me.getEntry('vault-repo').locked).toBe(false);
+
+        me.setAudience({ id: 'anyone', label: 'anyone' });
+        const compiled = me.compile('anyone', { write: false });
+        expect(compiled.bundle.entries.map((e) => e.id)).not.toContain('vault-repo');
+      });
+    });
   });
 });
